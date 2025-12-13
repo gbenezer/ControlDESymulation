@@ -1,13 +1,7 @@
 import sympy as sp
 import numpy as np
 import torch
-import torch.nn as nn
-from abc import ABC, abstractmethod
-from typing import Dict, List, Tuple, Union, Optional, Callable
-from enum import Enum
-import control
-import warnings
-from src.symbolic_dynamics import SymbolicDynamicalSystem
+from symbolic_dynamical_system import SymbolicDynamicalSystem
 
 
 class SymbolicPendulum(SymbolicDynamicalSystem):
