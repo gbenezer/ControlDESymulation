@@ -1,7 +1,7 @@
 import sympy as sp
 import numpy as np
 import torch
-from symbolic_dynamical_system import SymbolicDynamicalSystem
+from src.systems.base.symbolic_dynamical_system import SymbolicDynamicalSystem
 
 
 class VanDerPolOscillator(SymbolicDynamicalSystem):
