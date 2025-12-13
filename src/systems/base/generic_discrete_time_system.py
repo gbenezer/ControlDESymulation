@@ -9,7 +9,7 @@ import warnings
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from symbolic_dynamical_system import SymbolicDynamicalSystem
+from src.systems.base.symbolic_dynamical_system import SymbolicDynamicalSystem
 
 
 class IntegrationMethod(Enum):
