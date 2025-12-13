@@ -7,7 +7,7 @@ from typing import Dict, List, Tuple, Union, Optional, Callable
 from enum import Enum
 import control
 import warnings
-from neural_lyapunov_training.symbolic_dynamics import SymbolicDynamicalSystem
+from src.symbolic_dynamics import SymbolicDynamicalSystem
 
 
 class SymbolicPendulum(SymbolicDynamicalSystem):
