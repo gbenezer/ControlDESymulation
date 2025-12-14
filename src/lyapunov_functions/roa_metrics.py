@@ -11,7 +11,6 @@ import torch
 import numpy as np
 from typing import Optional, Tuple, Dict, Callable
 from dataclasses import dataclass
-from neural_lyapunov_training.dynamical_system import DiscreteTimeSystem
 
 
 @dataclass
@@ -293,11 +292,7 @@ def compute_roa_area_qmc_sobol(
     if hasattr(lyapunov_nn, "parameters"):
         try:
             first_layer = next(lyapunov_nn.parameters())
-            nx_total = (
-                first_layer.shape[1]
-                if len(first_layer.shape) > 1
-                else first_layer.shape[0]
-            )
+            nx_total = first_layer.shape[1] if len(first_layer.shape) > 1 else first_layer.shape[0]
         except StopIteration:
             # No parameters - assume nx equals number of limits
             nx_total = len(state_limits)
@@ -336,9 +331,7 @@ def compute_roa_area_qmc_sobol(
         samples_normalized = np.zeros((num_samples_actual, n_dims))
         for i in range(len(state_limits)):
             low, high = state_limits[i]
-            samples_normalized[:, i] = (sobol_samples[:, i].cpu().numpy() - low) / (
-                high - low
-            )
+            samples_normalized[:, i] = (sobol_samples[:, i].cpu().numpy() - low) / (high - low)
 
         # Clip to [0,1] to handle any floating point errors
         samples_normalized = np.clip(samples_normalized, 0.0, 1.0)
@@ -406,11 +399,7 @@ def compute_roa_area_qmc_halton(
     if hasattr(lyapunov_nn, "parameters"):
         try:
             first_layer = next(lyapunov_nn.parameters())
-            nx_total = (
-                first_layer.shape[1]
-                if len(first_layer.shape) > 1
-                else first_layer.shape[0]
-            )
+            nx_total = first_layer.shape[1] if len(first_layer.shape) > 1 else first_layer.shape[0]
         except StopIteration:
             nx_total = len(state_limits)
     else:
@@ -418,9 +407,7 @@ def compute_roa_area_qmc_halton(
 
     # FIXED: Generate Halton samples using enumeration
     bounds_for_halton = tuple(state_limits[i] for i in range(len(state_limits)))
-    halton_samples = generate_halton_samples(
-        num_samples, n_dims, bounds_for_halton, device
-    )
+    halton_samples = generate_halton_samples(num_samples, n_dims, bounds_for_halton, device)
 
     # Halton doesn't require power of 2, so num_samples stays the same
     num_samples_actual = halton_samples.shape[0]
@@ -447,9 +434,7 @@ def compute_roa_area_qmc_halton(
         samples_normalized = np.zeros((num_samples_actual, n_dims))
         for i in range(len(state_limits)):
             low, high = state_limits[i]
-            samples_normalized[:, i] = (halton_samples[:, i].cpu().numpy() - low) / (
-                high - low
-            )
+            samples_normalized[:, i] = (halton_samples[:, i].cpu().numpy() - low) / (high - low)
 
         # Clip to [0,1]
         samples_normalized = np.clip(samples_normalized, 0.0, 1.0)
@@ -509,11 +494,7 @@ def compute_roa_area_monte_carlo(
     if hasattr(lyapunov_nn, "parameters"):
         try:
             first_layer = next(lyapunov_nn.parameters())
-            nx_total = (
-                first_layer.shape[1]
-                if len(first_layer.shape) > 1
-                else first_layer.shape[0]
-            )
+            nx_total = first_layer.shape[1] if len(first_layer.shape) > 1 else first_layer.shape[0]
         except StopIteration:
             # No parameters - assume nx equals number of limits
             nx_total = len(state_limits)
@@ -601,21 +582,15 @@ def compute_roa_area_grid(
     # Infer total state dimension
     if hasattr(lyapunov_nn, "parameters"):
         first_layer = next(lyapunov_nn.parameters())
-        nx_total = (
-            first_layer.shape[1] if len(first_layer.shape) > 1 else first_layer.shape[0]
-        )
+        nx_total = first_layer.shape[1] if len(first_layer.shape) > 1 else first_layer.shape[0]
     else:
         nx_total = max(state_indices) + 1
 
     # Initialize state grid
     num_points = grid_resolution * grid_resolution
     states_grid = torch.zeros((num_points, nx_total), device=device)
-    states_grid[:, idx0] = torch.tensor(
-        X0.flatten(), dtype=torch.float32, device=device
-    )
-    states_grid[:, idx1] = torch.tensor(
-        X1.flatten(), dtype=torch.float32, device=device
-    )
+    states_grid[:, idx0] = torch.tensor(X0.flatten(), dtype=torch.float32, device=device)
+    states_grid[:, idx1] = torch.tensor(X1.flatten(), dtype=torch.float32, device=device)
 
     # Evaluate Lyapunov function
     with torch.no_grad():
@@ -701,9 +676,7 @@ def compute_roa_volume_nd(
     # Flatten and create state tensor
     states = torch.zeros((total_points, n_dims), device=device, dtype=torch.float32)
     for i in range(n_dims):
-        states[:, i] = torch.tensor(
-            mesh[i].flatten(), dtype=torch.float32, device=device
-        )
+        states[:, i] = torch.tensor(mesh[i].flatten(), dtype=torch.float32, device=device)
 
     # Evaluate Lyapunov function in batches to avoid memory issues
     batch_size = 10000
@@ -773,9 +746,7 @@ def estimate_rho_from_boundary(
             if d == dim:
                 grids.append([state_limits[d][0]])  # Fixed at min
             else:
-                grids.append(
-                    np.linspace(state_limits[d][0], state_limits[d][1], grid_resolution)
-                )
+                grids.append(np.linspace(state_limits[d][0], state_limits[d][1], grid_resolution))
 
         mesh = np.meshgrid(*grids, indexing="ij")
         points_lower = np.stack([m.flatten() for m in mesh], axis=1)
@@ -992,28 +963,18 @@ def compute_roa_area_with_controller(
 
             for idx in state_indices:
                 low, high = state_limits[idx]
-                samples[:, idx] = (
-                    torch.rand(n_verify, device=device) * (high - low) + low
-                )
+                samples[:, idx] = torch.rand(n_verify, device=device) * (high - low) + low
         else:
             # Use grid samples
             idx0, idx1 = state_indices
-            x0_range = np.linspace(
-                state_limits[0][0], state_limits[0][1], grid_resolution
-            )
-            x1_range = np.linspace(
-                state_limits[1][0], state_limits[1][1], grid_resolution
-            )
+            x0_range = np.linspace(state_limits[0][0], state_limits[0][1], grid_resolution)
+            x1_range = np.linspace(state_limits[1][0], state_limits[1][1], grid_resolution)
             X0, X1 = np.meshgrid(x0_range, x1_range, indexing="ij")
 
             nx_total = dynamics_system.nx
             samples = torch.zeros((grid_resolution**2, nx_total), device=device)
-            samples[:, idx0] = torch.tensor(
-                X0.flatten(), dtype=torch.float32, device=device
-            )
-            samples[:, idx1] = torch.tensor(
-                X1.flatten(), dtype=torch.float32, device=device
-            )
+            samples[:, idx0] = torch.tensor(X0.flatten(), dtype=torch.float32, device=device)
+            samples[:, idx1] = torch.tensor(X1.flatten(), dtype=torch.float32, device=device)
 
         # Evaluate V and ΔV
         with torch.no_grad():
@@ -1188,7 +1149,7 @@ def compute_lyapunov_difference_discrete(
                       - Output feedback: u = π(x_hat) or u = π([x_hat, y])
                         Input dimension auto-detected and augmented if needed
         dynamics_fn: Discrete dynamics x_{k+1} = f(x_k, u_k)
-                    Must have .h(x) method (or .continuous_time_system.h(x) for legacy)
+                    Must have .h(x) method
                     Must have .nx or .continuous_time_system.nx attribute
         observer_nn: Optional Luenberger observer x_hat_{k+1} = g(x_hat_k, u_k, y_{k+1})
                     If provided, assumes output feedback with augmented Lyapunov V([x,e])
@@ -1207,13 +1168,8 @@ def compute_lyapunov_difference_discrete(
           states = [x, 0] where e=0 represents converged observer
         - Controller input is automatically augmented with measurement y if needed
           based on controller's expected input dimension
-        - Supports both legacy DiscreteTimeSystem and new GenericDiscreteTimeSystem
     """
     with torch.no_grad():
-        legacy = False
-        # Check if the system is legacy in nature
-        if isinstance(dynamics_fn, DiscreteTimeSystem):
-            legacy = True
 
         # Get physical state dimension
         if hasattr(dynamics_fn, "continuous_time_system"):
@@ -1237,10 +1193,7 @@ def compute_lyapunov_difference_discrete(
             V_current = lyapunov_nn(states).squeeze()
 
             # Get measurement from TRUE state
-            if legacy:
-                y = dynamics_fn.continuous_time_system.h(x_true)
-            else:
-                y = dynamics_fn.h(x_true)
+            y = dynamics_fn.h(x_true)
 
             # Prepare controller input - may need to augment with measurement
             # Infer expected controller input dimension
@@ -1251,10 +1204,7 @@ def compute_lyapunov_difference_discrete(
                 controller_in_dim = controller_nn.x_equilibrium.shape[0]
 
             # Check if we need to augment observer estimate with measurement
-            if (
-                controller_in_dim is not None
-                and x_hat_current.shape[1] < controller_in_dim
-            ):
+            if controller_in_dim is not None and x_hat_current.shape[1] < controller_in_dim:
                 # Controller expects more inputs than just x_hat
                 deficit = controller_in_dim - x_hat_current.shape[1]
 
@@ -1278,10 +1228,7 @@ def compute_lyapunov_difference_discrete(
             x_next = dynamics_fn(x_true, u)
 
             # Next measurement
-            if legacy:
-                y_next = dynamics_fn.continuous_time_system.h(x_next)
-            else:
-                y_next = dynamics_fn.h(x_next)
+            y_next = dynamics_fn.h(x_next)
 
             # Observer update
             x_hat_next = observer_nn(x_hat_current, u, y_next)
@@ -1636,9 +1583,7 @@ def compute_lyapunov_difference_metrics_qmc_sobol(
         samples_normalized = np.zeros((num_samples_actual, n_dims))
         for i in range(len(state_limits)):  # FIXED: use range(len(state_limits))
             low, high = state_limits[i]
-            samples_normalized[:, i] = (sobol_samples[:, i].cpu().numpy() - low) / (
-                high - low
-            )
+            samples_normalized[:, i] = (sobol_samples[:, i].cpu().numpy() - low) / (high - low)
         samples_normalized = np.clip(samples_normalized, 0.0, 1.0)
         discrepancy_val = compute_discrepancy(samples_normalized, method="CD")
 
@@ -1747,9 +1692,7 @@ def compute_lyapunov_difference_metrics_qmc_halton(
 
     # FIXED: Generate Halton samples using enumeration
     bounds_for_halton = tuple(state_limits[i] for i in range(len(state_limits)))
-    halton_samples = generate_halton_samples(
-        num_samples, n_dims, bounds_for_halton, device
-    )
+    halton_samples = generate_halton_samples(num_samples, n_dims, bounds_for_halton, device)
 
     num_samples_actual = halton_samples.shape[0]
 
@@ -1819,9 +1762,7 @@ def compute_lyapunov_difference_metrics_qmc_halton(
         samples_normalized = np.zeros((num_samples_actual, n_dims))
         for i in range(len(state_limits)):  # FIXED: use range(len(state_limits))
             low, high = state_limits[i]
-            samples_normalized[:, i] = (halton_samples[:, i].cpu().numpy() - low) / (
-                high - low
-            )
+            samples_normalized[:, i] = (halton_samples[:, i].cpu().numpy() - low) / (high - low)
         samples_normalized = np.clip(samples_normalized, 0.0, 1.0)
         discrepancy_val = compute_discrepancy(samples_normalized, method="CD")
 
@@ -2028,9 +1969,7 @@ def compare_lyapunov_difference_methods(
     print("\n" + "=" * 90)
     print(f"{'Method Comparison':^90}")
     print("=" * 90)
-    print(
-        f"{'Method':<20} {'ROA Vol':<12} {'Verified Vol':<12} {'% Verified':<12} {'Mean ΔV':<12}"
-    )
+    print(f"{'Method':<20} {'ROA Vol':<12} {'Verified Vol':<12} {'% Verified':<12} {'Mean ΔV':<12}")
     print("-" * 90)
     for method_name, metrics in results.items():
         print(
