@@ -10,82 +10,6 @@ import scipy
 import torch
 import torch.nn as nn
 
-# Standard mapping from SymPy functions to PyTorch functions
-# CRITICAL: SymPy uses capital letters for some functions (Abs, Min, Max, Pow)
-def _torch_min(*args):
-    """Handle Min for both scalars and tensors"""
-    if len(args) == 2:
-        a, b = args
-        # Convert both to tensors to handle scalar/tensor combinations
-        a_tensor = torch.as_tensor(a) if not isinstance(a, torch.Tensor) else a
-        b_tensor = torch.as_tensor(b) if not isinstance(b, torch.Tensor) else b
-        return torch.minimum(a_tensor, b_tensor)
-    else:
-        # Multiple arguments - stack and take min
-        tensors = [
-            torch.as_tensor(a) if not isinstance(a, torch.Tensor) else a for a in args
-        ]
-        return torch.min(torch.stack(tensors))
-
-def _torch_max(*args):
-    """Handle Max for both scalars and tensors"""
-    if len(args) == 2:
-        a, b = args
-        # Convert both to tensors to handle scalar/tensor combinations
-        a_tensor = torch.as_tensor(a) if not isinstance(a, torch.Tensor) else a
-        b_tensor = torch.as_tensor(b) if not isinstance(b, torch.Tensor) else b
-        return torch.maximum(a_tensor, b_tensor)
-    else:
-        # Multiple arguments - stack and take max
-        tensors = [
-            torch.as_tensor(a) if not isinstance(a, torch.Tensor) else a for a in args
-        ]
-        return torch.max(torch.stack(tensors))
-
-def _identity_matrix(*args):
-    """Handle ImmutableDenseMatrix - just return the args as tuple"""
-    return args if len(args) > 1 else args[0]
-
-SYMPY_TO_TORCH = {
-    # Trigonometric
-    "sin": torch.sin,
-    "cos": torch.cos,
-    "tan": torch.tan,
-    "asin": torch.asin,
-    "acos": torch.acos,
-    "atan": torch.atan,
-    "atan2": torch.atan2,
-    "sinh": torch.sinh,
-    "cosh": torch.cosh,
-    "tanh": torch.tanh,
-    # Exponential/Logarithmic
-    "exp": torch.exp,
-    "log": torch.log,
-    "sqrt": torch.sqrt,
-    # Absolute value and sign - CRITICAL: SymPy uses 'Abs' not 'abs'
-    "Abs": torch.abs,
-    "abs": torch.abs,  # Include lowercase for safety
-    "sign": torch.sign,
-    # Min/Max - CRITICAL: SymPy uses 'Min' and 'Max' (capital letters)
-    # Use helper functions to handle scalar/tensor combinations
-    "Min": _torch_min,
-    "Max": _torch_max,
-    # Power - CRITICAL: SymPy uses 'Pow' (capital P)
-    "Pow": torch.pow,
-    # Rounding
-    "floor": torch.floor,
-    "ceil": torch.ceil,
-    "round": torch.round,
-    # Additional useful functions
-    "clip": torch.clamp,
-    "minimum": torch.minimum,
-    "maximum": torch.maximum,
-    # Matrix handling - SymPy sometimes uses these
-    "ImmutableDenseMatrix": _identity_matrix,
-    "MutableDenseMatrix": _identity_matrix,
-    "Matrix": _identity_matrix,
-}
-
 
 class SymbolicDynamicalSystem(ABC, nn.Module):
     """
@@ -118,8 +42,11 @@ class SymbolicDynamicalSystem(ABC, nn.Module):
 
         # Cached numerical functions
         self._f_numpy: Optional[Callable] = None
+        self._h_numpy: Optional[Callable] = None
         self._f_torch: Optional[Callable] = None
         self._h_torch: Optional[Callable] = None
+        self._f_jax: Optional[Callable] = None
+        self._h_jax: Optional[Callable] = None
 
         # Cached Jacobians for efficiency
         self._A_sym_cached: Optional[sp.Matrix] = None
@@ -236,14 +163,73 @@ class SymbolicDynamicalSystem(ABC, nn.Module):
         """
         return expr.subs(self.parameters)
 
-    def _cache_jacobians(self):
-        """Cache symbolic Jacobians for improved performance"""
+    def _cache_jacobians(self, backend="torch"):
+        """
+        Cache symbolic Jacobians and generate numerical functions for improved performance
+
+        Args:
+            backend: Target backend ('torch', 'jax', 'numpy')
+        """
+
+        from src.systems.base.codegen_utils import generate_function
+
+        all_vars = self.state_vars + self.control_vars
+
+        # Set backend-specific kwargs
+        if backend == "torch":
+            backend_kwargs = {}
+        elif backend == "jax":
+            backend_kwargs = {"jit": True}
+        else:  # numpy
+            backend_kwargs = {}
+
+        # Cache dynamics Jacobians
         if self._f_sym is not None and self._A_sym_cached is None:
             self._A_sym_cached = self._f_sym.jacobian(self.state_vars)
             self._B_sym_cached = self._f_sym.jacobian(self.control_vars)
 
+            A_with_params = self.substitute_parameters(self._A_sym_cached)
+            B_with_params = self.substitute_parameters(self._B_sym_cached)
+
+            if backend == "torch":
+                self._A_torch_fn = generate_function(
+                    A_with_params, all_vars, backend="torch", **backend_kwargs
+                )
+                self._B_torch_fn = generate_function(
+                    B_with_params, all_vars, backend="torch", **backend_kwargs
+                )
+            elif backend == "jax":
+                self._A_jax_fn = generate_function(
+                    A_with_params, all_vars, backend="jax", **backend_kwargs
+                )
+                self._B_jax_fn = generate_function(
+                    B_with_params, all_vars, backend="jax", **backend_kwargs
+                )
+            elif backend == "numpy":
+                self._A_numpy_fn = generate_function(
+                    A_with_params, all_vars, backend="numpy", **backend_kwargs
+                )
+                self._B_numpy_fn = generate_function(
+                    B_with_params, all_vars, backend="numpy", **backend_kwargs
+                )
+
+        # Cache observation Jacobian
         if self._h_sym is not None and self._C_sym_cached is None:
             self._C_sym_cached = self._h_sym.jacobian(self.state_vars)
+            C_with_params = self.substitute_parameters(self._C_sym_cached)
+
+            if backend == "torch":
+                self._C_torch_fn = generate_function(
+                    C_with_params, self.state_vars, backend="torch", **backend_kwargs
+                )
+            elif backend == "jax":
+                self._C_jax_fn = generate_function(
+                    C_with_params, self.state_vars, backend="jax", **backend_kwargs
+                )
+            elif backend == "numpy":
+                self._C_numpy_fn = generate_function(
+                    C_with_params, self.state_vars, backend="numpy", **backend_kwargs
+                )
 
     def linearized_dynamics_symbolic(
         self, x_eq: Optional[sp.Matrix] = None, u_eq: Optional[sp.Matrix] = None
@@ -363,9 +349,11 @@ class SymbolicDynamicalSystem(ABC, nn.Module):
         Returns:
             Callable function compatible with NumPy
         """
+        from src.systems.base.codegen_utils import generate_numpy_function
+
         f_with_params = self.substitute_parameters(self._f_sym)
         all_vars = self.state_vars + self.control_vars
-        self._f_numpy = sp.lambdify(all_vars, f_with_params, modules="numpy")
+        self._f_numpy = generate_numpy_function(f_with_params, all_vars)
         return self._f_numpy
 
     def generate_torch_function(self) -> Callable:
@@ -379,72 +367,112 @@ class SymbolicDynamicalSystem(ABC, nn.Module):
         Returns:
             Callable function compatible with PyTorch tensors
         """
+        from src.systems.base.codegen_utils import generate_torch_function
+
         f_with_params = self.substitute_parameters(self._f_sym)
         f_with_params = sp.simplify(f_with_params)
 
         all_vars = self.state_vars + self.control_vars
 
-        # Generate function signature
-        func_code_lines = [
-            "def dynamics_func(" + ", ".join([str(v) for v in all_vars]) + "):",
-            "    import torch",
-        ]
+        self._f_torch = generate_torch_function(f_with_params, all_vars)
 
-        # Generate code for each output component
-        results = []
-        for i, expr in enumerate(f_with_params):
-            code = pycode(expr)
-            # Replace module prefixes with torch
-            code = code.replace("numpy.", "torch.")
-            code = code.replace("math.", "torch.")
-
-            var_name = f"result_{i}"
-            func_code_lines.append(f"    {var_name} = {code}")
-            results.append(var_name)
-
-        # Return tuple of results
-        func_code_lines.append(f"    return ({', '.join(results)},)")
-        func_code = "\n".join(func_code_lines)
-
-        # Execute the generated code
-        namespace = {"torch": torch}
-        exec(func_code, namespace)
-        base_func = namespace["dynamics_func"]
-
-        # Wrap to ensure proper tensor handling
-        def wrapped_func(*args):
-            result = base_func(*args)
-
-            if isinstance(result, (list, tuple)):
-                return torch.stack(list(result), dim=-1)
-            elif isinstance(result, torch.Tensor):
-                if len(result.shape) == 1:
-                    return result.unsqueeze(-1)
-                return result
-            else:
-                return torch.tensor([result]).unsqueeze(0)
-
-        self._f_torch = wrapped_func
         return self._f_torch
 
-    def forward(self, x: torch.Tensor, u: torch.Tensor) -> torch.Tensor:
+    def generate_jax_function(self, jit: bool = True) -> Callable:
+        """
+        Generate JAX-compatible function for dynamics
+
+        Args:
+            jit: Whether to JIT-compile the function (default: True)
+
+        Returns:
+            Callable function compatible with JAX arrays
+        """
+        from src.systems.base.codegen_utils import generate_jax_function
+
+        f_with_params = self.substitute_parameters(self._f_sym)
+        all_vars = self.state_vars + self.control_vars
+        self._f_jax = generate_jax_function(f_with_params, all_vars, jit=jit)
+        return self._f_jax
+
+    def generate_dynamics_function(self, backend: str = "torch", **kwargs) -> Callable:
+        """
+        Generate dynamics function for specified backend
+
+        Args:
+            backend: 'numpy', 'torch', or 'jax'
+            **kwargs: Backend-specific options (e.g., method='lambdify', jit=True)
+
+        Returns:
+            Callable function compatible with the specified backend
+        """
+        from src.systems.base.codegen_utils import generate_function
+
+        f_with_params = self.substitute_parameters(self._f_sym)
+        all_vars = self.state_vars + self.control_vars
+
+        func = generate_function(f_with_params, all_vars, backend=backend, **kwargs)
+
+        # Cache in appropriate attribute
+        if backend == "numpy":
+            self._f_numpy = func
+        elif backend == "torch":
+            self._f_torch = func
+        elif backend == "jax":
+            self._f_jax = func
+
+        return func
+
+    def forward(self, x, u):
         """
         Evaluate continuous-time dynamics: compute state derivative dx/dt = f(x, u)
+
+        Automatically detects backend from input tensor types:
+        - torch.Tensor → PyTorch computation
+        - jax.Array → JAX computation
+        - np.ndarray → NumPy computation
 
         **CRITICAL DISTINCTION**: This method returns the DERIVATIVE (rate of change)
         of the state, NOT the next state value. This is fundamentally different from
         discrete-time systems.
 
         Args:
-            x: State tensor (batch_size, nx) or (nx,)
-            u: Control tensor (batch_size, nu) or (nu,)
+            x: State tensor/array (batch_size, nx) or (nx,)
+            u: Control tensor/array (batch_size, nu) or (nu,)
 
         Returns:
-            State derivative tensor (same shape as input)
+            State derivative (same shape and type as input)
 
         Raises:
             ValueError: If input dimensions don't match system dimensions
+            TypeError: If input type is not supported
         """
+        import torch
+
+        # Detect backend from input type and dispatch
+        if isinstance(x, torch.Tensor):
+            return self._forward_torch(x, u)
+
+        # Check for JAX arrays
+        try:
+            import jax.numpy as jnp
+
+            if isinstance(x, jnp.ndarray):
+                return self._forward_jax(x, u)
+        except ImportError:
+            pass
+
+        # Default to NumPy
+        if isinstance(x, np.ndarray):
+            return self._forward_numpy(x, u)
+
+        raise TypeError(
+            f"Unsupported input type: {type(x)}. Expected torch.Tensor, jax.Array, or np.ndarray"
+        )
+
+    def _forward_torch(self, x: torch.Tensor, u: torch.Tensor) -> torch.Tensor:
+        """PyTorch backend implementation"""
+        import torch
 
         start_time = time.time()
 
@@ -486,19 +514,127 @@ class SymbolicDynamicalSystem(ABC, nn.Module):
 
         return result
 
-    def linearized_dynamics(
-        self, x: torch.Tensor, u: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    def _forward_jax(self, x, u):
+        """JAX backend implementation"""
+        import jax
+        import jax.numpy as jnp
+
+        # Input validation
+        if x.ndim == 0 or u.ndim == 0:
+            raise ValueError("Input arrays must be at least 1D")
+
+        if x.ndim >= 1 and x.shape[-1] != self.nx:
+            raise ValueError(f"Expected state dimension {self.nx}, got {x.shape[-1]}")
+        if u.ndim >= 1 and u.shape[-1] != self.nu:
+            raise ValueError(f"Expected control dimension {self.nu}, got {u.shape[-1]}")
+
+        if not hasattr(self, "_f_jax") or self._f_jax is None:
+            self.generate_jax_function()
+
+        # Handle batched vs single evaluation
+        if x.ndim == 1:
+            x = jnp.expand_dims(x, 0)
+            u = jnp.expand_dims(u, 0)
+            squeeze_output = True
+        else:
+            squeeze_output = False
+
+        # For batched computation, use vmap for efficiency
+        if x.shape[0] > 1:
+
+            @jax.vmap
+            def batched_dynamics(x_i, u_i):
+                x_list = [x_i[j] for j in range(self.nx)]
+                u_list = [u_i[j] for j in range(self.nu)]
+                return self._f_jax(*(x_list + u_list))
+
+            result = batched_dynamics(x, u)
+        else:
+            # Single evaluation
+            x_list = [x[0, i] for i in range(self.nx)]
+            u_list = [u[0, i] for i in range(self.nu)]
+            result = self._f_jax(*(x_list + u_list))
+            result = jnp.expand_dims(result, 0)
+
+        if squeeze_output:
+            result = jnp.squeeze(result, 0)
+
+        return result
+
+    def _forward_numpy(self, x: np.ndarray, u: np.ndarray) -> np.ndarray:
+        """NumPy backend implementation"""
+
+        # Input validation
+        if x.ndim == 0 or u.ndim == 0:
+            raise ValueError("Input arrays must be at least 1D")
+
+        if x.ndim >= 1 and x.shape[-1] != self.nx:
+            raise ValueError(f"Expected state dimension {self.nx}, got {x.shape[-1]}")
+        if u.ndim >= 1 and u.shape[-1] != self.nu:
+            raise ValueError(f"Expected control dimension {self.nu}, got {u.shape[-1]}")
+
+        if self._f_numpy is None:
+            self.generate_numpy_function()
+
+        # Handle batched vs single evaluation
+        if x.ndim == 1:
+            x_list = [x[i] for i in range(self.nx)]
+            u_list = [u[i] for i in range(self.nu)]
+            result = self._f_numpy(*(x_list + u_list))
+            return np.array(result).flatten()
+        else:
+            # Batched numpy evaluation
+            results = []
+            for i in range(x.shape[0]):
+                x_list = [x[i, j] for j in range(self.nx)]
+                u_list = [u[i, j] for j in range(self.nu)]
+                result = self._f_numpy(*(x_list + u_list))
+                results.append(np.array(result).flatten())
+            return np.stack(results)
+
+    def linearized_dynamics(self, x, u):
         """
         Numerical evaluation of linearized dynamics at point (x, u)
 
+        Automatically detects backend from input types:
+        - torch.Tensor → PyTorch computation
+        - jax.Array → JAX computation (uses autodiff)
+        - np.ndarray → NumPy computation (uses symbolic)
+
         Args:
-            x: State tensor
-            u: Control tensor
+            x: State tensor/array
+            u: Control tensor/array
 
         Returns:
-            (A, B): Linearized dynamics matrices as PyTorch tensors
+            (A, B): Linearized dynamics matrices (same type as input)
         """
+        import torch
+
+        # Detect backend from input type and dispatch
+        if isinstance(x, torch.Tensor):
+            return self._linearized_dynamics_torch(x, u)
+
+        # Check for JAX arrays
+        try:
+            import jax.numpy as jnp
+
+            if isinstance(x, jnp.ndarray):
+                return self._linearized_dynamics_jax(x, u)
+        except ImportError:
+            pass
+
+        # Default to NumPy
+        if isinstance(x, np.ndarray):
+            return self._linearized_dynamics_numpy(x, u)
+
+        raise TypeError(f"Unsupported input type: {type(x)}")
+
+    def _linearized_dynamics_torch(self, x: torch.Tensor, u: torch.Tensor):
+        """
+        PyTorch implementation using cached Jacobian functions or symbolic evaluation
+        """
+        import torch
+
         start_time = time.time()
 
         # Handle batched input
@@ -517,49 +653,211 @@ class SymbolicDynamicalSystem(ABC, nn.Module):
         A_batch = torch.zeros(batch_size, self.nx, self.nx, dtype=dtype, device=device)
         B_batch = torch.zeros(batch_size, self.nx, self.nu, dtype=dtype, device=device)
 
-        # Evaluate for each sample
-        for i in range(batch_size):
-            # Convert to numpy - handle both 1D and potential 0D cases
-            x_i = x[i] if batch_size > 1 else x.squeeze(0)
-            u_i = u[i] if batch_size > 1 else u.squeeze(0)
+        # Check if we have cached Jacobian functions
+        if hasattr(self, "_A_torch_fn") and self._A_torch_fn is not None:
+            # Use cached functions (faster)
+            for i in range(batch_size):
+                x_i = x[i]
+                u_i = u[i]
 
-            x_np = x_i.detach().cpu().numpy()
-            u_np = u_i.detach().cpu().numpy()
+                # Prepare arguments
+                x_list = [x_i[j] for j in range(self.nx)]
+                u_list = [u_i[j] for j in range(self.nu)]
+                all_args = x_list + u_list
 
-            # Ensure arrays are at least 1D for SymPy Matrix
-            x_np = np.atleast_1d(x_np)
-            u_np = np.atleast_1d(u_np)
+                # Call cached Jacobian functions
+                A_batch[i] = self._A_torch_fn(*all_args)
+                B_batch[i] = self._B_torch_fn(*all_args)
+        else:
+            # Fall back to symbolic evaluation (your existing implementation)
+            for i in range(batch_size):
+                # Convert to numpy - handle both 1D and potential 0D cases
+                x_i = x[i] if batch_size > 1 else x.squeeze(0)
+                u_i = u[i] if batch_size > 1 else u.squeeze(0)
 
-            A_sym, B_sym = self.linearized_dynamics_symbolic(
-                sp.Matrix(x_np), sp.Matrix(u_np)
-            )
-            A_batch[i] = torch.tensor(
-                np.array(A_sym, dtype=np.float64), dtype=dtype, device=device
-            )
-            B_batch[i] = torch.tensor(
-                np.array(B_sym, dtype=np.float64), dtype=dtype, device=device
-            )
+                x_np = x_i.detach().cpu().numpy()
+                u_np = u_i.detach().cpu().numpy()
+
+                # Ensure arrays are at least 1D for SymPy Matrix
+                x_np = np.atleast_1d(x_np)
+                u_np = np.atleast_1d(u_np)
+
+                A_sym, B_sym = self.linearized_dynamics_symbolic(
+                    sp.Matrix(x_np), sp.Matrix(u_np)
+                )
+                A_batch[i] = torch.tensor(
+                    np.array(A_sym, dtype=np.float64), dtype=dtype, device=device
+                )
+                B_batch[i] = torch.tensor(
+                    np.array(B_sym, dtype=np.float64), dtype=dtype, device=device
+                )
 
         if squeeze_output:
             A_batch = A_batch.squeeze(0)
             B_batch = B_batch.squeeze(0)
 
         # Update performance stats
-        self._perf_stats["linearization_calls"] += 1
-        self._perf_stats["linearization_time"] += time.time() - start_time
+        if "linearization_calls" in self._perf_stats:
+            self._perf_stats["linearization_calls"] += 1
+            self._perf_stats["linearization_time"] += time.time() - start_time
 
         return A_batch, B_batch
 
-    def linearized_observation(self, x: torch.Tensor) -> torch.Tensor:
+    def _linearized_dynamics_jax(self, x, u):
+        """
+        JAX implementation using automatic differentiation
+
+        This is more efficient than symbolic -> lambdify for JAX
+        """
+        import jax
+        import jax.numpy as jnp
+
+        # Ensure dynamics function is available
+        if not hasattr(self, "_f_jax") or self._f_jax is None:
+            self.generate_jax_function()
+
+        # Handle batched input
+        if x.ndim == 1:
+            x = jnp.expand_dims(x, 0)
+            u = jnp.expand_dims(u, 0)
+            squeeze_output = True
+        else:
+            squeeze_output = False
+
+        # Define dynamics function for Jacobian computation
+        def dynamics_fn(x_i, u_i):
+            x_list = [x_i[j] for j in range(self.nx)]
+            u_list = [u_i[j] for j in range(self.nu)]
+            return self._f_jax(*(x_list + u_list))
+
+        # Compute Jacobians using JAX autodiff (vmap for batching)
+        @jax.vmap
+        def compute_jacobians(x_i, u_i):
+            # Jacobian w.r.t. state
+            A = jax.jacobian(lambda x: dynamics_fn(x, u_i))(x_i)
+            # Jacobian w.r.t. control
+            B = jax.jacobian(lambda u: dynamics_fn(x_i, u))(u_i)
+            return A, B
+
+        A_batch, B_batch = compute_jacobians(x, u)
+
+        if squeeze_output:
+            A_batch = jnp.squeeze(A_batch, 0)
+            B_batch = jnp.squeeze(B_batch, 0)
+
+        return A_batch, B_batch
+
+    def _linearized_dynamics_numpy(self, x: np.ndarray, u: np.ndarray):
+        """
+        NumPy implementation using symbolic evaluation
+
+        This is the most reliable approach for NumPy since it doesn't have autodiff
+        """
+
+        # Handle batched input
+        if x.ndim == 1:
+            x = np.expand_dims(x, 0)
+            u = np.expand_dims(u, 0)
+            squeeze_output = True
+        else:
+            squeeze_output = False
+
+        batch_size = x.shape[0]
+
+        A_batch = np.zeros((batch_size, self.nx, self.nx))
+        B_batch = np.zeros((batch_size, self.nx, self.nu))
+
+        # Check if we have cached NumPy Jacobian functions
+        if hasattr(self, "_A_numpy_fn") and self._A_numpy_fn is not None:
+            # Use cached functions
+            for i in range(batch_size):
+                x_i = x[i]
+                u_i = u[i]
+
+                # Prepare arguments
+                x_list = [x_i[j] for j in range(self.nx)]
+                u_list = [u_i[j] for j in range(self.nu)]
+                all_args = x_list + u_list
+
+                # Call cached Jacobian functions
+                A_result = self._A_numpy_fn(*all_args)
+                B_result = self._B_numpy_fn(*all_args)
+
+                # Handle different output types from lambdify
+                A_batch[i] = np.array(A_result, dtype=np.float64)
+                B_batch[i] = np.array(B_result, dtype=np.float64)
+        else:
+            # Fall back to symbolic evaluation
+            for i in range(batch_size):
+                x_np = np.atleast_1d(x[i])
+                u_np = np.atleast_1d(u[i])
+
+                # Use symbolic Jacobians (cached)
+                A_sym, B_sym = self.linearized_dynamics_symbolic(
+                    sp.Matrix(x_np), sp.Matrix(u_np)
+                )
+                A_batch[i] = np.array(A_sym, dtype=np.float64)
+                B_batch[i] = np.array(B_sym, dtype=np.float64)
+
+        if squeeze_output:
+            A_batch = np.squeeze(A_batch, 0)
+            B_batch = np.squeeze(B_batch, 0)
+
+        return A_batch, B_batch
+
+    def linearized_observation(self, x):
         """
         Numerical evaluation of output linearization C = dh/dx
 
+        Automatically detects backend from input type:
+        - torch.Tensor → PyTorch computation
+        - jax.Array → JAX computation (uses autodiff)
+        - np.ndarray → NumPy computation (uses symbolic)
+
         Args:
-            x: State tensor
+            x: State tensor/array
 
         Returns:
-            C: Linearized observation matrix as PyTorch tensor
+            C: Linearized observation matrix (same type as input)
         """
+        import torch
+
+        # Detect backend from input type and dispatch
+        if isinstance(x, torch.Tensor):
+            return self._linearized_observation_torch(x)
+
+        # Check for JAX arrays
+        try:
+            import jax.numpy as jnp
+
+            if isinstance(x, jnp.ndarray):
+                return self._linearized_observation_jax(x)
+        except ImportError:
+            pass
+
+        # Default to NumPy
+        if isinstance(x, np.ndarray):
+            return self._linearized_observation_numpy(x)
+
+        raise TypeError(f"Unsupported input type: {type(x)}")
+
+    def _linearized_observation_torch(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        PyTorch implementation using cached Jacobian function or symbolic evaluation
+        """
+        import torch
+
+        # If no custom output function, return identity
+        if self._h_sym is None:
+            batch_size = x.shape[0] if len(x.shape) > 1 else 1
+            if len(x.shape) == 1:
+                return torch.eye(self.nx, dtype=x.dtype, device=x.device)
+            else:
+                return (
+                    torch.eye(self.nx, dtype=x.dtype, device=x.device)
+                    .unsqueeze(0)
+                    .expand(batch_size, -1, -1)
+                )
 
         # Handle batched input
         if len(x.shape) == 1:
@@ -574,44 +872,179 @@ class SymbolicDynamicalSystem(ABC, nn.Module):
 
         C_batch = torch.zeros(batch_size, self.ny, self.nx, dtype=dtype, device=device)
 
-        for i in range(batch_size):
-            # Handle indexing properly
-            x_i = x[i] if batch_size > 1 else x.squeeze(0)
-            x_np = x_i.detach().cpu().numpy()
+        # Check if we have cached Jacobian function
+        if hasattr(self, "_C_torch_fn") and self._C_torch_fn is not None:
+            # Use cached function (faster)
+            for i in range(batch_size):
+                x_i = x[i]
 
-            # Ensure at least 1D
-            x_np = np.atleast_1d(x_np)
+                # Prepare arguments (only state variables for observation)
+                x_list = [x_i[j] for j in range(self.nx)]
 
-            C_sym = self.linearized_observation_symbolic(sp.Matrix(x_np))
-            C_batch[i] = torch.tensor(
-                np.array(C_sym, dtype=np.float64), dtype=dtype, device=device
-            )
+                # Call cached Jacobian function
+                C_batch[i] = self._C_torch_fn(*x_list)
+        else:
+            # Fall back to symbolic evaluation
+            for i in range(batch_size):
+                # Handle indexing properly
+                x_i = x[i] if batch_size > 1 else x.squeeze(0)
+                x_np = x_i.detach().cpu().numpy()
+
+                # Ensure at least 1D
+                x_np = np.atleast_1d(x_np)
+
+                C_sym = self.linearized_observation_symbolic(sp.Matrix(x_np))
+                C_batch[i] = torch.tensor(
+                    np.array(C_sym, dtype=np.float64), dtype=dtype, device=device
+                )
 
         if squeeze_output:
             C_batch = C_batch.squeeze(0)
 
         return C_batch
 
-    def h(self, x: torch.Tensor) -> torch.Tensor:
+    def _linearized_observation_jax(self, x):
+        """JAX implementation using automatic differentiation"""
+        import jax
+        import jax.numpy as jnp
+
+        # If no custom output function, return identity
+        if self._h_sym is None:
+            batch_size = x.shape[0] if x.ndim > 1 else 1
+            if x.ndim == 1:
+                return jnp.eye(self.nx)
+            else:
+                return jnp.tile(jnp.eye(self.nx), (batch_size, 1, 1))
+
+        # Ensure observation function is generated
+        if not hasattr(self, "_h_jax") or self._h_jax is None:
+            from src.systems.base.codegen_utils import generate_jax_function
+
+            h_with_params = self.substitute_parameters(self._h_sym)
+            self._h_jax = generate_jax_function(
+                h_with_params, self.state_vars, jit=True
+            )
+
+        # Handle batched input
+        if x.ndim == 1:
+            x = jnp.expand_dims(x, 0)
+            squeeze_output = True
+        else:
+            squeeze_output = False
+
+        # Define observation function for Jacobian computation
+        def observation_fn(x_i):
+            x_list = [x_i[j] for j in range(self.nx)]
+            return self._h_jax(*x_list)
+
+        # Compute Jacobian using JAX autodiff (vmap for batching)
+        @jax.vmap
+        def compute_jacobian(x_i):
+            return jax.jacobian(observation_fn)(x_i)
+
+        C_batch = compute_jacobian(x)
+
+        if squeeze_output:
+            C_batch = jnp.squeeze(C_batch, 0)
+
+        return C_batch
+
+    def _linearized_observation_numpy(self, x: np.ndarray) -> np.ndarray:
+        """
+        NumPy implementation using symbolic evaluation
+        """
+
+        # If no custom output function, return identity
+        if self._h_sym is None:
+            batch_size = x.shape[0] if x.ndim > 1 else 1
+            if x.ndim == 1:
+                return np.eye(self.nx)
+            else:
+                return np.tile(np.eye(self.nx), (batch_size, 1, 1))
+
+        # Handle batched input
+        if x.ndim == 1:
+            x = np.expand_dims(x, 0)
+            squeeze_output = True
+        else:
+            squeeze_output = False
+
+        batch_size = x.shape[0]
+        C_batch = np.zeros((batch_size, self.ny, self.nx))
+
+        # Check if we have cached NumPy Jacobian function
+        if hasattr(self, "_C_numpy_fn") and self._C_numpy_fn is not None:
+            # Use cached function
+            for i in range(batch_size):
+                x_i = x[i]
+
+                # Prepare arguments
+                x_list = [x_i[j] for j in range(self.nx)]
+
+                # Call cached Jacobian function
+                C_result = self._C_numpy_fn(*x_list)
+                C_batch[i] = np.array(C_result, dtype=np.float64)
+        else:
+            # Fall back to symbolic evaluation
+            for i in range(batch_size):
+                x_np = np.atleast_1d(x[i])
+
+                # Use symbolic Jacobian (cached)
+                C_sym = self.linearized_observation_symbolic(sp.Matrix(x_np))
+                C_batch[i] = np.array(C_sym, dtype=np.float64)
+
+        if squeeze_output:
+            C_batch = np.squeeze(C_batch, 0)
+
+        return C_batch
+
+    def h(self, x):
         """
         Evaluate output equation: y = h(x)
 
+        Automatically detects backend from input type:
+        - torch.Tensor → PyTorch computation
+        - jax.Array → JAX computation
+        - np.ndarray → NumPy computation
+
         Args:
-            x: State tensor
+            x: State tensor/array
 
         Returns:
-            Output tensor
+            Output tensor/array (same type as input)
         """
+        import torch
+
+        # Detect backend from input type and dispatch
+        if isinstance(x, torch.Tensor):
+            return self._h_torch_eval(x)
+
+        # Check for JAX arrays
+        try:
+            import jax.numpy as jnp
+
+            if isinstance(x, jnp.ndarray):
+                return self._h_jax_eval(x)
+        except ImportError:
+            pass
+
+        # Default to NumPy
+        if isinstance(x, np.ndarray):
+            return self._h_numpy_eval(x)
+
+        raise TypeError(f"Unsupported input type: {type(x)}")
+
+    def _h_torch_eval(self, x: torch.Tensor) -> torch.Tensor:
+        """PyTorch implementation of output equation"""
+
         if self._h_sym is None:
             return x
 
-        # Generate torch function for h if not cached
         if self._h_torch is None:
+            from src.systems.base.codegen_utils import generate_torch_function
+
             h_with_params = self.substitute_parameters(self._h_sym)
-            # Use ONLY custom namespace (don't add 'torch' as fallback to avoid conflicts)
-            self._h_torch = sp.lambdify(
-                self.state_vars, h_with_params, modules=[SYMPY_TO_TORCH]
-            )
+            self._h_torch = generate_torch_function(h_with_params, self.state_vars)
 
         # Handle batched input
         if len(x.shape) == 1:
@@ -623,28 +1056,105 @@ class SymbolicDynamicalSystem(ABC, nn.Module):
         x_list = [x[:, i] for i in range(self.nx)]
         result = self._h_torch(*x_list)
 
-        # Handle various return types from lambdify
-        def flatten_result(r):
-            """Recursively flatten nested lists/tuples to get tensors"""
-            if isinstance(r, torch.Tensor):
-                return [r]
-            elif isinstance(r, (list, tuple)):
-                flat = []
-                for item in r:
-                    flat.extend(flatten_result(item))
-                return flat
-            else:
-                # Scalar - convert to tensor
-                return [torch.as_tensor(r)]
+        # For single (unbatched) input, squeeze batch dimension but keep output dimension
+        if squeeze_output:
+            if result.ndim > 1:
+                result = result.squeeze(0)
+            elif result.ndim == 0:
+                result = result.reshape(1)
+        else:
+            # Batched output - ensure shape is (batch, ny)
+            # If result is (batch,) but should be (batch, 1), add dimension
+            if result.ndim == 1 and self.ny == 1:
+                result = result.unsqueeze(1)
 
-        if isinstance(result, (list, tuple)):
-            flat_tensors = flatten_result(result)
-            result = torch.stack(flat_tensors, dim=-1)
-        elif not isinstance(result, torch.Tensor):
-            result = torch.as_tensor(result).unsqueeze(-1)
+        # Final safety: ensure at least 1D
+        if result.ndim == 0:
+            result = result.reshape(1)
+
+        return result
+
+    def _h_numpy_eval(self, x: np.ndarray) -> np.ndarray:
+        """NumPy implementation of output equation"""
+
+        # If no custom output function, return full state
+        if self._h_sym is None:
+            return x
+
+        # Generate NumPy function for h if not cached
+        if self._h_numpy is None:
+            from src.systems.base.codegen_utils import generate_numpy_function
+
+            h_with_params = self.substitute_parameters(self._h_sym)
+            self._h_numpy = generate_numpy_function(h_with_params, self.state_vars)
+
+        # Handle batched input
+        if x.ndim == 1:
+            x = np.expand_dims(x, 0)
+            squeeze_output = True
+        else:
+            squeeze_output = False
+
+        batch_size = x.shape[0]
+        results = []
+
+        for i in range(batch_size):
+            x_list = [x[i, j] for j in range(self.nx)]
+            result = self._h_numpy(*x_list)
+
+            # Convert to array
+            result = np.atleast_1d(np.array(result))
+            results.append(result)
+
+        result = np.stack(results)
 
         if squeeze_output:
-            result = result.squeeze(0)
+            result = np.squeeze(result, 0)
+
+        return result
+
+    def _h_jax_eval(self, x):
+        """JAX implementation of output equation"""
+        import jax.numpy as jnp
+
+        # If no custom output function, return full state
+        if self._h_sym is None:
+            return x
+
+        # Generate JAX function for h if not cached
+        if not hasattr(self, "_h_jax") or self._h_jax is None:
+            from src.systems.base.codegen_utils import generate_jax_function
+
+            h_with_params = self.substitute_parameters(self._h_sym)
+            self._h_jax = generate_jax_function(
+                h_with_params, self.state_vars, jit=True
+            )
+
+        # Handle batched input
+        if x.ndim == 1:
+            x = jnp.expand_dims(x, 0)
+            squeeze_output = True
+        else:
+            squeeze_output = False
+
+        # For batched computation, use vmap
+        if x.shape[0] > 1:
+            import jax
+
+            @jax.vmap
+            def batched_observation(x_i):
+                x_list = [x_i[j] for j in range(self.nx)]
+                return self._h_jax(*x_list)
+
+            result = batched_observation(x)
+        else:
+            # Single evaluation
+            x_list = [x[0, i] for i in range(self.nx)]
+            result = self._h_jax(*x_list)
+            result = jnp.expand_dims(result, 0)
+
+        if squeeze_output:
+            result = jnp.squeeze(result, 0)
 
         return result
 
@@ -1048,8 +1558,8 @@ class SymbolicDynamicalSystem(ABC, nn.Module):
 
         # Get linearized dynamics at equilibrium
         A, B = self.linearized_dynamics(x_eq, u_eq)
-        A = A.squeeze().detach().cpu().numpy()
-        B = B.squeeze().detach().cpu().numpy()
+        A = A.squeeze(0).detach().cpu().numpy()
+        B = B.squeeze(0).detach().cpu().numpy()
 
         # Ensure B is 2D (nx, nu)
         if B.ndim == 1:
@@ -1168,10 +1678,10 @@ class SymbolicDynamicalSystem(ABC, nn.Module):
         A, _ = self.linearized_dynamics(
             x_eq, u_eq if len(u_eq.shape) > 1 else u_eq.unsqueeze(0)
         )
-        A = A.squeeze().detach().cpu().numpy()
+        A = A.squeeze(0).detach().cpu().numpy()
 
         C = self.linearized_observation(x_eq)
-        C = C.squeeze().detach().cpu().numpy()
+        C = C.squeeze(0).detach().cpu().numpy()
 
         # Ensure C is 2D (ny, nx)
         if C.ndim == 1:
@@ -1354,14 +1864,16 @@ class SymbolicDynamicalSystem(ABC, nn.Module):
         u_eq = self.u_equilibrium.unsqueeze(0)
 
         A, B = self.linearized_dynamics(x_eq, u_eq)
-        A = A.squeeze().detach().cpu().numpy()
-        B = B.squeeze().detach().cpu().numpy()
+        A = A.squeeze(0).detach().cpu().numpy()  # Only squeeze batch dim
+        B = B.squeeze(0).detach().cpu().numpy()  # Only squeeze batch dim
 
-        # Ensure B is 2D
+        # Ensure B is 2D - if it got squeezed to 1D, reshape
         if B.ndim == 1:
             B = B.reshape(-1, 1)
 
-        C = self.linearized_observation(x_eq).squeeze().detach().cpu().numpy()
+        C = (
+            self.linearized_observation(x_eq).squeeze(0).detach().cpu().numpy()
+        )  # Only squeeze batch dim
 
         # Ensure C is 2D
         if C.ndim == 1:

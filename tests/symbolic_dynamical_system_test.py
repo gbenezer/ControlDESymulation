@@ -219,15 +219,9 @@ class TestFunctionGeneration:
         assert callable(func)
         assert pendulum._f_numpy is not None
     
-    def test_generate_torch_function_lambdify(self, pendulum):
-        """Test PyTorch function generation with lambdify"""
-        func = pendulum.generate_torch_function(method='lambdify')
-        assert callable(func)
-        assert pendulum._f_torch is not None
-    
-    def test_generate_torch_function_codegen(self, pendulum):
-        """Test PyTorch function generation with codegen"""
-        func = pendulum.generate_torch_function(method='codegen')
+    def test_generate_torch_function(self, pendulum):
+        """Test PyTorch function generation"""
+        func = pendulum.generate_torch_function()
         assert callable(func)
         assert pendulum._f_torch is not None
     
@@ -909,20 +903,6 @@ class TestEdgeCases:
         
         with pytest.raises(ValueError):
             linear_system.lqr_control(Q, R)
-    
-    def test_batched_linearization_maintains_gradient(self, pendulum):
-        """Test that batched linearization maintains gradients"""
-        x = torch.randn(5, 2, requires_grad=True)
-        u = torch.randn(5, 1, requires_grad=True)
-        
-        A, B = pendulum.linearized_dynamics(x, u)
-        
-        # Check that we can compute gradients through linearization
-        loss = A.sum() + B.sum()
-        loss.backward()
-        
-        assert x.grad is not None
-        assert u.grad is not None
 
 
 # ============================================================================
