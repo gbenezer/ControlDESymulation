@@ -1,3 +1,17 @@
+"""
+Backend-agnostic code generation utilities.
+
+CURRENT IMPLEMENTATION NOTE:
+PyTorch backend has additional complexity compared to NumPy/JAX due to:
+- Gradient tracking requirements (requires_grad preservation)
+- Complex batching and shape inference
+- Device management across CPU/CUDA
+
+This is technical debt that should be addressed by adding equivalent complexity to NumPy/JAX backends
+
+For now, PyTorch privilege is accepted for backward compatibility.
+"""
+
 from typing import Callable, Literal, Union
 import sympy as sp
 import numpy as np
