@@ -75,15 +75,49 @@ class ArrayBackend(ABC, Generic[ArrayType]):
         """Get default dtype for this backend"""
         pass
 
+    def get_device(self) -> Optional[Any]:
+        """
+        Get device object (backend-specific).
+        
+        Returns:
+            Device object or None if not applicable
+        """
+        return None
+    
+    def get_device_str(self) -> str:
+        """
+        Get device string.
+        
+        Returns:
+            Device string ('cpu', 'cuda', 'gpu', etc.)
+        """
+        return 'cpu'  # Default to CPU
+
 
 class TorchArrayBackend(ArrayBackend):
-    """PyTorch implementation"""
+    """
+    PyTorch array operations with GPU support.
+    
+    Supports CPU, CUDA GPUs, and Apple Silicon (MPS).
+    PyTorch arrays support automatic differentiation and can be
+    moved between devices dynamically.
+    
+    Examples:
+        >>> # CPU backend
+        >>> backend = TorchArrayBackend(device='cpu')
+        >>> arr = backend.ones((3, 3))
+        >>>
+        >>> # CUDA GPU
+        >>> backend = TorchArrayBackend(device='cuda:0')
+        >>> arr = backend.zeros((100, 100))  # On GPU
+    """
 
     def __init__(self, device: str = "cpu", dtype=None):
         import torch
 
         self.torch = torch
-        self.device = device
+        self.device_str = device
+        self.device = torch.device(device)
         self.dtype = dtype or torch.float32
 
     def zeros(self, shape: tuple, dtype=None):
@@ -124,12 +158,45 @@ class TorchArrayBackend(ArrayBackend):
     def get_default_dtype(self):
         return self.dtype
 
+    def get_device(self):
+        """
+        Get the PyTorch device object.
+        
+        Returns:
+            torch.device object
+        """
+        return self.device
+    
+    def get_device_str(self) -> str:
+        """
+        Get the device string.
+        
+        Returns:
+            Device string like 'cpu', 'cuda', 'cuda:0', 'mps'
+        """
+        return self.device_str
+
 
 class NumpyArrayBackend(ArrayBackend):
-    """NumPy implementation"""
+    """
+    NumPy array operations (CPU-only).
+    
+    NumPy is the foundational array library for Python scientific computing.
+    Operations leverage optimized BLAS/LAPACK libraries for linear algebra.
+    
+    Examples:
+        >>> # NumPy backend (always CPU)
+        >>> backend = NumpyArrayBackend(dtype=np.float32)
+        >>> arr = backend.ones((3, 3))
+        >>>
+        >>> # High precision
+        >>> backend = NumpyArrayBackend(dtype=np.float64)
+        >>> arr = backend.eye(10)
+    """
 
     def __init__(self, dtype=np.float32):
         self.dtype = dtype
+        self.device_str = 'cpu'  # ADD: Always CPU for NumPy
 
     def zeros(self, shape: tuple, dtype=None):
         return np.zeros(shape, dtype=dtype or self.dtype)
@@ -168,6 +235,24 @@ class NumpyArrayBackend(ArrayBackend):
 
     def get_default_dtype(self):
         return self.dtype
+
+    def get_device(self):
+        """
+        Get device object (always None for NumPy).
+        
+        Returns:
+            None (NumPy doesn't have device objects)
+        """
+        return None
+    
+    def get_device_str(self) -> str:
+        """
+        Get device string (always 'cpu' for NumPy).
+        
+        Returns:
+            Always 'cpu'
+        """
+        return 'cpu'
 
 
 class JAXArrayBackend(ArrayBackend):
