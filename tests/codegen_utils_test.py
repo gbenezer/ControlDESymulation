@@ -23,6 +23,12 @@ from src.systems.base.codegen_utils import (
     _numpy_matrix_handler,
     _torch_matrix_handler,
     _jax_matrix_handler,
+    _numpy_min,
+    _numpy_max,
+    _torch_min,
+    _torch_max,
+    _jax_min,
+    _jax_max,
 )
 
 # Conditional imports
@@ -850,6 +856,569 @@ class TestDocumentation:
         doc_lower = doc.lower()
         assert "matrix" in doc_lower or "vector" in doc_lower or "expression" in doc_lower
 
+
+# ============================================================================
+# Test: Min/Max Helper Functions (ALL BACKENDS - EQUAL)
+# ============================================================================
+
+class TestMinMaxHelpers:
+    """Test Min/Max helper functions for all backends"""
+    
+    # ========== NumPy Min/Max ==========
+    
+    def test_numpy_min_two_args(self):
+        """Test NumPy min with 2 arguments"""
+        result = _numpy_min(3.0, 5.0)
+        assert np.allclose(result, 3.0)
+    
+    def test_numpy_min_three_args(self):
+        """Test NumPy min with 3 arguments"""
+        result = _numpy_min(5.0, 2.0, 8.0)
+        assert np.allclose(result, 2.0)
+    
+    def test_numpy_min_arrays(self):
+        """Test NumPy min with arrays"""
+        a = np.array([1.0, 5.0])
+        b = np.array([3.0, 2.0])
+        result = _numpy_min(a, b)
+        
+        expected = np.array([1.0, 2.0])
+        assert np.allclose(result, expected)
+    
+    def test_numpy_min_arrays_three_args(self):
+        """Test NumPy min with 3 array arguments"""
+        a = np.array([1.0, 5.0, 3.0])
+        b = np.array([3.0, 2.0, 4.0])
+        c = np.array([2.0, 4.0, 1.0])
+        result = _numpy_min(a, b, c)
+        
+        expected = np.array([1.0, 2.0, 1.0])
+        assert np.allclose(result, expected)
+    
+    def test_numpy_max_two_args(self):
+        """Test NumPy max with 2 arguments"""
+        result = _numpy_max(3.0, 5.0)
+        assert np.allclose(result, 5.0)
+    
+    def test_numpy_max_three_args(self):
+        """Test NumPy max with 3 arguments"""
+        result = _numpy_max(5.0, 2.0, 8.0)
+        assert np.allclose(result, 8.0)
+    
+    def test_numpy_max_arrays(self):
+        """Test NumPy max with arrays"""
+        a = np.array([1.0, 5.0])
+        b = np.array([3.0, 2.0])
+        result = _numpy_max(a, b)
+        
+        expected = np.array([3.0, 5.0])
+        assert np.allclose(result, expected)
+    
+    # ========== PyTorch Min/Max ==========
+    
+    @pytest.mark.skipif(not torch_available, reason="PyTorch not available")
+    def test_torch_min_two_args(self):
+        """Test PyTorch min with 2 arguments"""
+        result = _torch_min(torch.tensor(3.0), torch.tensor(5.0))
+        assert torch.allclose(result, torch.tensor(3.0))
+    
+    @pytest.mark.skipif(not torch_available, reason="PyTorch not available")
+    def test_torch_min_three_args(self):
+        """Test PyTorch min with 3 arguments"""
+        result = _torch_min(torch.tensor(5.0), torch.tensor(2.0), torch.tensor(8.0))
+        assert torch.allclose(result, torch.tensor(2.0))
+    
+    @pytest.mark.skipif(not torch_available, reason="PyTorch not available")
+    def test_torch_min_mixed_types(self):
+        """Test PyTorch min with mixed scalars and tensors"""
+        result = _torch_min(3.0, torch.tensor(5.0))
+        assert torch.allclose(result, torch.tensor(3.0))
+    
+    @pytest.mark.skipif(not torch_available, reason="PyTorch not available")
+    def test_torch_min_preserves_gradients(self):
+        """Test PyTorch min preserves gradient tracking"""
+        a = torch.tensor(3.0, requires_grad=True)
+        b = torch.tensor(5.0, requires_grad=True)
+        result = _torch_min(a, b)
+        
+        assert result.requires_grad
+        result.backward()
+        assert a.grad is not None
+    
+    @pytest.mark.skipif(not torch_available, reason="PyTorch not available")
+    def test_torch_max_two_args(self):
+        """Test PyTorch max with 2 arguments"""
+        result = _torch_max(torch.tensor(3.0), torch.tensor(5.0))
+        assert torch.allclose(result, torch.tensor(5.0))
+    
+    @pytest.mark.skipif(not torch_available, reason="PyTorch not available")
+    def test_torch_max_three_args(self):
+        """Test PyTorch max with 3 arguments"""
+        result = _torch_max(torch.tensor(5.0), torch.tensor(2.0), torch.tensor(8.0))
+        assert torch.allclose(result, torch.tensor(8.0))
+    
+    # ========== JAX Min/Max ==========
+    
+    @pytest.mark.skipif(not jax_available, reason="JAX not available")
+    def test_jax_min_two_args(self):
+        """Test JAX min with 2 arguments"""
+        import jax.numpy as jnp
+        
+        result = _jax_min(3.0, 5.0)
+        assert jnp.allclose(result, 3.0)
+    
+    @pytest.mark.skipif(not jax_available, reason="JAX not available")
+    def test_jax_min_three_args(self):
+        """Test JAX min with 3 arguments"""
+        import jax.numpy as jnp
+        
+        result = _jax_min(5.0, 2.0, 8.0)
+        assert jnp.allclose(result, 2.0)
+    
+    @pytest.mark.skipif(not jax_available, reason="JAX not available")
+    def test_jax_min_arrays(self):
+        """Test JAX min with arrays"""
+        import jax.numpy as jnp
+        
+        a = jnp.array([1.0, 5.0])
+        b = jnp.array([3.0, 2.0])
+        result = _jax_min(a, b)
+        
+        expected = jnp.array([1.0, 2.0])
+        assert jnp.allclose(result, expected)
+    
+    @pytest.mark.skipif(not jax_available, reason="JAX not available")
+    def test_jax_max_two_args(self):
+        """Test JAX max with 2 arguments"""
+        import jax.numpy as jnp
+        
+        result = _jax_max(3.0, 5.0)
+        assert jnp.allclose(result, 5.0)
+    
+    @pytest.mark.skipif(not jax_available, reason="JAX not available")
+    def test_jax_max_three_args(self):
+        """Test JAX max with 3 arguments"""
+        import jax.numpy as jnp
+        
+        result = _jax_max(5.0, 2.0, 8.0)
+        assert jnp.allclose(result, 8.0)
+
+
+# ============================================================================
+# Test: Min/Max in Symbolic Expressions (ALL BACKENDS)
+# ============================================================================
+
+class TestMinMaxInExpressions:
+    """Test Min/Max functions in actual SymPy expressions"""
+    
+    def test_numpy_min_in_expression(self):
+        """Test NumPy with Min in expression"""
+        x, y = sp.symbols('x y')
+        expr = sp.Min(x, y) + 1
+        
+        f = generate_numpy_function(expr, [x, y])
+        result = f(3.0, 5.0)
+        
+        # min(3, 5) + 1 = 4
+        assert np.allclose(result, 4.0)
+    
+    def test_numpy_max_in_expression(self):
+        """Test NumPy with Max in expression"""
+        x, y = sp.symbols('x y')
+        expr = sp.Max(x, y) * 2
+        
+        f = generate_numpy_function(expr, [x, y])
+        result = f(3.0, 5.0)
+        
+        # max(3, 5) * 2 = 10
+        assert np.allclose(result, 10.0)
+    
+    def test_numpy_min_three_args_in_expression(self):
+        """Test NumPy with Min of 3 arguments"""
+        x, y, z = sp.symbols('x y z')
+        expr = sp.Min(x, y, z)
+        
+        f = generate_numpy_function(expr, [x, y, z])
+        result = f(5.0, 2.0, 8.0)
+        
+        assert np.allclose(result, 2.0)
+    
+    @pytest.mark.skipif(not torch_available, reason="PyTorch not available")
+    def test_torch_min_in_expression(self):
+        """Test PyTorch with Min in expression"""
+        x, y = sp.symbols('x y')
+        expr = sp.Min(x, y) + 1
+        
+        f = generate_torch_function(expr, [x, y])
+        result = f(torch.tensor(3.0), torch.tensor(5.0))
+        
+        # min(3, 5) + 1 = 4
+        assert torch.allclose(result, torch.tensor(4.0))
+    
+    @pytest.mark.skipif(not torch_available, reason="PyTorch not available")
+    def test_torch_max_in_expression(self):
+        """Test PyTorch with Max in expression"""
+        x, y = sp.symbols('x y')
+        expr = sp.Max(x, y) * 2
+        
+        f = generate_torch_function(expr, [x, y])
+        result = f(torch.tensor(3.0), torch.tensor(5.0))
+        
+        # max(3, 5) * 2 = 10
+        assert torch.allclose(result, torch.tensor(10.0))
+    
+    @pytest.mark.skipif(not torch_available, reason="PyTorch not available")
+    def test_torch_min_three_args_in_expression(self):
+        """Test PyTorch with Min of 3 arguments"""
+        x, y, z = sp.symbols('x y z')
+        expr = sp.Min(x, y, z)
+        
+        f = generate_torch_function(expr, [x, y, z])
+        result = f(torch.tensor(5.0), torch.tensor(2.0), torch.tensor(8.0))
+        
+        assert torch.allclose(result, torch.tensor(2.0))
+    
+    @pytest.mark.skipif(not jax_available, reason="JAX not available")
+    def test_jax_min_in_expression(self):
+        """Test JAX with Min in expression"""
+        import jax.numpy as jnp
+        
+        x, y = sp.symbols('x y')
+        expr = sp.Min(x, y) + 1
+        
+        f = generate_jax_function(expr, [x, y])
+        result = f(3.0, 5.0)
+        
+        # min(3, 5) + 1 = 4
+        assert jnp.allclose(result, 4.0)
+    
+    @pytest.mark.skipif(not jax_available, reason="JAX not available")
+    def test_jax_max_in_expression(self):
+        """Test JAX with Max in expression"""
+        import jax.numpy as jnp
+        
+        x, y = sp.symbols('x y')
+        expr = sp.Max(x, y) * 2
+        
+        f = generate_jax_function(expr, [x, y])
+        result = f(3.0, 5.0)
+        
+        # max(3, 5) * 2 = 10
+        assert jnp.allclose(result, 10.0)
+    
+    @pytest.mark.skipif(not jax_available, reason="JAX not available")
+    def test_jax_min_three_args_in_expression(self):
+        """Test JAX with Min of 3 arguments"""
+        import jax.numpy as jnp
+        
+        x, y, z = sp.symbols('x y z')
+        expr = sp.Min(x, y, z)
+        
+        f = generate_jax_function(expr, [x, y, z])
+        result = f(5.0, 2.0, 8.0)
+        
+        assert jnp.allclose(result, 2.0)
+
+
+# ============================================================================
+# Test: Min/Max Cross-Backend Consistency
+# ============================================================================
+
+class TestMinMaxConsistency:
+    """Test that Min/Max work consistently across all backends"""
+    
+    def test_all_backends_min_consistency(self):
+        """Test all backends give same result for Min"""
+        x, y = sp.symbols('x y')
+        expr = sp.Min(x, y)
+        
+        input_vals = (3.0, 5.0)
+        results = {}
+        
+        # NumPy
+        f_np = generate_numpy_function(expr, [x, y])
+        np_result = f_np(*input_vals)
+        # Handle scalar or array result
+        results['numpy'] = float(np_result.item() if hasattr(np_result, 'item') else np_result)
+        
+        # PyTorch
+        if torch_available:
+            f_torch = generate_torch_function(expr, [x, y])
+            torch_inputs = [torch.tensor(v) for v in input_vals]
+            torch_result = f_torch(*torch_inputs)
+            # Flatten and take first element
+            results['torch'] = torch_result.flatten()[0].item()
+        
+        # JAX
+        if jax_available:
+            f_jax = generate_jax_function(expr, [x, y])
+            jax_result = f_jax(*input_vals)
+            # Handle scalar or array result
+            results['jax'] = float(jax_result.item() if hasattr(jax_result, 'item') else np.array(jax_result).item())
+        
+        # All should return 3.0
+        for backend, result in results.items():
+            assert np.allclose(result, 3.0), f"{backend} Min failed: got {result}"
+    
+    def test_all_backends_max_consistency(self):
+        """Test all backends give same result for Max"""
+        x, y = sp.symbols('x y')
+        expr = sp.Max(x, y)
+        
+        input_vals = (3.0, 5.0)
+        results = {}
+        
+        # NumPy
+        f_np = generate_numpy_function(expr, [x, y])
+        np_result = f_np(*input_vals)
+        results['numpy'] = float(np_result.item() if hasattr(np_result, 'item') else np_result)
+        
+        # PyTorch
+        if torch_available:
+            f_torch = generate_torch_function(expr, [x, y])
+            torch_inputs = [torch.tensor(v) for v in input_vals]
+            torch_result = f_torch(*torch_inputs)
+            results['torch'] = torch_result.flatten()[0].item()
+        
+        # JAX
+        if jax_available:
+            f_jax = generate_jax_function(expr, [x, y])
+            jax_result = f_jax(*input_vals)
+            results['jax'] = float(jax_result.item() if hasattr(jax_result, 'item') else np.array(jax_result).item())
+        
+        # All should return 5.0
+        for backend, result in results.items():
+            assert np.allclose(result, 5.0), f"{backend} Max failed: got {result}"
+    
+    def test_all_backends_min_three_args_consistency(self):
+        """Test all backends handle Min with 3+ args consistently"""
+        x, y, z = sp.symbols('x y z')
+        expr = sp.Min(x, y, z)
+        
+        input_vals = (7.0, 3.0, 9.0)
+        results = {}
+        
+        # NumPy
+        f_np = generate_numpy_function(expr, [x, y, z])
+        np_result = f_np(*input_vals)
+        results['numpy'] = float(np_result.item() if hasattr(np_result, 'item') else np_result)
+        
+        # PyTorch
+        if torch_available:
+            f_torch = generate_torch_function(expr, [x, y, z])
+            torch_inputs = [torch.tensor(v) for v in input_vals]
+            torch_result = f_torch(*torch_inputs)
+            results['torch'] = torch_result.flatten()[0].item()
+        
+        # JAX
+        if jax_available:
+            f_jax = generate_jax_function(expr, [x, y, z])
+            jax_result = f_jax(*input_vals)
+            results['jax'] = float(jax_result.item() if hasattr(jax_result, 'item') else np.array(jax_result).item())
+        
+        # All should return 3.0
+        for backend, result in results.items():
+            assert np.allclose(result, 3.0), f"{backend} Min(3 args) failed: got {result}"
+
+
+# ============================================================================
+# Test: Practical Use Cases
+# ============================================================================
+
+class TestMinMaxUseCases:
+    """Test realistic use cases for Min/Max in dynamics"""
+    
+    def test_relu_activation_all_backends(self):
+        """Test ReLU-like activation: max(0, x)"""
+        x = sp.Symbol('x')
+        expr = sp.Max(0, x)  # ReLU
+        
+        test_values = [-2.0, 0.0, 3.0]
+        expected_outputs = [0.0, 0.0, 3.0]
+        
+        for test_val, expected in zip(test_values, expected_outputs):
+            # NumPy
+            f_np = generate_numpy_function(expr, [x])
+            assert np.allclose(f_np(test_val), expected)
+            
+            # PyTorch
+            if torch_available:
+                f_torch = generate_torch_function(expr, [x])
+                assert torch.allclose(f_torch(torch.tensor(test_val)), 
+                                     torch.tensor(expected))
+            
+            # JAX
+            if jax_available:
+                import jax.numpy as jnp
+                f_jax = generate_jax_function(expr, [x])
+                assert jnp.allclose(f_jax(test_val), expected)
+    
+    def test_velocity_saturation_all_backends(self):
+        """Test velocity saturation: min(max(v, -v_max), v_max)"""
+        v = sp.Symbol('v')
+        v_max = 10.0
+        
+        # Clamp velocity to [-v_max, v_max]
+        expr = sp.Min(sp.Max(v, -v_max), v_max)
+        
+        test_cases = [
+            (-15.0, -10.0),  # Below min → clamped to -10
+            (0.0, 0.0),       # Within range → unchanged
+            (5.0, 5.0),       # Within range → unchanged
+            (15.0, 10.0),     # Above max → clamped to 10
+        ]
+        
+        for input_val, expected in test_cases:
+            # NumPy
+            f_np = generate_numpy_function(expr, [v])
+            assert np.allclose(f_np(input_val), expected)
+            
+            # PyTorch
+            if torch_available:
+                f_torch = generate_torch_function(expr, [v])
+                assert torch.allclose(f_torch(torch.tensor(input_val)), 
+                                     torch.tensor(expected))
+            
+            # JAX
+            if jax_available:
+                import jax.numpy as jnp
+                f_jax = generate_jax_function(expr, [v])
+                assert jnp.allclose(f_jax(input_val), expected)
+    
+    def test_deadband_function_all_backends(self):
+        """Test deadband: if |x| < threshold, return 0, else return x"""
+        x, thresh = sp.symbols('x thresh')
+        
+        # Deadband implementation using Min/Max
+        # This is complex but shows Min/Max can handle real control scenarios
+        expr = sp.Max(0, sp.Abs(x) - thresh) * sp.sign(x)
+        
+        test_cases = [
+            (0.5, 1.0, 0.0),    # Below threshold → 0
+            (2.0, 1.0, 1.0),    # Above threshold → reduced
+            (-2.0, 1.0, -1.0),  # Negative, above threshold
+        ]
+        
+        for x_val, t_val, expected in test_cases:
+            # NumPy
+            f_np = generate_numpy_function(expr, [x, thresh])
+            result_np = f_np(x_val, t_val)
+            assert np.allclose(result_np, expected), f"NumPy failed for x={x_val}"
+            
+            # PyTorch
+            if torch_available:
+                f_torch = generate_torch_function(expr, [x, thresh])
+                result_torch = f_torch(torch.tensor(x_val), torch.tensor(t_val))
+                assert torch.allclose(result_torch, torch.tensor(expected)), \
+                    f"PyTorch failed for x={x_val}"
+            
+            # JAX
+            if jax_available:
+                import jax.numpy as jnp
+                f_jax = generate_jax_function(expr, [x, thresh])
+                result_jax = f_jax(x_val, t_val)
+                assert jnp.allclose(result_jax, expected), f"JAX failed for x={x_val}"
+
+
+# ============================================================================
+# Test: Edge Cases for Min/Max
+# ============================================================================
+
+class TestMinMaxEdgeCases:
+    """Test edge cases for Min/Max handlers"""
+    
+    def test_numpy_min_single_arg(self):
+        """Test NumPy min with single argument"""
+        result = _numpy_min(5.0)
+        assert np.allclose(result, 5.0)
+    
+    @pytest.mark.skipif(not torch_available, reason="PyTorch not available")
+    def test_torch_min_single_arg(self):
+        """Test PyTorch min with single argument"""
+        result = _torch_min(torch.tensor(5.0))
+        assert torch.allclose(result, torch.tensor(5.0))
+    
+    @pytest.mark.skipif(not jax_available, reason="JAX not available")
+    def test_jax_min_single_arg(self):
+        """Test JAX min with single argument"""
+        import jax.numpy as jnp
+        result = _jax_min(5.0)
+        assert jnp.allclose(result, 5.0)
+    
+    def test_numpy_min_zero_args_raises(self):
+        """Test that Min with no args raises error"""
+        with pytest.raises(ValueError, match="at least one argument"):
+            _numpy_min()
+    
+    @pytest.mark.skipif(not torch_available, reason="PyTorch not available")
+    def test_torch_min_zero_args_raises(self):
+        """Test that Min with no args raises error"""
+        with pytest.raises(ValueError, match="at least one argument"):
+            _torch_min()
+    
+    @pytest.mark.skipif(not jax_available, reason="JAX not available")
+    def test_jax_min_zero_args_raises(self):
+        """Test that Min with no args raises error"""
+        with pytest.raises(ValueError, match="at least one argument"):
+            _jax_min()
+
+
+# ============================================================================
+# Test: Backend Equality for Min/Max
+# ============================================================================
+
+class TestMinMaxEquality:
+    """Verify that all backends treat Min/Max equally"""
+    
+    def test_all_backends_have_min_handlers(self):
+        """Test that all backends have min handler functions"""
+        assert callable(_numpy_min)
+        assert callable(_torch_min)
+        assert callable(_jax_min)
+    
+    def test_all_backends_have_max_handlers(self):
+        """Test that all backends have max handler functions"""
+        assert callable(_numpy_max)
+        assert callable(_torch_max)
+        assert callable(_jax_max)
+    
+    def test_min_handlers_same_signature(self):
+        """Test that all min handlers have same signature"""
+        import inspect
+        
+        sig_numpy = inspect.signature(_numpy_min)
+        sig_torch = inspect.signature(_torch_min)
+        sig_jax = inspect.signature(_jax_min)
+        
+        # All should accept *args
+        assert sig_numpy.parameters['args'].kind == inspect.Parameter.VAR_POSITIONAL
+        assert sig_torch.parameters['args'].kind == inspect.Parameter.VAR_POSITIONAL
+        assert sig_jax.parameters['args'].kind == inspect.Parameter.VAR_POSITIONAL
+    
+    def test_max_handlers_same_signature(self):
+        """Test that all max handlers have same signature"""
+        import inspect
+        
+        sig_numpy = inspect.signature(_numpy_max)
+        sig_torch = inspect.signature(_torch_max)
+        sig_jax = inspect.signature(_jax_max)
+        
+        # All should accept *args
+        assert sig_numpy.parameters['args'].kind == inspect.Parameter.VAR_POSITIONAL
+        assert sig_torch.parameters['args'].kind == inspect.Parameter.VAR_POSITIONAL
+        assert sig_jax.parameters['args'].kind == inspect.Parameter.VAR_POSITIONAL
+    
+    def test_all_handlers_have_docstrings(self):
+        """Test that all Min/Max handlers have docstrings"""
+        handlers = [
+            _numpy_min, _numpy_max,
+            _torch_min, _torch_max,
+            _jax_min, _jax_max,
+        ]
+        
+        for handler in handlers:
+            assert handler.__doc__ is not None, f"{handler.__name__} missing docstring"
+            assert "SymPy" in handler.__doc__, f"{handler.__name__} should mention SymPy"
 
 # ============================================================================
 # Run Tests
