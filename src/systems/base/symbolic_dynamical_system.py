@@ -9,11 +9,11 @@ import numpy as np
 import scipy
 
 # necessary sub-object import
-from src.systems.base.equilibrium import EquilibriumHandler
-from src.systems.base.monitoring import PerformanceMonitor
+from src.systems.base.equilibrium_handler import EquilibriumHandler
 
 # Define type alias for any array type
 ArrayLike = Union[np.ndarray, "torch.Tensor", "jax.Array"]
+
 
 class SymbolicDynamicalSystem(ABC):
     """
@@ -61,8 +61,13 @@ class SymbolicDynamicalSystem(ABC):
         # COMPOSITION: Delegate equilibrium management
         self.equilibria = EquilibriumHandler(self.nx, self.nu)
 
-        # COMPOSITION: Delegate performance monitoring (optional)
-        self.performance = PerformanceMonitor()
+        # for backward compatibility
+        self._perf_stats = {
+            "forward_calls": 0,
+            "forward_time": 0.0,
+            "linearization_calls": 0,
+            "linearization_time": 0.0,
+        }
 
     @abstractmethod
     def define_system(self, *args, **kwargs):
@@ -392,7 +397,201 @@ class SymbolicDynamicalSystem(ABC):
         """Number of generalized coordinates (for higher-order systems)"""
         return self.nx // self.order if self.order > 1 else self.nx
 
+    # Utility functions
+    def set_default_backend(self, backend: str, device: Optional[str] = None):
+        """
+        Set default backend for this system.
+
+        Args:
+            backend: 'numpy', 'torch', or 'jax'
+            device: Optional device ('cpu', 'cuda', 'gpu:0', etc.)
+
+        Example:
+            >>> system.set_default_backend('jax', device='gpu:0')
+            >>> dx = system(x, u, backend='default')  # Uses JAX on GPU
+        """
+        valid_backends = ["numpy", "torch", "jax"]
+        if backend not in valid_backends:
+            raise ValueError(f"Invalid backend '{backend}'. Must be one of {valid_backends}")
+
+        # Check if backend is available
+        self._check_backend_available(backend)
+
+        self._default_backend = backend
+        if device is not None:
+            self._preferred_device = device
+
+        return self
+
+    def _detect_backend(self, x) -> str:
+        """Detect backend from input type"""
+        try:
+            import torch
+
+            if isinstance(x, torch.Tensor):
+                return "torch"
+        except ImportError:
+            pass
+
+        try:
+            import jax.numpy as jnp
+
+            if isinstance(x, jnp.ndarray):
+                return "jax"
+        except ImportError:
+            pass
+
+        if isinstance(x, np.ndarray):
+            return "numpy"
+
+        raise TypeError(f"Unknown input type: {type(x)}")
+
+    def _check_backend_available(self, backend: str):
+        """Raise error if backend not available"""
+        if backend == "torch":
+            try:
+                import torch
+            except ImportError:
+                raise RuntimeError("PyTorch backend not available. Install with: pip install torch")
+        elif backend == "jax":
+            try:
+                import jax
+            except ImportError:
+                raise RuntimeError("JAX backend not available. Install with: pip install jax")
+
+    def _convert_to_backend(self, arr, backend: str):
+        """Convert array to target backend"""
+        # Already correct backend
+        current_backend = self._detect_backend(arr)
+        if current_backend == backend:
+            return arr
+
+        # Convert to NumPy first (common intermediate)
+        if current_backend == "torch":
+            arr_np = arr.detach().cpu().numpy()
+        elif current_backend == "jax":
+            arr_np = np.array(arr)
+        else:
+            arr_np = arr
+
+        # Convert to target backend
+        if backend == "numpy":
+            return arr_np
+        elif backend == "torch":
+            import torch
+
+            return torch.tensor(arr_np, dtype=torch.float32, device=self._preferred_device)
+        elif backend == "jax":
+            import jax.numpy as jnp
+            from jax import device_put, devices
+
+            arr_jax = jnp.array(arr_np)
+            if self._preferred_device != "cpu":
+                target_device = devices(self._preferred_device)[0]
+                arr_jax = device_put(arr_jax, target_device)
+            return arr_jax
+
+        raise ValueError(f"Unknown backend: {backend}")
+
+    def _dispatch_to_backend(self, method_prefix: str, backend: Optional[str], *args):
+        """
+        Generic backend dispatcher.
+
+        Args:
+            method_prefix: Method name prefix (e.g., '_forward', '_h', '_linearized_dynamics')
+            backend: Backend selection
+            *args: Arguments to pass to backend method
+
+        Returns:
+            Result from backend-specific method
+        """
+        # Determine backend from first argument (usually x)
+        if backend == "default":
+            target_backend = self._default_backend
+        elif backend is None:
+            target_backend = self._detect_backend(args[0])
+        else:
+            target_backend = backend
+
+        # Check availability
+        self._check_backend_available(target_backend)
+
+        # Get backend-specific method
+        method_name = f"{method_prefix}_{target_backend}"
+        method = getattr(self, method_name)
+
+        # Call it
+        return method(*args)
+
     # Symbolic methods
+    def _cache_jacobians(self, backend="torch"):
+        """
+        Cache symbolic Jacobians and generate numerical functions for improved performance
+
+        Args:
+            backend: Target backend ('torch', 'jax', 'numpy')
+        """
+
+        from src.systems.base.codegen_utils import generate_function
+
+        all_vars = self.state_vars + self.control_vars
+
+        # Set backend-specific kwargs
+        if backend == "torch":
+            backend_kwargs = {}
+        elif backend == "jax":
+            backend_kwargs = {"jit": True}
+        else:  # numpy
+            backend_kwargs = {}
+
+        # Cache dynamics Jacobians
+        if self._f_sym is not None and self._A_sym_cached is None:
+            self._A_sym_cached = self._f_sym.jacobian(self.state_vars)
+            self._B_sym_cached = self._f_sym.jacobian(self.control_vars)
+
+            A_with_params = self.substitute_parameters(self._A_sym_cached)
+            B_with_params = self.substitute_parameters(self._B_sym_cached)
+
+            if backend == "torch":
+                self._A_torch_fn = generate_function(
+                    A_with_params, all_vars, backend="torch", **backend_kwargs
+                )
+                self._B_torch_fn = generate_function(
+                    B_with_params, all_vars, backend="torch", **backend_kwargs
+                )
+            elif backend == "jax":
+                self._A_jax_fn = generate_function(
+                    A_with_params, all_vars, backend="jax", **backend_kwargs
+                )
+                self._B_jax_fn = generate_function(
+                    B_with_params, all_vars, backend="jax", **backend_kwargs
+                )
+            elif backend == "numpy":
+                self._A_numpy_fn = generate_function(
+                    A_with_params, all_vars, backend="numpy", **backend_kwargs
+                )
+                self._B_numpy_fn = generate_function(
+                    B_with_params, all_vars, backend="numpy", **backend_kwargs
+                )
+
+        # Cache observation Jacobian
+        if self._h_sym is not None and self._C_sym_cached is None:
+            self._C_sym_cached = self._h_sym.jacobian(self.state_vars)
+            C_with_params = self.substitute_parameters(self._C_sym_cached)
+
+            if backend == "torch":
+                self._C_torch_fn = generate_function(
+                    C_with_params, self.state_vars, backend="torch", **backend_kwargs
+                )
+            elif backend == "jax":
+                self._C_jax_fn = generate_function(
+                    C_with_params, self.state_vars, backend="jax", **backend_kwargs
+                )
+            elif backend == "numpy":
+                self._C_numpy_fn = generate_function(
+                    C_with_params, self.state_vars, backend="numpy", **backend_kwargs
+                )
+
     def substitute_parameters(self, expr: Union[sp.Expr, sp.Matrix]) -> Union[sp.Expr, sp.Matrix]:
         """
         Substitute numerical parameter values into symbolic expression
@@ -515,38 +714,75 @@ class SymbolicDynamicalSystem(ABC):
         return C
 
     def verify_jacobians(
-        self, x: torch.Tensor, u: torch.Tensor, tol: float = 1e-3
+        self, x: ArrayLike, u: ArrayLike, tol: float = 1e-3, backend: str = "torch"
     ) -> Dict[str, Union[bool, float]]:
         """
-        Verify symbolic Jacobians against numerical finite differences
+        Verify symbolic Jacobians against automatic differentiation.
 
-        Checks:
-        - A_match: Does ∂f/∂x from SymPy match autograd?
-        - B_match: Does ∂f/∂u from SymPy match autograd?
-
-        Use for:
-        - Debugging symbolic derivations after system modifications
-        - Ensuring code generation correctness
-        - Validating against hardcoded implementations
+        Uses autodiff to numerically compute Jacobians and compares against
+        symbolic derivation. Requires a backend with autodiff (torch or jax).
 
         Args:
-            x: State at which to verify (can be 1D or 2D)
-            u: Control at which to verify (can be 1D or 2D)
+            x: State at which to verify
+            u: Control at which to verify
             tol: Tolerance for considering Jacobians equal
+            backend: Backend for autodiff ('torch' or 'jax')
+                    NumPy doesn't support autodiff
 
         Returns:
             Dict with 'A_match', 'B_match' booleans and error magnitudes
+
+        Raises:
+            RuntimeError: If backend doesn't support autodiff
+
+        Example:
+            >>> # Using PyTorch
+            >>> x = torch.tensor([0.1, 0.0])
+            >>> u = torch.tensor([0.0])
+            >>> results = system.verify_jacobians(x, u, backend='torch')
+            >>>
+            >>> # Using JAX
+            >>> x = jnp.array([0.1, 0.0])
+            >>> u = jnp.array([0.0])
+            >>> results = system.verify_jacobians(x, u, backend='jax')
         """
+        if backend not in ["torch", "jax"]:
+            raise ValueError(
+                f"Jacobian verification requires autodiff backend ('torch' or 'jax'), "
+                f"got '{backend}'. NumPy doesn't support automatic differentiation."
+            )
+
+        # Check backend availability
+        self._check_backend_available(backend)
+
+        # Dispatch to backend-specific implementation
+        if backend == "torch":
+            return self._verify_jacobians_torch(x, u, tol)
+        else:  # jax
+            return self._verify_jacobians_jax(x, u, tol)
+
+    def _verify_jacobians_torch(
+        self, x: ArrayLike, u: ArrayLike, tol: float
+    ) -> Dict[str, Union[bool, float]]:
+        """PyTorch-based Jacobian verification"""
+        import torch
+
+        # Convert to torch if needed
+        if not isinstance(x, torch.Tensor):
+            x = torch.tensor(np.asarray(x), dtype=torch.float32)
+        if not isinstance(u, torch.Tensor):
+            u = torch.tensor(np.asarray(u), dtype=torch.float32)
+
         # Ensure proper 2D shape (batch_size=1, dim)
         x_2d = x.reshape(1, -1) if len(x.shape) <= 1 else x
         u_2d = u.reshape(1, -1) if len(u.shape) <= 1 else u
 
-        # Clone for autograd - keep 2D shape
+        # Clone for autograd
         x_grad = x_2d.clone().requires_grad_(True)
         u_grad = u_2d.clone().requires_grad_(True)
 
         # Compute symbolic Jacobians
-        A_sym, B_sym = self.linearized_dynamics(x_2d.detach(), u_2d.detach())
+        A_sym, B_sym = self.linearized_dynamics(x_2d.detach(), u_2d.detach(), backend="torch")
 
         # Ensure 3D shape for batch processing
         if len(A_sym.shape) == 2:
@@ -554,24 +790,20 @@ class SymbolicDynamicalSystem(ABC):
             B_sym = B_sym.unsqueeze(0)
 
         # Compute numerical Jacobians via autograd
-        fx = self.forward(x_grad, u_grad)  # fx shape: (1, n_outputs)
+        fx = self.forward(x_grad, u_grad, backend="torch")
 
-        # - First-order: n_outputs = nx (all state derivatives)
-        # - Second-order: n_outputs = nq (only accelerations)
-        # - Higher-order: n_outputs = nq (highest derivative only)
+        # Determine output dimension
         if self.order == 1:
             n_outputs = self.nx
         else:
             n_outputs = self.nq
 
-        # For higher-order systems, the Jacobians A and B are of full state-space form
-        # but forward() only returns the highest derivative. We need to verify only
-        # the relevant part of the Jacobians.
+        # Compute gradients
         A_num = torch.zeros_like(A_sym)
         B_num = torch.zeros_like(B_sym)
 
         if self.order == 1:
-            # First-order: forward() returns dx/dt, verify full A and B
+            # First-order: verify full A and B
             for i in range(n_outputs):
                 if fx[0, i].requires_grad:
                     grad_x = torch.autograd.grad(
@@ -580,14 +812,10 @@ class SymbolicDynamicalSystem(ABC):
                     grad_u = torch.autograd.grad(
                         fx[0, i], u_grad, retain_graph=True, create_graph=False
                     )[0]
-                    A_num[0, i] = grad_x[0]  # grad_x shape: (1, nx)
-                    B_num[0, i] = grad_u[0]  # grad_u shape: (1, nu)
+                    A_num[0, i] = grad_x[0]
+                    B_num[0, i] = grad_u[0]
         else:
-            # Higher-order: forward() returns highest derivative only
-            # The full state-space A matrix has structure:
-            # For second-order: A = [[0, I], [A_accel]]
-            # We verify only the A_accel part (rows nq:nx)
-
+            # Higher-order: verify acceleration part
             for i in range(n_outputs):
                 if fx[0, i].requires_grad:
                     grad_x = torch.autograd.grad(
@@ -597,26 +825,68 @@ class SymbolicDynamicalSystem(ABC):
                         fx[0, i], u_grad, retain_graph=True, create_graph=False
                     )[0]
 
-                    # Place in the acceleration rows of the full state-space matrix
                     row_idx = (self.order - 1) * self.nq + i
                     A_num[0, row_idx] = grad_x[0]
                     B_num[0, row_idx] = grad_u[0]
 
-            # For the derivative relationships (upper rows), we verify analytically
-            # These should be identity blocks: dq/dt = qdot, etc.
-            # The symbolic linearization already includes these, so we just copy them
+            # Copy derivative relationships
             for i in range((self.order - 1) * self.nq):
                 A_num[0, i] = A_sym[0, i]
                 B_num[0, i] = B_sym[0, i]
 
+        # Compute errors
         A_error = (A_sym - A_num).abs().max().item()
         B_error = (B_sym - B_num).abs().max().item()
-        A_match = A_error < tol
-        B_match = B_error < tol
 
         return {
-            "A_match": bool(A_match),
-            "B_match": bool(B_match),
+            "A_match": bool(A_error < tol),
+            "B_match": bool(B_error < tol),
+            "A_error": float(A_error),
+            "B_error": float(B_error),
+        }
+
+    def _verify_jacobians_jax(
+        self, x: ArrayLike, u: ArrayLike, tol: float
+    ) -> Dict[str, Union[bool, float]]:
+        """JAX-based Jacobian verification"""
+        import jax
+        import jax.numpy as jnp
+
+        # Convert to JAX if needed
+        if not isinstance(x, jnp.ndarray):
+            x = jnp.array(np.asarray(x))
+        if not isinstance(u, jnp.ndarray):
+            u = jnp.array(np.asarray(u))
+
+        # Ensure proper shape
+        x_2d = x.reshape(1, -1) if x.ndim <= 1 else x
+        u_2d = u.reshape(1, -1) if u.ndim <= 1 else u
+
+        # Compute symbolic Jacobians
+        A_sym, B_sym = self.linearized_dynamics(x_2d, u_2d, backend="jax")
+
+        # For JAX, use the autodiff Jacobian computation directly
+        # (which is what _linearized_dynamics_jax already does!)
+        # So we can just compare against symbolic evaluation
+
+        # Get symbolic Jacobians as NumPy
+        x_np = np.array(x_2d[0])
+        u_np = np.array(u_2d[0])
+        A_sym_np, B_sym_np = self.linearized_dynamics_symbolic(sp.Matrix(x_np), sp.Matrix(u_np))
+        A_sym_np = np.array(A_sym_np, dtype=np.float64)
+        B_sym_np = np.array(B_sym_np, dtype=np.float64)
+
+        # Convert JAX results to NumPy for comparison
+        A_jax_np = np.array(A_sym)
+        B_jax_np = np.array(B_sym)
+
+        # Compute errors
+        A_error = np.abs(A_sym_np - A_jax_np).max()
+        B_error = np.abs(B_sym_np - B_jax_np).max()
+
+        return {
+            "A_match": bool(A_error < tol),
+            "B_match": bool(B_error < tol),
             "A_error": float(A_error),
             "B_error": float(B_error),
         }
@@ -730,94 +1000,6 @@ class SymbolicDynamicalSystem(ABC):
 
         return func
 
-    # helper methods
-    def _detect_backend(self, x) -> str:
-        """Detect backend from input type"""
-        try:
-            import torch
-
-            if isinstance(x, torch.Tensor):
-                return "torch"
-        except ImportError:
-            pass
-
-        try:
-            import jax.numpy as jnp
-
-            if isinstance(x, jnp.ndarray):
-                return "jax"
-        except ImportError:
-            pass
-
-        if isinstance(x, np.ndarray):
-            return "numpy"
-
-        raise TypeError(f"Unknown input type: {type(x)}")
-
-    def _convert_to_backend(self, arr, backend: str):
-        """Convert array to target backend"""
-        # Already correct backend
-        current_backend = self._detect_backend(arr)
-        if current_backend == backend:
-            return arr
-
-        # Convert to NumPy first (common intermediate)
-        if current_backend == "torch":
-            arr_np = arr.detach().cpu().numpy()
-        elif current_backend == "jax":
-            arr_np = np.array(arr)
-        else:
-            arr_np = arr
-
-        # Convert to target backend
-        if backend == "numpy":
-            return arr_np
-        elif backend == "torch":
-            import torch
-
-            return torch.tensor(arr_np, dtype=torch.float32, device=self._preferred_device)
-        elif backend == "jax":
-            import jax.numpy as jnp
-            from jax import device_put, devices
-
-            arr_jax = jnp.array(arr_np)
-            if self._preferred_device != "cpu":
-                target_device = devices(self._preferred_device)[0]
-                arr_jax = device_put(arr_jax, target_device)
-            return arr_jax
-
-        raise ValueError(f"Unknown backend: {backend}")
-
-    def _dispatch_to_backend(self, method_prefix: str, backend: Optional[str], *args):
-        """
-        Generic backend dispatcher.
-
-        Args:
-            method_prefix: Method name prefix (e.g., '_forward', '_h', '_linearized_dynamics')
-            backend: Backend selection
-            *args: Arguments to pass to backend method
-
-        Returns:
-            Result from backend-specific method
-        """
-        # Determine backend from first argument (usually x)
-        if backend == "default":
-            target_backend = self._default_backend
-        elif backend is None:
-            target_backend = self._detect_backend(args[0])
-        else:
-            target_backend = backend
-
-        # Check availability
-        self._check_backend_available(target_backend)
-
-        # Get backend-specific method
-        method_name = f"{method_prefix}_{target_backend}"
-        method = getattr(self, method_name)
-
-        # Call it
-        return method(*args)
-
     # forward methods
     def forward(self, x, u, backend: Optional[str] = None):
         """
@@ -852,24 +1034,24 @@ class SymbolicDynamicalSystem(ABC):
 
         return self._dispatch_to_backend("_forward", backend, x, u)
 
-    def _forward_torch(self, x: torch.Tensor, u: torch.Tensor) -> torch.Tensor:
+    def _forward_torch(self, x, u):
         """PyTorch backend implementation"""
         import torch
 
         start_time = time.time()
 
-        # Input validation - handle edge cases
+        # Input validation
         if len(x.shape) == 0 or len(u.shape) == 0:
             raise ValueError("Input tensors must be at least 1D")
 
-        # Check dimensions only if tensors are at least 1D
         if len(x.shape) >= 1 and x.shape[-1] != self.nx:
             raise ValueError(f"Expected state dimension {self.nx}, got {x.shape[-1]}")
         if len(u.shape) >= 1 and u.shape[-1] != self.nu:
             raise ValueError(f"Expected control dimension {self.nu}, got {u.shape[-1]}")
 
+        # Generate function if not cached
         if self._f_torch is None:
-            self.generate_torch_function()
+            self._generate_dynamics_function("torch")  # ← Use consolidated method
 
         # Handle batched vs single evaluation
         if len(x.shape) == 1:
@@ -910,8 +1092,9 @@ class SymbolicDynamicalSystem(ABC):
         if u.ndim >= 1 and u.shape[-1] != self.nu:
             raise ValueError(f"Expected control dimension {self.nu}, got {u.shape[-1]}")
 
-        if not hasattr(self, "_f_jax") or self._f_jax is None:
-            self.generate_jax_function()
+        # Generate function if not cached
+        if self._f_jax is None:
+            self._generate_dynamics_function("jax", jit=True)  # ← Use consolidated method
 
         # Handle batched vs single evaluation
         if x.ndim == 1:
@@ -921,7 +1104,7 @@ class SymbolicDynamicalSystem(ABC):
         else:
             squeeze_output = False
 
-        # For batched computation, use vmap for efficiency
+        # For batched computation, use vmap
         if x.shape[0] > 1:
 
             @jax.vmap
@@ -955,8 +1138,9 @@ class SymbolicDynamicalSystem(ABC):
         if u.ndim >= 1 and u.shape[-1] != self.nu:
             raise ValueError(f"Expected control dimension {self.nu}, got {u.shape[-1]}")
 
+        # Generate function if not cached
         if self._f_numpy is None:
-            self.generate_numpy_function()
+            self._generate_dynamics_function("numpy")  # ← Use consolidated method
 
         # Handle batched vs single evaluation
         if x.ndim == 1:
@@ -965,7 +1149,7 @@ class SymbolicDynamicalSystem(ABC):
             result = self._f_numpy(*(x_list + u_list))
             return np.array(result).flatten()
         else:
-            # Batched numpy evaluation
+            # Batched evaluation
             results = []
             for i in range(x.shape[0]):
                 x_list = [x[i, j] for j in range(self.nx)]
@@ -974,7 +1158,7 @@ class SymbolicDynamicalSystem(ABC):
                 results.append(np.array(result).flatten())
             return np.stack(results)
 
-    def linearized_dynamics(self, x, u):
+    def linearized_dynamics(self, x, u, backend: Optional[str] = None):
         """
         Numerical evaluation of linearized dynamics at point (x, u)
 
@@ -1083,7 +1267,7 @@ class SymbolicDynamicalSystem(ABC):
 
         # Ensure dynamics function is available
         if not hasattr(self, "_f_jax") or self._f_jax is None:
-            self.generate_jax_function()
+            self._generate_dynamics_function("jax", jit=True)
 
         # Handle batched input
         if x.ndim == 1:
@@ -1172,7 +1356,29 @@ class SymbolicDynamicalSystem(ABC):
 
         return A_batch, B_batch
 
-    def linearized_observation(self, x):
+    def _generate_output_function(self, backend: str, **kwargs):
+        """Generate output function h(x) for backend"""
+        from src.systems.base.codegen_utils import generate_function
+
+        # Check if already cached
+        cache_attr = f"_h_{backend}"
+        if getattr(self, cache_attr, None) is not None:
+            return getattr(self, cache_attr)
+
+        # No custom output - return identity
+        if self._h_sym is None:
+            return None
+
+        # Generate function
+        h_with_params = self.substitute_parameters(self._h_sym)
+        func = generate_function(h_with_params, self.state_vars, backend=backend, **kwargs)
+
+        # Cache
+        setattr(self, cache_attr, func)
+
+        return func
+
+    def linearized_observation(self, x, backend: Optional[str] = None):
         """
         Numerical evaluation of output linearization C = dh/dx
 
@@ -1384,10 +1590,7 @@ class SymbolicDynamicalSystem(ABC):
             return x
 
         if self._h_torch is None:
-            from src.systems.base.codegen_utils import generate_torch_function
-
-            h_with_params = self.substitute_parameters(self._h_sym)
-            self._h_torch = generate_torch_function(h_with_params, self.state_vars)
+            self._generate_output_function("torch")
 
         # Handle batched input
         if len(x.shape) == 1:
@@ -1426,10 +1629,7 @@ class SymbolicDynamicalSystem(ABC):
 
         # Generate NumPy function for h if not cached
         if self._h_numpy is None:
-            from src.systems.base.codegen_utils import generate_numpy_function
-
-            h_with_params = self.substitute_parameters(self._h_sym)
-            self._h_numpy = generate_numpy_function(h_with_params, self.state_vars)
+            self._generate_output_function("numpy")
 
         # Handle batched input
         if x.ndim == 1:
@@ -1466,10 +1666,7 @@ class SymbolicDynamicalSystem(ABC):
 
         # Generate JAX function for h if not cached
         if not hasattr(self, "_h_jax") or self._h_jax is None:
-            from src.systems.base.codegen_utils import generate_jax_function
-
-            h_with_params = self.substitute_parameters(self._h_sym)
-            self._h_jax = generate_jax_function(h_with_params, self.state_vars, jit=True)
+            self._generate_output_function("jax", jit=True)
 
         # Handle batched input
         if x.ndim == 1:
@@ -1537,7 +1734,7 @@ class SymbolicDynamicalSystem(ABC):
     def control(self):
         """Get control designer for this system"""
         if not hasattr(self, "_control_designer"):
-            from src.control import ControlDesigner
+            from src.control.control_designer import ControlDesigner
 
             self._control_designer = ControlDesigner(self)
         return self._control_designer
