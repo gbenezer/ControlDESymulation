@@ -1,1002 +1,1453 @@
 """
-Unit tests for SymbolicDynamicalSystem
-Tests all methods with multiple backends (torch, jax, numpy)
+Comprehensive unit tests for SymbolicDynamicalSystem
+
+Tests cover:
+1. System initialization and validation
+2. Backend detection and conversion
+3. Forward dynamics (all backends)
+4. Linearization (all backends)
+5. Output functions (all backends)
+6. Equilibrium handling
+7. Backend switching and device management
+8. Code generation and caching
+9. Performance monitoring
+10. Configuration save/load
 """
 
 import pytest
 import numpy as np
-import torch
 import sympy as sp
-from typing import Tuple
+from typing import Dict, List, Tuple
 
-# Try to import JAX, mark tests as skipped if not available
+# Conditional imports for backends
+torch_available = True
+try:
+    import torch
+except ImportError:
+    torch_available = False
+
+jax_available = True
 try:
     import jax
     import jax.numpy as jnp
-
-    JAX_AVAILABLE = True
 except ImportError:
-    JAX_AVAILABLE = False
-    jnp = None
+    jax_available = False
 
 from src.systems.base.symbolic_dynamical_system import SymbolicDynamicalSystem
-from src.systems.builtin.mechanical_systems import SymbolicPendulum
-from src.systems.builtin.aerial_systems import SymbolicQuadrotor2DLidar
-from src.systems.builtin.abstract_symbolic_systems import VanDerPolOscillator
 
 
 # ============================================================================
-# Test Fixtures: Concrete System Implementations
+# Test Fixtures - Simple Systems
 # ============================================================================
 
 
-class SimplePendulum(SymbolicDynamicalSystem):
-    """Simple pendulum for testing: θ̈ = -g/l * sin(θ) - b*θ̇ + τ/(m*l²)"""
-
-    def __init__(self, m=1.0, l=1.0, g=9.81, b=0.1):
-        super().__init__(m, l, g, b)
-
-    def define_system(self, m, l, g, b):
+class SimpleFirstOrderSystem(SymbolicDynamicalSystem):
+    """Simple linear system: dx/dt = -x + u"""
+    
+    def define_system(self, a=1.0):
+        a_sym = sp.symbols('a', real=True, positive=True)
+        x = sp.symbols('x', real=True)
+        u = sp.symbols('u', real=True)
         
-        theta, theta_dot = sp.symbols("theta theta_dot", real=True)
-        tau = sp.symbols("tau", real=True)
-        m_sym, l_sym, g_sym, b_sym = sp.symbols("m l g b", real=True, positive=True)
-
-        self.state_vars = [theta, theta_dot]
-        self.control_vars = [tau]
-        self.output_vars = []
-        self.parameters = {m_sym: m, l_sym: l, g_sym: g, b_sym: b}
-        self.order = 1
-
-        # Dynamics
-        self._f_sym = sp.Matrix(
-            [theta_dot, -g / l * sp.sin(theta) - b * theta_dot + tau / (m * l**2)]
-        )
-
+        dx = -a_sym * x + u
         
-
-
-
-class PartialObservationPendulum(SymbolicDynamicalSystem):
-    """Pendulum with only angle measured (partial observation)"""
-
-    def __init__(self, m=1.0, l=1.0, g=9.81, b=0.1):
-        super().__init__(m, l, g, b)
-
-    def define_system(self, m, l, g, b):
-        theta, theta_dot = sp.symbols("theta theta_dot", real=True)
-        tau = sp.symbols("tau", real=True)
-
-        self.state_vars = [theta, theta_dot]
-        self.control_vars = [tau]
-
-        # Dynamics
-        self._f_sym = sp.Matrix(
-            [theta_dot, -g / l * sp.sin(theta) - b * theta_dot + tau / (m * l**2)]
-        )
-
-        # Output: only observe angle
-        self._h_sym = sp.Matrix([theta])
-        self.output_vars = [sp.symbols("y")]
-
-        m_sym, l_sym, g_sym, b_sym = sp.symbols("m l g b", real=True, positive=True)
-        self.parameters = {m_sym: m, l_sym: l, g_sym: g, b_sym: b}
-
+        self.state_vars = [x]
+        self.control_vars = [u]
+        self._f_sym = sp.Matrix([dx])
+        self.parameters = {a_sym: a}
         self.order = 1
 
 
-class LinearSystem(SymbolicDynamicalSystem):
-    """Simple 2D linear system: ẋ = Ax + Bu"""
+class SimpleSecondOrderSystem(SymbolicDynamicalSystem):
+    """Simple harmonic oscillator: q̈ = -k*q - c*q̇ + u"""
+    
+    def define_system(self, k=10.0, c=0.5):
+        k_sym, c_sym = sp.symbols('k c', real=True, positive=True)
+        q, q_dot = sp.symbols('q q_dot', real=True)
+        u = sp.symbols('u', real=True)
+        
+        q_ddot = -k_sym * q - c_sym * q_dot + u
+        
+        self.state_vars = [q, q_dot]
+        self.control_vars = [u]
+        self._f_sym = sp.Matrix([q_ddot])
+        self.parameters = {k_sym: k, c_sym: c}
+        self.order = 2
 
-    def __init__(self):
-        super().__init__()
 
+class CustomOutputSystem(SymbolicDynamicalSystem):
+    """System with custom output: y = [x1, x1^2 + x2^2]"""
+    
     def define_system(self):
-        x1, x2 = sp.symbols("x1 x2", real=True)
-        u1 = sp.symbols("u1", real=True)
-
+        x1, x2 = sp.symbols('x1 x2', real=True)
+        u = sp.symbols('u', real=True)
+        
         self.state_vars = [x1, x2]
-        self.control_vars = [u1]
-
-        # ẋ₁ = -x₁ + x₂
-        # ẋ₂ = -2x₂ + u₁
-        self._f_sym = sp.Matrix([-x1 + x2, -2 * x2 + u1])
-
+        self.control_vars = [u]
+        self._f_sym = sp.Matrix([x2, -x1])
+        self._h_sym = sp.Matrix([x1, x1**2 + x2**2])
         self.parameters = {}
         self.order = 1
 
 
 # ============================================================================
-# Fixtures
+# Test Class 1: Initialization and Validation
 # ============================================================================
 
 
-@pytest.fixture
-def pendulum():
-    """Create a simple pendulum system"""
-    return SimplePendulum(m=0.15, l=0.5, g=9.81, b=0.1)
-
-
-@pytest.fixture
-def partial_obs_pendulum():
-    """Create a pendulum with partial observation"""
-    return PartialObservationPendulum(m=0.15, l=0.5, g=9.81, b=0.1)
-
-
-@pytest.fixture
-def linear_system():
-    """Create a linear system"""
-    return LinearSystem()
-
-
-@pytest.fixture
-def builtin_pendulum():
-    """Create a pendulum system with builtin class"""
-    return SymbolicPendulum()
-
-
-@pytest.fixture
-def builtin_quadrotor_lidar():
-    """Create a quadrotor system with LIDAR observation using builtin class"""
-    return SymbolicQuadrotor2DLidar()
-
-
-@pytest.fixture
-def builtin_vdp_oscillator():
-    """Create a VdP Oscillator system with builtin class"""
-    return VanDerPolOscillator()
-
-
-@pytest.fixture
-def sample_state_control():
-    """Sample state and control for testing"""
-    return {
-        "x_torch": torch.tensor([0.5, 0.1]),
-        "u_torch": torch.tensor([0.2]),
-        "x_np": np.array([0.5, 0.1]),
-        "u_np": np.array([0.2]),
-        "x_jax": jnp.array([0.5, 0.1]) if JAX_AVAILABLE else None,
-        "u_jax": jnp.array([0.2]) if JAX_AVAILABLE else None,
-    }
+class TestInitializationAndValidation:
+    """Test system initialization and validation"""
+    
+    def test_successful_initialization(self):
+        """Test that valid system initializes successfully"""
+        system = SimpleFirstOrderSystem(a=2.0)
+        
+        assert system._initialized is True
+        assert system.nx == 1
+        assert system.nu == 1
+        assert system.order == 1
+        assert system._default_backend == 'numpy'
+    
+    def test_template_method_pattern(self):
+        """Test that define_system is called automatically"""
+        system = SimpleFirstOrderSystem()
+        
+        # Should have state vars from define_system
+        assert len(system.state_vars) == 1
+        assert len(system.control_vars) == 1
+        assert system._f_sym is not None
+    
+    def test_validation_empty_state_vars(self):
+        """Test validation fails with empty state_vars"""
+        
+        class BadSystem(SymbolicDynamicalSystem):
+            def define_system(self):
+                self.state_vars = []  # Empty!
+                self.control_vars = [sp.symbols('u')]
+                self._f_sym = sp.Matrix([sp.symbols('u')])
+                self.parameters = {}
+        
+        with pytest.raises(ValueError, match="state_vars is empty"):
+            BadSystem()
+    
+    def test_validation_empty_control_vars(self):
+        """Test validation fails with empty control_vars"""
+        
+        class BadSystem(SymbolicDynamicalSystem):
+            def define_system(self):
+                self.state_vars = [sp.symbols('x')]
+                self.control_vars = []  # Empty!
+                self._f_sym = sp.Matrix([sp.symbols('x')])
+                self.parameters = {}
+        
+        with pytest.raises(ValueError, match="control_vars is empty"):
+            BadSystem()
+    
+    def test_validation_missing_f_sym(self):
+        """Test validation fails with missing _f_sym"""
+        
+        class BadSystem(SymbolicDynamicalSystem):
+            def define_system(self):
+                self.state_vars = [sp.symbols('x')]
+                self.control_vars = [sp.symbols('u')]
+                self._f_sym = None  # Not defined!
+                self.parameters = {}
+        
+        with pytest.raises(ValueError, match="_f_sym is not defined"):
+            BadSystem()
+    
+    def test_validation_wrong_parameter_keys(self):
+        """Test validation fails when using string parameter keys"""
+        
+        class BadSystem(SymbolicDynamicalSystem):
+            def define_system(self):
+                x = sp.symbols('x')
+                u = sp.symbols('u')
+                
+                self.state_vars = [x]
+                self.control_vars = [u]
+                self._f_sym = sp.Matrix([-x + u])
+                self.parameters = {'a': 1.0}  # String key! Should be Symbol
+        
+        with pytest.raises(ValueError, match="Parameter key"):
+            BadSystem()
+    
+    def test_validation_non_symbol_state_vars(self):
+        """Test validation fails when state_vars contains non-Symbols"""
+        
+        class BadSystem(SymbolicDynamicalSystem):
+            def define_system(self):
+                self.state_vars = ['x', 'y']  # Strings! Should be Symbols
+                self.control_vars = [sp.symbols('u')]
+                self._f_sym = sp.Matrix([0, 0])
+                self.parameters = {}
+        
+        with pytest.raises(ValueError, match="not a SymPy Symbol"):
+            BadSystem()
+    
+    def test_validation_f_sym_not_matrix(self):
+        """Test validation fails when _f_sym is not a Matrix"""
+        
+        class BadSystem(SymbolicDynamicalSystem):
+            def define_system(self):
+                x = sp.symbols('x')
+                u = sp.symbols('u')
+                
+                self.state_vars = [x]
+                self.control_vars = [u]
+                self._f_sym = [x + u]  # List! Should be Matrix
+                self.parameters = {}
+        
+        with pytest.raises(ValueError, match="_f_sym must be sp.Matrix"):
+            BadSystem()
+    
+    def test_validation_dimension_mismatch(self):
+        """Test validation fails when _f_sym has wrong dimensions"""
+        
+        class BadSystem(SymbolicDynamicalSystem):
+            def define_system(self):
+                x, y = sp.symbols('x y')
+                u = sp.symbols('u')
+                
+                self.state_vars = [x, y]
+                self.control_vars = [u]
+                self._f_sym = sp.Matrix([x])  # Only 1 row, need 2!
+                self.parameters = {}
+                self.order = 1
+        
+        with pytest.raises(ValueError, match="rows but expected"):
+            BadSystem()
+    
+    def test_validation_order_dimension_mismatch(self):
+        """Test validation fails when nx not divisible by order"""
+        
+        class BadSystem(SymbolicDynamicalSystem):
+            def define_system(self):
+                x1, x2, x3 = sp.symbols('x1 x2 x3')
+                u = sp.symbols('u')
+                
+                self.state_vars = [x1, x2, x3]  # 3 states
+                self.control_vars = [u]
+                self._f_sym = sp.Matrix([0])  # Placeholder
+                self.parameters = {}
+                self.order = 2  # But 3 is not divisible by 2!
+        
+        with pytest.raises(ValueError, match="must be divisible by order"):
+            BadSystem()
+    
+    def test_validation_undefined_symbols(self):
+        """Test validation fails with undefined symbols in _f_sym"""
+        
+        class BadSystem(SymbolicDynamicalSystem):
+            def define_system(self):
+                x = sp.symbols('x')
+                u = sp.symbols('u')
+                mystery = sp.symbols('mystery')  # Not declared anywhere!
+                
+                self.state_vars = [x]
+                self.control_vars = [u]
+                self._f_sym = sp.Matrix([x + mystery])  # Uses undefined symbol
+                self.parameters = {}
+        
+        with pytest.raises(ValueError, match="undefined symbols"):
+            BadSystem()
+    
+    def test_validation_control_in_output(self):
+        """Test validation fails when output depends on control"""
+        
+        class BadSystem(SymbolicDynamicalSystem):
+            def define_system(self):
+                x = sp.symbols('x')
+                u = sp.symbols('u')
+                
+                self.state_vars = [x]
+                self.control_vars = [u]
+                self._f_sym = sp.Matrix([x + u])
+                self._h_sym = sp.Matrix([x + u])  # Output depends on control!
+                self.parameters = {}
+        
+        with pytest.raises(ValueError, match="Output.*should only depend on states"):
+            BadSystem()
+    
+    def test_validation_duplicate_variables(self):
+        """Test validation fails with duplicate variable names"""
+        
+        class BadSystem(SymbolicDynamicalSystem):
+            def define_system(self):
+                x1 = sp.symbols('x')
+                x2 = sp.symbols('x')  # Same name!
+                u = sp.symbols('u')
+                
+                self.state_vars = [x1, x2]
+                self.control_vars = [u]
+                self._f_sym = sp.Matrix([0, 0])
+                self.parameters = {}
+        
+        with pytest.raises(ValueError, match="Duplicate variable names"):
+            BadSystem()
+    
+    def test_validation_non_finite_parameter(self):
+        """Test validation fails with NaN/Inf parameter"""
+        
+        class BadSystem(SymbolicDynamicalSystem):
+            def define_system(self):
+                a = sp.symbols('a')
+                x = sp.symbols('x')
+                u = sp.symbols('u')
+                
+                self.state_vars = [x]
+                self.control_vars = [u]
+                self._f_sym = sp.Matrix([a * x])
+                self.parameters = {a: np.inf}  # Infinite!
+        
+        with pytest.raises(ValueError, match="non-finite value"):
+            BadSystem()
+    
+    def test_validation_negative_mass(self):
+        """Test validation fails with negative mass"""
+        
+        class BadSystem(SymbolicDynamicalSystem):
+            def define_system(self):
+                m = sp.symbols('m')
+                x = sp.symbols('x')
+                u = sp.symbols('u')
+                
+                self.state_vars = [x]
+                self.control_vars = [u]
+                self._f_sym = sp.Matrix([u / m])
+                self.parameters = {m: -1.0}  # Negative mass!
+        
+        with pytest.raises(ValueError, match="should be positive"):
+            BadSystem()
+    
+    def test_validation_warnings(self):
+        """Test that warnings are issued for unusual configurations"""
+        
+        class WeirdSystem(SymbolicDynamicalSystem):
+            def define_system(self):
+                x = sp.symbols('x')
+                u = sp.symbols('u')
+                a = sp.symbols('a')
+                
+                self.state_vars = [x]
+                self.control_vars = [u]
+                self._f_sym = sp.Matrix([u])  # Doesn't depend on x!
+                self.parameters = {a: 1.0}  # Unused parameter!
+        
+        with pytest.warns(UserWarning):
+            WeirdSystem()
 
 
 # ============================================================================
-# Test System Properties
+# Test Class 2: Backend Detection and Conversion
 # ============================================================================
 
 
-class TestSystemProperties:
-    """Test basic system properties and configuration"""
-
-    def test_dimensions(self, pendulum):
-        """Test that system dimensions are correct"""
-        assert pendulum.nx == 2
-        assert pendulum.nu == 1
-        assert pendulum.ny == 2  # Full state observation by default
-        assert pendulum.nq == 2
-        assert pendulum.order == 1
-
-    def test_partial_observation_dimensions(self, partial_obs_pendulum):
-        """Test dimensions with partial observation"""
-        assert partial_obs_pendulum.nx == 2
-        assert partial_obs_pendulum.nu == 1
-        assert partial_obs_pendulum.ny == 1  # Only angle observed
-
-    def test_equilibrium_points(self, pendulum):
-        """Test default equilibrium points"""
-        x_eq = pendulum.x_equilibrium
-        u_eq = pendulum.u_equilibrium
-
-        assert isinstance(x_eq, torch.Tensor)
-        assert isinstance(u_eq, torch.Tensor)
-        assert x_eq.shape == (2,)
-        assert u_eq.shape == (1,)
-        assert torch.allclose(x_eq, torch.zeros(2))
-        assert torch.allclose(u_eq, torch.zeros(1))
-
-    def test_validate_system(self, pendulum):
-        """Test system validation"""
-        assert pendulum._validate_system()
-
-    def test_substitute_parameters(self, pendulum):
-        """Test parameter substitution"""
-        theta, theta_dot = sp.symbols("theta theta_dot")
-        m, l, g, b = sp.symbols("m l g b", positive=True)
-
-        expr = m * l * g * theta + b * theta_dot
-
-        # Before substitution, expression contains symbols
-        assert m in expr.free_symbols
-
-        # After substitution, parameters should be replaced
-        substituted = pendulum.substitute_parameters(expr)
-        assert m not in substituted.free_symbols
-
-    def test_repr_and_str(self, pendulum):
-        """Test string representations"""
-        repr_str = repr(pendulum)
-        str_str = str(pendulum)
-
-        assert "SimplePendulum" in repr_str
-        assert "nx=2" in repr_str
-        assert "nu=1" in repr_str
-        assert "SimplePendulum" in str_str
+class TestBackendHandling:
+    """Test backend detection, conversion, and availability checking"""
+    
+    def test_detect_numpy_backend(self):
+        """Test detecting NumPy arrays"""
+        system = SimpleFirstOrderSystem()
+        x = np.array([1.0])
+        
+        backend = system._detect_backend(x)
+        assert backend == 'numpy'
+    
+    @pytest.mark.skipif(not torch_available, reason="PyTorch not installed")
+    def test_detect_torch_backend(self):
+        """Test detecting PyTorch tensors"""
+        system = SimpleFirstOrderSystem()
+        x = torch.tensor([1.0])
+        
+        backend = system._detect_backend(x)
+        assert backend == 'torch'
+    
+    @pytest.mark.skipif(not jax_available, reason="JAX not installed")
+    def test_detect_jax_backend(self):
+        """Test detecting JAX arrays"""
+        system = SimpleFirstOrderSystem()
+        x = jnp.array([1.0])
+        
+        backend = system._detect_backend(x)
+        assert backend == 'jax'
+    
+    def test_detect_unknown_type(self):
+        """Test error on unknown array type"""
+        system = SimpleFirstOrderSystem()
+        
+        with pytest.raises(TypeError, match="Unknown input type"):
+            system._detect_backend([1.0])  # Python list
+    
+    def test_convert_numpy_to_numpy(self):
+        """Test numpy -> numpy is no-op"""
+        system = SimpleFirstOrderSystem()
+        x = np.array([1.0, 2.0])
+        
+        x_converted = system._convert_to_backend(x, 'numpy')
+        
+        assert x_converted is x  # Same object
+        assert isinstance(x_converted, np.ndarray)
+    
+    @pytest.mark.skipif(not torch_available, reason="PyTorch not installed")
+    def test_convert_numpy_to_torch(self):
+        """Test numpy -> torch conversion"""
+        system = SimpleFirstOrderSystem()
+        x = np.array([1.0, 2.0])
+        
+        x_torch = system._convert_to_backend(x, 'torch')
+        
+        assert isinstance(x_torch, torch.Tensor)
+        assert torch.allclose(x_torch, torch.tensor([1.0, 2.0]))
+    
+    @pytest.mark.skipif(not torch_available, reason="PyTorch not installed")
+    def test_convert_torch_to_numpy(self):
+        """Test torch -> numpy conversion"""
+        system = SimpleFirstOrderSystem()
+        x = torch.tensor([1.0, 2.0])
+        
+        x_numpy = system._convert_to_backend(x, 'numpy')
+        
+        assert isinstance(x_numpy, np.ndarray)
+        assert np.allclose(x_numpy, np.array([1.0, 2.0]))
+    
+    @pytest.mark.skipif(not jax_available, reason="JAX not installed")
+    def test_convert_numpy_to_jax(self):
+        """Test numpy -> jax conversion"""
+        system = SimpleFirstOrderSystem()
+        x = np.array([1.0, 2.0])
+        
+        x_jax = system._convert_to_backend(x, 'jax')
+        
+        assert isinstance(x_jax, jnp.ndarray)
+        assert jnp.allclose(x_jax, jnp.array([1.0, 2.0]))
+    
+    def test_check_backend_available_numpy(self):
+        """Test NumPy is always available"""
+        system = SimpleFirstOrderSystem()
+        
+        # Should not raise
+        system._check_backend_available('numpy')
+    
+    def test_check_backend_unavailable(self):
+        """Test error when backend not installed"""
+        system = SimpleFirstOrderSystem()
+        
+        # This will fail unless you have both torch and jax
+        # Pick the one you don't have installed
+        if not torch_available:
+            with pytest.raises(RuntimeError, match="PyTorch.*not available"):
+                system._check_backend_available('torch')
+        
+        if not jax_available:
+            with pytest.raises(RuntimeError, match="JAX.*not available"):
+                system._check_backend_available('jax')
+    
+    def test_set_default_backend(self):
+        """Test setting default backend"""
+        system = SimpleFirstOrderSystem()
+        
+        system.set_default_backend('numpy')
+        assert system._default_backend == 'numpy'
+        
+        system.set_default_backend('numpy', device='cpu')
+        assert system._preferred_device == 'cpu'
+    
+    def test_set_invalid_backend(self):
+        """Test error on invalid backend name"""
+        system = SimpleFirstOrderSystem()
+        
+        with pytest.raises(ValueError, match="Invalid backend"):
+            system.set_default_backend('tensorflow')
 
 
 # ============================================================================
-# Test Function Generation
-# ============================================================================
-
-
-class TestFunctionGeneration:
-    """Test generation of numerical functions from symbolic expressions"""
-
-    def test_generate_numpy_function(self, pendulum):
-        """Test NumPy function generation"""
-        func = pendulum.generate_numpy_function()
-        assert callable(func)
-        assert pendulum._f_numpy is not None
-
-    def test_generate_torch_function(self, pendulum):
-        """Test PyTorch function generation"""
-        func = pendulum.generate_torch_function()
-        assert callable(func)
-        assert pendulum._f_torch is not None
-
-    @pytest.mark.skipif(not JAX_AVAILABLE, reason="JAX not available")
-    def test_generate_jax_function(self, pendulum):
-        """Test JAX function generation"""
-        func = pendulum.generate_jax_function(jit=True)
-        assert callable(func)
-        assert pendulum._f_jax is not None
-
-    def test_generate_dynamics_function_torch(self, pendulum):
-        """Test unified dynamics function generation for torch"""
-        func = pendulum.generate_dynamics_function(backend="torch")
-        assert callable(func)
-        assert pendulum._f_torch is not None
-
-    def test_generate_dynamics_function_numpy(self, pendulum):
-        """Test unified dynamics function generation for numpy"""
-        func = pendulum.generate_dynamics_function(backend="numpy")
-        assert callable(func)
-        assert pendulum._f_numpy is not None
-
-    @pytest.mark.skipif(not JAX_AVAILABLE, reason="JAX not available")
-    def test_generate_dynamics_function_jax(self, pendulum):
-        """Test unified dynamics function generation for JAX"""
-        func = pendulum.generate_dynamics_function(backend="jax")
-        assert callable(func)
-        assert pendulum._f_jax is not None
-
-
-# ============================================================================
-# Test Forward Dynamics
+# Test Class 3: Forward Dynamics
 # ============================================================================
 
 
 class TestForwardDynamics:
     """Test forward dynamics evaluation across backends"""
-
-    def test_forward_torch_single(self, pendulum, sample_state_control):
-        """Test PyTorch forward dynamics with single state"""
-        x = sample_state_control["x_torch"]
-        u = sample_state_control["u_torch"]
-
-        dx = pendulum.forward(x, u)
-
-        assert isinstance(dx, torch.Tensor)
-        assert dx.shape == (2,)
-        assert not torch.isnan(dx).any()
-        assert not torch.isinf(dx).any()
-
-    def test_forward_torch_batched(self, pendulum):
-        """Test PyTorch forward dynamics with batched states"""
-        x = torch.randn(10, 2)
-        u = torch.randn(10, 1)
-
-        dx = pendulum.forward(x, u)
-
-        assert isinstance(dx, torch.Tensor)
-        assert dx.shape == (10, 2)
-        assert not torch.isnan(dx).any()
-
-    def test_forward_numpy_single(self, pendulum, sample_state_control):
-        """Test NumPy forward dynamics with single state"""
-        x = sample_state_control["x_np"]
-        u = sample_state_control["u_np"]
-
-        dx = pendulum.forward(x, u)
-
+    
+    def test_forward_numpy(self):
+        """Test forward dynamics with NumPy"""
+        system = SimpleFirstOrderSystem(a=2.0)
+        
+        x = np.array([1.0])
+        u = np.array([0.5])
+        
+        dx = system(x, u)
+        
         assert isinstance(dx, np.ndarray)
-        assert dx.shape == (2,)
-        assert not np.isnan(dx).any()
-
-    def test_forward_numpy_batched(self, pendulum):
-        """Test NumPy forward dynamics with batched states"""
-        x = np.random.randn(10, 2)
-        u = np.random.randn(10, 1)
-
-        dx = pendulum.forward(x, u)
-
-        assert isinstance(dx, np.ndarray)
-        assert dx.shape == (10, 2)
-
-    @pytest.mark.skipif(not JAX_AVAILABLE, reason="JAX not available")
-    def test_forward_jax_single(self, pendulum, sample_state_control):
-        """Test JAX forward dynamics with single state"""
-        x = sample_state_control["x_jax"]
-        u = sample_state_control["u_jax"]
-
-        dx = pendulum.forward(x, u)
-
+        assert dx.shape == (1,)
+        # dx = -2*x + u = -2*1 + 0.5 = -1.5
+        assert np.allclose(dx, np.array([-1.5]))
+    
+    @pytest.mark.skipif(not torch_available, reason="PyTorch not installed")
+    def test_forward_torch(self):
+        """Test forward dynamics with PyTorch"""
+        system = SimpleFirstOrderSystem(a=2.0)
+        
+        x = torch.tensor([1.0])
+        u = torch.tensor([0.5])
+        
+        dx = system(x, u)
+        
+        assert isinstance(dx, torch.Tensor)
+        assert dx.shape == (1,)
+        assert torch.allclose(dx, torch.tensor([-1.5]))
+    
+    @pytest.mark.skipif(not jax_available, reason="JAX not installed")
+    def test_forward_jax(self):
+        """Test forward dynamics with JAX"""
+        system = SimpleFirstOrderSystem(a=2.0)
+        
+        x = jnp.array([1.0])
+        u = jnp.array([0.5])
+        
+        dx = system(x, u)
+        
         assert isinstance(dx, jnp.ndarray)
-        assert dx.shape == (2,)
-        assert not jnp.isnan(dx).any()
-
-    @pytest.mark.skipif(not JAX_AVAILABLE, reason="JAX not available")
-    def test_forward_jax_batched(self, pendulum):
-        """Test JAX forward dynamics with batched states"""
-        x = jnp.array(np.random.randn(10, 2))
-        u = jnp.array(np.random.randn(10, 1))
-
-        dx = pendulum.forward(x, u)
-
-        assert isinstance(dx, jnp.ndarray)
-        assert dx.shape == (10, 2)
-
-    def test_forward_cross_backend_consistency(self, pendulum, sample_state_control):
-        """Test that all backends give consistent results"""
-        x_torch = sample_state_control["x_torch"]
-        u_torch = sample_state_control["u_torch"]
-        x_np = sample_state_control["x_np"]
-        u_np = sample_state_control["u_np"]
-
-        dx_torch = pendulum.forward(x_torch, u_torch)
-        dx_np = pendulum.forward(x_np, u_np)
-
-        # Convert to numpy for comparison
-        dx_torch_np = dx_torch.detach().numpy()
-
-        assert np.allclose(dx_torch_np, dx_np, rtol=1e-5, atol=1e-6)
-
-    @pytest.mark.skipif(not JAX_AVAILABLE, reason="JAX not available")
-    def test_forward_jax_torch_consistency(self, pendulum, sample_state_control):
-        """Test that JAX and PyTorch give consistent results"""
-        x_torch = sample_state_control["x_torch"]
-        u_torch = sample_state_control["u_torch"]
-        x_jax = sample_state_control["x_jax"]
-        u_jax = sample_state_control["u_jax"]
-
-        dx_torch = pendulum.forward(x_torch, u_torch)
-        dx_jax = pendulum.forward(x_jax, u_jax)
-
-        dx_torch_np = dx_torch.detach().numpy()
-        dx_jax_np = np.array(dx_jax)
-
-        assert np.allclose(dx_torch_np, dx_jax_np, rtol=1e-5, atol=1e-6)
-
-    def test_forward_invalid_dimensions(self, pendulum):
-        """Test that forward raises error with invalid dimensions"""
-        x = torch.tensor([0.5])  # Wrong dimension
-        u = torch.tensor([0.2])
-
-        with pytest.raises(ValueError, match="Expected state dimension"):
-            pendulum.forward(x, u)
-
-    def test_forward_invalid_type(self, pendulum):
-        """Test that forward raises error with invalid input type"""
-        x = [0.5, 0.1]  # List instead of tensor/array
-        u = [0.2]
-
-        with pytest.raises(TypeError, match="Unsupported input type"):
-            pendulum.forward(x, u)
+        assert jnp.allclose(dx, jnp.array([-1.5]))
+    
+    def test_forward_batched_numpy(self):
+        """Test batched forward dynamics"""
+        system = SimpleFirstOrderSystem(a=2.0)
+        
+        x = np.array([[1.0], [2.0], [3.0]])  # Batch of 3
+        u = np.array([[0.5], [0.5], [0.5]])
+        
+        dx = system(x, u)
+        
+        assert dx.shape == (3, 1)
+        expected = np.array([[-1.5], [-3.5], [-5.5]])
+        assert np.allclose(dx, expected)
+    
+    def test_forward_backend_override_numpy_to_torch(self):
+        """Test forcing PyTorch backend with NumPy input"""
+        if not torch_available:
+            pytest.skip("PyTorch not installed")
+        
+        system = SimpleFirstOrderSystem(a=2.0)
+        
+        x = np.array([1.0])
+        u = np.array([0.5])
+        
+        dx = system(x, u, backend='torch')
+        
+        assert isinstance(dx, torch.Tensor)
+        assert torch.allclose(dx, torch.tensor([-1.5]))
+    
+    def test_forward_with_default_backend(self):
+        """Test using configured default backend"""
+        if not torch_available:
+            pytest.skip("PyTorch not installed")
+        
+        system = SimpleFirstOrderSystem(a=2.0)
+        system.set_default_backend('torch')
+        
+        x = np.array([1.0])
+        u = np.array([0.5])
+        
+        dx = system(x, u, backend='default')
+        
+        assert isinstance(dx, torch.Tensor)
+    
+    def test_forward_second_order_system(self):
+        """Test forward dynamics for second-order system"""
+        system = SimpleSecondOrderSystem(k=10.0, c=0.5)
+        
+        x = np.array([0.1, 0.0])  # [q, q_dot]
+        u = np.array([0.0])
+        
+        dx = system(x, u)
+        
+        assert dx.shape == (1,)
+        # dx = q_ddot = -10*0.1 - 0.5*0 + 0 = -1.0
+        assert np.allclose(dx, np.array([-1.0]))
+    
+    def test_callable_interface(self):
+        """Test that __call__ works"""
+        system = SimpleFirstOrderSystem(a=1.0)
+        
+        x = np.array([1.0])
+        u = np.array([0.0])
+        
+        # These should be equivalent
+        dx1 = system(x, u)
+        dx2 = system.forward(x, u)
+        
+        assert np.allclose(dx1, dx2)
 
 
 # ============================================================================
-# Test Linearization
+# Test Class 4: Linearization
 # ============================================================================
 
 
 class TestLinearization:
-    """Test linearization methods"""
-
-    def test_cache_jacobians_torch(self, pendulum):
-        """Test Jacobian caching for PyTorch"""
-        pendulum._cache_jacobians(backend="torch")
-
-        assert pendulum._A_sym_cached is not None
-        assert pendulum._B_sym_cached is not None
-        assert hasattr(pendulum, "_A_torch_fn")
-        assert hasattr(pendulum, "_B_torch_fn")
-
-    def test_cache_jacobians_numpy(self, pendulum):
-        """Test Jacobian caching for NumPy"""
-        pendulum._cache_jacobians(backend="numpy")
-
-        assert pendulum._A_sym_cached is not None
-        assert pendulum._B_sym_cached is not None
-
-    @pytest.mark.skipif(not JAX_AVAILABLE, reason="JAX not available")
-    def test_cache_jacobians_jax(self, pendulum):
-        """Test Jacobian caching for JAX"""
-        pendulum._cache_jacobians(backend="jax")
-
-        assert pendulum._A_sym_cached is not None
-        assert pendulum._B_sym_cached is not None
-        assert hasattr(pendulum, "_A_jax_fn")
-        assert hasattr(pendulum, "_B_jax_fn")
-
-    def test_linearized_dynamics_symbolic(self, pendulum):
-        """Test symbolic linearization"""
-        x_eq = sp.Matrix([0, 0])
-        u_eq = sp.Matrix([0])
-
-        A, B = pendulum.linearized_dynamics_symbolic(x_eq, u_eq)
-
-        assert isinstance(A, sp.Matrix)
-        assert isinstance(B, sp.Matrix)
-        assert A.shape == (2, 2)
-        assert B.shape == (2, 1)
-
-    def test_linearized_dynamics_torch(self, pendulum, sample_state_control):
-        """Test numerical linearization with PyTorch"""
-        x = sample_state_control["x_torch"]
-        u = sample_state_control["u_torch"]
-
-        A, B = pendulum.linearized_dynamics(x, u)
-
-        assert isinstance(A, torch.Tensor)
-        assert isinstance(B, torch.Tensor)
-        assert A.shape == (2, 2)
-        assert B.shape == (2, 1)
-        assert not torch.isnan(A).any()
-        assert not torch.isnan(B).any()
-
-    def test_linearized_dynamics_numpy(self, pendulum, sample_state_control):
-        """Test numerical linearization with NumPy"""
-        x = sample_state_control["x_np"]
-        u = sample_state_control["u_np"]
-
-        A, B = pendulum.linearized_dynamics(x, u)
-
+    """Test linearized dynamics computation"""
+    
+    def test_linearized_dynamics_numpy(self):
+        """Test linearization with NumPy"""
+        system = SimpleFirstOrderSystem(a=2.0)
+        
+        x = np.array([1.0])
+        u = np.array([0.0])
+        
+        A, B = system.linearized_dynamics(x, u)
+        
         assert isinstance(A, np.ndarray)
         assert isinstance(B, np.ndarray)
-        assert A.shape == (2, 2)
-        assert B.shape == (2, 1)
-
-    @pytest.mark.skipif(not JAX_AVAILABLE, reason="JAX not available")
-    def test_linearized_dynamics_jax(self, pendulum, sample_state_control):
-        """Test numerical linearization with JAX"""
-        x = sample_state_control["x_jax"]
-        u = sample_state_control["u_jax"]
-
-        A, B = pendulum.linearized_dynamics(x, u)
-
-        assert isinstance(A, jnp.ndarray)
-        assert isinstance(B, jnp.ndarray)
-        assert A.shape == (2, 2)
-        assert B.shape == (2, 1)
-
-    def test_linearized_dynamics_batched(self, pendulum):
-        """Test batched linearization"""
-        x = torch.randn(5, 2)
-        u = torch.randn(5, 1)
-
-        A, B = pendulum.linearized_dynamics(x, u)
-
-        assert A.shape == (5, 2, 2)
-        assert B.shape == (5, 2, 1)
-
-    def test_linearized_dynamics_cross_backend(self, pendulum, sample_state_control):
-        """Test that linearization is consistent across backends"""
-        x_torch = sample_state_control["x_torch"]
-        u_torch = sample_state_control["u_torch"]
-        x_np = sample_state_control["x_np"]
-        u_np = sample_state_control["u_np"]
-
-        A_torch, B_torch = pendulum.linearized_dynamics(x_torch, u_torch)
-        A_np, B_np = pendulum.linearized_dynamics(x_np, u_np)
-
-        A_torch_np = A_torch.detach().numpy()
-        B_torch_np = B_torch.detach().numpy()
-
-        assert np.allclose(A_torch_np, A_np, rtol=1e-4, atol=1e-5)
-        assert np.allclose(B_torch_np, B_np, rtol=1e-4, atol=1e-5)
-
-
-# ============================================================================
-# Test Observation
-# ============================================================================
-
-
-class TestObservation:
-    """Test observation and output linearization"""
-
-    def test_linearized_observation_symbolic_full_state(self, pendulum):
-        """Test symbolic observation linearization with full state observation"""
-        x_eq = sp.Matrix([0, 0])
-        C = pendulum.linearized_observation_symbolic(x_eq)
-
-        # Should be identity for full state observation
-        assert C.shape == (2, 2)
-        assert C == sp.eye(2)
-
-    def test_linearized_observation_symbolic_partial(self, partial_obs_pendulum):
-        """Test symbolic observation linearization with partial observation"""
-        x_eq = sp.Matrix([0, 0])
-        C = partial_obs_pendulum.linearized_observation_symbolic(x_eq)
-
-        # Should be [1, 0] for angle-only observation
-        assert C.shape == (1, 2)
-
-    def test_linearized_observation_torch_full_state(self, pendulum, sample_state_control):
-        """Test numerical observation linearization (full state)"""
-        x = sample_state_control["x_torch"]
-        C = pendulum.linearized_observation(x)
-
-        assert isinstance(C, torch.Tensor)
-        assert C.shape == (2, 2)
-        # Should be identity
-        assert torch.allclose(C, torch.eye(2), atol=1e-6)
-
-    def test_linearized_observation_torch_partial(self, partial_obs_pendulum, sample_state_control):
-        """Test numerical observation linearization (partial observation)"""
-        x = sample_state_control["x_torch"]
-        C = partial_obs_pendulum.linearized_observation(x)
-
-        assert isinstance(C, torch.Tensor)
-        assert C.shape == (1, 2)
-        # Should be [1, 0]
-        expected = torch.tensor([[1.0, 0.0]])
-        assert torch.allclose(C, expected, atol=1e-6)
-
-    def test_linearized_observation_numpy(self, partial_obs_pendulum, sample_state_control):
-        """Test observation linearization with NumPy"""
-        x = sample_state_control["x_np"]
-        C = partial_obs_pendulum.linearized_observation(x)
-
-        assert isinstance(C, np.ndarray)
-        assert C.shape == (1, 2)
-
-    @pytest.mark.skipif(not JAX_AVAILABLE, reason="JAX not available")
-    def test_linearized_observation_jax(self, partial_obs_pendulum, sample_state_control):
-        """Test observation linearization with JAX"""
-        x = sample_state_control["x_jax"]
-        C = partial_obs_pendulum.linearized_observation(x)
-
-        assert isinstance(C, jnp.ndarray)
-        assert C.shape == (1, 2)
-
-    def test_h_full_state_torch(self, pendulum, sample_state_control):
-        """Test output function with full state observation"""
-        x = sample_state_control["x_torch"]
-        y = pendulum.h(x)
-
-        assert isinstance(y, torch.Tensor)
-        assert y.shape == x.shape
-        assert torch.allclose(y, x)  # Full state observation
-
-    def test_h_partial_state_torch(self, partial_obs_pendulum, sample_state_control):
-        """Test output function with partial observation"""
-        x = sample_state_control["x_torch"]
-        y = partial_obs_pendulum.h(x)
-
-        assert isinstance(y, torch.Tensor)
-        assert y.shape == (1,)
-        assert torch.allclose(y, x[0:1])  # Only first element (angle)
-
-    def test_h_numpy(self, partial_obs_pendulum, sample_state_control):
-        """Test output function with NumPy"""
-        x = sample_state_control["x_np"]
-        y = partial_obs_pendulum.h(x)
-
-        assert isinstance(y, np.ndarray)
-        # Accept both (1,) and (1, 1) as valid shapes for single output
-        assert y.shape in [(1,), (1, 1)] or y.size == 1
-        # Check value is correct
-        assert np.allclose(y.flatten(), x[0:1])
-
-    @pytest.mark.skipif(not JAX_AVAILABLE, reason="JAX not available")
-    def test_h_jax(self, partial_obs_pendulum, sample_state_control):
-        """Test output function with JAX"""
-        x = sample_state_control["x_jax"]
-        y = partial_obs_pendulum.h(x)
-
-        assert isinstance(y, jnp.ndarray)
-        assert y.shape == (1,)
-
-    def test_h_batched(self, partial_obs_pendulum):
-        """Test batched output evaluation"""
-        x = torch.randn(5, 2)
-        y = partial_obs_pendulum.h(x)
-
-        assert y.shape == (5, 1)
-
-
-# ============================================================================
-# Test Control Design Methods
-# ============================================================================
-
-
-class TestControlDesign:
-    """Test LQR, Kalman gain, and LQG methods"""
-
-    def test_lqr_control(self, linear_system):
-        """Test LQR control design"""
-        Q = np.eye(2)
-        R = np.array([[1.0]])
-
-        K, S = linear_system.lqr_control(Q, R)
-
-        assert isinstance(K, np.ndarray)
-        assert isinstance(S, np.ndarray)
-        assert K.shape == (1, 2)  # (nu, nx)
-        assert S.shape == (2, 2)  # (nx, nx)
-
-        # Check that S is positive definite
-        eigenvalues = np.linalg.eigvals(S)
-        assert np.all(eigenvalues > 0)
-
-    def test_lqr_with_custom_equilibrium(self, pendulum):
-        """Test LQR with custom equilibrium point"""
-        Q = np.diag([10.0, 1.0])
-        R = np.array([[0.1]])
-        x_eq = torch.tensor([np.pi, 0.0])  # Inverted pendulum
-        u_eq = torch.tensor([0.0])
-
-        K, S = pendulum.lqr_control(Q, R, x_eq, u_eq)
-
-        assert K.shape == (1, 2)
-        assert S.shape == (2, 2)
-
-    def test_kalman_gain(self, linear_system):
-        """Test Kalman gain computation"""
-        Q_process = np.eye(2) * 0.01
-        R_measurement = np.eye(2) * 0.1
-
-        L = linear_system.kalman_gain(Q_process, R_measurement)
-
-        assert isinstance(L, np.ndarray)
-        assert L.shape == (2, 2)  # (nx, ny)
-
-    def test_kalman_gain_partial_observation(self, partial_obs_pendulum):
-        """Test Kalman gain with partial observation"""
-        Q_process = np.eye(2) * 0.01
-        R_measurement = np.array([[0.1]])  # Only one measurement
-
-        L = partial_obs_pendulum.kalman_gain(Q_process, R_measurement)
-
-        assert isinstance(L, np.ndarray)
-        assert L.shape == (2, 1)  # (nx, ny) where ny=1
-
-    def test_lqg_control(self, linear_system):
-        """Test LQG controller design"""
-        Q_lqr = np.eye(2)
-        R_lqr = np.array([[1.0]])
-        Q_process = np.eye(2) * 0.01
-        R_measurement = np.eye(2) * 0.1
-
-        K, L = linear_system.lqg_control(Q_lqr, R_lqr, Q_process, R_measurement)
-
-        assert isinstance(K, np.ndarray)
-        assert isinstance(L, np.ndarray)
-        assert K.shape == (1, 2)
-        assert L.shape == (2, 2)
-
-    def test_lqg_closed_loop_matrix(self, linear_system):
-        """Test closed-loop system matrix computation"""
-        Q_lqr = np.eye(2)
-        R_lqr = np.array([[1.0]])
-        Q_process = np.eye(2) * 0.01
-        R_measurement = np.eye(2) * 0.1
-
-        K, L = linear_system.lqg_control(Q_lqr, R_lqr, Q_process, R_measurement)
-        A_cl = linear_system.lqg_closed_loop_matrix(K, L)
-
-        assert isinstance(A_cl, np.ndarray)
-        assert A_cl.shape == (4, 4)  # (2*nx, 2*nx)
-
-        # Check that closed-loop is stable
-        eigenvalues = np.linalg.eigvals(A_cl)
-        assert np.all(np.real(eigenvalues) < 0), "Closed-loop should be stable"
-
-
-# ============================================================================
-# Test Analysis Methods
-# ============================================================================
-
-
-class TestAnalysisMethods:
-    """Test equilibrium and stability analysis methods"""
-
-    def test_check_equilibrium_at_origin(self, pendulum):
-        """Test equilibrium check at origin"""
-        x_eq = torch.tensor([0.0, 0.0])
-        u_eq = torch.tensor([0.0])
-
-        is_eq, max_deriv = pendulum.check_equilibrium(x_eq, u_eq)
-
-        assert is_eq
-        assert max_deriv < 1e-6
-
-    def test_check_equilibrium_not_at_origin(self, pendulum):
-        """Test equilibrium check at non-equilibrium point"""
-        x = torch.tensor([0.5, 0.1])
+        assert A.shape == (1, 1)
+        assert B.shape == (1, 1)
+        
+        # dδ/dx = -a = -2
+        assert np.allclose(A, np.array([[-2.0]]))
+        # dδ/du = 1
+        assert np.allclose(B, np.array([[1.0]]))
+    
+    @pytest.mark.skipif(not torch_available, reason="PyTorch not installed")
+    def test_linearized_dynamics_torch(self):
+        """Test linearization with PyTorch"""
+        system = SimpleFirstOrderSystem(a=2.0)
+        
+        x = torch.tensor([1.0])
         u = torch.tensor([0.0])
-
-        is_eq, max_deriv = pendulum.check_equilibrium(x, u)
-
-        assert not is_eq
-        assert max_deriv > 1e-6
-
-    def test_eigenvalues_at_equilibrium(self, linear_system):
-        """Test eigenvalue computation"""
-        eigs = linear_system.eigenvalues_at_equilibrium()
-
-        assert isinstance(eigs, np.ndarray)
-        assert eigs.shape == (2,)
-        # Linear system should be stable (eigenvalues have negative real part)
-        assert np.all(np.real(eigs) < 0)
-
-    def test_is_stable_equilibrium(self, linear_system):
-        """Test stability check"""
-        is_stable = linear_system.is_stable_equilibrium(discrete_time=False)
-        assert is_stable
-
-    def test_verify_jacobians(self, pendulum, sample_state_control):
-        """Test Jacobian verification against autograd"""
-        x = sample_state_control["x_torch"]
-        u = sample_state_control["u_torch"]
-
-        result = pendulum.verify_jacobians(x, u, tol=1e-3)
-
-        assert isinstance(result, dict)
-        assert "A_match" in result
-        assert "B_match" in result
-        assert "A_error" in result
-        assert "B_error" in result
-
-        assert result["A_match"]
-        assert result["B_match"]
-        assert result["A_error"] < 1e-3
-        assert result["B_error"] < 1e-3
-
-    def test_check_numerical_stability(self, pendulum, sample_state_control):
-        """Test numerical stability check"""
-        x = sample_state_control["x_torch"]
-        u = sample_state_control["u_torch"]
-
-        result = pendulum.check_numerical_stability(x, u)
-
-        assert isinstance(result, dict)
-        assert "has_nan" in result
-        assert "has_inf" in result
-        assert "max_derivative" in result
-        assert "is_stable" in result
-
-        assert not result["has_nan"]
-        assert not result["has_inf"]
-        assert result["is_stable"]
+        
+        A, B = system.linearized_dynamics(x, u)
+        
+        assert isinstance(A, torch.Tensor)
+        assert isinstance(B, torch.Tensor)
+        assert torch.allclose(A, torch.tensor([[-2.0]]))
+        assert torch.allclose(B, torch.tensor([[1.0]]))
+    
+    def test_linearized_dynamics_second_order(self):
+        """Test linearization of second-order system"""
+        system = SimpleSecondOrderSystem(k=10.0, c=0.5)
+        
+        x = np.array([0.0, 0.0])
+        u = np.array([0.0])
+        
+        A, B = system.linearized_dynamics(x, u)
+        
+        # State-space form for q̈ = -k*q - c*q̇ + u:
+        # dx/dt = [q̇; q̈] = [0 1; -k -c][q; q̇] + [0; 1]u
+        expected_A = np.array([[0, 1], [-10, -0.5]])
+        expected_B = np.array([[0], [1]])
+        
+        assert A.shape == (2, 2)
+        assert B.shape == (2, 1)
+        assert np.allclose(A, expected_A)
+        assert np.allclose(B, expected_B)
+    
+    def test_linearized_dynamics_symbolic(self):
+        """Test symbolic linearization"""
+        system = SimpleFirstOrderSystem(a=2.0)
+        
+        x_eq = sp.Matrix([0])
+        u_eq = sp.Matrix([0])
+        
+        A_sym, B_sym = system.linearized_dynamics_symbolic(x_eq, u_eq)
+        
+        assert isinstance(A_sym, sp.Matrix)
+        assert isinstance(B_sym, sp.Matrix)
+        
+        # Convert to numpy for checking
+        A_np = np.array(A_sym, dtype=float)
+        B_np = np.array(B_sym, dtype=float)
+        
+        assert np.allclose(A_np, np.array([[-2.0]]))
+        assert np.allclose(B_np, np.array([[1.0]]))
 
 
 # ============================================================================
-# Test Utility Methods
+# Test Class 5: Output Functions
+# ============================================================================
+
+
+class TestOutputFunctions:
+    """Test output equation evaluation"""
+    
+    def test_default_output_numpy(self):
+        """Test default output (identity) with NumPy"""
+        system = SimpleFirstOrderSystem()
+        
+        x = np.array([1.0])
+        y = system.h(x)
+        
+        assert isinstance(y, np.ndarray)
+        assert np.allclose(y, x)
+    
+    def test_custom_output_numpy(self):
+        """Test custom output function"""
+        system = CustomOutputSystem()
+        
+        x = np.array([1.0, 2.0])
+        y = system.h(x)
+        
+        # y = [x1, x1^2 + x2^2] = [1, 5]
+        assert y.shape == (2,)
+        assert np.allclose(y, np.array([1.0, 5.0]))
+    
+    @pytest.mark.skipif(not torch_available, reason="PyTorch not installed")
+    def test_custom_output_torch(self):
+        """Test custom output with PyTorch"""
+        system = CustomOutputSystem()
+        
+        x = torch.tensor([1.0, 2.0])
+        y = system.h(x)
+        
+        assert isinstance(y, torch.Tensor)
+        assert torch.allclose(y, torch.tensor([1.0, 5.0]))
+    
+    def test_linearized_observation_numpy(self):
+        """Test linearized observation matrix"""
+        system = CustomOutputSystem()
+        
+        x = np.array([1.0, 2.0])
+        C = system.linearized_observation(x)
+        
+        # C = dh/dx = [[1, 0], [2*x1, 2*x2]] = [[1, 0], [2, 4]]
+        expected_C = np.array([[1.0, 0.0], [2.0, 4.0]])
+        
+        assert C.shape == (2, 2)
+        assert np.allclose(C, expected_C)
+    
+    def test_output_backend_override(self):
+        """Test forcing backend for output evaluation"""
+        if not torch_available:
+            pytest.skip("PyTorch not installed")
+        
+        system = CustomOutputSystem()
+        
+        x = np.array([1.0, 2.0])
+        y = system.h(x, backend='torch')
+        
+        assert isinstance(y, torch.Tensor)
+
+
+# ============================================================================
+# Test Class 6: Equilibrium Handling
+# ============================================================================
+
+
+class TestEquilibriumHandling:
+    """Test equilibrium management"""
+    
+    def test_default_origin_equilibrium(self):
+        """Test that origin equilibrium exists by default"""
+        system = SimpleFirstOrderSystem()
+        
+        equilibria = system.equilibria.list_names()
+        
+        assert 'origin' in equilibria
+        assert len(equilibria) == 1
+    
+    def test_get_origin_equilibrium(self):
+        """Test getting origin equilibrium"""
+        system = SimpleFirstOrderSystem()
+        
+        x_eq = system.equilibria.get_x('origin')
+        u_eq = system.equilibria.get_u('origin')
+        
+        assert isinstance(x_eq, np.ndarray)
+        assert isinstance(u_eq, np.ndarray)
+        assert np.allclose(x_eq, np.array([0.0]))
+        assert np.allclose(u_eq, np.array([0.0]))
+    
+    def test_add_equilibrium(self):
+        """Test adding custom equilibrium"""
+        system = SimpleFirstOrderSystem(a=2.0)
+        
+        # For dx = -2x + u, equilibrium at x=1 requires u=2
+        system.add_equilibrium(
+            'custom',
+            x_eq=np.array([1.0]),
+            u_eq=np.array([2.0]),
+            verify=False  # Skip verification for this test
+        )
+        
+        x_eq = system.equilibria.get_x('custom')
+        assert np.allclose(x_eq, np.array([1.0]))
+    
+    def test_equilibrium_verification_valid(self):
+        """Test verification accepts valid equilibrium"""
+        system = SimpleFirstOrderSystem(a=2.0)
+        
+        # This IS an equilibrium: -2*1 + 2 = 0
+        with pytest.warns(None) as warning_list:
+            system.add_equilibrium(
+                'valid',
+                x_eq=np.array([1.0]),
+                u_eq=np.array([2.0]),
+                verify=True,
+                tol=1e-6
+            )
+        
+        # Should not warn for valid equilibrium
+        assert len([w for w in warning_list if 'may not be valid' in str(w.message)]) == 0
+    
+    def test_equilibrium_verification_invalid(self):
+        """Test verification warns on invalid equilibrium"""
+        system = SimpleFirstOrderSystem(a=2.0)
+        
+        # This is NOT an equilibrium: -2*1 + 0 = -2 ≠ 0
+        with pytest.warns(UserWarning, match="may not be valid"):
+            system.add_equilibrium(
+                'invalid',
+                x_eq=np.array([1.0]),
+                u_eq=np.array([0.0]),  # Wrong control
+                verify=True
+            )
+    
+    def test_set_default_equilibrium(self):
+        """Test changing default equilibrium"""
+        system = SimpleFirstOrderSystem()
+        
+        system.add_equilibrium('custom', np.array([1.0]), np.array([0.0]), verify=False)
+        system.equilibria.set_default('custom')
+        
+        assert system.equilibria._default == 'custom'
+    
+    def test_get_equilibrium_with_backend(self):
+        """Test getting equilibrium in different backends"""
+        system = SimpleFirstOrderSystem()
+        
+        system.add_equilibrium('test', np.array([1.0]), np.array([0.5]), verify=False)
+        
+        # NumPy
+        x_np = system.equilibria.get_x('test', backend='numpy')
+        assert isinstance(x_np, np.ndarray)
+        
+        if torch_available:
+            # PyTorch
+            x_torch = system.equilibria.get_x('test', backend='torch')
+            assert isinstance(x_torch, torch.Tensor)
+        
+        if jax_available:
+            # JAX
+            x_jax = system.equilibria.get_x('test', backend='jax')
+            assert isinstance(x_jax, jnp.ndarray)
+    
+    def test_equilibrium_dimension_validation(self):
+        """Test that wrong-sized equilibria are rejected"""
+        system = SimpleFirstOrderSystem()
+        
+        with pytest.raises(ValueError, match="must have shape"):
+            system.add_equilibrium(
+                'bad',
+                x_eq=np.array([1.0, 2.0]),  # 2 states, but system has 1!
+                u_eq=np.array([0.0])
+            )
+
+
+# ============================================================================
+# Test Class 7: Code Generation and Caching
+# ============================================================================
+
+
+class TestCodeGeneration:
+    """Test code generation and function caching"""
+    
+    def test_lazy_generation_numpy(self):
+        """Test that functions are generated lazily"""
+        system = SimpleFirstOrderSystem()
+        
+        assert system._f_numpy is None  # Not generated yet
+        
+        x = np.array([1.0])
+        u = np.array([0.0])
+        
+        dx = system(x, u)  # First call generates function
+        
+        assert system._f_numpy is not None  # Now cached
+    
+    def test_compile_all_backends(self):
+        """Test compiling for all available backends"""
+        system = SimpleFirstOrderSystem()
+        
+        timings = system.compile(verbose=False)
+        
+        assert 'numpy' in timings
+        assert timings['numpy'] is not None
+        assert system._f_numpy is not None
+    
+    def test_compile_specific_backend(self):
+        """Test compiling for specific backend"""
+        system = SimpleFirstOrderSystem()
+        
+        timings = system.compile(backends=['numpy'], verbose=False)
+        
+        assert 'numpy' in timings
+        assert 'torch' not in timings
+        assert 'jax' not in timings
+    
+    def test_compile_verbose(self, capsys):
+        """Test verbose compilation output"""
+        system = SimpleFirstOrderSystem()
+        
+        system.compile(backends=['numpy'], verbose=True)
+        
+        captured = capsys.readouterr()
+        assert 'Compiling numpy' in captured.out
+    
+    def test_function_reuse(self):
+        """Test that cached functions are reused"""
+        system = SimpleFirstOrderSystem()
+        
+        # First call
+        x = np.array([1.0])
+        u = np.array([0.0])
+        system(x, u)
+        
+        func1 = system._f_numpy
+        
+        # Second call
+        system(x, u)
+        
+        func2 = system._f_numpy
+        
+        assert func1 is func2  # Same function object
+    
+    def test_reset_caches(self):
+        """Test cache clearing"""
+        system = SimpleFirstOrderSystem()
+        
+        # Generate function
+        system.compile(backends=['numpy'])
+        assert system._f_numpy is not None
+        
+        # Clear cache
+        system.reset_caches(['numpy'])
+        assert system._f_numpy is None
+
+
+# ============================================================================
+# Test Class 8: Backend Switching
+# ============================================================================
+
+
+class TestBackendSwitching:
+    """Test dynamic backend switching"""
+    
+    def test_to_device(self):
+        """Test device setting"""
+        system = SimpleFirstOrderSystem()
+        
+        result = system.to_device('cuda')
+        
+        assert system._preferred_device == 'cuda'
+        assert result is system  # Returns self for chaining
+    
+    @pytest.mark.skipif(not torch_available, reason="PyTorch not installed")
+    def test_device_clears_cache(self):
+        """Test that changing device clears backend cache"""
+        system = SimpleFirstOrderSystem()
+        system.set_default_backend('torch')
+        
+        # Generate function
+        system.compile(backends=['torch'])
+        assert system._f_torch is not None
+        
+        # Change device
+        system.to_device('cuda')
+        
+        # Cache should be cleared
+        assert system._f_torch is None
+    
+    def test_use_backend_context_manager(self):
+        """Test temporary backend switching"""
+        if not torch_available:
+            pytest.skip("PyTorch not installed")
+        
+        system = SimpleFirstOrderSystem()
+        system.set_default_backend('numpy')
+        
+        assert system._default_backend == 'numpy'
+        
+        # Temporarily switch to torch
+        with system.use_backend('torch'):
+            assert system._default_backend == 'torch'
+        
+        # Back to numpy
+        assert system._default_backend == 'numpy'
+    
+    def test_clone_same_backend(self):
+        """Test cloning system"""
+        system = SimpleFirstOrderSystem(a=2.0)
+        
+        cloned = system.clone()
+        
+        assert cloned is not system
+        assert cloned._default_backend == system._default_backend
+        assert len(cloned.state_vars) == len(system.state_vars)
+    
+    def test_clone_different_backend(self):
+        """Test cloning with backend change"""
+        if not torch_available:
+            pytest.skip("PyTorch not installed")
+        
+        system = SimpleFirstOrderSystem()
+        system.set_default_backend('numpy')
+        
+        cloned = system.clone(backend='torch')
+        
+        assert system._default_backend == 'numpy'
+        assert cloned._default_backend == 'torch'
+    
+    def test_get_backend_info(self):
+        """Test getting backend information"""
+        system = SimpleFirstOrderSystem()
+        
+        info = system.get_backend_info()
+        
+        assert 'default_backend' in info
+        assert 'available_backends' in info
+        assert 'compiled_backends' in info
+        assert 'numpy' in info['available_backends']
+        assert info['default_backend'] == 'numpy'
+
+
+# ============================================================================
+# Test Class 9: Jacobian Verification
+# ============================================================================
+
+
+class TestJacobianVerification:
+    """Test Jacobian verification against autodiff"""
+    
+    @pytest.mark.skipif(not torch_available, reason="PyTorch not installed")
+    def test_verify_jacobians_torch(self):
+        """Test Jacobian verification with PyTorch autodiff"""
+        system = SimpleFirstOrderSystem(a=2.0)
+        
+        x = torch.tensor([1.0])
+        u = torch.tensor([0.0])
+        
+        results = system.verify_jacobians(x, u, backend='torch', tol=1e-4)
+        
+        assert results['A_match'] is True
+        assert results['B_match'] is True
+        assert results['A_error'] < 1e-4
+        assert results['B_error'] < 1e-4
+    
+    @pytest.mark.skipif(not jax_available, reason="JAX not installed")
+    def test_verify_jacobians_jax(self):
+        """Test Jacobian verification with JAX autodiff"""
+        system = SimpleFirstOrderSystem(a=2.0)
+        
+        x = jnp.array([1.0])
+        u = jnp.array([0.0])
+        
+        results = system.verify_jacobians(x, u, backend='jax', tol=1e-4)
+        
+        assert results['A_match'] is True
+        assert results['B_match'] is True
+    
+    def test_verify_jacobians_numpy_fails(self):
+        """Test that NumPy backend is rejected for verification"""
+        system = SimpleFirstOrderSystem()
+        
+        x = np.array([1.0])
+        u = np.array([0.0])
+        
+        with pytest.raises(ValueError, match="requires autodiff backend"):
+            system.verify_jacobians(x, u, backend='numpy')
+    
+    @pytest.mark.skipif(not torch_available, reason="PyTorch not installed")
+    def test_verify_second_order_jacobians(self):
+        """Test Jacobian verification for second-order system"""
+        system = SimpleSecondOrderSystem(k=10.0, c=0.5)
+        
+        x = torch.tensor([0.1, 0.0])
+        u = torch.tensor([0.0])
+        
+        results = system.verify_jacobians(x, u, backend='torch', tol=1e-3)
+        
+        assert results['A_match'] is True
+        assert results['B_match'] is True
+
+
+# ============================================================================
+# Test Class 10: Performance Monitoring
+# ============================================================================
+
+
+class TestPerformanceMonitoring:
+    """Test performance statistics tracking"""
+    
+    def test_forward_call_counting(self):
+        """Test that forward calls are counted"""
+        system = SimpleFirstOrderSystem()
+        
+        x = np.array([1.0])
+        u = np.array([0.0])
+        
+        initial_calls = system._perf_stats['forward_calls']
+        
+        system(x, u)
+        system(x, u)
+        system(x, u)
+        
+        assert system._perf_stats['forward_calls'] == initial_calls + 3
+    
+    def test_get_performance_stats(self):
+        """Test getting performance statistics"""
+        system = SimpleFirstOrderSystem()
+        
+        x = np.array([1.0])
+        u = np.array([0.0])
+        
+        system(x, u)
+        
+        stats = system.get_performance_stats()
+        
+        assert 'forward_calls' in stats
+        assert 'avg_forward_time' in stats
+        assert stats['forward_calls'] >= 1
+    
+    def test_reset_performance_stats(self):
+        """Test resetting performance counters"""
+        system = SimpleFirstOrderSystem()
+        
+        x = np.array([1.0])
+        u = np.array([0.0])
+        
+        system(x, u)
+        assert system._perf_stats['forward_calls'] > 0
+        
+        system.reset_performance_stats()
+        assert system._perf_stats['forward_calls'] == 0
+        assert system._perf_stats['forward_time'] == 0.0
+
+
+# ============================================================================
+# Test Class 11: Configuration Save/Load
+# ============================================================================
+
+
+class TestConfiguration:
+    """Test configuration persistence"""
+    
+    def test_get_config_dict(self):
+        """Test getting configuration as dictionary"""
+        system = SimpleFirstOrderSystem(a=2.0)
+        
+        config = system.get_config_dict()
+        
+        assert config['class_name'] == 'SimpleFirstOrderSystem'
+        assert config['nx'] == 1
+        assert config['nu'] == 1
+        assert config['order'] == 1
+        assert config['default_backend'] == 'numpy'
+        assert 'a' in config['parameters']
+    
+    def test_save_config_json(self, tmp_path):
+        """Test saving configuration to JSON"""
+        system = SimpleFirstOrderSystem(a=2.0)
+        
+        config_file = tmp_path / "system_config.json"
+        system.save_config(str(config_file))
+        
+        assert config_file.exists()
+        
+        # Load and verify
+        import json
+        with open(config_file) as f:
+            loaded = json.load(f)
+        
+        assert loaded['class_name'] == 'SimpleFirstOrderSystem'
+        assert loaded['default_backend'] == 'numpy'
+    
+    def test_save_config_with_equilibria(self, tmp_path):
+        """Test that equilibria are saved"""
+        system = SimpleFirstOrderSystem()
+        system.add_equilibrium('test', np.array([1.0]), np.array([0.5]), verify=False)
+        
+        config_file = tmp_path / "config.json"
+        system.save_config(str(config_file))
+        
+        import json
+        with open(config_file) as f:
+            config = json.load(f)
+        
+        assert 'equilibria' in config
+        assert 'test' in config['equilibria']
+        assert config['equilibria']['test']['x'] == [1.0]
+
+
+# ============================================================================
+# Test Class 12: Utility Methods
 # ============================================================================
 
 
 class TestUtilityMethods:
     """Test utility and helper methods"""
-
-    def test_print_equations(self, pendulum, capsys):
+    
+    def test_repr(self):
+        """Test __repr__ output"""
+        system = SimpleFirstOrderSystem()
+        
+        repr_str = repr(system)
+        
+        assert 'SimpleFirstOrderSystem' in repr_str
+        assert 'nx=1' in repr_str
+        assert 'nu=1' in repr_str
+        assert 'backend=numpy' in repr_str
+    
+    def test_str(self):
+        """Test __str__ output"""
+        system = SimpleFirstOrderSystem()
+        
+        str_repr = str(system)
+        
+        assert 'SimpleFirstOrderSystem' in str_repr
+        assert 'nx=1' in str_repr
+    
+    def test_str_with_multiple_equilibria(self):
+        """Test __str__ shows equilibria count"""
+        system = SimpleFirstOrderSystem()
+        system.add_equilibrium('eq1', np.array([1.0]), np.array([0.0]), verify=False)
+        system.add_equilibrium('eq2', np.array([2.0]), np.array([0.0]), verify=False)
+        
+        str_repr = str(system)
+        
+        assert 'equilibria' in str_repr
+    
+    def test_print_equations(self, capsys):
         """Test equation printing"""
-        pendulum.print_equations(simplify=True)
-
+        system = SimpleFirstOrderSystem(a=2.0)
+        
+        system.print_equations(simplify=True)
+        
         captured = capsys.readouterr()
-        assert "SimplePendulum" in captured.out
-        assert "State Variables" in captured.out
-        assert "Dynamics" in captured.out
-
-    def test_clone(self, pendulum):
-        """Test system cloning"""
-        cloned = pendulum.clone()
-
-        assert cloned is not pendulum
-        assert cloned.nx == pendulum.nx
-        assert cloned.nu == pendulum.nu
-        assert len(cloned.parameters) == len(pendulum.parameters)
-
-    def test_to_device_cpu(self, pendulum):
-        """Test moving to CPU device"""
-        pendulum_cpu = pendulum.to_device("cpu")
-        assert pendulum_cpu is pendulum  # Returns self
-
-    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
-    def test_to_device_cuda(self, pendulum):
-        """Test moving to CUDA device"""
-        pendulum_cuda = pendulum.to_device("cuda")
-        assert pendulum_cuda is pendulum
-
-    def test_get_config_dict(self, pendulum):
-        """Test configuration dictionary generation"""
-        config = pendulum.get_config_dict()
-
-        assert isinstance(config, dict)
-        assert "class_name" in config
-        assert "parameters" in config
-        assert "nx" in config
-        assert "nu" in config
-        assert config["class_name"] == "SimplePendulum"
-        assert config["nx"] == 2
-        assert config["nu"] == 1
-
-    def test_save_config_json(self, pendulum, tmp_path):
-        """Test saving configuration to JSON"""
-        filepath = tmp_path / "config.json"
-        pendulum.save_config(str(filepath))
-
-        assert filepath.exists()
-
-        import json
-
-        with open(filepath, "r") as f:
-            config = json.load(f)
-
-        assert config["class_name"] == "SimplePendulum"
-        assert config["nx"] == 2
-
-    def test_save_config_pt(self, pendulum, tmp_path):
-        """Test saving configuration to PyTorch file"""
-        filepath = tmp_path / "config.pt"
-        pendulum.save_config(str(filepath))
-
-        assert filepath.exists()
-
-        config = torch.load(filepath)
-        assert config["class_name"] == "SimplePendulum"
-
-    def test_save_config_invalid_format(self, pendulum, tmp_path):
-        """Test that invalid format raises error"""
-        filepath = tmp_path / "config.txt"
-
-        with pytest.raises(ValueError, match="Unsupported file format"):
-            pendulum.save_config(str(filepath))
-
-    def test_get_performance_stats(self, pendulum, sample_state_control):
-        """Test performance statistics tracking"""
-        # Reset stats
-        pendulum.reset_performance_stats()
-
-        # Make some forward calls
-        x = sample_state_control["x_torch"]
-        u = sample_state_control["u_torch"]
-        for _ in range(5):
-            pendulum.forward(x, u)
-
-        stats = pendulum.get_performance_stats()
-
-        assert isinstance(stats, dict)
-        assert "forward_calls" in stats
-        assert "forward_time" in stats
-        assert "avg_forward_time" in stats
-        assert stats["forward_calls"] == 5
-        assert stats["forward_time"] > 0
-
-    def test_reset_performance_stats(self, pendulum, sample_state_control):
-        """Test performance statistics reset"""
-        # Make some calls
-        x = sample_state_control["x_torch"]
-        u = sample_state_control["u_torch"]
-        pendulum.forward(x, u)
-
-        # Reset
-        pendulum.reset_performance_stats()
-
-        stats = pendulum.get_performance_stats()
-        assert stats["forward_calls"] == 0
-        assert stats["forward_time"] == 0.0
+        assert 'SimpleFirstOrderSystem' in captured.out
+        assert 'State Variables' in captured.out
+        assert 'Dynamics' in captured.out
+    
+    def test_print_equations_with_output(self, capsys):
+        """Test printing system with custom output"""
+        system = CustomOutputSystem()
+        
+        system.print_equations(simplify=True)
+        
+        captured = capsys.readouterr()
+        assert 'Output' in captured.out
 
 
 # ============================================================================
-# Test Edge Cases and Error Handling
+# Test Class 13: Edge Cases and Error Handling
 # ============================================================================
 
 
 class TestEdgeCases:
-    """Test edge cases and error handling"""
-
-    def test_forward_with_zero_dimensional_input(self, pendulum):
-        """Test that 0D inputs raise error"""
-        x = torch.tensor(0.5)  # 0D tensor
-        u = torch.tensor(0.2)
-
-        with pytest.raises(ValueError, match="Input tensors must be at least 1D"):
-            pendulum.forward(x, u)
-
-    def test_linearization_with_scalar_R(self, linear_system):
-        """Test LQR with scalar R matrix"""
-        Q = np.eye(2)
-        R = 1.0  # Scalar
-
-        K, S = linear_system.lqr_control(Q, R)
-
-        assert K.shape == (1, 2)
-
-    def test_linearization_with_incompatible_dimensions(self, linear_system):
-        """Test that incompatible dimensions raise error"""
-        Q = np.eye(3)  # Wrong size
-        R = np.array([[1.0]])
-
-        with pytest.raises(ValueError):
-            linear_system.lqr_control(Q, R)
+    """Test edge cases and error conditions"""
+    
+    def test_zero_dimensional_input_error(self):
+        """Test error on scalar input"""
+        system = SimpleFirstOrderSystem()
+        
+        with pytest.raises(ValueError, match="at least 1D"):
+            system(np.array(1.0), np.array(0.0))  # 0D arrays
+    
+    def test_wrong_state_dimension(self):
+        """Test error on wrong state dimension"""
+        system = SimpleFirstOrderSystem()
+        
+        x = np.array([1.0, 2.0])  # 2D but system is 1D!
+        u = np.array([0.0])
+        
+        with pytest.raises(ValueError, match="Expected state dimension"):
+            system(x, u)
+    
+    def test_wrong_control_dimension(self):
+        """Test error on wrong control dimension"""
+        system = SimpleFirstOrderSystem()
+        
+        x = np.array([1.0])
+        u = np.array([0.0, 0.0])  # 2D but system has 1 control!
+        
+        with pytest.raises(ValueError, match="Expected control dimension"):
+            system(x, u)
+    
+    def test_warmup_success(self, capsys):
+        """Test backend warmup"""
+        system = SimpleFirstOrderSystem()
+        
+        success = system.warmup(backend='numpy')
+        
+        captured = capsys.readouterr()
+        assert 'Warming up' in captured.out
+        assert success is True
+    
+    def test_warmup_with_test_point(self, capsys):
+        """Test warmup with custom test point"""
+        system = SimpleFirstOrderSystem()
+        
+        x_test = np.array([1.0])
+        u_test = np.array([0.5])
+        
+        success = system.warmup(backend='numpy', test_point=(x_test, u_test))
+        
+        assert success is True
 
 
 # ============================================================================
-# Test Performance
+# Test Class 14: Integration Tests
 # ============================================================================
 
 
-class TestPerformance:
-    """Test performance-related functionality"""
+class TestIntegration:
+    """Integration tests combining multiple features"""
+    
+    def test_full_workflow_numpy(self):
+        """Test complete workflow with NumPy backend"""
+        # Create system
+        system = SimpleFirstOrderSystem(a=2.0)
+        
+        # Add custom equilibrium
+        system.add_equilibrium('eq1', np.array([1.0]), np.array([2.0]), verify=True)
+        
+        # Get equilibrium
+        x_eq = system.equilibria.get_x('eq1')
+        u_eq = system.equilibria.get_u('eq1')
+        
+        # Evaluate dynamics at equilibrium
+        dx = system(x_eq, u_eq)
+        
+        # Should be near zero (at equilibrium)
+        assert np.abs(dx).max() < 1e-10
+        
+        # Linearize at equilibrium
+        A, B = system.linearized_dynamics(x_eq, u_eq)
+        
+        assert A.shape == (1, 1)
+        assert B.shape == (1, 1)
+    
+    @pytest.mark.skipif(not torch_available, reason="PyTorch not installed")
+    def test_full_workflow_torch(self):
+        """Test complete workflow with PyTorch backend"""
+        system = SimpleFirstOrderSystem(a=2.0)
+        system.set_default_backend('torch')
+        
+        # Compile
+        system.compile(backends=['torch'])
+        
+        # Evaluate
+        x = torch.tensor([1.0])
+        u = torch.tensor([0.0])
+        dx = system(x, u, backend='default')
+        
+        assert isinstance(dx, torch.Tensor)
+        
+        # Verify gradients work
+        x.requires_grad_(True)
+        dx = system(x, u)
+        dx.backward()
+        
+        assert x.grad is not None
+    
+    def test_multi_backend_consistency(self):
+        """Test that all backends give same results"""
+        system = SimpleFirstOrderSystem(a=2.0)
+        
+        x_np = np.array([1.0])
+        u_np = np.array([0.5])
+        
+        # NumPy result
+        dx_np = system(x_np, u_np)
+        
+        backends_to_test = ['numpy']
+        if torch_available:
+            backends_to_test.append('torch')
+        if jax_available:
+            backends_to_test.append('jax')
+        
+        # All backends should give same numerical result
+        for backend in backends_to_test:
+            dx = system(x_np, u_np, backend=backend)
+            dx_val = np.array(dx) if not isinstance(dx, np.ndarray) else dx
+            
+            assert np.allclose(dx_val, dx_np), f"{backend} doesn't match NumPy"
+    
+    def test_second_order_complete_workflow(self):
+        """Test second-order system end-to-end"""
+        system = SimpleSecondOrderSystem(k=10.0, c=0.5)
+        
+        # State: [position, velocity]
+        x = np.array([0.1, 0.0])
+        u = np.array([0.0])
+        
+        # Dynamics (acceleration)
+        dx = system(x, u)
+        assert dx.shape == (1,)
+        
+        # Linearization (state-space form)
+        A, B = system.linearized_dynamics(x, u)
+        assert A.shape == (2, 2)
+        assert B.shape == (2, 1)
+        
+        # Verify state-space structure
+        assert np.allclose(A[0, 1], 1.0)  # dq/dt = q̇
+        assert np.allclose(B[0, 0], 0.0)  # Control doesn't affect position directly
 
-    def test_cached_jacobians_faster(self, pendulum, sample_state_control):
-        """Test that cached Jacobians are faster than symbolic evaluation"""
-        import time
 
-        x = sample_state_control["x_torch"]
-        u = sample_state_control["u_torch"]
+# ============================================================================
+# Test Class 15: Property Tests
+# ============================================================================
 
-        # Without caching
-        start = time.time()
-        for _ in range(10):
-            A1, B1 = pendulum.linearized_dynamics(x, u)
-        time_uncached = time.time() - start
 
-        # With caching
-        pendulum._cache_jacobians(backend="torch")
-        start = time.time()
-        for _ in range(10):
-            A2, B2 = pendulum.linearized_dynamics(x, u)
-        time_cached = time.time() - start
-
-        # Cached should be faster (or at least not slower)
-        assert time_cached <= time_uncached * 1.5  # Allow some margin
-
-        # Results should be the same
-        assert torch.allclose(A1, A2, atol=1e-6)
-        assert torch.allclose(B1, B2, atol=1e-6)
-
-    @pytest.mark.skipif(not JAX_AVAILABLE, reason="JAX not available")
-    def test_jax_jit_compilation(self, pendulum):
-        """Test that JAX JIT compilation works"""
-        import time
-
-        pendulum.generate_jax_function(jit=True)
-
-        x = jnp.array([0.5, 0.1])
-        u = jnp.array([0.2])
-
-        # First call (compilation)
-        start = time.time()
-        dx1 = pendulum.forward(x, u)
-        time_first = time.time() - start
-
-        # Second call (should be faster due to JIT)
-        start = time.time()
-        dx2 = pendulum.forward(x, u)
-        time_second = time.time() - start
-
-        # Results should be identical
-        assert jnp.allclose(dx1, dx2)
-
-        # Second call should be faster (with some margin for variance)
-        # Note: This might not always be true in test environments
-        print(f"First call: {time_first:.6f}s, Second call: {time_second:.6f}s")
+class TestProperties:
+    """Test system properties"""
+    
+    def test_nx_property(self):
+        """Test nx property"""
+        system = SimpleFirstOrderSystem()
+        assert system.nx == 1
+        
+        system2 = SimpleSecondOrderSystem()
+        assert system2.nx == 2
+    
+    def test_nu_property(self):
+        """Test nu property"""
+        system = SimpleFirstOrderSystem()
+        assert system.nu == 1
+    
+    def test_ny_property_default(self):
+        """Test ny defaults to nx"""
+        system = SimpleFirstOrderSystem()
+        assert system.ny == system.nx
+    
+    def test_ny_property_custom(self):
+        """Test ny with custom output"""
+        system = CustomOutputSystem()
+        assert system.ny == 2
+    
+    def test_nq_property_first_order(self):
+        """Test nq for first-order system"""
+        system = SimpleFirstOrderSystem()
+        assert system.nq == system.nx
+    
+    def test_nq_property_second_order(self):
+        """Test nq for second-order system"""
+        system = SimpleSecondOrderSystem()
+        assert system.nq == 1  # nx=2, order=2, so nq=1
 
 
 # ============================================================================
 # Run Tests
 # ============================================================================
 
-if __name__ == "__main__":
-    pytest.main([__file__, "-v", "--tb=short"])
+
+if __name__ == '__main__':
+    # Run with pytest
+    # pytest symbolic_dynamical_system_test.py -v
+    
+    # Or run specific test class
+    # pytest symbolic_dynamical_system_test.py::TestInitializationAndValidation -v
+    
+    # Or with coverage
+    # pytest symbolic_dynamical_system_test.py --cov=src.systems.base.symbolic_dynamical_system
+    
+    pytest.main([__file__, '-v', '--tb=short'])
