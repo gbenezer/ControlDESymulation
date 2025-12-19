@@ -36,18 +36,27 @@ import sympy as sp
 from src.systems.base import SymbolicDynamicalSystem
 
 class Pendulum(SymbolicDynamicalSystem):
-    def define_system(self, m=0.15, l=0.5, beta=0.1, g=9.81):
-        # Symbolic definition
-        θ, θ_dot = sp.symbols('theta theta_dot')
-        u = sp.symbols('u')
+    def __init__(self, m=0.15, l=0.5, beta=0.1, g=9.81):
+        super().__init__()
+        self.define_system(m, l, beta, g)
+        self._validate_system()
+    
+    def define_system(self, m_val, l_val, beta_val, g_val):
+        """Define pendulum dynamics symbolically"""
+
+        # Create symbols
+        m, l, beta, g = sp.symbols('m l beta g', real=True, positive=True)
+        θ, θ_dot = sp.symbols('theta theta_dot', real=True)
+        u = sp.symbols('u', real=True)
         
-        # Physics in SymPy
+        # Dynamics
         θ_ddot = -(g/l)*sp.sin(θ) - (beta/m)*θ_dot + u/(m*l**2)
         
+        # Assign
         self.state_vars = [θ, θ_dot]
         self.control_vars = [u]
         self._f_sym = sp.Matrix([θ_ddot])
-        self.parameters = {m: 0.15, l: 0.5, beta: 0.1, g: 9.81}
+        self.parameters = {m: m_val, l: l_val, beta: beta_val, g: g_val}
         self.order = 2
 
 pendulum = Pendulum()
@@ -144,10 +153,17 @@ Define your dynamical system using SymPy:
 
 ```python
 class MySystem(SymbolicDynamicalSystem):
-    def define_system(self, param1, param2):
+
+    def __init__(self, param1 = 1.0, param2 = 0.5):
+        super().__init__()
+        self.define_system(param1, param2)
+        self._validate_system()
+
+    def define_system(self, param1_val, param2_val):
         # Define symbolic variables
         x1, x2 = sp.symbols('x1 x2')
         u = sp.symbols('u')
+        param1, param2 = sp.symbols('param1 param2')
         
         # Define dynamics: dx/dt = f(x, u)
         dx1_dt = x2
@@ -157,17 +173,8 @@ class MySystem(SymbolicDynamicalSystem):
         self.state_vars = [x1, x2]
         self.control_vars = [u]
         self._f_sym = sp.Matrix([dx1_dt, dx2_dt])
-        self.parameters = {param1: 1.0, param2: 0.5}
+        self.parameters = {param1: param1_val, param2: param2_val}
         self.order = 1  # First-order system
-
-        # If necessary, redefine equilibrium/target/setpoint control and state variables
-        @property
-        def x_equilibrium(self) -> torch.Tensor:
-            return torch.zeros(self.nx)
-
-        @property
-        def u_equilibrium(self) -> torch.Tensor:
-            return torch.zeros(self.nu)
 ```
 
 ### 2. Multi-Backend Execution
@@ -318,13 +325,14 @@ Features:
 - **Adaptive layout**: Automatically arranges subplots based on number of states
 - **Interactive**: Zoom, pan, hover for values
 - **Batch support**: Compare multiple trajectories
-- **Compact mode**: For systems with many states
+- **Compact mode**: For systems with many state variables
 
 ### 3D Visualization
 
 ```python
 # 3D trajectory with time coloring (single trajectory only)
 # otherwise analogous to plot_phase_portrait_3d
+# (for theoretical 3D Quadrotor system)
 system.plot_trajectory_3d(
     trajectory,
     state_indices=(0, 1, 2),
@@ -347,15 +355,23 @@ The library automatically handles arbitrary-order systems:
 
 ```python
 class SecondOrderSystem(SymbolicDynamicalSystem):
-    def define_system(self):
+
+    def __init__(self, k=10.0, c=0.5):
+        super().__init__()
+        self.define_system(k, c)
+        self._validate_system()
+
+    def define_system(self, k_val, c_val):
         q, q_dot = sp.symbols('q q_dot')
         u = sp.symbols('u')
+        k, c = sp.symbols('k c', real=True, positive=True)
         
         # Define acceleration: q̈ = f(q, q̇, u)
-        q_ddot = -10*q - 0.5*q_dot + u
+        q_ddot = -k*q - c*q_dot + u
         
         self.state_vars = [q, q_dot]
         self.control_vars = [u]
+        self.parameters = {k: k_val, c: c_val}
         self._f_sym = sp.Matrix([q_ddot])
         self.order = 2  # Second-order
 ```
@@ -409,18 +425,30 @@ print_installation_summary()
 
 ```python
 class CustomOutputSystem(SymbolicDynamicalSystem):
+    def __init__(self):
+        super().__init__()
+        self.define_system()
+        self._validate_system()
+
     def define_system(self):
-        x1, x2 = sp.symbols('x1 x2')
-        
-        # Dynamics
-        self._f_sym = sp.Matrix([x2, -x1])
-        
-        # Custom output: y = [x1, x1^2 + x2^2]
-        self.output_vars = [sp.symbols('y1'), sp.symbols('y2')]
-        self._h_sym = sp.Matrix([x1, x1**2 + x2**2])
+        x1, x2 = sp.symbols('x1 x2', real=True)
+        u = sp.symbols('u', real=True)
         
         self.state_vars = [x1, x2]
-        self.control_vars = [sp.symbols('u')]
+        self.control_vars = [u]
+        self._f_sym = sp.Matrix([x2, -x1])
+        self.order = 1
+        
+        # Custom output: y = h(x)
+        # y[0] = x1
+        # y[1] = x1^2 + x2^2
+        self._h_sym = sp.Matrix([x1, x1**2 + x2**2])
+        
+        # Name the outputs for clarity
+        self.output_vars = [sp.Symbol('y1'), sp.Symbol('y2')]
+        
+        # No parameters in this system
+        self.parameters = {}
 
 # Evaluate output
 y = system.h(x)  # y = h(x)
