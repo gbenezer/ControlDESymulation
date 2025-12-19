@@ -25,35 +25,33 @@ from src.systems.builtin.abstract_symbolic_systems import VanDerPolOscillator
 
 
 class SimplePendulum(SymbolicDynamicalSystem):
-    """Simple pendulum for testing"""
+    """Simple pendulum for testing: θ̈ = -g/l * sin(θ) - b*θ̇ + τ/(m*l²)"""
 
     def __init__(self, m=1.0, l=1.0, g=9.81, b=0.1):
-        super().__init__()
-        self.define_system(m, l, g, b)
+        super().__init__(m, l, g, b)
 
     def define_system(self, m, l, g, b):
         theta, theta_dot = sp.symbols("theta theta_dot", real=True)
         tau = sp.symbols("tau", real=True)
+        m_sym, l_sym, g_sym, b_sym = sp.symbols("m l g b", real=True, positive=True)
 
         self.state_vars = [theta, theta_dot]
         self.control_vars = [tau]
         self.output_vars = []
+        self.parameters = {m_sym: m, l_sym: l, g_sym: g, b_sym: b}
+        self.order = 1
 
+        # Dynamics
         self._f_sym = sp.Matrix(
             [theta_dot, -g / l * sp.sin(theta) - b * theta_dot + tau / (m * l**2)]
         )
 
-        m_sym, l_sym, g_sym, b_sym = sp.symbols("m l g b", real=True, positive=True)
-        self.parameters = {m_sym: m, l_sym: l, g_sym: g, b_sym: b}
-        self.order = 1
-
 
 class PartialObservationPendulum(SymbolicDynamicalSystem):
-    """Pendulum with only angle measured"""
+    """Pendulum with only angle measured (partial observation)"""
 
     def __init__(self, m=1.0, l=1.0, g=9.81, b=0.1):
-        super().__init__()
-        self.define_system(m, l, g, b)
+        super().__init__(m, l, g, b)
 
     def define_system(self, m, l, g, b):
         theta, theta_dot = sp.symbols("theta theta_dot", real=True)
@@ -62,11 +60,13 @@ class PartialObservationPendulum(SymbolicDynamicalSystem):
         self.state_vars = [theta, theta_dot]
         self.control_vars = [tau]
 
+        # Dynamics
         self._f_sym = sp.Matrix(
             [theta_dot, -g / l * sp.sin(theta) - b * theta_dot + tau / (m * l**2)]
         )
 
-        self._h_sym = sp.Matrix([theta])  # Only observe angle
+        # Output: only observe angle
+        self._h_sym = sp.Matrix([theta])
         self.output_vars = [sp.symbols("y")]
 
         m_sym, l_sym, g_sym, b_sym = sp.symbols("m l g b", real=True, positive=True)
@@ -75,11 +75,10 @@ class PartialObservationPendulum(SymbolicDynamicalSystem):
 
 
 class LinearSystem(SymbolicDynamicalSystem):
-    """Simple 2D linear system"""
+    """Simple 2D linear system: ẋ = Ax + Bu"""
 
     def __init__(self):
         super().__init__()
-        self.define_system()
 
     def define_system(self):
         x1, x2 = sp.symbols("x1 x2", real=True)
@@ -88,6 +87,8 @@ class LinearSystem(SymbolicDynamicalSystem):
         self.state_vars = [x1, x2]
         self.control_vars = [u1]
 
+        # ẋ₁ = -x₁ + x₂
+        # ẋ₂ = -2x₂ + u₁
         self._f_sym = sp.Matrix([-x1 + x2, -2 * x2 + u1])
 
         self.parameters = {}

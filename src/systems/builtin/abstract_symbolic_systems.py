@@ -153,10 +153,7 @@ class VanDerPolOscillator(SymbolicDynamicalSystem):
     """
 
     def __init__(self, mu: float = 1.0):
-        super().__init__()
-        self.order = 1
-        self.mu_val = mu
-        self.define_system(mu)
+        super().__init__(mu)
 
     def define_system(self, mu_val):
         x, y = sp.symbols("x y", real=True)
@@ -167,6 +164,7 @@ class VanDerPolOscillator(SymbolicDynamicalSystem):
         self.state_vars = [x, y]
         self.control_vars = [u]
         self.output_vars = [x]
+        self.order = 1
 
         # Van der Pol dynamics: d²x/dt² - μ(1-x²)dx/dt + x = u
         # Rewritten as first-order system
@@ -342,12 +340,7 @@ class Lorenz(SymbolicDynamicalSystem):
     """
 
     def __init__(self, sigma: float = 10.0, rho: float = 28.0, beta: float = 8.0 / 3.0):
-        super().__init__()
-        self.order = 1
-        self.sigma_val = sigma
-        self.rho_val = rho
-        self.beta_val = beta
-        self.define_system(sigma, rho, beta)
+        super().__init__(sigma, rho, beta)
 
     def define_system(self, sigma_val, rho_val, beta_val):
         x, y, z = sp.symbols("x y z", real=True)
@@ -359,6 +352,7 @@ class Lorenz(SymbolicDynamicalSystem):
         self.state_vars = [x, y, z]
         self.control_vars = [u]
         self.output_vars = [x, y]
+        self.order = 1
 
         # Lorenz dynamics with control
         dx = sigma * (y - x) + u
@@ -575,14 +569,7 @@ class DuffingOscillator(SymbolicDynamicalSystem):
         gamma: float = 0.0,
         omega: float = 1.0,
     ):
-        super().__init__()
-        self.order = 1
-        self.alpha_val = alpha
-        self.beta_val = beta
-        self.delta_val = delta
-        self.gamma_val = gamma
-        self.omega_val = omega
-        self.define_system(alpha, beta, delta, gamma, omega)
+        super().__init__(alpha, beta, delta, gamma, omega)
 
     def define_system(self, alpha_val, beta_val, delta_val, gamma_val, omega_val):
         x, v = sp.symbols("x v", real=True)
@@ -602,6 +589,7 @@ class DuffingOscillator(SymbolicDynamicalSystem):
         self.state_vars = [x, v]
         self.control_vars = [u]
         self.output_vars = [x]
+        self.order = 1
 
         # Duffing equation: d²x/dt² + delta*dx/dt + alpha*x + beta*x³ = gamma*cos(omega*t) + u
         # First-order form

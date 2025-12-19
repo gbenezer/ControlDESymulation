@@ -34,36 +34,34 @@ class SimplePendulum(SymbolicDynamicalSystem):
     """Simple pendulum for testing: θ̈ = -g/l * sin(θ) - b*θ̇ + τ/(m*l²)"""
 
     def __init__(self, m=1.0, l=1.0, g=9.81, b=0.1):
-        super().__init__()
-        self.define_system(m, l, g, b)
+        super().__init__(m, l, g, b)
 
     def define_system(self, m, l, g, b):
-        # State: [θ, θ̇]
+        
         theta, theta_dot = sp.symbols("theta theta_dot", real=True)
         tau = sp.symbols("tau", real=True)
+        m_sym, l_sym, g_sym, b_sym = sp.symbols("m l g b", real=True, positive=True)
 
         self.state_vars = [theta, theta_dot]
         self.control_vars = [tau]
         self.output_vars = []
+        self.parameters = {m_sym: m, l_sym: l, g_sym: g, b_sym: b}
+        self.order = 1
 
         # Dynamics
         self._f_sym = sp.Matrix(
             [theta_dot, -g / l * sp.sin(theta) - b * theta_dot + tau / (m * l**2)]
         )
 
-        # Parameters
-        m_sym, l_sym, g_sym, b_sym = sp.symbols("m l g b", real=True, positive=True)
-        self.parameters = {m_sym: m, l_sym: l, g_sym: g, b_sym: b}
+        
 
-        self.order = 1
 
 
 class PartialObservationPendulum(SymbolicDynamicalSystem):
     """Pendulum with only angle measured (partial observation)"""
 
     def __init__(self, m=1.0, l=1.0, g=9.81, b=0.1):
-        super().__init__()
-        self.define_system(m, l, g, b)
+        super().__init__(m, l, g, b)
 
     def define_system(self, m, l, g, b):
         theta, theta_dot = sp.symbols("theta theta_dot", real=True)
@@ -92,7 +90,6 @@ class LinearSystem(SymbolicDynamicalSystem):
 
     def __init__(self):
         super().__init__()
-        self.define_system()
 
     def define_system(self):
         x1, x2 = sp.symbols("x1 x2", real=True)

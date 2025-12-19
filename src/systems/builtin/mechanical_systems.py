@@ -56,15 +56,7 @@ class SymbolicPendulum(SymbolicDynamicalSystem):
     def __init__(
         self, m: float = 1.0, l: float = 1.0, beta: float = 1.0, g: float = 9.81
     ):
-        super().__init__()
-        self.order = 1
-        # Store values for backward compatibility
-        self.m_val = m
-        self.l_val = l
-        self.beta_val = beta
-        self.g_val = g
-        self.inertia_val = m * l**2
-        self.define_system(m, l, beta, g)
+        super().__init__(m, l, beta, g)
 
     def define_system(self, m_val, l_val, beta_val, g_val):
         theta, theta_dot = sp.symbols("theta theta_dot", real=True)
@@ -75,17 +67,13 @@ class SymbolicPendulum(SymbolicDynamicalSystem):
         self.state_vars = [theta, theta_dot]
         self.control_vars = [u]
         self.output_vars = [theta]
+        self.order = 1
 
         ml2 = m * l * l
         self._f_sym = sp.Matrix(
             [theta_dot, (-beta / ml2) * theta_dot + (g / l) * sp.sin(theta) + u / ml2]
         )
         self._h_sym = sp.Matrix([theta])
-
-    @property
-    def inertia(self):
-        """For backward compatibility"""
-        return self.inertia_val
 
 
 class SymbolicPendulum2ndOrder(SymbolicDynamicalSystem):
@@ -147,16 +135,10 @@ class SymbolicPendulum2ndOrder(SymbolicDynamicalSystem):
     """
 
     def __init__(self, m=1.0, l=1.0, beta=1.0, g=9.81):
-        super().__init__()
-        self.order = 2  # CRITICAL: Mark as second-order
-        self.m_val = m
-        self.l_val = l
-        self.beta_val = beta
-        self.g_val = g
-        self.inertia_val = m * l**2
-        self.define_system(m, l, beta, g)
+        super().__init__(m, l, beta, g)
 
     def define_system(self, m_val, l_val, beta_val, g_val):
+
         # State: [theta, theta_dot]
         theta, theta_dot = sp.symbols("theta theta_dot", real=True)
         u = sp.symbols("u", real=True)
@@ -166,24 +148,14 @@ class SymbolicPendulum2ndOrder(SymbolicDynamicalSystem):
         self.state_vars = [theta, theta_dot]
         self.control_vars = [u]
         self.output_vars = [theta]  # Observe angle only
-
-        ml2 = m * l * l
+        self.order = 2 # Mark as second-order
 
         # Second-order system: return ONLY acceleration
+        ml2 = m * l * l
         theta_ddot = (-beta / ml2) * theta_dot + (g / l) * sp.sin(theta) + u / ml2
 
         self._f_sym = sp.Matrix([theta_ddot])  # ← Single element!
         self._h_sym = sp.Matrix([theta])
-
-    @property
-    def inertia(self):
-        """For backward compatibility"""
-        return self.inertia_val
-
-    @property
-    def nq(self) -> int:
-        """Number of generalized coordinates"""
-        return 1  # One angle
 
 class FifthOrderMechanicalSystem(SymbolicDynamicalSystem):
     """
@@ -265,16 +237,7 @@ class FifthOrderMechanicalSystem(SymbolicDynamicalSystem):
         c3: float = 0.01,
         g: float = 9.81,
     ):
-        super().__init__()
-        self.order = 5
-        # Store values for backward compatibility
-        self.m_val = m
-        self.k_val = k
-        self.c1_val = c1
-        self.c2_val = c2
-        self.c3_val = c3
-        self.g_val = g
-        self.define_system(m, k, c1, c2, c3, g)
+        super().__init__(m, k, c1, c2, c3, g)
 
     def define_system(self, m_val, k_val, c1_val, c2_val, c3_val, g_val):
         q, q1, q2, q3, q4 = sp.symbols("q q1 q2 q3 q4", real=True)
@@ -293,6 +256,7 @@ class FifthOrderMechanicalSystem(SymbolicDynamicalSystem):
         self.state_vars = [q, q1, q2, q3, q4]
         self.control_vars = [u]
         self.output_vars = [q, q1]
+        self.order = 5
 
         # Fifth derivative: complex dynamics with multiple damping terms
         q5 = -k / m * q - c1 * q1 - c2 * q2 - c3 * q3 - 0.01 * q4 - g + u / m
@@ -413,17 +377,7 @@ class CoupledOscillatorSystem(SymbolicDynamicalSystem):
         c: float = 0.1,
         J: float = 0.1,
     ):
-        super().__init__()
-        self.order = 1
-        # Store values
-        self.m1_val = m1
-        self.m2_val = m2
-        self.k1_val = k1
-        self.k2_val = k2
-        self.k_coupling_val = k_coupling
-        self.c_val = c
-        self.J_val = J
-        self.define_system(m1, m2, k1, k2, k_coupling, c, J)
+        super().__init__(m1, m2, k1, k2, k_coupling, c, J)
 
     def define_system(
         self, m1_val, m2_val, k1_val, k2_val, k_coupling_val, c_val, J_val
@@ -447,6 +401,7 @@ class CoupledOscillatorSystem(SymbolicDynamicalSystem):
         self.state_vars = [x1, x2, v1, v2, theta]
         self.control_vars = [u1, u2]
         self.output_vars = [x1, x2, theta]
+        self.order = 1
 
         # Coupled dynamics
         dx1 = v1
@@ -563,13 +518,7 @@ class NonlinearChainSystem(SymbolicDynamicalSystem):
     """
 
     def __init__(self, k: float = 1.0, c: float = 0.1, alpha: float = 0.1):
-        super().__init__()
-        self.order = 1
-        # Store values
-        self.k_val = k
-        self.c_val = c
-        self.alpha_val = alpha
-        self.define_system(k, c, alpha)
+        super().__init__(k, c, alpha)
 
     def define_system(self, k_val, c_val, alpha_val):
         x1, x2, x3, x4, x5 = sp.symbols("x1 x2 x3 x4 x5", real=True)
@@ -581,6 +530,7 @@ class NonlinearChainSystem(SymbolicDynamicalSystem):
         self.state_vars = [x1, x2, x3, x4, x5]
         self.control_vars = [u]
         self.output_vars = [x1, x3, x5]
+        self.order = 1
 
         # Chain dynamics with nonlinear coupling
         dx1 = -k * x1 - c * x1 + alpha * sp.sin(x2 - x1) + u
@@ -689,15 +639,7 @@ class CartPole(SymbolicDynamicalSystem):
         gravity: float = 9.81,
         friction: float = 0.1,
     ):
-        super().__init__()
-        self.order = 2
-        # Store values
-        self.m_cart_val = m_cart
-        self.m_pole_val = m_pole
-        self.length_val = length
-        self.gravity_val = gravity
-        self.friction_val = friction
-        self.define_system(m_cart, m_pole, length, gravity, friction)
+        super().__init__(m_cart, m_pole, length, gravity, friction)
 
     def define_system(
         self, m_cart_val, m_pole_val, length_val, gravity_val, friction_val
@@ -720,6 +662,7 @@ class CartPole(SymbolicDynamicalSystem):
         self.state_vars = [x, theta, x_dot, theta_dot]
         self.control_vars = [F]
         self.output_vars = [x, theta]
+        self.order = 2
 
         # Dynamics (derived from Euler-Lagrange equations)
         # Total mass
@@ -867,8 +810,6 @@ class DubinsVehicle(SymbolicDynamicalSystem):
 
     def __init__(self):
         super().__init__()
-        self.order = 1
-        self.define_system()
 
     def define_system(self):
         x, y, theta = sp.symbols("x y theta", real=True)
@@ -878,6 +819,7 @@ class DubinsVehicle(SymbolicDynamicalSystem):
         self.state_vars = [x, y, theta]
         self.control_vars = [v, omega]
         self.output_vars = [x, y, theta]
+        self.order = 1
 
         # Kinematic equations
         dx = v * sp.cos(theta)
@@ -1078,21 +1020,7 @@ class Manipulator2Link(SymbolicDynamicalSystem):
         friction1: float = 0.1,
         friction2: float = 0.1,
     ):
-        super().__init__()
-        self.order = 2
-        # Store values
-        self.m1_val = m1
-        self.m2_val = m2
-        self.l1_val = l1
-        self.l2_val = l2
-        self.lc1_val = lc1
-        self.lc2_val = lc2
-        self.I1_val = I1
-        self.I2_val = I2
-        self.gravity_val = gravity
-        self.friction1_val = friction1
-        self.friction2_val = friction2
-        self.define_system(
+        super().__init__(
             m1, m2, l1, l2, lc1, lc2, I1, I2, gravity, friction1, friction2
         )
 
@@ -1137,6 +1065,7 @@ class Manipulator2Link(SymbolicDynamicalSystem):
         self.state_vars = [q1, q2, q1_dot, q2_dot]
         self.control_vars = [tau1, tau2]
         self.output_vars = [q1, q2]
+        self.order = 2
 
         # Mass matrix M(q)
         M11 = m1 * lc1**2 + m2 * (l1**2 + lc2**2 + 2 * l1 * lc2 * sp.cos(q2)) + I1 + I2
@@ -1181,7 +1110,7 @@ class Manipulator2Link(SymbolicDynamicalSystem):
     @property
     def x_equilibrium(self) -> torch.Tensor:
         """Hanging down equilibrium"""
-        return torch.tensor([sp.pi, 0.0, 0.0, 0.0])
+        return torch.tensor([np.pi, 0.0, 0.0, 0.0])
 
     @property
     def u_equilibrium(self) -> torch.Tensor:
@@ -1286,12 +1215,7 @@ class PathTracking(SymbolicDynamicalSystem):
     """
 
     def __init__(self, speed: float = 1.0, length: float = 1.0, radius: float = 10.0):
-        super().__init__()
-        self.order = 1
-        self.speed_val = speed
-        self.length_val = length
-        self.radius_val = radius
-        self.define_system(speed, length, radius)
+        super().__init__(speed, length, radius)
 
     def define_system(self, speed_val, length_val, radius_val):
         d_e, theta_e = sp.symbols("d_e theta_e", real=True)
@@ -1303,6 +1227,7 @@ class PathTracking(SymbolicDynamicalSystem):
         self.state_vars = [d_e, theta_e]
         self.control_vars = [delta]
         self.output_vars = [d_e, theta_e]
+        self.order = 1
 
         # Error dynamics
         sin_theta_e = sp.sin(theta_e)

@@ -91,14 +91,7 @@ class SymbolicQuadrotor2D(SymbolicDynamicalSystem):
         inertia: float = 0.00383,
         gravity: float = 9.81,
     ):
-        super().__init__()
-        self.order = 2
-        # Store values for backward compatibility
-        self.length_val = length
-        self.mass_val = mass
-        self.inertia_val = inertia
-        self.gravity_val = gravity
-        self.define_system(length, mass, inertia, gravity)
+        super().__init__(length, mass, inertia, gravity)
 
     def define_system(self, length_val, mass_val, inertia_val, gravity_val):
         x, y, theta, x_dot, y_dot, theta_dot = sp.symbols(
@@ -111,6 +104,7 @@ class SymbolicQuadrotor2D(SymbolicDynamicalSystem):
         self.state_vars = [x, y, theta, x_dot, y_dot, theta_dot]
         self.control_vars = [u1, u2]
         self.output_vars = [x, y, theta]
+        self.order = 2
 
         # For second-order system, forward() returns acceleration
         dx_dot = (-1 / m) * sp.sin(theta) * (u1 + u2)
@@ -124,27 +118,6 @@ class SymbolicQuadrotor2D(SymbolicDynamicalSystem):
     def u_equilibrium(self) -> torch.Tensor:
         mg = self.mass_val * self.gravity_val
         return torch.tensor([mg / 2, mg / 2])
-
-    @property
-    def length(self):
-        """For backward compatibility"""
-        return self.length_val
-
-    @property
-    def mass(self):
-        """For backward compatibility"""
-        return self.mass_val
-
-    @property
-    def inertia(self):
-        """For backward compatibility"""
-        return self.inertia_val
-
-    @property
-    def gravity(self):
-        """For backward compatibility"""
-        return self.gravity_val
-
 
 class SymbolicQuadrotor2DLidar(SymbolicDynamicalSystem):
     """
@@ -225,18 +198,7 @@ class SymbolicQuadrotor2DLidar(SymbolicDynamicalSystem):
         angle_max: float = 0.149 * np.pi,
         origin_height: float = 1.0,
     ):
-        super().__init__()
-        self.order = 2
-        # Store values for backward compatibility
-        self.length_val = length
-        self.mass_val = mass
-        self.inertia_val = inertia
-        self.gravity_val = gravity
-        self.b_val = b
-        self.H = H
-        self.angle_max = angle_max
-        self.origin_height = origin_height
-        self.define_system(
+        super().__init__(
             length, mass, inertia, gravity, b, H, angle_max, origin_height
         )
 
@@ -264,6 +226,7 @@ class SymbolicQuadrotor2DLidar(SymbolicDynamicalSystem):
         }
         self.state_vars = [y, theta, y_dot, theta_dot]  # nx = 4
         self.control_vars = [u1, u2]
+        self.order = 2
 
         # Dynamics (same as before)
         dy_dot = (1 / m) * sp.cos(theta) * (u1 + u2) - g - b * y_dot
@@ -314,31 +277,6 @@ class SymbolicQuadrotor2DLidar(SymbolicDynamicalSystem):
     def u_equilibrium(self) -> torch.Tensor:
         mg = self.mass_val * self.gravity_val
         return torch.tensor([mg / 2, mg / 2])
-
-    @property
-    def length(self):
-        """For backward compatibility"""
-        return self.length_val
-
-    @property
-    def mass(self):
-        """For backward compatibility"""
-        return self.mass_val
-
-    @property
-    def inertia(self):
-        """For backward compatibility"""
-        return self.inertia_val
-
-    @property
-    def gravity(self):
-        """For backward compatibility"""
-        return self.gravity_val
-
-    @property
-    def b(self):
-        """For backward compatibility"""
-        return self.b_val
 
 class PVTOL(SymbolicDynamicalSystem):
     """
@@ -461,15 +399,7 @@ class PVTOL(SymbolicDynamicalSystem):
         gravity: float = 9.8,
         dist: float = 0.25,
     ):
-        super().__init__()
-        self.order = 2
-        # Store values
-        self.length_val = length
-        self.mass_val = mass
-        self.inertia_val = inertia
-        self.gravity_val = gravity
-        self.dist_val = dist
-        self.define_system(length, mass, inertia, gravity, dist)
+        super().__init__(length, mass, inertia, gravity, dist)
 
     def define_system(self, length_val, mass_val, inertia_val, gravity_val, dist_val):
         # State variables (position and velocity in body frame)
@@ -492,6 +422,7 @@ class PVTOL(SymbolicDynamicalSystem):
         self.state_vars = [x, y, theta, x_dot, y_dot, theta_dot]
         self.control_vars = [u1, u2]
         self.output_vars = [x, y, theta]
+        self.order = 2
 
         # Rotation from body to world frame
         sin_theta = sp.sin(theta)
@@ -518,23 +449,3 @@ class PVTOL(SymbolicDynamicalSystem):
     @property
     def u_equilibrium(self) -> torch.Tensor:
         return torch.full((2,), self.mass_val * self.gravity_val / 2)
-
-    @property
-    def length(self):
-        return self.length_val
-
-    @property
-    def mass(self):
-        return self.mass_val
-
-    @property
-    def inertia(self):
-        return self.inertia_val
-
-    @property
-    def gravity(self):
-        return self.gravity_val
-
-    @property
-    def dist(self):
-        return self.dist_val
