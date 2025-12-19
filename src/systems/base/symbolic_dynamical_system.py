@@ -198,8 +198,9 @@ class SymbolicDynamicalSystem(ABC):
         # 3. DIMENSION CONSISTENCY
         # ================================================================
 
-        # Check _f_sym dimensions
-        if self._f_sym is not None:
+        # Check _f_sym dimensions (if it is a valid symbolic Matrix,
+        # otherwise the above check will get it)
+        if self._f_sym is not None and isinstance(self._f_sym, sp.Matrix):
             expected_rows = self.nq if self.order > 1 else self.nx
             actual_rows = self._f_sym.shape[0]
 
@@ -213,7 +214,7 @@ class SymbolicDynamicalSystem(ABC):
                 errors.append(f"_f_sym must be column vector, got shape {self._f_sym.shape}")
 
         # Check _h_sym dimensions (if defined)
-        if self._h_sym is not None:
+        if self._h_sym is not None and isinstance(self._h_sym, sp.Matrix):
             if self._h_sym.shape[1] != 1:
                 errors.append(f"_h_sym must be column vector, got shape {self._h_sym.shape}")
 
@@ -235,7 +236,7 @@ class SymbolicDynamicalSystem(ABC):
         # 4. SYMBOLIC EXPRESSION VALIDATION
         # ================================================================
 
-        if self._f_sym is not None and self.state_vars and self.control_vars:
+        if self._f_sym is not None and self.state_vars and self.control_vars and isinstance(self._f_sym, sp.Matrix):
             # Get all symbols that appear in _f_sym
             f_symbols = self._f_sym.free_symbols
 
@@ -261,7 +262,7 @@ class SymbolicDynamicalSystem(ABC):
                 )
 
         # Check output expression (if defined)
-        if self._h_sym is not None and self.state_vars:
+        if self._h_sym is not None and self.state_vars and isinstance(self._h_sym, sp.Matrix):
             h_symbols = self._h_sym.free_symbols
             state_and_params = set(self.state_vars + list(self.parameters.keys()))
 
@@ -297,7 +298,7 @@ class SymbolicDynamicalSystem(ABC):
         # 6. PARAMETER USAGE VALIDATION
         # ================================================================
 
-        if self.parameters and self._f_sym is not None:
+        if self.parameters and self._f_sym is not None and isinstance(self._f_sym, sp.Matrix):
             param_symbols = set(self.parameters.keys())
             used_params = self._f_sym.free_symbols & param_symbols
             unused_params = param_symbols - used_params
