@@ -628,19 +628,66 @@ ControlODESymulation/
 
 ### Contributing and Future Work
 
-Currently not open to contributions until base functionality is fully built, tested, documented, and example notebooks constructed
+Currently not open to contributions, though may change after Phase 4 and once I learn how open-source development works
 
-Once base functionality is constructed, current plans for added functionality (in order of planned implementation) include
+#### Phase 1 (Current):
+- Finish implementation of StochasticDynamicalSystem class
+    - Make unit tests for the DiffusionHandler, NoiseCharacterizer, and SDEValidator sub-object classes
+    - After those pass, make unit test for StochasticDynamicalSystem and ensure it passes
+- Start and finish deterministic DiffEqPyIntegrator class
+    - Instantiate/code deterministic DiffEqPyIntegrator and associated unit tests
+    - Modify IntegratorFactory to handle deterministic DiffEqPyIntegrator objects and update unit tests
+- Finish implementation of SDE Integration utilities
+    - Instantiate/code SDEIntegratorBase unit tests and debug base class
+    - Instantiate/code DiffraxSDEIntegrator, TorchSDEIntegrator, and DiffEqPySDEIntegrator classes with associated unit tests
+    - Make analogous SDEIntegratorFactory class and unit tests
+- Look back and assess if any additional refactoring needs to occur (looking for god objects/code smells/design flaws)
 
-- Capability to save/store systems and associated configurations
-- Uncertainty quantification and Stochastic Differential Equation definition for handling stochasticity
-- Parameter sensitivity analysis and associated visualizations using Plotly
-- Allowing definition of Gymnasium environments based on symbolic system dynamics for reproducible online reinforcement learning environment development
-- Construction and export of simulated trajectory batches for convenient synthetic data generation and facilitation of offline and hybrid online/offline reinforcement learning
-- Robust control, stochastic control, and model-predictive control capabilities for nonlinear state space controller development
-    - Mainly discrete-time, continuous time systems may follow
-- Capability to construct and train neural network controllers, observers, and Lyapunov functions according to the techniques in [Lyapunov-stable Neural Control for State and Output Feedback: A Novel Formulation](https://proceedings.mlr.press/v235/yang24f.html) and [Certifying Stability of Reinforcement Learning Policies using Generalized Lyapunov Functions](https://arxiv.org/abs/2505.10947v3)
-- Capability to connect smaller physical systems through coupling to make composite systems
+#### Phase 2:
+- Refactoring of DiscreteTimeSystem
+    - Construct SimulationEngine class for simulation of open/closed loop trajectories
+    - Construct DiscretizationEngine class for linearization of discrete-time systems
+    - Construct unified DiscreteTimeSystem class from the above two sub-object classes
+        - Main responsibility is coordination of numerical integration and simulation
+    - Construct unit tests for deterministic systems interfacing with DiscreteTimeSystem
+    - Construct unit tests for stochastic systems interfacing with DiscreteTimeSystem
+- Debug/Evaluate
+
+#### Phase 3:
+- Re-implement plotting utilities
+    - Construct TrajectoryPlotGenerator class
+        - arrays of 2D Plotly plots of state variables
+        - add options to plot control and output variables along with external state estimates from observers
+    - Construct PhasePortraitGenerator class for 2D or 3D Plotly phase portrait generation
+- Re-implement classical control theory capabilities
+    - Construct ControlDesigner class
+        - Wrapper class to either of the core deterministic classes
+            - Interface/access to traditional/classic nonlinear state-space control utilities (LQR/Kalman/LQG matrices, etc.)
+            - Auto-detect time type (continuous vs. discrete)
+    - libraries under consideration for backend implementation include control, control-toolbox, pysyscontrol, OpenControl, Kontrol
+
+#### Phase 4:
+- Look back and assess if any additional refactoring needs to occur (looking for god objects/code smells/design flaws)
+- Construct integration tests at the interfaces between classes to ensure full pipelines work and ensure they pass
+- Re-assess module level and function/method level docstrings and adjust as needed
+- Re-code built-in classes and re-assess utility of each
+- Add some new systems
+    - Industrial control systems
+    - Stochastic systems
+- Re-code existing and novel Jupyter demo notebooks
+- Re-do README file
+- Release/Publish
+
+#### Phase 5:
+- Start to address some ultimate goals of the library
+    - Automatic Gymnasium, PyBullet, and Brax environment construction
+    - Synthetic data generation and export
+    - Integration with neural network verification libraries (VNN-Lib, Auto-Lirpa/CROWN, NFL-Veripy)
+    - Re-introduce capabilities for (generalized) Lyapunov function/controller/observer synthesis, design and verification based on [Lyapunov-stable Neural Control for State and Output Feedback: A Novel Formulation](https://proceedings.mlr.press/v235/yang24f.html) and [Certifying Stability of Reinforcement Learning Policies using Generalized Lyapunov Functions](https://arxiv.org/abs/2505.10947v3)
+    - Look at do-mpc, CasADi, acados, nMPyC, and GEKKO for optimal/MP control; see what could/should be implemented
+    - Add parameter sensitivity analysis or other methods to probe dependencies of dynamical systems
+    - Check to see if there's any interest in robust, adaptive, and/or stochastic control theory technique implementation
+    - Coupling systems together to make larger composite systems
 
 ---
 
