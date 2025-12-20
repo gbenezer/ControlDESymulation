@@ -1,8 +1,8 @@
-# ControlODESymulation
+# ControlDESymulation
 
 > **Control Theory, ODE/SDE Modeling, and Synthetic Data Generation Through Symbolic Dynamical System Specification**
 
-A Python library for constructing, analyzing, and simulating nonlinear dynamical systems using symbolic mathematics with multi-backend numerical execution. I developed it because I couldn't find an easy-to-use, reproducible, modular library for simulating simple physical systems in terms of symbolic variables. The main goal of this library is to enable realistic synthetic data generation for nonlinear dynamical systems, enable nonlinear state-space control theory research, build a framework for defining physical reinforcement learning environments in terms of state-space models, and allowing for reproducible specification of physical model systems for use in verifiable machine learning and safe/contstrained RL contexts.
+A Python library for constructing, analyzing, and simulating nonlinear dynamical systems using symbolic mathematics with multi-backend numerical execution. I developed it because I couldn't find an easy-to-use, reproducible, modular library for simulating simple physical systems in terms of symbolic variables. The main goal of this library is to enable realistic synthetic data generation for nonlinear dynamical systems, enable nonlinear state-space control theory research, build a framework for defining physical reinforcement learning environments in terms of state-space models, and allowing for reproducible specification of physical model systems for use in verifiable machine learning and safe/constrained RL contexts.
 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -632,14 +632,13 @@ Currently not open to contributions until base functionality is fully built, tes
 
 Once base functionality is constructed, current plans for added functionality (in order of planned implementation) include
 
-- Support for scipy.integrate.solve_ivp, Diffrax, and torchdiffeq to enable better methods for numerical integration
 - Capability to save/store systems and associated configurations
 - Uncertainty quantification and Stochastic Differential Equation definition for handling stochasticity
 - Parameter sensitivity analysis and associated visualizations using Plotly
 - Allowing definition of Gymnasium environments based on symbolic system dynamics for reproducible online reinforcement learning environment development
 - Construction and export of simulated trajectory batches for convenient synthetic data generation and facilitation of offline and hybrid online/offline reinforcement learning
 - Robust control, stochastic control, and model-predictive control capabilities for nonlinear state space controller development
-- Mainly discrete-time, continuous time systems may follow
+    - Mainly discrete-time, continuous time systems may follow
 - Capability to construct and train neural network controllers, observers, and Lyapunov functions according to the techniques in [Lyapunov-stable Neural Control for State and Output Feedback: A Novel Formulation](https://proceedings.mlr.press/v235/yang24f.html) and [Certifying Stability of Reinforcement Learning Policies using Generalized Lyapunov Functions](https://arxiv.org/abs/2505.10947v3)
 - Capability to connect smaller physical systems through coupling to make composite systems
 
