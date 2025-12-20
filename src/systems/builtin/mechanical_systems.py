@@ -53,12 +53,9 @@ class SymbolicPendulum(SymbolicDynamicalSystem):
         Gravitational acceleration [m/s²].
     """
 
-    def __init__(
-        self, m: float = 1.0, l: float = 1.0, beta: float = 1.0, g: float = 9.81
+    def define_system(
+        self, m_val: float = 1.0, l_val: float = 1.0, beta_val: float = 1.0, g_val: float = 9.81
     ):
-        super().__init__(m, l, beta, g)
-
-    def define_system(self, m_val, l_val, beta_val, g_val):
         theta, theta_dot = sp.symbols("theta theta_dot", real=True)
         u = sp.symbols("u", real=True)
         m, l, beta, g = sp.symbols("m l beta g", real=True, positive=True)
@@ -148,7 +145,7 @@ class SymbolicPendulum2ndOrder(SymbolicDynamicalSystem):
         self.state_vars = [theta, theta_dot]
         self.control_vars = [u]
         self.output_vars = [theta]  # Observe angle only
-        self.order = 2 # Mark as second-order
+        self.order = 2  # Mark as second-order
 
         # Second-order system: return ONLY acceleration
         ml2 = m * l * l
@@ -156,6 +153,7 @@ class SymbolicPendulum2ndOrder(SymbolicDynamicalSystem):
 
         self._f_sym = sp.Matrix([theta_ddot])  # ← Single element!
         self._h_sym = sp.Matrix([theta])
+
 
 class FifthOrderMechanicalSystem(SymbolicDynamicalSystem):
     """
@@ -379,14 +377,10 @@ class CoupledOscillatorSystem(SymbolicDynamicalSystem):
     ):
         super().__init__(m1, m2, k1, k2, k_coupling, c, J)
 
-    def define_system(
-        self, m1_val, m2_val, k1_val, k2_val, k_coupling_val, c_val, J_val
-    ):
+    def define_system(self, m1_val, m2_val, k1_val, k2_val, k_coupling_val, c_val, J_val):
         x1, x2, v1, v2, theta = sp.symbols("x1 x2 v1 v2 theta", real=True)
         u1, u2 = sp.symbols("u1 u2", real=True)
-        m1, m2, k1, k2, k_c, c, J = sp.symbols(
-            "m1 m2 k1 k2 k_c c J", real=True, positive=True
-        )
+        m1, m2, k1, k2, k_c, c, J = sp.symbols("m1 m2 k1 k2 k_c c J", real=True, positive=True)
 
         self.parameters = {
             m1: m1_val,
@@ -407,13 +401,7 @@ class CoupledOscillatorSystem(SymbolicDynamicalSystem):
         dx1 = v1
         dv1 = -k1 / m1 * x1 - k_c / m1 * (x1 - x2) - c / m1 * v1 + u1 / m1
         dx2 = v2
-        dv2 = (
-            -k2 / m2 * x2
-            - k_c / m2 * (x2 - x1)
-            - c / m2 * v2
-            + sp.sin(theta) / m2
-            + u2 / m2
-        )
+        dv2 = -k2 / m2 * x2 - k_c / m2 * (x2 - x1) - c / m2 * v2 + sp.sin(theta) / m2 + u2 / m2
         dtheta = -theta / J - x2 / J + u2 / (2 * J)
 
         self._f_sym = sp.Matrix([dx1, dx2, dv1, dv2, dtheta])
@@ -641,9 +629,7 @@ class CartPole(SymbolicDynamicalSystem):
     ):
         super().__init__(m_cart, m_pole, length, gravity, friction)
 
-    def define_system(
-        self, m_cart_val, m_pole_val, length_val, gravity_val, friction_val
-    ):
+    def define_system(self, m_cart_val, m_pole_val, length_val, gravity_val, friction_val):
         # State variables
         x, theta, x_dot, theta_dot = sp.symbols("x theta x_dot theta_dot", real=True)
         F = sp.symbols("F", real=True)
@@ -677,10 +663,7 @@ class CartPole(SymbolicDynamicalSystem):
 
         # Cart acceleration
         x_ddot = (
-            F
-            - b * x_dot
-            + mp * l * theta_dot**2 * sin_theta
-            - mp * g * sin_theta * cos_theta
+            F - b * x_dot + mp * l * theta_dot**2 * sin_theta - mp * g * sin_theta * cos_theta
         ) / denom
 
         # Pole angular acceleration
@@ -704,6 +687,7 @@ class CartPole(SymbolicDynamicalSystem):
     def u_equilibrium(self) -> torch.Tensor:
         """No force needed at equilibrium"""
         return torch.zeros(1)
+
 
 class DubinsVehicle(SymbolicDynamicalSystem):
     """
@@ -1020,9 +1004,7 @@ class Manipulator2Link(SymbolicDynamicalSystem):
         friction1: float = 0.1,
         friction2: float = 0.1,
     ):
-        super().__init__(
-            m1, m2, l1, l2, lc1, lc2, I1, I2, gravity, friction1, friction2
-        )
+        super().__init__(m1, m2, l1, l2, lc1, lc2, I1, I2, gravity, friction1, friction2)
 
     def define_system(
         self,
@@ -1043,9 +1025,7 @@ class Manipulator2Link(SymbolicDynamicalSystem):
         tau1, tau2 = sp.symbols("tau1 tau2", real=True)
 
         # Parameters
-        m1, m2, l1, l2, lc1, lc2 = sp.symbols(
-            "m1 m2 l1 l2 lc1 lc2", real=True, positive=True
-        )
+        m1, m2, l1, l2, lc1, lc2 = sp.symbols("m1 m2 l1 l2 lc1 lc2", real=True, positive=True)
         I1, I2, g, b1, b2 = sp.symbols("I1 I2 g b1 b2", real=True, positive=True)
 
         self.parameters = {
