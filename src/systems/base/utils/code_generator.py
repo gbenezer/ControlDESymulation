@@ -114,7 +114,7 @@ class CodeGenerator:
             return self._f_funcs[backend]
         
         # Import low-level utility
-        from src.systems.base.codegen_utils import generate_function
+        from src.systems.base.utils.codegen_utils import generate_function
         
         # Substitute parameters into symbolic expression
         f_with_params = self.system.substitute_parameters(self.system._f_sym)
@@ -184,7 +184,7 @@ class CodeGenerator:
             return self._h_funcs[backend]
         
         # Import low-level utility
-        from src.systems.base.codegen_utils import generate_function
+        from src.systems.base.utils.codegen_utils import generate_function
         
         # Substitute parameters
         h_with_params = self.system.substitute_parameters(self.system._h_sym)
@@ -263,7 +263,7 @@ class CodeGenerator:
         self._compute_symbolic_jacobians()
         
         # Import low-level utility
-        from src.systems.base.codegen_utils import generate_function
+        from src.systems.base.utils.codegen_utils import generate_function
         
         # Substitute parameters
         A_with_params = self.system.substitute_parameters(self._A_sym_cache)
@@ -307,7 +307,7 @@ class CodeGenerator:
         self._compute_symbolic_jacobians()
         
         # Import low-level utility
-        from src.systems.base.codegen_utils import generate_function
+        from src.systems.base.utils.codegen_utils import generate_function
         
         # Substitute parameters
         C_with_params = self.system.substitute_parameters(self._C_sym_cache)
