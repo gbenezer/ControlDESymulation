@@ -14,7 +14,7 @@ import pytest
 import numpy as np
 from typing import Any
 
-from src.systems.base.backend_utils import (
+from src.systems.base.utils.backend_utils import (
     get_device_info,
     detect_backend,
     diagnose_installation,
@@ -24,7 +24,7 @@ from src.systems.base.backend_utils import (
     compare_backend_performance,
 )
 
-from src.systems.base.array_backend import (
+from src.systems.base.utils.array_backend import (
     TorchArrayBackend,
     NumpyArrayBackend,
 )

@@ -30,9 +30,9 @@ try:
 except ImportError:
     jax_available = False
 
-from src.systems.base.dynamics_evaluator import DynamicsEvaluator
-from src.systems.base.code_generator import CodeGenerator
-from src.systems.base.backend_manager import BackendManager
+from src.systems.base.utils.dynamics_evaluator import DynamicsEvaluator
+from src.systems.base.utils.code_generator import CodeGenerator
+from src.systems.base.utils.backend_manager import BackendManager
 
 
 # ============================================================================

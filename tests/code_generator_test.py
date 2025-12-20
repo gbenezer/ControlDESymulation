@@ -29,7 +29,7 @@ try:
 except ImportError:
     jax_available = False
 
-from src.systems.base.code_generator import CodeGenerator
+from src.systems.base.utils.code_generator import CodeGenerator
 
 
 # ============================================================================

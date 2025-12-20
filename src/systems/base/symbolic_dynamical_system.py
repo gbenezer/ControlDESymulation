@@ -3,24 +3,17 @@ from contextlib import contextmanager
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Union, Optional, Tuple, List, Dict
 import json
-import time
 import sympy as sp
-import numpy as np
-
-# TODO:
-# refactor linearization into LinearizationEngine and
-# output/observation into ObservationEngine
-# decide whether to put linearized observation into
-# LinearizationEngine or ObservationEngine
+import numpy as NumPy
 
 # necessary sub-object import
-from src.systems.base.equilibrium_handler import EquilibriumHandler
-from src.systems.base.backend_manager import BackendManager
-from src.systems.base.symbolic_validator import SymbolicValidator
-from src.systems.base.code_generator import CodeGenerator
-from src.systems.base.dynamics_evaluator import DynamicsEvaluator
-from src.systems.base.linearization_engine import LinearizationEngine
-from src.systems.base.observation_engine import ObservationEngine
+from src.systems.base.utils.equilibrium_handler import EquilibriumHandler
+from src.systems.base.utils.backend_manager import BackendManager
+from src.systems.base.utils.symbolic_validator import SymbolicValidator
+from src.systems.base.utils.code_generator import CodeGenerator
+from src.systems.base.utils.dynamics_evaluator import DynamicsEvaluator
+from src.systems.base.utils.linearization_engine import LinearizationEngine
+from src.systems.base.utils.observation_engine import ObservationEngine
 
 if TYPE_CHECKING:
     import torch

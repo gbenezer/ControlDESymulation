@@ -15,7 +15,7 @@ import numpy as np
 import sympy as sp
 from typing import Callable
 
-from src.systems.base.codegen_utils import (
+from src.systems.base.utils.codegen_utils import (
     generate_numpy_function,
     generate_torch_function,
     generate_jax_function,

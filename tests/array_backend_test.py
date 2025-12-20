@@ -17,14 +17,14 @@ import numpy as np
 from typing import List, Any
 
 # Import array backends
-from src.systems.base.array_backend import (
+from src.systems.base.utils.array_backend import (
     ArrayBackend,
     TorchArrayBackend,
     NumpyArrayBackend,
 )
 
 # Import backend utilities
-from src.systems.base.backend_utils import get_device_info
+from src.systems.base.utils.backend_utils import get_device_info
 
 # Conditionally import optional backends
 torch_available = False
