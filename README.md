@@ -602,7 +602,7 @@ loss = torch.relu(V_dot + margin).mean()
 
 ## Development
 
-### Current Project Structure
+<!-- ### Current Project Structure
 
 ```
 ControlODESymulation/
@@ -624,7 +624,7 @@ ControlODESymulation/
 ├── tests/                     # Test suite
 ├── example_notebooks/         # Jupyter tutorials
 └── requirements.txt
-```
+``` -->
 
 ### Contributing and Future Work
 
@@ -696,11 +696,11 @@ Currently not open to contributions, though may change after Phase 4 and once I 
 If you use this library in your research, please cite:
 
 ```bibtex
-@software{benezer2024controlode,
+@software{benezer2025controlde,
   author = {Benezer, Gil},
-  title = {ControlODESymulation: Symbolic Control Theory for Modern Scientific Computing},
+  title = {ControlDESymulation: Symbolic Dynamical System Specification for Modern Scientific Computing},
   year = {2025},
-  url = {https://github.com/gbenezer/ControlODESymulation}
+  url = {https://github.com/gbenezer/ControlDESymulation}
 }
 ```
 
