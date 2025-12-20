@@ -17,7 +17,7 @@ import time
 import numpy as np
 from typing import Optional, Tuple, Callable, TYPE_CHECKING
 
-from src.systems.numerical_integration.integrator_base import (
+from src.systems.base.numerical_integration.integrator_base import (
     IntegratorBase,
     StepMode,
     IntegrationResult,
