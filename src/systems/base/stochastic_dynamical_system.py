@@ -1124,6 +1124,30 @@ class StochasticDynamicalSystem(SymbolicDynamicalSystem):
         }
         
         return sde_info
+
+    def is_pure_diffusion(self) -> bool:
+        """
+        Check if system is pure diffusion (zero drift).
+        
+        Returns
+        -------
+        bool
+            True if drift f(x,u,t) is identically zero
+        
+        Examples
+        --------
+        >>> # Brownian motion is pure diffusion
+        >>> if system.is_pure_diffusion():
+        ...     print("System has no deterministic evolution")
+        ...     print("All dynamics come from noise")
+        
+        Notes
+        -----
+        Pure diffusion systems satisfy f(x,u,t) = 0 for all x, u, t.
+        These systems evolve only through stochastic forcing.
+        """
+        # Check if drift symbolic expression is zero
+        return all(expr == 0 for expr in self._f_sym)
     
     def print_sde_info(self):
         """
