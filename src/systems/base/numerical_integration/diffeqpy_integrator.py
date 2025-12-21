@@ -1,3 +1,7 @@
+# ============================================================================
+# FILE: src/systems/base/numerical_integration/diffeqpy_integrator.py
+# ============================================================================
+
 """
 DiffEqPyIntegrator: Julia DifferentialEquations.jl ODE solver via diffeqpy.
 
@@ -471,7 +475,7 @@ class DiffEqPyIntegrator(IntegratorBase):
         start_time = time.time()
         
         t0, tf = t_span
-        x0 = np.asarray(x0)
+        x0 = np.asarray(x0, dtype=np.float64)
         
         # Handle edge case
         if t0 == tf:
@@ -487,32 +491,32 @@ class DiffEqPyIntegrator(IntegratorBase):
         # Track function evaluations for this integration
         fev_count = [0]
         
-        # Define ODE function for Julia
-        # Julia signature: du = f(u, p, t)
-        def ode_func(u_val, p, t):
+        # Define ODE function for Julia using IN-PLACE formulation
+        # Julia signature for in-place: f!(du, u, p, t) - modifies du in place
+        def ode_func_inplace(du, u_val, p, t):
             """
-            ODE function in Julia's signature.
+            ODE function in Julia's IN-PLACE signature.
+            
+            Uses in-place formulation to avoid type stability issues.
+            Modifies du in-place rather than returning a value.
             
             Parameters
             ----------
+            du : array
+                Output array to fill with derivatives (Julia array)
             u_val : array
                 Current state (Julia array)
             p : any
                 Parameters (unused, required by Julia)
             t : float
                 Current time
-                
-            Returns
-            -------
-            array
-                State derivative dx/dt
             """
             # Convert from Julia arrays to NumPy
-            x_np = np.array(u_val)
+            x_np = np.asarray(u_val, dtype=np.float64)
             
             # Evaluate control policy
-            u_control = u_func(t, x_np)
-            u_np = np.asarray(u_control)
+            u_control = u_func(float(t), x_np)
+            u_np = np.asarray(u_control, dtype=np.float64)
             
             # Evaluate system dynamics
             dx = self.system(x_np, u_np, backend='numpy')
@@ -520,7 +524,12 @@ class DiffEqPyIntegrator(IntegratorBase):
             # Track function evaluations
             fev_count[0] += 1
             
-            return dx
+            # Convert to float64 array
+            dx_array = np.asarray(dx, dtype=np.float64).flatten()
+            
+            # Fill du in-place (Julia's in-place convention)
+            for i in range(len(dx_array)):
+                du[i] = dx_array[i]
         
         # Prepare time span
         tspan = (float(t0), float(tf))
@@ -570,8 +579,8 @@ class DiffEqPyIntegrator(IntegratorBase):
         if self.callback is not None:
             solve_kwargs['callback'] = self.callback
         
-        # Set up ODE problem
-        prob = self.de.ODEProblem(ode_func, x0, tspan)
+        # Set up ODE problem using IN-PLACE formulation
+        prob = self.de.ODEProblem(ode_func_inplace, x0, tspan)
         
         # Get algorithm
         algorithm = self._get_algorithm()
@@ -591,9 +600,14 @@ class DiffEqPyIntegrator(IntegratorBase):
             x_out = np.array([np.array(x_i) for x_i in sol.u])
             
             # Determine success
-            # Julia retcode: :Success means successful integration
-            success = str(sol.retcode) == ':Success'
-            message = f"Integration {sol.retcode}"
+            # Julia retcode is a Symbol - check for success variants
+            retcode_str = str(sol.retcode)
+            success = (
+                retcode_str == ':Success' or 
+                retcode_str == 'Success' or
+                'Success' in retcode_str
+            )
+            message = f"Integration {retcode_str}"
             
             # Update statistics
             nsteps = len(t_out) - 1
