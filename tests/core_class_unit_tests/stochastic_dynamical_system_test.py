@@ -14,6 +14,12 @@ Tests cover:
 10. String-based sde_type API
 11. Information and diagnostics
 12. Best practices validation
+
+NOTE: Technical debt exists here because a lot of warnings are raised
+due to the inherent fact that for stochastic systems, parameters that
+define diffusion relations and are not used in the drift or observation
+dynamics raise a warning about being unused
+TODO: Fix above issue
 """
 
 import pytest
@@ -108,16 +114,17 @@ class GeometricBrownianMotion(StochasticDynamicalSystem):
 class DiagonalNoiseSystem(StochasticDynamicalSystem):
     """3D system with diagonal (independent) noise sources."""
     
-    def define_system(self):
+    def define_system(self, param1_val = -1.0):
         """Define system with independent noise per state."""
         x1, x2, x3 = sp.symbols('x1 x2 x3', real=True)
         u = sp.symbols('u', real=True)
+        param1_sym = sp.symbols('param1', real=True)
         
         # Drift
         self.state_vars = [x1, x2, x3]
         self.control_vars = [u]
-        self._f_sym = sp.Matrix([x2, x3, -x1 + u])
-        self.parameters = {}
+        self._f_sym = sp.Matrix([x2, x3, param1_sym * x1 + u])
+        self.parameters = {param1_sym: param1_val}
         self.order = 1
         
         # Diagonal diffusion
@@ -131,18 +138,19 @@ class DiagonalNoiseSystem(StochasticDynamicalSystem):
 class StratonovichSystem(StochasticDynamicalSystem):
     """System using Stratonovich interpretation."""
     
-    def define_system(self):
+    def define_system(self, sigma_val = 0.5):
         """Define Stratonovich SDE."""
         x = sp.symbols('x')
         u = sp.symbols('u')
+        sigma_sym = sp.symbols("sigma")
         
         self.state_vars = [x]
         self.control_vars = [u]
         self._f_sym = sp.Matrix([[-x + u]])
-        self.parameters = {}
+        self.parameters = {sigma_sym: sigma_val}
         self.order = 1
         
-        self.diffusion_expr = sp.Matrix([[0.5]])
+        self.diffusion_expr = sp.Matrix([[sigma_sym]])
         self.sde_type = 'stratonovich'  # String-based API
 
 class AutonomousOrnsteinUhlenbeck(StochasticDynamicalSystem):

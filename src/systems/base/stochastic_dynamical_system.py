@@ -74,7 +74,13 @@ specify both drift and diffusion:
     
     system = OrnsteinUhlenbeck(alpha=2.0, sigma=0.3)
 
-This pattern is consistent with SymbolicDynamicalSystem!
+This pattern is consistent with SymbolicDynamicalSystem
+
+NOTE: Technical debt exists here because a lot of warnings are raised
+due to the inherent fact that for stochastic systems, parameters that
+define diffusion relations and are not used in the drift or observation
+dynamics raise a warning about being unused
+TODO: Fix above issue
 
 Pure Diffusion Processes
 ------------------------
