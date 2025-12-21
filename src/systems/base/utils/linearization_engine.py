@@ -219,7 +219,7 @@ class LinearizationEngine:
         # Handle batched input
         if x.ndim == 1:
             x = np.expand_dims(x, 0)
-            u = np.expand_dims(u, 0)
+            u = np.expand_dims(u, 0) if self.system.nu > 0 else np.empty((1, 0))
             squeeze_output = True
         else:
             squeeze_output = False
@@ -227,7 +227,7 @@ class LinearizationEngine:
         batch_size = x.shape[0]
         
         A_batch = np.zeros((batch_size, self.system.nx, self.system.nx))
-        B_batch = np.zeros((batch_size, self.system.nx, self.system.nu))
+        B_batch = np.zeros((batch_size, self.system.nx, self.system.nu))  # (nx, 0) if nu=0
         
         # Try to get cached Jacobian functions
         A_func, B_func, _ = self.code_gen.get_jacobians('numpy')
@@ -236,22 +236,25 @@ class LinearizationEngine:
             # Use cached functions
             for i in range(batch_size):
                 x_i = x[i]
-                u_i = u[i]
+                u_i = u[i] if self.system.nu > 0 else np.array([])
                 
                 x_list = [x_i[j] for j in range(self.system.nx)]
-                u_list = [u_i[j] for j in range(self.system.nu)]
+                u_list = [u_i[j] for j in range(self.system.nu)]  # Empty if nu=0
                 all_args = x_list + u_list
                 
                 A_result = A_func(*all_args)
-                B_result = B_func(*all_args)
-                
                 A_batch[i] = np.array(A_result, dtype=np.float64)
-                B_batch[i] = np.array(B_result, dtype=np.float64)
+                
+                # Only compute B if system has controls
+                if self.system.nu > 0:
+                    B_result = B_func(*all_args)
+                    B_batch[i] = np.array(B_result, dtype=np.float64)
+                # else: B_batch[i] remains zeros with shape (nx, 0)
         else:
             # Fall back to symbolic evaluation
             for i in range(batch_size):
                 x_np = np.atleast_1d(x[i])
-                u_np = np.atleast_1d(u[i])
+                u_np = np.atleast_1d(u[i]) if self.system.nu > 0 else np.array([])
                 
                 A_sym, B_sym = self.compute_symbolic(sp.Matrix(x_np), sp.Matrix(u_np))
                 A_batch[i] = np.array(A_sym, dtype=np.float64)
@@ -278,7 +281,7 @@ class LinearizationEngine:
         # Handle batched input
         if len(x.shape) == 1:
             x = x.unsqueeze(0)
-            u = u.unsqueeze(0)
+            u = u.unsqueeze(0) if self.system.nu > 0 else torch.empty((1, 0))
             squeeze_output = True
         else:
             squeeze_output = False
@@ -297,25 +300,29 @@ class LinearizationEngine:
             # Use cached functions
             for i in range(batch_size):
                 x_i = x[i]
-                u_i = u[i]
+                u_i = u[i] if self.system.nu > 0 else torch.tensor([])
                 
                 x_list = [x_i[j] for j in range(self.system.nx)]
-                u_list = [u_i[j] for j in range(self.system.nu)]
+                u_list = [u_i[j] for j in range(self.system.nu)]  # Empty if nu=0
                 all_args = x_list + u_list
                 
                 A_batch[i] = A_func(*all_args)
-                B_batch[i] = B_func(*all_args)
+                
+                # Only compute B if system has controls
+                if self.system.nu > 0:
+                    B_batch[i] = B_func(*all_args)
         else:
             # Fall back to symbolic evaluation
             for i in range(batch_size):
                 x_i = x[i] if batch_size > 1 else x.squeeze(0)
                 u_i = u[i] if batch_size > 1 else u.squeeze(0)
+                u_i = u_i if self.system.nu > 0 else torch.tensor([])
                 
                 x_np = x_i.detach().cpu().numpy()
-                u_np = u_i.detach().cpu().numpy()
+                u_np = u_i.detach().cpu().numpy() if self.system.nu > 0 else np.array([])
                 
                 x_np = np.atleast_1d(x_np)
-                u_np = np.atleast_1d(u_np)
+                u_np = np.atleast_1d(u_np) if self.system.nu > 0 else np.array([])
                 
                 A_sym, B_sym = self.compute_symbolic(sp.Matrix(x_np), sp.Matrix(u_np))
                 A_batch[i] = torch.tensor(
@@ -350,7 +357,7 @@ class LinearizationEngine:
         # Handle batched input
         if x.ndim == 1:
             x = jnp.expand_dims(x, 0)
-            u = jnp.expand_dims(u, 0)
+            u = jnp.expand_dims(u, 0) if self.system.nu > 0 else jnp.empty((1, 0))  # ← CHANGE
             squeeze_output = True
         else:
             squeeze_output = False
@@ -358,17 +365,27 @@ class LinearizationEngine:
         # Define dynamics function for Jacobian computation
         def dynamics_fn(x_i, u_i):
             x_list = [x_i[j] for j in range(self.system.nx)]
-            u_list = [u_i[j] for j in range(self.system.nu)]
+            u_list = [u_i[j] for j in range(self.system.nu)]  # Empty if nu=0
             return f_jax(*(x_list + u_list))
         
         # Compute Jacobians using JAX autodiff (vmap for batching)
-        @jax.vmap
-        def compute_jacobians(x_i, u_i):
-            A = jax.jacobian(lambda x: dynamics_fn(x, u_i))(x_i)
-            B = jax.jacobian(lambda u: dynamics_fn(x_i, u))(u_i)
-            return A, B
-        
-        A_batch, B_batch = compute_jacobians(x, u)
+        if self.system.nu > 0:  # ← ADD
+            @jax.vmap
+            def compute_jacobians(x_i, u_i):
+                A = jax.jacobian(lambda x: dynamics_fn(x, u_i))(x_i)
+                B = jax.jacobian(lambda u: dynamics_fn(x_i, u))(u_i)
+                return A, B
+            
+            A_batch, B_batch = compute_jacobians(x, u)
+        else:  # Autonomous system (nu=0)
+            @jax.vmap
+            def compute_jacobian_A(x_i, u_i):
+                A = jax.jacobian(lambda x: dynamics_fn(x, u_i))(x_i)
+                return A
+            
+            A_batch = compute_jacobian_A(x, u)
+            # B is empty matrix (nx, 0)
+            B_batch = jnp.empty((x.shape[0], self.system.nx, 0))
         
         if squeeze_output:
             A_batch = jnp.squeeze(A_batch, 0)

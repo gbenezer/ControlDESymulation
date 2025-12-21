@@ -1322,7 +1322,7 @@ class SymbolicDynamicalSystem(ABC):
     # Forward Dynamics
     # ========================================================================
 
-    def forward(self, x: ArrayLike, u: ArrayLike, backend: Optional[str] = None) -> ArrayLike:
+    def forward(self, x: ArrayLike, u: Optional[ArrayLike] = None, backend: Optional[str] = None) -> ArrayLike:
         """
         Evaluate continuous-time dynamics: dx/dt = f(x, u).
 
@@ -1373,6 +1373,20 @@ class SymbolicDynamicalSystem(ABC):
         This method delegates to DynamicsEvaluator.evaluate() for actual computation.
         Backend conversion happens automatically if input type doesn't match target backend.
         """
+        # Handle None control for autonomous systems
+        if u is None:
+            if self.nu > 0:
+                raise ValueError("Non-autonomous system requires control input u")
+            # Create empty control array
+            if backend == 'numpy' or backend is None:
+                u = np.array([])
+            elif backend == 'torch':
+                import torch
+                u = torch.tensor([])
+            elif backend == 'jax':
+                import jax.numpy as jnp
+                u = jnp.array([])
+        
         return self._dynamics.evaluate(x, u, backend)
 
     def __call__(self, x: ArrayLike, u: ArrayLike, backend: Optional[str] = None) -> ArrayLike:
