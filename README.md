@@ -631,8 +631,10 @@ ControlODESymulation/
 Currently not open to contributions, though may change after Phase 4 and once I learn how open-source development works
 
 #### Phase 1 (Current):
-- Start and finish deterministic DiffEqPyIntegrator class
-    - Instantiate/code deterministic DiffEqPyIntegrator and associated unit tests
+- StochasticDynamicalSystem
+    - Assess if possible to define pure diffusion systems and fix if not currently possible
+- DiffEqPyIntegrator class
+    - Instantiate/code deterministic DiffEqPyIntegrator and associated unit tests (and ensure they pass)
     - Modify IntegratorFactory to handle deterministic DiffEqPyIntegrator objects and update unit tests
 - Finish implementation of SDE Integration utilities
     - Instantiate/code SDEIntegratorBase unit tests and debug base class
@@ -645,7 +647,7 @@ Currently not open to contributions, though may change after Phase 4 and once I 
         - Inconsistencies in user-facing API
 
 #### Phase 2:
-- Make control variables truly optional (for autonomous system simulation)
+- Make control variables truly optional for autonomous system simulation
 - Refactoring of DiscreteTimeSystem
     - Construct SimulationEngine class for simulation of open/closed loop trajectories
     - Construct DiscretizationEngine class for linearization of discrete-time systems
@@ -653,13 +655,18 @@ Currently not open to contributions, though may change after Phase 4 and once I 
         - Main responsibility is coordination of numerical integration and simulation
     - Construct unit tests for deterministic systems interfacing with DiscreteTimeSystem
     - Construct unit tests for stochastic systems interfacing with DiscreteTimeSystem
-- Debug/Evaluate
+- Look back and assess if any additional refactoring needs to occur
+    - Mainly looking for
+        - God objects
+        - Other code smells/design flaws
+        - Inconsistencies in user-facing API
 
 #### Phase 3:
 - Re-implement plotting utilities
     - Construct TrajectoryPlotGenerator class
         - arrays of 2D Plotly plots of state variables
         - add options to plot control and output variables along with external state estimates from observers
+        - evaluate possibility/utility of 
     - Construct PhasePortraitGenerator class for 2D or 3D Plotly phase portrait generation
 - Re-implement classical control theory capabilities
     - Construct ControlDesigner class
@@ -667,12 +674,25 @@ Currently not open to contributions, though may change after Phase 4 and once I 
             - Interface/access to traditional/classic nonlinear state-space control utilities (LQR/Kalman/LQG matrices, etc.)
             - Auto-detect time type (continuous vs. discrete)
     - libraries under consideration for backend implementation include control, control-toolbox, pysyscontrol, OpenControl, Kontrol
+- Look back and assess if any additional refactoring needs to occur
+    - Mainly looking for
+        - God objects
+        - Other code smells/design flaws
+        - Inconsistencies in user-facing API
 
 #### Phase 4:
-- Look back and assess if any additional refactoring needs to occur (looking for god objects/code smells/design flaws)
-- Construct integration tests at the interfaces between classes to ensure full pipelines work and ensure they pass
+- Integration testing
+    - Construct integration tests at interfaces between classes in currently envisioned typical pipelines
+        - SymbolicDynamicalSystem / DiscreteTimeSystem / IntegratorFactory
+        - StochasticDynamicalSystem / DiscreteTimeSystem / SDEIntegratorFactory
+        - SymbolicDynamicalSystem / ControlDesigner
+        - SymbolicDynamicalSystem / DiscreteTimeSystem / ControlDesigner
+        - SymbolicDynamicalSystem / DiscreteTimeSystem / IntegratorFactory / TrajectoryPlotGenerator
+        - StochasticDynamicalSystem / DiscreteTimeSystem / SDEIntegratorFactory / TrajectoryPlotGenerator
+        - SymbolicDynamicalSystem / TrajectoryPlotGenerator (maybe)
+- Again re-assess need to refactor
 - Re-assess module level and function/method level docstrings and adjust as needed
-- Re-code built-in classes and re-assess utility of each
+- Re-code built-in system classes and re-assess utility of each
 - Add some new systems
     - Industrial control systems
     - Stochastic systems
