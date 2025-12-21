@@ -205,11 +205,14 @@ class AutonomousGeometricBrownianMotion(StochasticDynamicalSystem):
 
 
 class Autonomous2DBrownianMotion(StochasticDynamicalSystem):
-    """2D autonomous Brownian motion with independent noise."""
+    """2D autonomous Brownian motion with independent noise (diagonal AND additive)."""
     
     def define_system(self, sigma1=0.5, sigma2=0.3):
         """
         Define 2D Brownian motion: dx = σ*dW
+        
+        This has BOTH diagonal AND additive noise (constant diagonal matrix).
+        Additive takes priority in classification.
         
         Parameters
         ----------
@@ -226,10 +229,75 @@ class Autonomous2DBrownianMotion(StochasticDynamicalSystem):
         self.parameters = {sigma1_sym: sigma1, sigma2_sym: sigma2}
         self.order = 1
         
-        # Diagonal diffusion
+        # Diagonal AND additive diffusion (constant diagonal matrix)
         self.diffusion_expr = sp.Matrix([
             [sigma1_sym, 0],
             [0, sigma2_sym]
+        ])
+        self.sde_type = 'ito'
+
+
+class AutonomousDiagonalMultiplicative(StochasticDynamicalSystem):
+    """2D autonomous system with diagonal multiplicative noise (NOT additive)."""
+    
+    def define_system(self, sigma1=0.5, sigma2=0.3):
+        """
+        Define system with diagonal but state-dependent noise.
+        
+        This is DIAGONAL but NOT additive (state-dependent).
+        
+        Parameters
+        ----------
+        sigma1, sigma2 : float
+            Noise intensity coefficients
+        """
+        x1, x2 = sp.symbols('x1 x2', real=True)
+        sigma1_sym, sigma2_sym = sp.symbols('sigma1 sigma2', positive=True)
+        
+        # Simple autonomous drift
+        self.state_vars = [x1, x2]
+        self.control_vars = []  # AUTONOMOUS
+        self._f_sym = sp.Matrix([[-x1], [-x2]])
+        self.parameters = {sigma1_sym: sigma1, sigma2_sym: sigma2}
+        self.order = 1
+        
+        # Diagonal BUT multiplicative diffusion (state-dependent diagonal)
+        self.diffusion_expr = sp.Matrix([
+            [sigma1_sym * x1, 0],
+            [0, sigma2_sym * x2]
+        ])
+        self.sde_type = 'ito'
+
+
+class ControlledDiagonalMultiplicative(StochasticDynamicalSystem):
+    """2D controlled system with diagonal multiplicative noise (NOT additive)."""
+    
+    def define_system(self, sigma1=0.5, sigma2=0.3):
+        """
+        Define controlled system with diagonal but state-dependent noise.
+        
+        This is DIAGONAL but NOT additive (state-dependent).
+        
+        Parameters
+        ----------
+        sigma1, sigma2 : float
+            Noise intensity coefficients
+        """
+        x1, x2 = sp.symbols('x1 x2', real=True)
+        u = sp.symbols('u', real=True)
+        sigma1_sym, sigma2_sym = sp.symbols('sigma1 sigma2', positive=True)
+        
+        # Controlled drift
+        self.state_vars = [x1, x2]
+        self.control_vars = [u]
+        self._f_sym = sp.Matrix([[-x1 + u], [-x2]])
+        self.parameters = {sigma1_sym: sigma1, sigma2_sym: sigma2}
+        self.order = 1
+        
+        # Diagonal BUT multiplicative diffusion (state-dependent diagonal)
+        self.diffusion_expr = sp.Matrix([
+            [sigma1_sym * x1, 0],
+            [0, sigma2_sym * x2]
         ])
         self.sde_type = 'ito'
 
@@ -1525,12 +1593,30 @@ class TestAutonomousNoiseCharacterization:
         assert not system.is_additive_noise()
         assert system.is_scalar_noise()
     
-    def test_autonomous_diagonal_noise(self):
-        """Test autonomous system with diagonal noise."""
+    def test_autonomous_diagonal_additive(self):
+        """Test autonomous system with diagonal additive noise."""
         system = Autonomous2DBrownianMotion(sigma1=0.5, sigma2=0.3)
         
+        # This system is BOTH diagonal AND additive (constant diagonal matrix)
         assert system.is_diagonal_noise()
-        assert system.get_noise_type() == NoiseType.DIAGONAL
+        assert system.is_additive_noise()
+        
+        # Additive classification takes priority (more specific optimization)
+        noise_type = system.get_noise_type()
+        assert noise_type == NoiseType.ADDITIVE
+    
+    def test_autonomous_diagonal_multiplicative(self):
+        """Test autonomous system with diagonal multiplicative noise."""
+        system = AutonomousDiagonalMultiplicative(sigma1=0.5, sigma2=0.3)
+        
+        # This system is diagonal but NOT additive (state-dependent)
+        assert system.is_diagonal_noise()
+        assert not system.is_additive_noise()
+        assert system.is_multiplicative_noise()
+        
+        # Diagonal classification should be used (not additive)
+        noise_type = system.get_noise_type()
+        assert noise_type == NoiseType.DIAGONAL
     
     def test_autonomous_noise_dependencies(self):
         """Test noise dependencies for autonomous systems."""
@@ -1616,9 +1702,30 @@ class TestAutonomousSolverRecommendations:
         
         assert len(solvers) > 0
     
-    def test_autonomous_diagonal_recommendations(self):
-        """Test solver recommendations for autonomous diagonal noise."""
+    def test_autonomous_diagonal_additive_recommendations(self):
+        """Test solver recommendations for autonomous diagonal additive noise."""
         system = Autonomous2DBrownianMotion()
+        
+        solvers = system.recommend_solvers('jax')
+        
+        assert len(solvers) > 0
+        # System is ADDITIVE (constant) with diagonal structure
+        # Additive takes priority, so we get additive-specialized solvers
+        assert any(s in solvers for s in ['sea', 'shark', 'sra1'])
+    
+    def test_autonomous_diagonal_multiplicative_recommendations(self):
+        """Test solver recommendations for diagonal multiplicative noise."""
+        system = AutonomousDiagonalMultiplicative()
+        
+        solvers = system.recommend_solvers('jax')
+        
+        assert len(solvers) > 0
+        # System is DIAGONAL (not additive), should get diagonal solvers
+        assert 'spark' in solvers or 'euler_heun' in solvers
+    
+    def test_controlled_diagonal_multiplicative_recommendations(self):
+        """Test solver recommendations for controlled diagonal multiplicative."""
+        system = ControlledDiagonalMultiplicative()
         
         solvers = system.recommend_solvers('jax')
         
@@ -1926,6 +2033,71 @@ class TestAutonomousCompilation:
         assert 'numpy' in timings
         assert timings['numpy'] is not None
 
+
+# ============================================================================
+# Test Class: Diagonal Noise Classification
+# ============================================================================
+
+class TestDiagonalNoiseClassification:
+    """Test diagonal noise classification edge cases."""
+    
+    def test_diagonal_additive_classification(self):
+        """Test that constant diagonal is classified as ADDITIVE."""
+        system = Autonomous2DBrownianMotion(sigma1=0.5, sigma2=0.3)
+        
+        # Constant diagonal matrix is both diagonal and additive
+        assert system.is_diagonal_noise()
+        assert system.is_additive_noise()
+        
+        # Additive takes priority (more specific)
+        assert system.get_noise_type() == NoiseType.ADDITIVE
+    
+    def test_diagonal_multiplicative_autonomous_classification(self):
+        """Test that state-dependent diagonal is classified as DIAGONAL."""
+        system = AutonomousDiagonalMultiplicative(sigma1=0.5, sigma2=0.3)
+        
+        # State-dependent diagonal is diagonal but not additive
+        assert system.is_diagonal_noise()
+        assert not system.is_additive_noise()
+        
+        # Diagonal classification used
+        assert system.get_noise_type() == NoiseType.DIAGONAL
+    
+    def test_diagonal_multiplicative_controlled_classification(self):
+        """Test that controlled diagonal multiplicative is DIAGONAL."""
+        system = ControlledDiagonalMultiplicative(sigma1=0.5, sigma2=0.3)
+        
+        # State-dependent diagonal is diagonal but not additive
+        assert system.is_diagonal_noise()
+        assert not system.is_additive_noise()
+        
+        # Diagonal classification used
+        assert system.get_noise_type() == NoiseType.DIAGONAL
+    
+    def test_diagonal_additive_gets_additive_optimizations(self):
+        """Test that diagonal additive can use additive optimizations."""
+        system = Autonomous2DBrownianMotion(sigma1=0.5, sigma2=0.3)
+        
+        # Can use additive optimization (precompute)
+        assert system.can_optimize_for_additive()
+        
+        G = system.get_constant_noise('numpy')
+        assert G.shape == (2, 2)
+        
+        # Verify it's diagonal
+        assert G[0, 1] == 0.0
+        assert G[1, 0] == 0.0
+    
+    def test_diagonal_multiplicative_cannot_precompute(self):
+        """Test that diagonal multiplicative cannot precompute."""
+        system = AutonomousDiagonalMultiplicative(sigma1=0.5, sigma2=0.3)
+        
+        # Cannot use additive optimization
+        assert not system.can_optimize_for_additive()
+        
+        # But can use diagonal optimization
+        opts = system.get_optimization_opportunities()
+        assert opts['use_diagonal_solver']
 
 # ============================================================================
 # Run Tests
