@@ -631,9 +631,6 @@ ControlODESymulation/
 Currently not open to contributions, though may change after Phase 4 and once I learn how open-source development works
 
 #### Phase 1 (Current):
-- StochasticDynamicalSystem
-    - Add final test fixture (non-additive diagonal noise process) and debug if needed
-    - Formalize/document how to specify pure noise (no drift) processes
 - DiffEqPyIntegrator class
     - Instantiate/code deterministic DiffEqPyIntegrator and associated unit tests (and ensure they pass)
     - Modify IntegratorFactory to handle deterministic DiffEqPyIntegrator objects and update unit tests
