@@ -231,10 +231,23 @@ class CodeGenerator:
         # Compute A and B if not cached
         if self._A_sym_cache is None:
             self._A_sym_cache = self.system._f_sym.jacobian(self.system.state_vars)
-            self._B_sym_cache = self.system._f_sym.jacobian(self.system.control_vars)
+            
+            # For autonomous systems (nu=0 or no control_vars), create empty B matrix directly
+            if hasattr(self.system, 'nu') and self.system.nu == 0:
+                # B should be (nq, 0) for first-order or (nq, 0) for higher-order
+                # The actual state-space form will be constructed in LinearizationEngine
+                n_outputs = self.system.nq if self.system.order > 1 else self.system.nx
+                self._B_sym_cache = sp.zeros(n_outputs, 0)
+            elif len(self.system.control_vars) == 0:
+                # Fallback: check if control_vars is empty (for systems without nu attribute)
+                n_outputs = self.system.nq if hasattr(self.system, 'order') and self.system.order > 1 else self.system.nx
+                self._B_sym_cache = sp.zeros(n_outputs, 0)
+            else:
+                # Non-autonomous: compute Jacobian w.r.t. control variables
+                self._B_sym_cache = self.system._f_sym.jacobian(self.system.control_vars)
         
-        # Compute C if output function exists and not cached
-        if self.system._h_sym is not None and self._C_sym_cache is None:
+        # Compute C if not cached and output function exists
+        if self._C_sym_cache is None and self.system._h_sym is not None:
             self._C_sym_cache = self.system._h_sym.jacobian(self.system.state_vars)
     
     def generate_dynamics_jacobians(self, backend: str, **kwargs) -> Tuple[Callable, Callable]:
