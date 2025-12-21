@@ -62,6 +62,7 @@ Examples
 
 import time
 import re
+import os
 import numpy as np
 from typing import Optional, Callable, Tuple, Dict, Any, List, TYPE_CHECKING
 
@@ -74,6 +75,10 @@ from src.systems.base.numerical_integration.integrator_base import (
 
 if TYPE_CHECKING:
     from src.systems.base.symbolic_dynamical_system import SymbolicDynamicalSystem
+
+
+# Debug flag - set via environment variable
+DEBUG_DIFFEQPY = os.environ.get('DEBUG_DIFFEQPY', '0') == '1'
 
 
 class DiffEqPyIntegrator(IntegratorBase):
@@ -180,6 +185,7 @@ class DiffEqPyIntegrator(IntegratorBase):
     - First call may be slow due to Julia JIT compilation
     - Subsequent calls are very fast (Julia's strength)
     - For difficult ODEs, this is often the best choice
+    - Set DEBUG_DIFFEQPY=1 environment variable for debug output
     """
     
     def __init__(
@@ -589,6 +595,14 @@ class DiffEqPyIntegrator(IntegratorBase):
         try:
             sol = self.de.solve(prob, algorithm, **solve_kwargs)
             
+            if DEBUG_DIFFEQPY:
+                print(f"\n[DEBUG] Julia retcode: {sol.retcode}")
+                print(f"[DEBUG] retcode type: {type(sol.retcode)}")
+                print(f"[DEBUG] retcode str: '{str(sol.retcode)}'")
+                print(f"[DEBUG] retcode repr: {repr(sol.retcode)}")
+                print(f"[DEBUG] sol.t length: {len(sol.t)}")
+                print(f"[DEBUG] sol.u length: {len(sol.u)}")
+            
             # Extract solution
             # Julia returns solution object with attributes:
             # - sol.t: time points (Vector)
@@ -600,13 +614,18 @@ class DiffEqPyIntegrator(IntegratorBase):
             x_out = np.array([np.array(x_i) for x_i in sol.u])
             
             # Determine success
-            # Julia retcode is a Symbol - check for success variants
+            # Julia retcode is a Symbol that gets converted to string by diffeqpy
+            # Successful integration returns 'Success' (without the colon prefix)
+            # Failed integrations return other codes like 'DtLessThanMin', 'MaxIters', etc.
             retcode_str = str(sol.retcode)
-            success = (
-                retcode_str == ':Success' or 
-                retcode_str == 'Success' or
-                'Success' in retcode_str
-            )
+            
+            # Check for successful integration
+            # Note: diffeqpy converts Julia Symbol :Success to Python string 'Success'
+            success = retcode_str == 'Success'
+            
+            if DEBUG_DIFFEQPY:
+                print(f"[DEBUG] Success check: '{retcode_str}' == 'Success' -> {success}")
+            
             message = f"Integration {retcode_str}"
             
             # Update statistics
@@ -634,6 +653,12 @@ class DiffEqPyIntegrator(IntegratorBase):
         except Exception as e:
             elapsed = time.time() - start_time
             self._stats['total_time'] += elapsed
+            
+            if DEBUG_DIFFEQPY:
+                print(f"\n[DEBUG] Integration exception: {type(e).__name__}")
+                print(f"[DEBUG] Exception message: {str(e)}")
+                import traceback
+                traceback.print_exc()
             
             return IntegrationResult(
                 t=np.array([t0]),
