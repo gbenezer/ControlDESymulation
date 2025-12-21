@@ -57,6 +57,7 @@ Examples
 """
 
 import time
+import re
 import numpy as np
 from typing import Optional, Callable, Tuple, Dict, Any, List, TYPE_CHECKING
 
@@ -123,8 +124,8 @@ class DiffEqPyIntegrator(IntegratorBase):
         Julia callback for events, termination, etc.
     **options
         Additional solver options:
-        - reltol: Relative tolerance (default: 1e-6)
-        - abstol: Absolute tolerance (default: 1e-8)
+        - rtol: Relative tolerance (default: 1e-6)
+        - atol: Absolute tolerance (default: 1e-8)
         - maxiters: Maximum iterations (default: 1e7)
         - dtmin: Minimum step size (adaptive only)
         - dtmax: Maximum step size (adaptive only)
@@ -150,15 +151,15 @@ class DiffEqPyIntegrator(IntegratorBase):
     >>> integrator = DiffEqPyIntegrator(
     ...     system,
     ...     algorithm='Vern9',
-    ...     reltol=1e-12,
-    ...     abstol=1e-14
+    ...     rtol=1e-12,
+    ...     atol=1e-14
     ... )
     >>> 
     >>> # Stiff system
     >>> integrator = DiffEqPyIntegrator(
     ...     system,
     ...     algorithm='Rodas5',
-    ...     reltol=1e-8
+    ...     rtol=1e-8
     ... )
     >>> 
     >>> # Fixed-step integration
@@ -211,7 +212,7 @@ class DiffEqPyIntegrator(IntegratorBase):
         callback : Optional
             Julia callback function
         **options
-            Solver options (reltol, abstol, etc.)
+            Solver options (rtol, atol, etc.)
         """
         if backend != 'numpy':
             raise ValueError(
@@ -333,9 +334,22 @@ class DiffEqPyIntegrator(IntegratorBase):
         # Handle auto-switching algorithms
         if 'Auto' in algo_str or '(' in algo_str:
             try:
-                # Evaluate as Julia expression
-                # e.g., "AutoTsit5(Rosenbrock23())"
-                return eval(f"self.de.{algo_str}")
+                # Evaluate as Julia expression using proper scoping
+                # e.g., "AutoTsit5(Rosenbrock23())" -> self.de.AutoTsit5(self.de.Rosenbrock23())
+                
+                # Replace algorithm names with self.de.AlgorithmName
+                def replace_algo(match):
+                    algo_name = match.group(0)
+                    # Don't replace 'self' or 'de'
+                    if algo_name in ['self', 'de']:
+                        return algo_name
+                    return f"self.de.{algo_name}"
+                
+                # Find algorithm names (capital letter followed by letters/numbers)
+                pattern = r'\b([A-Z][a-zA-Z0-9]*)\b'
+                modified_str = re.sub(pattern, replace_algo, algo_str)
+                
+                return eval(modified_str)
             except Exception as e:
                 raise ValueError(
                     f"Failed to create algorithm '{algo_str}'. "
@@ -527,8 +541,8 @@ class DiffEqPyIntegrator(IntegratorBase):
         
         # Build solver options
         solve_kwargs = {
-            'reltol': self.rtol,
-            'abstol': self.atol,
+            'reltol': self.rtol,  # Julia uses 'reltol'
+            'abstol': self.atol,  # Julia uses 'abstol'
             'maxiters': int(self.options.get('maxiters', 1e7)),
         }
         
@@ -789,7 +803,7 @@ def create_diffeqpy_integrator(
     step_mode : StepMode
         FIXED or ADAPTIVE
     **options
-        Additional solver options (reltol, abstol, etc.)
+        Additional solver options (rtol, atol, etc.)
         
     Returns
     -------
@@ -805,8 +819,8 @@ def create_diffeqpy_integrator(
     >>> integrator = create_diffeqpy_integrator(
     ...     system,
     ...     algorithm='Vern9',
-    ...     reltol=1e-12,
-    ...     abstol=1e-14
+    ...     rtol=1e-12,
+    ...     atol=1e-14
     ... )
     >>> 
     >>> # Auto-switching solver
