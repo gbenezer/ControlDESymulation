@@ -1,7 +1,3 @@
-# ============================================================================
-# FILE: src/systems/base/numerical_integration/diffeqpy_integrator.py
-# ============================================================================
-
 """
 DiffEqPyIntegrator: Julia DifferentialEquations.jl ODE solver via diffeqpy.
 
@@ -35,6 +31,16 @@ DiffEqPyIntegrator is ideal for:
 - Very stiff or difficult ODEs where scipy struggles
 - Problems where Julia's specialized solvers excel
 - Non-gradient workflows where accuracy/performance matter most
+
+Known Limitations:
+- Rosenbrock methods (Rosenbrock23, Rodas4, Rodas5) may fail with Jacobian 
+  autodiff errors when using Python-defined ODE functions. This is a 
+  fundamental limitation of the Python-Julia bridge.
+  
+  Workarounds:
+  1. Use alternative stiff solvers: RadauIIA5, TRBDF2, KenCarp4
+  2. Use scipy.BDF for stiff systems (recommended for Python workflows)
+  3. Provide analytical Jacobian (advanced, not currently supported)
 
 Examples
 --------
