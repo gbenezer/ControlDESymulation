@@ -22,7 +22,7 @@ A Python library for constructing, analyzing, and simulating nonlinear dynamical
 
 ## Why ControlDESymulation?
 
-Most control libraries force you to choose: symbolic elegance (MATLAB Symbolic Toolbox) *or* numerical efficiency (SciPy, CasADi). ControlODESymulation gives you **both**:
+Most control libraries force you to choose: symbolic elegance (MATLAB Symbolic Toolbox) *or* numerical efficiency (SciPy, CasADi). ControlDESymulation gives you **both**:
 
 1. **Write once, run anywhere**: Define your system symbolically, execute on any backend
 2. **No code rewriting**: Switch between NumPy, PyTorch, and JAX without changing system definitions  
