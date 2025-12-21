@@ -249,72 +249,34 @@ class IntegratorFactory:
             return ScipyIntegrator(system, dt=dt, method=method, backend="numpy", **options)
 
     @classmethod
-    def _create_torch_integrator(
-        cls, system, method: str, dt: Optional[float], step_mode: StepMode, **options
-    ):
-        """Create PyTorch-based integrator."""
-        # Fixed-step methods
-        if method in ["euler", "midpoint", "rk4"]:
-            if dt is None:
-                raise ValueError(f"Fixed-step method '{method}' requires dt")
-
-            from src.systems.base.numerical_integration.fixed_step_integrators import (
-                ExplicitEulerIntegrator,
-                MidpointIntegrator,
-                RK4Integrator,
-            )
-
-            integrator_map = {
-                "euler": ExplicitEulerIntegrator,
-                "midpoint": MidpointIntegrator,
-                "rk4": RK4Integrator,
-            }
-
-            integrator_class = integrator_map[method]
-            return integrator_class(system, dt=dt, backend="torch", **options)
-
-        # TorchDiffEq methods
-        else:
-            from src.systems.base.numerical_integration.torchdiffeq_integrator import (
-                TorchDiffEqIntegrator,
-            )
-
-            return TorchDiffEqIntegrator(
-                system, dt=dt, step_mode=step_mode, backend="torch", method=method, **options
-            )
+    def _create_torch_integrator(cls, system, method: str, dt, step_mode, **options):
+        """Create PyTorch-based integrator using TorchDiffEq."""
+        from src.systems.base.numerical_integration.torchdiffeq_integrator import TorchDiffEqIntegrator
+        
+        # Always use TorchDiffEq for torch backend
+        return TorchDiffEqIntegrator(
+            system,
+            dt=dt,
+            step_mode=step_mode,
+            backend='torch',
+            method=method,
+            **options
+        )
 
     @classmethod
-    def _create_jax_integrator(
-        cls, system, method: str, dt: Optional[float], step_mode: StepMode, **options
-    ):
-        """Create JAX-based integrator."""
-        # Fixed-step methods
-        if method in ["euler", "midpoint", "rk4"]:
-            if dt is None:
-                raise ValueError(f"Fixed-step method '{method}' requires dt")
-
-            from src.systems.base.numerical_integration.fixed_step_integrators import (
-                ExplicitEulerIntegrator,
-                MidpointIntegrator,
-                RK4Integrator,
-            )
-
-            integrator_map = {
-                "euler": ExplicitEulerIntegrator,
-                "midpoint": MidpointIntegrator,
-                "rk4": RK4Integrator,
-            }
-
-            integrator_class = integrator_map[method]
-            return integrator_class(system, dt=dt, backend="jax", **options)
-
-        # Diffrax methods
-        else:
-            from src.systems.base.numerical_integration.diffrax_integrator import DiffraxIntegrator
-
-            return DiffraxIntegrator(
-                system, dt=dt, step_mode=step_mode, backend="jax", solver=method, **options
-            )
+    def _create_jax_integrator(cls, system, method: str, dt, step_mode, **options):
+        """Create JAX-based integrator - always use Diffrax."""
+        from src.systems.base.numerical_integration.diffrax_integrator import DiffraxIntegrator
+        
+        # Let Diffrax handle ALL methods, including euler/midpoint
+        return DiffraxIntegrator(
+            system,
+            dt=dt,
+            step_mode=step_mode,
+            backend='jax',
+            solver=method,
+            **options
+        )
 
     # ========================================================================
     # Convenience Methods - Use Case-Specific Creation
