@@ -632,7 +632,6 @@ Currently not open to contributions, though may change after Phase 4 and once I 
 
 #### Phase 1 (Current):
 - Finish implementation of StochasticDynamicalSystem class
-    - Make unit tests for the DiffusionHandler, NoiseCharacterizer, and SDEValidator sub-object classes
     - After those pass, make unit test for StochasticDynamicalSystem and ensure it passes
 - Start and finish deterministic DiffEqPyIntegrator class
     - Instantiate/code deterministic DiffEqPyIntegrator and associated unit tests
