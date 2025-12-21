@@ -114,7 +114,7 @@ import numpy as np
 # necessary sub-object import
 from src.systems.base.utils.equilibrium_handler import EquilibriumHandler
 from src.systems.base.utils.backend_manager import BackendManager
-from src.systems.base.utils.symbolic_validator import SymbolicValidator
+from src.systems.base.utils.symbolic_validator import SymbolicValidator, ValidationError
 from src.systems.base.utils.code_generator import CodeGenerator
 from src.systems.base.utils.dynamics_evaluator import DynamicsEvaluator
 from src.systems.base.utils.linearization_engine import LinearizationEngine
@@ -263,8 +263,13 @@ class SymbolicDynamicalSystem(ABC):
         """Backend manager handles detection, conversion, and device placement"""
 
         # COMPOSITION: Delegate validation
-        self._validator = SymbolicValidator(strict=True)
+        self._validator: Optional[SymbolicValidator] = None
         """Validator checks system definition for correctness"""
+
+        # COMPOSITION: Delegate equilibrium management
+        # Note: Initialized early because define_system might add equilibria
+        self.equilibria = EquilibriumHandler(nx=0, nu=0)  # Will update dimensions after validation
+        """Equilibrium handler manages multiple equilibrium points"""
 
         # COMPOSITION: Delegate code generation (initialized after validation)
         self._code_gen: Optional[CodeGenerator] = None
@@ -281,8 +286,19 @@ class SymbolicDynamicalSystem(ABC):
         # Step 1: Call user-defined system definition
         self.define_system(*args, **kwargs)
 
-        # Step 2: Validate system definition
-        self._validator.validate(self)
+        # Step 2: Create validator and validate system definition
+        self._validator = SymbolicValidator(self)
+        try:
+            validation_result = self._validator.validate(raise_on_error=True)
+        except ValidationError as e:
+            # Re-raise with context about which system failed
+            raise ValidationError(
+                f"Validation failed for {self.__class__.__name__}:\n{str(e)}"
+            ) from e
+
+        # Step 3: Update equilibrium handler dimensions (now that we know nx, nu)
+        self.equilibria._nx = self.nx
+        self.equilibria._nu = self.nu
 
         # Step 3: Mark as initialized (validation passed)
         self._initialized = True
