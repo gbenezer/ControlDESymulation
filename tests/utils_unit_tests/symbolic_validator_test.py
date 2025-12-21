@@ -10,13 +10,18 @@ Tests cover all validation checks:
 6. Physical constraints
 7. Naming conventions
 8. Usage patterns
+9. ValidationResult integration
 """
 
 import pytest
 import numpy as np
 import sympy as sp
 
-from src.systems.base.utils.symbolic_validator import SymbolicValidator, ValidationError
+from src.systems.base.utils.symbolic_validator import (
+    SymbolicValidator,
+    ValidationError,
+    ValidationResult,
+)
 
 
 # ============================================================================
@@ -59,6 +64,42 @@ class MockSecondOrderSystem:
 
 
 # ============================================================================
+# Test ValidationResult Dataclass
+# ============================================================================
+
+
+class TestValidationResult:
+    """Test ValidationResult dataclass."""
+    
+    def test_valid_result_creation(self):
+        """Test creating valid ValidationResult."""
+        result = ValidationResult(
+            is_valid=True,
+            errors=[],
+            warnings=[],
+            info={"nx": 1, "nu": 1}
+        )
+        
+        assert result.is_valid
+        assert len(result.errors) == 0
+        assert len(result.warnings) == 0
+        assert result.info["nx"] == 1
+    
+    def test_invalid_result_creation(self):
+        """Test creating invalid ValidationResult."""
+        result = ValidationResult(
+            is_valid=False,
+            errors=["Dimension mismatch"],
+            warnings=["Unusual order"],
+            info={}
+        )
+        
+        assert not result.is_valid
+        assert len(result.errors) == 1
+        assert len(result.warnings) == 1
+
+
+# ============================================================================
 # Test Class 1: Required Attributes
 # ============================================================================
 
@@ -69,90 +110,109 @@ class TestRequiredAttributes:
     def test_valid_system_passes(self):
         """Test that valid system passes validation"""
         system = MockValidSystem()
-        validator = SymbolicValidator()
+        validator = SymbolicValidator(system)
         
-        # Should not raise
-        assert validator.validate(system) is True
+        result = validator.validate(raise_on_error=False)
+        assert result.is_valid
+    
+    def test_valid_system_with_raise(self):
+        """Test valid system doesn't raise with raise_on_error=True"""
+        system = MockValidSystem()
+        validator = SymbolicValidator(system)
+        
+        result = validator.validate(raise_on_error=True)
+        assert result.is_valid
     
     def test_missing_state_vars(self):
         """Test error when state_vars is missing"""
         system = MockValidSystem()
         delattr(system, 'state_vars')
         
-        validator = SymbolicValidator()
+        validator = SymbolicValidator(system)
         
         with pytest.raises(ValidationError, match="Missing required attribute 'state_vars'"):
-            validator.validate(system)
+            validator.validate(raise_on_error=True)
+    
+    def test_missing_state_vars_no_raise(self):
+        """Test error detection without raising"""
+        system = MockValidSystem()
+        delattr(system, 'state_vars')
+        
+        validator = SymbolicValidator(system)
+        result = validator.validate(raise_on_error=False)
+        
+        assert not result.is_valid
+        assert any("state_vars" in err for err in result.errors)
     
     def test_empty_state_vars(self):
         """Test error when state_vars is empty"""
         system = MockValidSystem()
         system.state_vars = []
         
-        validator = SymbolicValidator()
+        validator = SymbolicValidator(system)
         
         with pytest.raises(ValidationError, match="state_vars is empty"):
-            validator.validate(system)
+            validator.validate(raise_on_error=True)
     
     def test_missing_control_vars(self):
         """Test error when control_vars is missing"""
         system = MockValidSystem()
         delattr(system, 'control_vars')
         
-        validator = SymbolicValidator()
+        validator = SymbolicValidator(system)
         
         with pytest.raises(ValidationError, match="Missing required attribute 'control_vars'"):
-            validator.validate(system)
+            validator.validate(raise_on_error=True)
     
     def test_empty_control_vars(self):
         """Test error when control_vars is empty"""
         system = MockValidSystem()
         system.control_vars = []
         
-        validator = SymbolicValidator()
+        validator = SymbolicValidator(system)
         
         with pytest.raises(ValidationError, match="control_vars is empty"):
-            validator.validate(system)
+            validator.validate(raise_on_error=True)
     
     def test_missing_f_sym(self):
         """Test error when _f_sym is missing"""
         system = MockValidSystem()
         delattr(system, '_f_sym')
         
-        validator = SymbolicValidator()
+        validator = SymbolicValidator(system)
         
         with pytest.raises(ValidationError, match="Missing required attribute '_f_sym'"):
-            validator.validate(system)
+            validator.validate(raise_on_error=True)
     
     def test_none_f_sym(self):
         """Test error when _f_sym is None"""
         system = MockValidSystem()
         system._f_sym = None
         
-        validator = SymbolicValidator()
+        validator = SymbolicValidator(system)
         
         with pytest.raises(ValidationError, match="_f_sym is not defined"):
-            validator.validate(system)
+            validator.validate(raise_on_error=True)
     
     def test_missing_parameters(self):
         """Test error when parameters is missing"""
         system = MockValidSystem()
         delattr(system, 'parameters')
         
-        validator = SymbolicValidator()
+        validator = SymbolicValidator(system)
         
         with pytest.raises(ValidationError, match="Missing required attribute 'parameters'"):
-            validator.validate(system)
+            validator.validate(raise_on_error=True)
     
     def test_missing_order(self):
         """Test error when order is missing"""
         system = MockValidSystem()
         delattr(system, 'order')
         
-        validator = SymbolicValidator()
+        validator = SymbolicValidator(system)
         
         with pytest.raises(ValidationError, match="Missing required attribute 'order'"):
-            validator.validate(system)
+            validator.validate(raise_on_error=True)
 
 
 # ============================================================================
@@ -165,65 +225,70 @@ class TestTypeValidation:
     
     def test_state_vars_not_symbols(self):
         """Test error when state_vars contains non-Symbols"""
-        system = MockValidSystem()
-        system.state_vars = ['x', 'y']  # Strings instead of Symbols
-        # Also need to fix _f_sym to match
-        system._f_sym = sp.Matrix([0, 0])
+        class InvalidSystem:
+            state_vars = ['x', 'y']  # Strings - INVALID
+            control_vars = [sp.symbols('u')]
+            _f_sym = sp.Matrix([sp.Integer(1), sp.Integer(2)])
+            _h_sym = None
+            parameters = {}
+            output_vars = []
+            order = 1
         
-        validator = SymbolicValidator()
+        system = InvalidSystem()
+        validator = SymbolicValidator(system)
         
         with pytest.raises(ValidationError, match="is not a SymPy Symbol"):
-            validator.validate(system)
+            validator.validate(raise_on_error=True)
     
     def test_control_vars_not_symbols(self):
         """Test error when control_vars contains non-Symbols"""
         system = MockValidSystem()
         system.control_vars = ['u']  # String instead of Symbol
         
-        validator = SymbolicValidator()
+        validator = SymbolicValidator(system)
         
         with pytest.raises(ValidationError, match="is not a SymPy Symbol"):
-            validator.validate(system)
+            validator.validate(raise_on_error=True)
     
     def test_output_vars_not_symbols(self):
         """Test error when output_vars contains non-Symbols"""
         system = MockValidSystem()
         system.output_vars = ['y']  # String instead of Symbol
         
-        validator = SymbolicValidator()
+        validator = SymbolicValidator(system)
         
         with pytest.raises(ValidationError, match="is not a SymPy Symbol"):
-            validator.validate(system)
+            validator.validate(raise_on_error=True)
     
     def test_f_sym_not_matrix(self):
         """Test error when _f_sym is not a Matrix"""
         system = MockValidSystem()
         system._f_sym = [sp.symbols('x')]  # List instead of Matrix
         
-        validator = SymbolicValidator()
+        validator = SymbolicValidator(system)
         
         with pytest.raises(ValidationError, match="_f_sym must be sp.Matrix"):
-            validator.validate(system)
+            validator.validate(raise_on_error=True)
     
     def test_h_sym_not_matrix(self):
         """Test error when _h_sym is not a Matrix"""
         system = MockValidSystem()
         system._h_sym = [sp.symbols('x')]  # List instead of Matrix
         
-        validator = SymbolicValidator()
+        validator = SymbolicValidator(system)
         
         with pytest.raises(ValidationError, match="_h_sym must be sp.Matrix"):
-            validator.validate(system)
+            validator.validate(raise_on_error=True)
     
     def test_parameter_key_not_symbol(self):
         """Test error when parameter key is not a Symbol"""
         system = MockValidSystem()
         system.parameters = {'a': 1.0}  # String key instead of Symbol
         
-        validator = SymbolicValidator()
+        validator = SymbolicValidator(system)
         
         with pytest.raises(ValidationError, match="Parameter key.*is not a SymPy Symbol"):
-            validator.validate(system)
+            validator.validate(raise_on_error=True)
     
     def test_parameter_value_not_numeric(self):
         """Test error when parameter value is not numeric"""
@@ -237,20 +302,20 @@ class TestTypeValidation:
         system._f_sym = sp.Matrix([a * x + u])
         system.parameters = {a: "1.0"}  # String value instead of number
         
-        validator = SymbolicValidator()
+        validator = SymbolicValidator(system)
         
         with pytest.raises(ValidationError, match="Parameter value.*must be numeric"):
-            validator.validate(system)
+            validator.validate(raise_on_error=True)
     
     def test_order_not_integer(self):
         """Test error when order is not integer"""
         system = MockValidSystem()
         system.order = 1.5  # Float instead of int
         
-        validator = SymbolicValidator()
+        validator = SymbolicValidator(system)
         
         with pytest.raises(ValidationError, match="order must be int"):
-            validator.validate(system)
+            validator.validate(raise_on_error=True)
 
 
 # ============================================================================
@@ -268,10 +333,10 @@ class TestDimensionValidation:
         system.state_vars = [x, y]  # 2 states
         # But _f_sym still has 1 row!
         
-        validator = SymbolicValidator()
+        validator = SymbolicValidator(system)
         
         with pytest.raises(ValidationError, match="has.*rows but expected"):
-            validator.validate(system)
+            validator.validate(raise_on_error=True)
     
     def test_f_sym_not_column_vector(self):
         """Test error when _f_sym is not a column vector"""
@@ -279,10 +344,10 @@ class TestDimensionValidation:
         x = sp.symbols('x')
         system._f_sym = sp.Matrix([[x, x]])  # Row vector instead of column
         
-        validator = SymbolicValidator()
+        validator = SymbolicValidator(system)
         
         with pytest.raises(ValidationError, match="must be column vector"):
-            validator.validate(system)
+            validator.validate(raise_on_error=True)
     
     def test_h_sym_not_column_vector(self):
         """Test error when _h_sym is not a column vector"""
@@ -290,10 +355,10 @@ class TestDimensionValidation:
         x = sp.symbols('x')
         system._h_sym = sp.Matrix([[x, x]])  # Row vector
         
-        validator = SymbolicValidator()
+        validator = SymbolicValidator(system)
         
         with pytest.raises(ValidationError, match="must be column vector"):
-            validator.validate(system)
+            validator.validate(raise_on_error=True)
     
     def test_output_vars_h_sym_mismatch(self):
         """Test error when output_vars and _h_sym dimensions don't match"""
@@ -304,10 +369,10 @@ class TestDimensionValidation:
         system.output_vars = [y1, y2]  # 2 outputs
         system._h_sym = sp.Matrix([x])  # But only 1 row in _h_sym
         
-        validator = SymbolicValidator()
+        validator = SymbolicValidator(system)
         
         with pytest.raises(ValidationError, match="output_vars has.*elements but _h_sym has.*rows"):
-            validator.validate(system)
+            validator.validate(raise_on_error=True)
     
     def test_order_not_divisible(self):
         """Test error when nx not divisible by order"""
@@ -316,28 +381,28 @@ class TestDimensionValidation:
         system.state_vars = [x1, x2, x3]  # 3 states
         system.order = 2  # But 3 is not divisible by 2!
         
-        validator = SymbolicValidator()
+        validator = SymbolicValidator(system)
         
         with pytest.raises(ValidationError, match="must be divisible by order"):
-            validator.validate(system)
+            validator.validate(raise_on_error=True)
     
     def test_second_order_system_valid(self):
         """Test that valid second-order system passes"""
         system = MockSecondOrderSystem()
-        validator = SymbolicValidator()
+        validator = SymbolicValidator(system)
         
-        # Should not raise
-        assert validator.validate(system) is True
+        result = validator.validate(raise_on_error=False)
+        assert result.is_valid
     
     def test_order_less_than_one(self):
         """Test error when order < 1"""
         system = MockValidSystem()
         system.order = 0
         
-        validator = SymbolicValidator()
+        validator = SymbolicValidator(system)
         
         with pytest.raises(ValidationError, match="order must be >= 1"):
-            validator.validate(system)
+            validator.validate(raise_on_error=True)
     
     def test_order_very_large_warning(self):
         """Test warning when order is unusually high"""
@@ -352,10 +417,13 @@ class TestDimensionValidation:
         system.order = 10  # Very high order
         system.parameters = {}
         
-        validator = SymbolicValidator()
+        validator = SymbolicValidator(system)
         
         with pytest.warns(UserWarning, match="order.*unusually high"):
-            validator.validate(system)
+            result = validator.validate(raise_on_error=False)
+        
+        assert result.is_valid
+        assert len(result.warnings) > 0
 
 
 # ============================================================================
@@ -373,10 +441,10 @@ class TestSymbolValidation:
         x = sp.symbols('x')
         system._f_sym = sp.Matrix([x + mystery])  # mystery not defined!
         
-        validator = SymbolicValidator()
+        validator = SymbolicValidator(system)
         
         with pytest.raises(ValidationError, match="undefined symbols"):
-            validator.validate(system)
+            validator.validate(raise_on_error=True)
     
     def test_f_sym_no_state_dependency_warning(self):
         """Test warning when dynamics don't depend on states"""
@@ -388,10 +456,13 @@ class TestSymbolValidation:
         system._f_sym = sp.Matrix([u])  # Only depends on control!
         system.parameters = {}  # No parameters needed
         
-        validator = SymbolicValidator()
+        validator = SymbolicValidator(system)
         
         with pytest.warns(UserWarning, match="does not depend on any state"):
-            validator.validate(system)
+            result = validator.validate(raise_on_error=False)
+        
+        assert result.is_valid
+        assert len(result.warnings) > 0
     
     def test_h_sym_contains_control(self):
         """Test error when output depends on control"""
@@ -404,10 +475,10 @@ class TestSymbolValidation:
         system._h_sym = sp.Matrix([x + u])  # Depends on control!
         system.parameters = {}
         
-        validator = SymbolicValidator()
+        validator = SymbolicValidator(system)
         
         with pytest.raises(ValidationError, match="_h_sym contains control"):
-            validator.validate(system)
+            validator.validate(raise_on_error=True)
     
     def test_h_sym_undefined_symbol(self):
         """Test error when _h_sym contains undefined symbol"""
@@ -416,10 +487,10 @@ class TestSymbolValidation:
         mystery = sp.symbols('mystery')
         system._h_sym = sp.Matrix([x + mystery])
         
-        validator = SymbolicValidator()
+        validator = SymbolicValidator(system)
         
         with pytest.raises(ValidationError, match="_h_sym contains undefined symbols"):
-            validator.validate(system)
+            validator.validate(raise_on_error=True)
 
 
 # ============================================================================
@@ -436,10 +507,13 @@ class TestParameterValidation:
         unused = sp.symbols('unused')
         system.parameters[unused] = 5.0  # Not used in _f_sym
         
-        validator = SymbolicValidator()
+        validator = SymbolicValidator(system)
         
         with pytest.warns(UserWarning, match="defined but not used"):
-            validator.validate(system)
+            result = validator.validate(raise_on_error=False)
+        
+        assert result.is_valid
+        assert len(result.warnings) > 0
     
     def test_parameter_used_in_h_sym_no_warning(self):
         """Test no warning when parameter is used in _h_sym"""
@@ -453,10 +527,10 @@ class TestParameterValidation:
         system._h_sym = sp.Matrix([b * x])      # Uses 'b'
         system.parameters = {a: 1.0, b: 2.0}
         
-        validator = SymbolicValidator()
+        validator = SymbolicValidator(system)
         
-        # Should not raise or warn (both parameters are used)
-        validator.validate(system)
+        result = validator.validate(raise_on_error=False)
+        assert result.is_valid
 
 
 # ============================================================================
@@ -478,10 +552,10 @@ class TestPhysicalConstraints:
         system._f_sym = sp.Matrix([a * x + u])
         system.parameters = {a: np.nan}
         
-        validator = SymbolicValidator()
+        validator = SymbolicValidator(system)
         
         with pytest.raises(ValidationError, match="non-finite value"):
-            validator.validate(system)
+            validator.validate(raise_on_error=True)
     
     def test_inf_parameter(self):
         """Test error for infinite parameter"""
@@ -494,10 +568,10 @@ class TestPhysicalConstraints:
         system._f_sym = sp.Matrix([a * x + u])
         system.parameters = {a: np.inf}
         
-        validator = SymbolicValidator()
+        validator = SymbolicValidator(system)
         
         with pytest.raises(ValidationError, match="non-finite value"):
-            validator.validate(system)
+            validator.validate(raise_on_error=True)
     
     def test_very_small_parameter_warning(self):
         """Test warning for very small parameters"""
@@ -510,10 +584,13 @@ class TestPhysicalConstraints:
         system._f_sym = sp.Matrix([a * x + u])
         system.parameters = {a: 1e-15}
         
-        validator = SymbolicValidator()
+        validator = SymbolicValidator(system)
         
         with pytest.warns(UserWarning, match="very small"):
-            validator.validate(system)
+            result = validator.validate(raise_on_error=False)
+        
+        assert result.is_valid
+        assert len(result.warnings) > 0
     
     def test_very_large_parameter_warning(self):
         """Test warning for very large parameters"""
@@ -526,10 +603,12 @@ class TestPhysicalConstraints:
         system._f_sym = sp.Matrix([a * x + u])
         system.parameters = {a: 1e15}
         
-        validator = SymbolicValidator()
+        validator = SymbolicValidator(system)
         
         with pytest.warns(UserWarning, match="very large"):
-            validator.validate(system)
+            result = validator.validate(raise_on_error=False)
+        
+        assert result.is_valid
 
 
 # ============================================================================
@@ -550,10 +629,10 @@ class TestNamingConventions:
         system.state_vars = [x1, x2]
         system.control_vars = [u]
         
-        validator = SymbolicValidator()
+        validator = SymbolicValidator(system)
         
         with pytest.raises(ValidationError, match="Duplicate variable names"):
-            validator.validate(system)
+            validator.validate(raise_on_error=True)
     
     def test_second_order_bad_naming_warning(self):
         """Test warning for second-order system with poor naming"""
@@ -568,74 +647,106 @@ class TestNamingConventions:
         system.parameters = {k: 10.0, c: 0.5}
         system.order = 2
         
-        validator = SymbolicValidator()
+        validator = SymbolicValidator(system)
         
         with pytest.warns(UserWarning, match="don't follow.*pattern"):
-            validator.validate(system)
+            result = validator.validate(raise_on_error=False)
+        
+        assert result.is_valid
     
     def test_second_order_good_naming_no_warning(self):
         """Test no warning for properly named second-order system"""
         system = MockSecondOrderSystem()
         # Already uses q, q_dot naming
         
-        validator = SymbolicValidator()
+        validator = SymbolicValidator(system)
         
-        # Should not warn
-        validator.validate(system)
+        result = validator.validate(raise_on_error=False)
+        assert result.is_valid
 
 
 # ============================================================================
-# Test Class 8: Check Method
+# Test Class 8: ValidationResult Return
 # ============================================================================
 
 
-class TestCheckMethod:
-    """Test non-raising check method"""
+class TestValidationResultReturn:
+    """Test ValidationResult return values"""
     
-    def test_check_valid_system(self):
-        """Test check method on valid system"""
+    def test_result_structure_valid(self):
+        """Test ValidationResult structure for valid system"""
         system = MockValidSystem()
-        validator = SymbolicValidator(strict=False)
+        validator = SymbolicValidator(system)
         
-        is_valid, errors, warnings = validator.check(system)
+        result = validator.validate(raise_on_error=False)
         
-        assert is_valid is True
-        assert len(errors) == 0
-        assert len(warnings) == 0
+        assert isinstance(result, ValidationResult)
+        assert result.is_valid
+        assert isinstance(result.errors, list)
+        assert isinstance(result.warnings, list)
+        assert isinstance(result.info, dict)
+        assert len(result.errors) == 0
     
-    def test_check_invalid_system(self):
-        """Test check method on invalid system"""
+    def test_result_structure_invalid(self):
+        """Test ValidationResult structure for invalid system"""
         system = MockValidSystem()
-        system.state_vars = []  # Invalid!
+        system.state_vars = []  # Invalid
         
-        validator = SymbolicValidator(strict=False)
+        validator = SymbolicValidator(system)
+        result = validator.validate(raise_on_error=False)
         
-        is_valid, errors, warnings = validator.check(system)
-        
-        assert is_valid is False
-        assert len(errors) > 0
-        assert "state_vars is empty" in errors[0]
+        assert isinstance(result, ValidationResult)
+        assert not result.is_valid
+        assert len(result.errors) > 0
     
-    def test_check_with_warnings(self):
-        """Test check method captures warnings"""
+    def test_result_info_contains_dimensions(self):
+        """Test that info contains dimension information"""
         system = MockValidSystem()
-        # Create a system with warnings but no errors
-        x_vars = [sp.symbols(f'x{i}') for i in range(10)]
-        u = sp.symbols('u')
+        validator = SymbolicValidator(system)
         
-        system.state_vars = x_vars
+        result = validator.validate(raise_on_error=False)
+        
+        assert 'nx' in result.info
+        assert 'nu' in result.info
+        assert result.info['nx'] == 1
+        assert result.info['nu'] == 1
+    
+    def test_result_info_contains_order(self):
+        """Test that info contains order"""
+        system = MockSecondOrderSystem()
+        validator = SymbolicValidator(system)
+        
+        result = validator.validate(raise_on_error=False)
+        
+        assert 'order' in result.info
+        assert result.info['order'] == 2
+    
+    def test_result_info_linearity(self):
+        """Test that info contains linearity flag"""
+        system = MockValidSystem()
+        validator = SymbolicValidator(system)
+        
+        result = validator.validate(raise_on_error=False)
+        
+        assert 'is_linear' in result.info
+        # -a*x + u is linear
+        assert result.info['is_linear'] is True
+    
+    def test_result_info_nonlinear(self):
+        """Test linearity detection for nonlinear system"""
+        system = MockValidSystem()
+        x, u = sp.symbols('x u')
+        a = sp.symbols('a')
+        
+        system.state_vars = [x]
         system.control_vars = [u]
-        system._f_sym = sp.Matrix([u])  # Only 1 row for order=10
-        system.order = 10  # Warning: unusually high
-        system.parameters = {}
+        system._f_sym = sp.Matrix([a * x**2 + u])  # Nonlinear
+        system.parameters = {a: 1.0}
         
-        validator = SymbolicValidator(strict=False)
+        validator = SymbolicValidator(system)
+        result = validator.validate(raise_on_error=False)
         
-        is_valid, errors, warnings = validator.check(system)
-        
-        assert is_valid is True  # No errors, only warnings
-        assert len(errors) == 0
-        assert len(warnings) > 0
+        assert result.info['is_linear'] is False
 
 
 # ============================================================================
@@ -650,8 +761,15 @@ class TestStaticMethod:
         """Test static method on valid system"""
         system = MockValidSystem()
         
-        # Should not raise
-        assert SymbolicValidator.validate_system(system) is True
+        result = SymbolicValidator.validate_system(system, raise_on_error=False)
+        assert result.is_valid
+    
+    def test_static_validate_valid_with_raise(self):
+        """Test static method with raise_on_error=True"""
+        system = MockValidSystem()
+        
+        result = SymbolicValidator.validate_system(system, raise_on_error=True)
+        assert result.is_valid
     
     def test_static_validate_invalid(self):
         """Test static method on invalid system"""
@@ -659,7 +777,15 @@ class TestStaticMethod:
         system.state_vars = []
         
         with pytest.raises(ValidationError):
-            SymbolicValidator.validate_system(system)
+            SymbolicValidator.validate_system(system, raise_on_error=True)
+    
+    def test_static_validate_invalid_no_raise(self):
+        """Test static method returns result without raising"""
+        system = MockValidSystem()
+        system.state_vars = []
+        
+        result = SymbolicValidator.validate_system(system, raise_on_error=False)
+        assert not result.is_valid
 
 
 # ============================================================================
@@ -672,21 +798,22 @@ class TestStringRepresentations:
     
     def test_repr(self):
         """Test __repr__ output"""
-        validator = SymbolicValidator(strict=True)
+        system = MockValidSystem()
+        validator = SymbolicValidator(system)
         
         repr_str = repr(validator)
         
         assert 'SymbolicValidator' in repr_str
-        assert 'strict=True' in repr_str
+        assert 'MockValidSystem' in repr_str
     
     def test_str(self):
         """Test __str__ output"""
-        validator = SymbolicValidator(strict=False)
+        system = MockValidSystem()
+        validator = SymbolicValidator(system)
         
         str_repr = str(validator)
         
         assert 'SymbolicValidator' in str_repr
-        assert 'strict=False' in str_repr
 
 
 # ============================================================================
@@ -706,11 +833,28 @@ class TestIntegration:
         system._f_sym = [1, 2, 3]  # Error 2: not a Matrix
         system.parameters = {'a': 1.0}  # Error 3: string key
         
-        validator = SymbolicValidator(strict=False)
-        is_valid, errors, warnings = validator.check(system)
+        validator = SymbolicValidator(system)
+        result = validator.validate(raise_on_error=False)
         
-        assert is_valid is False
-        assert len(errors) >= 3
+        assert not result.is_valid
+        assert len(result.errors) >= 3
+    
+    def test_multiple_warnings(self):
+        """Test system with multiple warnings"""
+        system = MockValidSystem()
+        x, u = sp.symbols('x u')
+        a, b = sp.symbols('a b')
+        
+        system.state_vars = [x]
+        system.control_vars = [u]
+        system._f_sym = sp.Matrix([u])  # Warning 1: no state dependency
+        system.parameters = {a: 1e-15, b: 1e15}  # Warning 2,3: extreme values
+        
+        validator = SymbolicValidator(system)
+        result = validator.validate(raise_on_error=False)
+        
+        assert result.is_valid  # Valid despite warnings
+        assert len(result.warnings) >= 2
     
     def test_complex_valid_system(self):
         """Test complex but valid system"""
@@ -728,10 +872,70 @@ class TestIntegration:
         system.parameters = {m: 1.0, k: 10.0, c: 0.5}
         system.order = 1
         
-        validator = SymbolicValidator()
+        validator = SymbolicValidator(system)
         
-        # Should pass all validations
-        assert validator.validate(system) is True
+        result = validator.validate(raise_on_error=False)
+        assert result.is_valid
+        assert len(result.errors) == 0
+    
+    def test_full_workflow_with_output(self):
+        """Test system with output equation"""
+        x1, x2 = sp.symbols('x1 x2', real=True)
+        u = sp.symbols('u', real=True)
+        y = sp.symbols('y', real=True)
+        a = sp.symbols('a', real=True, positive=True)
+        
+        system = MockValidSystem()
+        system.state_vars = [x1, x2]
+        system.control_vars = [u]
+        system.output_vars = [y]
+        system._f_sym = sp.Matrix([x2, -a * x1 + u])
+        system._h_sym = sp.Matrix([x1])  # Output is first state
+        system.parameters = {a: 1.0}
+        system.order = 1
+        
+        validator = SymbolicValidator(system)
+        result = validator.validate(raise_on_error=False)
+        
+        assert result.is_valid
+        assert result.info['has_output']
+        assert result.info['ny'] == 1
+
+
+# ============================================================================
+# Test Class 12: Error Message Formatting
+# ============================================================================
+
+
+class TestErrorMessageFormatting:
+    """Test error message formatting"""
+    
+    def test_error_message_contains_errors(self):
+        """Test that error message contains all errors"""
+        system = MockValidSystem()
+        system.state_vars = []
+        
+        validator = SymbolicValidator(system)
+        
+        try:
+            validator.validate(raise_on_error=True)
+        except ValidationError as e:
+            error_msg = str(e)
+            assert "state_vars is empty" in error_msg
+            assert "validation failed" in error_msg.lower()
+    
+    def test_error_message_contains_common_fixes(self):
+        """Test that error message includes common fixes"""
+        system = MockValidSystem()
+        system.parameters = {'a': 1.0}  # String key
+        
+        validator = SymbolicValidator(system)
+        
+        try:
+            validator.validate(raise_on_error=True)
+        except ValidationError as e:
+            error_msg = str(e)
+            assert "COMMON FIXES" in error_msg
 
 
 # ============================================================================

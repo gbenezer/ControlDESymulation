@@ -165,39 +165,7 @@ class DiffusionHandler:
     def generate_function(self, backend: str, **kwargs) -> Callable:
         """
         Generate g(x, u) function for specified backend.
-
-        Uses caching - if already generated, returns cached version.
-        Mirrors CodeGenerator.generate_dynamics() API.
-
-        Parameters
-        ----------
-        backend : str
-            Target backend ('numpy', 'torch', 'jax')
-        **kwargs
-            Backend-specific options:
-            - jit : bool (JAX only) - Whether to JIT compile
-
-        Returns
-        -------
-        Callable
-            Function with signature:
-            - g(x1, x2, ..., xn, u1, u2, ..., um) → diffusion matrix
-
-            Returns diffusion matrix as 2D array, shape (nx, nw)
-
-        Examples
-        --------
-        >>> g_numpy = handler.generate_function('numpy')
-        >>>
-        >>> # Call with unpacked scalars
-        >>> import numpy as np
-        >>> x_vals = [1.0, 0.5]  # x1=1.0, x2=0.5
-        >>> u_vals = [0.0]       # u=0.0
-        >>> g_matrix = g_numpy(*x_vals, *u_vals)
-        >>> print(g_matrix.shape)  # (2, 1)
-        >>>
-        >>> # JAX with JIT
-        >>> g_jax = handler.generate_function('jax', jit=True)
+        ...
         """
         start_time = time.time()
 
@@ -220,14 +188,16 @@ class DiffusionHandler:
             all_vars = [self.time_var] + all_vars
 
         # ✅ REUSE: Use codegen_utils.generate_function()
-        # This is the SAME function used by CodeGenerator for drift!
-        func = generate_function(
+        base_func = generate_function(
             expr=diffusion_with_params, symbols=all_vars, backend=backend, **kwargs
         )
 
         # Verify callable (mirrors CodeGenerator)
-        if not callable(func):
-            raise RuntimeError(f"generate_function returned non-callable: {type(func)}")
+        if not callable(base_func):
+            raise RuntimeError(f"generate_function returned non-callable: {type(base_func)}")
+
+        # Wrap to ensure 2D output
+        func = self._wrap_to_ensure_2d(base_func, backend)
 
         # Cache it (mirrors CodeGenerator)
         self._diffusion_funcs[backend] = func
@@ -238,6 +208,50 @@ class DiffusionHandler:
         self._generation_stats["total_time"] += elapsed
 
         return func
+
+    def _wrap_to_ensure_2d(self, func: Callable, backend: str) -> Callable:
+        """
+        Wrap function to ensure output is always 2D with shape (nx, nw).
+        
+        The underlying generate_function() may return 1D arrays for matrices,
+        so we reshape to ensure consistent 2D output.
+        """
+        if backend == "numpy":
+            def wrapped(*args):
+                result = func(*args)
+                result = np.atleast_2d(result)
+                # Ensure correct shape (nx, nw)
+                if result.shape != (self.nx, self.nw):
+                    result = result.reshape(self.nx, self.nw)
+                return result
+            return wrapped
+        
+        elif backend == "torch":
+            def wrapped(*args):
+                import torch
+                result = func(*args)
+                # Ensure 2D
+                if result.dim() == 1:
+                    result = result.reshape(self.nx, self.nw)
+                elif result.dim() == 0:
+                    result = result.reshape(1, 1)
+                return result
+            return wrapped
+        
+        elif backend == "jax":
+            def wrapped(*args):
+                import jax.numpy as jnp
+                result = func(*args)
+                # Ensure 2D
+                if result.ndim == 1:
+                    result = result.reshape(self.nx, self.nw)
+                elif result.ndim == 0:
+                    result = result.reshape(1, 1)
+                return result
+            return wrapped
+        
+        else:
+            raise ValueError(f"Unknown backend: {backend}")
 
     def get_function(self, backend: str) -> Optional[Callable]:
         """

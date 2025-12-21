@@ -16,6 +16,7 @@ This class is completely standalone and can validate any object with
 symbolic system attributes.
 """
 
+from dataclasses import dataclass
 from typing import List, Dict, Tuple, Optional, TYPE_CHECKING
 import warnings
 import sympy as sp
@@ -25,9 +26,46 @@ if TYPE_CHECKING:
     from src.systems.base.symbolic_dynamical_system import SymbolicDynamicalSystem
 
 
+# ============================================================================
+# Exceptions
+# ============================================================================
+
+
 class ValidationError(ValueError):
     """Raised when system validation fails"""
     pass
+
+
+# ============================================================================
+# Validation Result Container
+# ============================================================================
+
+
+@dataclass
+class ValidationResult:
+    """
+    Container for validation results.
+    
+    Attributes
+    ----------
+    is_valid : bool
+        True if system passed all validation checks
+    errors : List[str]
+        List of validation errors (empty if valid)
+    warnings : List[str]
+        List of validation warnings (non-fatal issues)
+    info : Dict
+        Additional information about the validated system
+    """
+    is_valid: bool
+    errors: List[str]
+    warnings: List[str]
+    info: Dict
+
+
+# ============================================================================
+# Symbolic Validator
+# ============================================================================
 
 
 class SymbolicValidator:
@@ -37,23 +75,33 @@ class SymbolicValidator:
     Performs comprehensive validation of symbolic system components including
     variable definitions, dimensions, symbolic expressions, and parameter values.
     
-    Example:
-        >>> validator = SymbolicValidator()
-        >>> validator.validate(system)  # Raises ValidationError if invalid
-        >>> 
-        >>> # Or check without raising
-        >>> is_valid, errors, warnings = validator.check(system)
+    Examples
+    --------
+    >>> validator = SymbolicValidator(system)
+    >>> result = validator.validate()
+    >>> 
+    >>> if result.is_valid:
+    ...     print("System is valid!")
+    ... else:
+    ...     print(f"Errors: {result.errors}")
+    >>>
+    >>> # Raise exception on error
+    >>> try:
+    ...     result = validator.validate(raise_on_error=True)
+    ... except ValidationError as e:
+    ...     print(f"Validation failed: {e}")
     """
     
-    def __init__(self, strict: bool = True):
+    def __init__(self, system: 'SymbolicDynamicalSystem'):
         """
-        Initialize validator.
+        Initialize validator with system to validate.
         
-        Args:
-            strict: If True, raise exception on validation failure.
-                   If False, return errors without raising.
+        Parameters
+        ----------
+        system : SymbolicDynamicalSystem
+            System to validate
         """
-        self.strict = strict
+        self.system = system
         self._errors: List[str] = []
         self._warnings: List[str] = []
     
@@ -61,83 +109,86 @@ class SymbolicValidator:
     # Public API
     # ========================================================================
     
-    def validate(self, system: 'SymbolicDynamicalSystem') -> bool:
+    def validate(self, raise_on_error: bool = True) -> ValidationResult:
         """
-        Validate system definition and raise exception if invalid.
+        Validate system definition.
         
-        Args:
-            system: System to validate
+        Parameters
+        ----------
+        raise_on_error : bool
+            If True, raise ValidationError on validation failure
+            If False, return ValidationResult with errors
             
-        Returns:
-            True if valid
+        Returns
+        -------
+        ValidationResult
+            Validation results with errors, warnings, and info
             
-        Raises:
-            ValidationError: If system is invalid (with detailed error messages)
+        Raises
+        ------
+        ValidationError
+            If validation fails and raise_on_error=True
             
-        Example:
-            >>> validator = SymbolicValidator()
-            >>> try:
-            >>>     validator.validate(system)
-            >>>     print("System is valid!")
-            >>> except ValidationError as e:
-            >>>     print(f"Validation failed: {e}")
+        Examples
+        --------
+        >>> result = validator.validate(raise_on_error=False)
+        >>> if not result.is_valid:
+        ...     for error in result.errors:
+        ...         print(f"Error: {error}")
+        >>>
+        >>> # Or raise on error
+        >>> try:
+        ...     validator.validate(raise_on_error=True)
+        ... except ValidationError as e:
+        ...     print(f"Validation failed: {e}")
         """
-        is_valid, errors, warnings_list = self.check(system)
-        
-        # Issue warnings
-        if warnings_list:
-            self._issue_warnings(warnings_list)
-        
-        # Raise if invalid
-        if not is_valid:
-            raise ValidationError(self._format_error_message(errors))
-        
-        return True
-    
-    def check(self, system: 'SymbolicDynamicalSystem') -> Tuple[bool, List[str], List[str]]:
-        """
-        Check system validity without raising exceptions.
-        
-        Args:
-            system: System to check
-            
-        Returns:
-            Tuple of (is_valid, errors, warnings)
-            
-        Example:
-            >>> validator = SymbolicValidator(strict=False)
-            >>> is_valid, errors, warnings = validator.check(system)
-            >>> if not is_valid:
-            >>>     for error in errors:
-            >>>         print(f"Error: {error}")
-        """
+        # Reset state
         self._errors = []
         self._warnings = []
         
         # Run all validation checks
         # CRITICAL: Check required attributes and types FIRST
         # If these fail, skip checks that would try to USE the invalid data
-        self._validate_required_attributes(system)
-        self._validate_types(system)
+        self._validate_required_attributes()
+        self._validate_types()
         
         # Only continue with deeper checks if basics pass
         if len(self._errors) == 0:
-            self._validate_dimensions(system)
-            self._validate_symbols(system)
-            self._validate_parameters(system)
-            self._validate_physical_constraints(system)
-            self._validate_naming_conventions(system)
-            self._check_usage_patterns(system)
+            self._validate_dimensions()
+            self._validate_symbols()
+            self._validate_parameters()
+            self._validate_physical_constraints()
+            self._validate_naming_conventions()
+            self._check_usage_patterns()
         
+        # Determine validity
         is_valid = len(self._errors) == 0
-        return is_valid, self._errors.copy(), self._warnings.copy()
+        
+        # Build result
+        result = ValidationResult(
+            is_valid=is_valid,
+            errors=self._errors.copy(),
+            warnings=self._warnings.copy(),
+            info=self._build_info(),
+        )
+        
+        # Issue warnings (even if valid)
+        if result.warnings:
+            self._issue_warnings(result.warnings)
+        
+        # Raise if requested and invalid
+        if not is_valid and raise_on_error:
+            raise ValidationError(self._format_error_message())
+        
+        return result
     
     # ========================================================================
     # Validation Checks
     # ========================================================================
     
-    def _validate_required_attributes(self, system: 'SymbolicDynamicalSystem'):
+    def _validate_required_attributes(self):
         """Check that all required attributes are present and non-empty"""
+        system = self.system
         
         # Check state_vars exists and is not empty
         if not hasattr(system, 'state_vars'):
@@ -165,8 +216,9 @@ class SymbolicValidator:
         if not hasattr(system, 'order'):
             self._errors.append("Missing required attribute 'order'")
     
-    def _validate_types(self, system: 'SymbolicDynamicalSystem'):
+    def _validate_types(self):
         """Check that all attributes have correct types"""
+        system = self.system
         
         # Check state_vars contains only Symbols
         if hasattr(system, 'state_vars') and system.state_vars:
@@ -232,8 +284,9 @@ class SymbolicValidator:
                     f"order must be int, got {type(system.order).__name__}"
                 )
     
-    def _validate_dimensions(self, system: 'SymbolicDynamicalSystem'):
+    def _validate_dimensions(self):
         """Check dimensional consistency"""
+        system = self.system
         
         # Get dimensions (handle missing attributes gracefully)
         nx = len(system.state_vars) if hasattr(system, 'state_vars') else 0
@@ -297,8 +350,9 @@ class SymbolicValidator:
                     f"Are you sure this is correct? Most systems are order 1 or 2."
                 )
     
-    def _validate_symbols(self, system: 'SymbolicDynamicalSystem'):
+    def _validate_symbols(self):
         """Validate symbolic expressions"""
+        system = self.system
         
         # Only proceed if we have all required components AND they passed type checks
         if not (hasattr(system, 'state_vars') and hasattr(system, 'control_vars') 
@@ -376,8 +430,9 @@ class SymbolicValidator:
                         f"Output can only use state_vars and parameters."
                     )
     
-    def _validate_parameters(self, system: 'SymbolicDynamicalSystem'):
+    def _validate_parameters(self):
         """Validate parameter definitions and usage"""
+        system = self.system
         
         if not hasattr(system, 'parameters'):
             return
@@ -403,8 +458,9 @@ class SymbolicValidator:
                     f"Consider removing them or checking for typos."
                 )
     
-    def _validate_physical_constraints(self, system: 'SymbolicDynamicalSystem'):
+    def _validate_physical_constraints(self):
         """Validate physical constraints on parameter values"""
+        system = self.system
         
         if not hasattr(system, 'parameters') or not system.parameters:
             return
@@ -441,25 +497,31 @@ class SymbolicValidator:
                     f"Consider rescaling for numerical stability."
                 )
     
-    def _validate_naming_conventions(self, system: 'SymbolicDynamicalSystem'):
+    def _validate_naming_conventions(self):
         """Validate naming conventions and check for duplicates"""
+        system = self.system
         
         if not (hasattr(system, 'state_vars') and hasattr(system, 'control_vars')):
             return
         
-        # Only check if variables are actually Symbols (otherwise type validation handles it)
-        if system.state_vars and not all(isinstance(v, sp.Symbol) for v in system.state_vars):
-            return
-        if system.control_vars and not all(isinstance(v, sp.Symbol) for v in system.control_vars):
-            return
+        # CRITICAL: Only check if ALL variables are actually Symbols
+        # Otherwise type validation handles it, and str(var) might fail
+        if system.state_vars:
+            if not all(isinstance(v, sp.Symbol) for v in system.state_vars):
+                return
         
-        # Collect all variable names
+        if system.control_vars:
+            if not all(isinstance(v, sp.Symbol) for v in system.control_vars):
+                return
+        
+        # Collect all variable names (safe now - all are Symbols)
         all_vars = []
         if system.state_vars:
             all_vars.extend(system.state_vars)
         if system.control_vars:
             all_vars.extend(system.control_vars)
         if hasattr(system, 'output_vars') and system.output_vars:
+            # Check output_vars too before using them
             if all(isinstance(v, sp.Symbol) for v in system.output_vars):
                 all_vars.extend(system.output_vars)
         
@@ -493,8 +555,9 @@ class SymbolicValidator:
                         f"Consider naming derivatives with '_dot' suffix for clarity."
                     )
     
-    def _check_usage_patterns(self, system: 'SymbolicDynamicalSystem'):
+    def _check_usage_patterns(self):
         """Check for unusual usage patterns (warnings only)"""
+        system = self.system
         
         # Check if dynamics are linear or nonlinear
         if (hasattr(system, '_f_sym') and system._f_sym is not None 
@@ -505,14 +568,79 @@ class SymbolicValidator:
                 is_linear = True
                 for expr in system._f_sym:
                     for state in system.state_vars:
-                        if sp.degree(expr, state) > 1:
+                        try:
+                            if sp.degree(expr, state) > 1:
+                                is_linear = False
+                                break
+                        except Exception: 
+                            # Transcendental functions or non-polynomial terms
                             is_linear = False
                             break
                     if not is_linear:
                         break
-                
-                # Just informational, not a warning
-                # Could be exposed via a property later
+    
+    # ========================================================================
+    # Info Building
+    # ========================================================================
+    
+    def _build_info(self) -> Dict:
+        """Build info dictionary with system characteristics."""
+        system = self.system
+        info = {}
+        
+        # Basic dimensions - ALWAYS include these (safe operations)
+        try:
+            if hasattr(system, 'state_vars') and system.state_vars:
+                info['nx'] = len(system.state_vars)
+            
+            if hasattr(system, 'control_vars') and system.control_vars:
+                info['nu'] = len(system.control_vars)
+            
+            if hasattr(system, 'output_vars') and system.output_vars:
+                info['ny'] = len(system.output_vars)
+            
+            if hasattr(system, 'parameters') and system.parameters:
+                info['num_parameters'] = len(system.parameters)
+            
+            if hasattr(system, 'order'):
+                info['order'] = system.order
+        except Exception:
+            # If even basic info gathering fails, return what we have
+            pass
+        
+        # System characteristics - only if expressions are valid
+        try:
+            if hasattr(system, '_f_sym') and system._f_sym is not None:
+                if isinstance(system._f_sym, sp.Matrix):
+                    info['has_dynamics'] = True
+                    
+                    # Check linearity only if state_vars are valid Symbols
+                    if hasattr(system, 'state_vars') and system.state_vars:
+                        # GUARD: Verify all are Symbols before checking linearity
+                        if all(isinstance(v, sp.Symbol) for v in system.state_vars):
+                            # Check if system is linear (useful info)
+                            is_linear = True
+                            for expr in system._f_sym:
+                                for state in system.state_vars:
+                                    try:
+                                        if sp.degree(expr, state) > 1:
+                                            is_linear = False
+                                            break
+                                    except Exception:
+                                        # Transcendental or non-polynomial terms
+                                        is_linear = False
+                                        break
+                                if not is_linear:
+                                    break
+                            info['is_linear'] = is_linear
+            
+            if hasattr(system, '_h_sym') and system._h_sym is not None:
+                info['has_output'] = True
+        except Exception:
+            # If characteristics gathering fails, return basic info
+            pass
+        
+        return info
     
     # ========================================================================
     # Helper Methods
@@ -523,10 +651,16 @@ class SymbolicValidator:
         for warning in warnings_list:
             warnings.warn(f"System validation warning: {warning}", UserWarning)
     
-    def _format_error_message(self, errors: List[str]) -> str:
+    def _format_error_message(self) -> str:
         """Format error messages in a readable way"""
-        msg = "System validation failed:\n"
-        msg += "\n".join(f"  • {error}" for error in errors)
+        msg = "System validation failed:\n\n"
+        msg += "Errors:\n"
+        msg += "\n".join(f"  • {error}" for error in self._errors)
+        
+        if self._warnings:
+            msg += "\n\nWarnings:\n"
+            msg += "\n".join(f"  • {warning}" for warning in self._warnings)
+        
         msg += "\n\n" + "=" * 70
         msg += "\nCOMMON FIXES:"
         msg += "\n  1. Use Symbol objects as parameter keys: {m: 1.0} not {'m': 1.0}"
@@ -542,29 +676,46 @@ class SymbolicValidator:
     # ========================================================================
     
     @staticmethod
-    def validate_system(system: 'SymbolicDynamicalSystem') -> bool:
+    def validate_system(
+        system: 'SymbolicDynamicalSystem',
+        raise_on_error: bool = True
+    ) -> ValidationResult:
         """
         Static convenience method for one-off validation.
         
-        Args:
-            system: System to validate
+        Parameters
+        ----------
+        system : SymbolicDynamicalSystem
+            System to validate
+        raise_on_error : bool
+            If True, raise ValidationError on failure
             
-        Returns:
-            True if valid
+        Returns
+        -------
+        ValidationResult
+            Validation results
             
-        Raises:
-            ValidationError: If invalid
+        Raises
+        ------
+        ValidationError
+            If invalid and raise_on_error=True
             
-        Example:
-            >>> SymbolicValidator.validate_system(my_system)
+        Examples
+        --------
+        >>> result = SymbolicValidator.validate_system(my_system)
+        >>> 
+        >>> # Or without raising
+        >>> result = SymbolicValidator.validate_system(
+        ...     my_system, raise_on_error=False
+        ... )
         """
-        validator = SymbolicValidator(strict=True)
-        return validator.validate(system)
+        validator = SymbolicValidator(system)
+        return validator.validate(raise_on_error=raise_on_error)
     
     def __repr__(self) -> str:
         """String representation"""
-        return f"SymbolicValidator(strict={self.strict})"
+        return f"SymbolicValidator(system={type(self.system).__name__})"
     
     def __str__(self) -> str:
         """Human-readable string"""
-        return f"SymbolicValidator(strict={self.strict})"
+        return f"SymbolicValidator(system={type(self.system).__name__})"

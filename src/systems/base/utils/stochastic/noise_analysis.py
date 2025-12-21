@@ -18,7 +18,7 @@ Reuses: Nothing (self-contained SymPy analysis)
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Optional, Set
+from typing import List, Optional, Set, Dict
 import sympy as sp
 
 
@@ -338,8 +338,8 @@ class NoiseCharacterizer:
         1. Additive (most specialized)
         2. Scalar (single noise source)
         3. Diagonal (independent sources)
-        4. Multiplicative (state-dependent)
-        5. General (fallback)
+        4. General (fully coupled multiplicative)
+        5. Multiplicative (fallback for state-dependent)
         """
         if is_additive:
             return NoiseType.ADDITIVE
@@ -347,6 +347,9 @@ class NoiseCharacterizer:
             return NoiseType.SCALAR
         elif is_diagonal:
             return NoiseType.DIAGONAL
+        elif is_multiplicative and not is_diagonal and not is_scalar:
+            # Multiplicative with coupling -> GENERAL
+            return NoiseType.GENERAL
         elif is_multiplicative:
             return NoiseType.MULTIPLICATIVE
         else:
