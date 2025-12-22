@@ -6,6 +6,7 @@ based on backend, method, and requirements. Simplifies integrator selection
 and configuration.
 
 Now includes support for Julia's DifferentialEquations.jl via DiffEqPy!
+Supports both controlled and autonomous systems (nu=0).
 
 Examples
 --------
@@ -20,6 +21,14 @@ Examples
 >>> # Julia DiffEqPy solver
 >>> integrator = IntegratorFactory.create(
 ...     system, backend='numpy', method='Tsit5'
+... )
+>>>
+>>> # Autonomous system
+>>> integrator = IntegratorFactory.create(autonomous_system, backend='jax')
+>>> result = integrator.integrate(
+...     x0=jnp.array([1.0, 0.0]),
+...     u_func=lambda t, x: None,  # No control
+...     t_span=(0.0, 10.0)
 ... )
 >>>
 >>> # Quick helpers
@@ -67,6 +76,8 @@ class IntegratorFactory:
     - TorchDiffEq (torch): dopri5, dopri8, etc.
     - Diffrax (jax): tsit5, dopri5, etc.
     - Manual (any): euler, midpoint, rk4
+    
+    All integrators support autonomous systems (nu=0) by passing u=None.
 
     Examples
     --------
@@ -178,7 +189,7 @@ class IntegratorFactory:
         Parameters
         ----------
         system : SymbolicDynamicalSystem
-            System to integrate
+            System to integrate (controlled or autonomous)
         backend : str, optional
             Backend: 'numpy', 'torch', 'jax'. Default: 'numpy'
         method : Optional[str]
@@ -193,6 +204,7 @@ class IntegratorFactory:
             FIXED or ADAPTIVE stepping
         **options
             Additional integrator options (rtol, atol, etc.)
+            Note: For JAX backend, 'solver' in options will be treated as 'method'
 
         Returns
         -------
@@ -216,9 +228,13 @@ class IntegratorFactory:
         ...     system, backend='numpy', method='Tsit5'
         ... )
         >>>
-        >>> # Specify JAX method
+        >>> # Specify JAX method (both calling styles work)
         >>> integrator = IntegratorFactory.create(
         ...     system, backend='jax', method='dopri5'
+        ... )
+        >>> # OR
+        >>> integrator = IntegratorFactory.create(
+        ...     system, backend='jax', solver='dopri5'
         ... )
         >>>
         >>> # Fixed-step
@@ -229,7 +245,20 @@ class IntegratorFactory:
         ...     dt=0.01,
         ...     step_mode=StepMode.FIXED
         ... )
+        >>>
+        >>> # Autonomous system
+        >>> integrator = IntegratorFactory.create(autonomous_system)
+        >>> result = integrator.integrate(
+        ...     x0=np.array([1.0, 0.0]),
+        ...     u_func=lambda t, x: None,
+        ...     t_span=(0.0, 10.0)
+        ... )
         """
+        # Handle 'solver' parameter for JAX backend (backward compatibility)
+        # If user passes 'solver' instead of 'method', use it
+        if backend == 'jax' and 'solver' in options and method is None:
+            method = options.pop('solver')  # Remove from options to avoid duplicate
+        
         # Use default method if not specified
         if method is None:
             method = cls._BACKEND_DEFAULTS.get(backend, "LSODA")
@@ -422,10 +451,21 @@ class IntegratorFactory:
 
     @classmethod
     def _create_jax_integrator(cls, system, method: str, dt, step_mode, **options):
-        """Create JAX-based integrator - always use Diffrax."""
+        """
+        Create JAX-based integrator - always use Diffrax.
+        
+        Notes
+        -----
+        The 'solver' parameter is removed from options to avoid duplicate
+        keyword argument errors, as it's passed explicitly via the 'method' parameter.
+        This handles both calling styles:
+        - create(backend='jax', method='tsit5')  # Preferred
+        - create(backend='jax', solver='tsit5')  # Also works (handled in create())
+        """
         from src.systems.base.numerical_integration.diffrax_integrator import DiffraxIntegrator
         
-        # Remove 'solver' from options if present (avoid duplicate keyword argument)
+        # Remove 'solver' from options if present to avoid duplicate keyword argument
+        # This can happen if user calls create(backend='jax', solver='tsit5')
         options_clean = {k: v for k, v in options.items() if k != 'solver'}
         
         # Let Diffrax handle ALL methods, including euler/midpoint
@@ -434,8 +474,8 @@ class IntegratorFactory:
             dt=dt,
             step_mode=step_mode,
             backend='jax',
-            solver=method,  # Pass method as solver parameter
-            **options_clean  # Pass cleaned options without 'solver'
+            solver=method,  # Pass as explicit keyword argument
+            **options_clean  # Pass remaining options without 'solver'
         )
 
     # ========================================================================
@@ -457,7 +497,7 @@ class IntegratorFactory:
         Parameters
         ----------
         system : SymbolicDynamicalSystem
-            System to integrate
+            System to integrate (controlled or autonomous)
         prefer_backend : Optional[str]
             Preferred backend if available
         **options
@@ -472,6 +512,9 @@ class IntegratorFactory:
         --------
         >>> integrator = IntegratorFactory.auto(system)
         >>> integrator = IntegratorFactory.auto(system, prefer_backend='jax')
+        >>> 
+        >>> # Works with autonomous systems
+        >>> integrator = IntegratorFactory.auto(autonomous_system)
         """
         # Check backend availability
         backends_available = []
@@ -518,7 +561,7 @@ class IntegratorFactory:
         Parameters
         ----------
         system : SymbolicDynamicalSystem
-            System to integrate
+            System to integrate (controlled or autonomous)
         use_julia : bool
             If True, use Julia's AutoTsit5. Default: False (scipy)
         **options
@@ -540,6 +583,9 @@ class IntegratorFactory:
         >>> integrator = IntegratorFactory.for_production(
         ...     system, use_julia=True
         ... )
+        >>>
+        >>> # Autonomous system
+        >>> integrator = IntegratorFactory.for_production(autonomous_system)
         """
         if use_julia:
             try:
@@ -596,7 +642,7 @@ class IntegratorFactory:
         Parameters
         ----------
         system : SymbolicDynamicalSystem
-            System to integrate
+            System to integrate (controlled or autonomous)
         algorithm : str
             Julia algorithm name. Default: 'Tsit5'
             Options: Tsit5, Vern9, Rosenbrock23, AutoTsit5(Rosenbrock23()), etc.
@@ -636,6 +682,9 @@ class IntegratorFactory:
         ...     system,
         ...     algorithm='Rodas5'
         ... )
+        >>>
+        >>> # Autonomous system
+        >>> integrator = IntegratorFactory.for_julia(autonomous_system)
         """
         try:
             from src.systems.base.numerical_integration.diffeqpy_integrator import (
@@ -668,6 +717,26 @@ class IntegratorFactory:
         Create integrator for optimization/parameter estimation.
 
         Prioritizes gradient computation and JIT compilation.
+        
+        Parameters
+        ----------
+        system : SymbolicDynamicalSystem
+            System to integrate (controlled or autonomous)
+        prefer_backend : str
+            Preferred backend ('jax' or 'torch')
+        **options
+            Additional options
+            
+        Returns
+        -------
+        IntegratorBase
+            Integrator with gradient support
+            
+        Examples
+        --------
+        >>> integrator = IntegratorFactory.for_optimization(system)
+        >>> # Works with autonomous systems
+        >>> integrator = IntegratorFactory.for_optimization(autonomous_system)
         """
         # Try preferred backend first
         try:
@@ -805,7 +874,7 @@ class IntegratorFactory:
         Parameters
         ----------
         system : SymbolicDynamicalSystem
-            System to integrate
+            System to integrate (controlled or autonomous)
         dt : float
             Time step. Default: 0.01
         backend : str
@@ -823,6 +892,9 @@ class IntegratorFactory:
         >>> integrator = IntegratorFactory.for_simple_simulation(
         ...     system, dt=0.01
         ... )
+        >>> 
+        >>> # Autonomous system
+        >>> integrator = IntegratorFactory.for_simple_simulation(autonomous_system)
         """
         from src.systems.base.numerical_integration.fixed_step_integrators import RK4Integrator
 
@@ -840,7 +912,7 @@ class IntegratorFactory:
         Parameters
         ----------
         system : SymbolicDynamicalSystem
-            System to integrate
+            System to integrate (controlled or autonomous)
         dt : float
             Fixed time step (must match real-time clock)
         backend : str
@@ -1252,6 +1324,9 @@ def create_integrator(
     >>> integrator = create_integrator(system)
     >>> integrator = create_integrator(system, backend='jax', method='tsit5')
     >>> integrator = create_integrator(system, backend='numpy', method='Tsit5')  # Julia
+    >>> 
+    >>> # Autonomous system
+    >>> integrator = create_integrator(autonomous_system)
     """
     return IntegratorFactory.create(system, backend, method, **options)
 
@@ -1265,5 +1340,8 @@ def auto_integrator(system: "SymbolicDynamicalSystem", **options) -> IntegratorB
     Examples
     --------
     >>> integrator = auto_integrator(system, rtol=1e-8)
+    >>> 
+    >>> # Autonomous system
+    >>> integrator = auto_integrator(autonomous_system)
     """
     return IntegratorFactory.auto(system, **options)

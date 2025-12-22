@@ -4,6 +4,8 @@ Scipy Integrator - Adaptive Integration using scipy.integrate.solve_ivp
 Wraps scipy's professional-grade ODE solvers with adaptive time stepping,
 error control, and automatic stiffness detection.
 
+Supports both controlled and autonomous systems (nu=0).
+
 Supported Methods:
 - RK45: Explicit Runge-Kutta 5(4) - general purpose
 - RK23: Explicit Runge-Kutta 3(2) - low accuracy/fast
@@ -41,6 +43,7 @@ class ScipyIntegrator(IntegratorBase):
     - Dense output (interpolated solution)
     - Event detection
     - Stiff system support
+    - Supports both controlled and autonomous systems
     
     Available Methods:
     ------------------
@@ -77,7 +80,7 @@ class ScipyIntegrator(IntegratorBase):
     
     Examples
     --------
-    >>> # General-purpose adaptive integration
+    >>> # Controlled system - general-purpose adaptive integration
     >>> integrator = ScipyIntegrator(
     ...     system,
     ...     dt=0.01,  # Initial guess
@@ -92,6 +95,14 @@ class ScipyIntegrator(IntegratorBase):
     ...     t_span=(0.0, 10.0)
     ... )
     >>> print(f"Adaptive steps: {result.nsteps}")
+    >>> 
+    >>> # Autonomous system
+    >>> integrator = ScipyIntegrator(autonomous_system, method='RK45')
+    >>> result = integrator.integrate(
+    ...     x0=np.array([1.0, 0.0]),
+    ...     u_func=lambda t, x: None,  # No control
+    ...     t_span=(0.0, 10.0)
+    ... )
     >>> 
     >>> # Stiff system (automatic detection)
     >>> stiff_integrator = ScipyIntegrator(
@@ -123,7 +134,7 @@ class ScipyIntegrator(IntegratorBase):
         Parameters
         ----------
         system : SymbolicDynamicalSystem
-            System to integrate
+            System to integrate (controlled or autonomous)
         dt : Optional[float]
             Initial time step guess (not used for adaptive, but kept for API consistency)
         method : str
@@ -176,7 +187,7 @@ class ScipyIntegrator(IntegratorBase):
     def step(
         self,
         x: ArrayLike,
-        u: ArrayLike,
+        u: Optional[ArrayLike] = None,
         dt: Optional[float] = None
     ) -> ArrayLike:
         """
@@ -189,8 +200,8 @@ class ScipyIntegrator(IntegratorBase):
         ----------
         x : ArrayLike
             Current state
-        u : ArrayLike
-            Control input (assumed constant over step)
+        u : Optional[ArrayLike]
+            Control input (None for autonomous systems, assumed constant over step)
         dt : Optional[float]
             Step size (uses self.dt if None)
             
@@ -208,7 +219,7 @@ class ScipyIntegrator(IntegratorBase):
         dt = dt if dt is not None else self.dt
         
         # Use integrate for a single step
-        u_func = lambda t, x_cur: u
+        u_func = lambda t, x_cur: u  # May be None for autonomous
         
         result = self.integrate(
             x0=x,
@@ -224,7 +235,7 @@ class ScipyIntegrator(IntegratorBase):
     def integrate(
         self,
         x0: ArrayLike,
-        u_func: Callable[[float, ArrayLike], ArrayLike],
+        u_func: Callable[[float, ArrayLike], Optional[ArrayLike]],
         t_span: Tuple[float, float],
         t_eval: Optional[ArrayLike] = None,
         dense_output: bool = False,
@@ -237,8 +248,8 @@ class ScipyIntegrator(IntegratorBase):
         ----------
         x0 : ArrayLike
             Initial state (nx,)
-        u_func : Callable[[float, ArrayLike], ArrayLike]
-            Control policy (t, x) → u
+        u_func : Callable[[float, ArrayLike], Optional[ArrayLike]]
+            Control policy (t, x) → u (or None for autonomous systems)
         t_span : Tuple[float, float]
             Integration interval (t_start, t_end)
         t_eval : Optional[ArrayLike]
@@ -256,13 +267,20 @@ class ScipyIntegrator(IntegratorBase):
             
         Examples
         --------
-        >>> # Let solver choose time points
+        >>> # Controlled system - let solver choose time points
         >>> result = integrator.integrate(
         ...     x0=np.array([1.0, 0.0]),
         ...     u_func=lambda t, x: -K @ x,
         ...     t_span=(0.0, 10.0)
         ... )
         >>> # result.t has variable spacing (adaptive!)
+        >>> 
+        >>> # Autonomous system
+        >>> result = integrator.integrate(
+        ...     x0=np.array([1.0, 0.0]),
+        ...     u_func=lambda t, x: None,
+        ...     t_span=(0.0, 10.0)
+        ... )
         >>> 
         >>> # Evaluate at specific times
         >>> t_eval = np.linspace(0, 10, 1001)
@@ -286,11 +304,17 @@ class ScipyIntegrator(IntegratorBase):
             """Dynamics function in scipy's signature: f(t, x) → dx/dt"""
             u = u_func(t, x)
             
-            # Ensure arrays are NumPy
+            # Ensure state is NumPy array
             x_np = np.asarray(x) if not isinstance(x, np.ndarray) else x
-            u_np = np.asarray(u) if not isinstance(u, np.ndarray) else u
             
-            # Evaluate dynamics
+            # Handle autonomous systems - keep None as None
+            # Do NOT convert None to array, as np.asarray(None) creates array(None, dtype=object)
+            if u is not None:
+                u_np = np.asarray(u) if not isinstance(u, np.ndarray) else u
+            else:
+                u_np = None  # Keep as None for autonomous systems
+            
+            # Evaluate dynamics (DynamicsEvaluator handles u=None correctly)
             dx = self.system(x_np, u_np, backend='numpy')
             
             # Count function evaluation

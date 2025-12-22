@@ -8,6 +8,8 @@ Implements classic fixed time-step integration methods:
 
 These are manual implementations that work across all backends
 (NumPy, PyTorch, JAX) using the system's multi-backend interface.
+
+Supports both controlled and autonomous systems (nu=0).
 """
 
 import time
@@ -49,13 +51,18 @@ class ExplicitEulerIntegrator(IntegratorBase):
     
     Examples
     --------
+    >>> # Controlled system
     >>> integrator = ExplicitEulerIntegrator(system, dt=0.01, backend='numpy')
     >>> x_next = integrator.step(x, u)
+    >>> 
+    >>> # Autonomous system
+    >>> integrator = ExplicitEulerIntegrator(autonomous_system, dt=0.01)
+    >>> x_next = integrator.step(x, u=None)
     >>> 
     >>> # Integrate trajectory
     >>> result = integrator.integrate(
     ...     x0=np.array([1.0, 0.0]),
-    ...     u_func=lambda t, x: np.zeros(1),
+    ...     u_func=lambda t, x: np.zeros(1),  # or None for autonomous
     ...     t_span=(0.0, 10.0)
     ... )
     """
@@ -73,7 +80,7 @@ class ExplicitEulerIntegrator(IntegratorBase):
         Parameters
         ----------
         system : SymbolicDynamicalSystem
-            System to integrate
+            System to integrate (controlled or autonomous)
         dt : float
             Fixed time step
         backend : str
@@ -84,7 +91,7 @@ class ExplicitEulerIntegrator(IntegratorBase):
     def step(
         self,
         x: ArrayLike,
-        u: ArrayLike,
+        u: Optional[ArrayLike] = None,
         dt: Optional[float] = None
     ) -> ArrayLike:
         """
@@ -94,8 +101,8 @@ class ExplicitEulerIntegrator(IntegratorBase):
         ----------
         x : ArrayLike
             Current state
-        u : ArrayLike
-            Control input
+        u : Optional[ArrayLike]
+            Control input (None for autonomous systems)
         dt : Optional[float]
             Time step (uses self.dt if None)
             
@@ -106,7 +113,7 @@ class ExplicitEulerIntegrator(IntegratorBase):
         """
         dt = dt if dt is not None else self.dt
         
-        # Evaluate dynamics
+        # Evaluate dynamics (handles u=None for autonomous systems)
         dx = self._evaluate_dynamics(x, u)
         
         # Euler update
@@ -119,7 +126,7 @@ class ExplicitEulerIntegrator(IntegratorBase):
     def integrate(
         self,
         x0: ArrayLike,
-        u_func: Callable[[float, ArrayLike], ArrayLike],
+        u_func: Callable[[float, ArrayLike], Optional[ArrayLike]],
         t_span: Tuple[float, float],
         t_eval: Optional[ArrayLike] = None,
         dense_output: bool = False
@@ -132,7 +139,7 @@ class ExplicitEulerIntegrator(IntegratorBase):
         x0 : ArrayLike
             Initial state
         u_func : Callable
-            Control policy (t, x) → u
+            Control policy (t, x) → u (or None for autonomous systems)
         t_span : Tuple[float, float]
             (t_start, t_end)
         t_eval : Optional[ArrayLike]
@@ -173,7 +180,10 @@ class ExplicitEulerIntegrator(IntegratorBase):
             t = t_points[i]
             dt_step = float(t_points[i+1] - t_points[i])
             
+            # Get control (may be None for autonomous systems)
             u = u_func(float(t), x)
+            
+            # Take step (handles u=None)
             x = self.step(x, u, dt=dt_step)
             trajectory.append(x)
         
@@ -227,8 +237,13 @@ class MidpointIntegrator(IntegratorBase):
     
     Examples
     --------
+    >>> # Controlled system
     >>> integrator = MidpointIntegrator(system, dt=0.01, backend='torch')
     >>> x_next = integrator.step(x_torch, u_torch)
+    >>> 
+    >>> # Autonomous system
+    >>> integrator = MidpointIntegrator(autonomous_system, dt=0.01)
+    >>> x_next = integrator.step(x, u=None)
     """
     
     def __init__(
@@ -243,13 +258,27 @@ class MidpointIntegrator(IntegratorBase):
     def step(
         self,
         x: ArrayLike,
-        u: ArrayLike,
+        u: Optional[ArrayLike] = None,
         dt: Optional[float] = None
     ) -> ArrayLike:
         """
         Take one midpoint step.
         
         Uses two function evaluations per step for 2nd-order accuracy.
+        
+        Parameters
+        ----------
+        x : ArrayLike
+            Current state
+        u : Optional[ArrayLike]
+            Control input (None for autonomous systems)
+        dt : Optional[float]
+            Time step (uses self.dt if None)
+            
+        Returns
+        -------
+        ArrayLike
+            Next state
         """
         dt = dt if dt is not None else self.dt
         
@@ -270,7 +299,7 @@ class MidpointIntegrator(IntegratorBase):
     def integrate(
         self,
         x0: ArrayLike,
-        u_func: Callable[[float, ArrayLike], ArrayLike],
+        u_func: Callable[[float, ArrayLike], Optional[ArrayLike]],
         t_span: Tuple[float, float],
         t_eval: Optional[ArrayLike] = None,
         dense_output: bool = False
@@ -304,7 +333,10 @@ class MidpointIntegrator(IntegratorBase):
             t = t_points[i]
             dt_step = float(t_points[i+1] - t_points[i])
             
+            # Get control (may be None for autonomous systems)
             u = u_func(float(t), x)
+            
+            # Take step (handles u=None)
             x = self.step(x, u, dt=dt_step)
             trajectory.append(x)
         
@@ -374,6 +406,10 @@ class RK4Integrator(IntegratorBase):
     >>> x_torch = torch.tensor([1.0, 0.0], device='cuda')
     >>> u_torch = torch.tensor([0.0], device='cuda')
     >>> x_next = integrator.step(x_torch, u_torch)
+    >>> 
+    >>> # Autonomous system
+    >>> integrator = RK4Integrator(autonomous_system, dt=0.01)
+    >>> x_next = integrator.step(x, u=None)
     """
     
     def __init__(
@@ -389,7 +425,7 @@ class RK4Integrator(IntegratorBase):
         Parameters
         ----------
         system : SymbolicDynamicalSystem
-            System to integrate
+            System to integrate (controlled or autonomous)
         dt : float
             Fixed time step
         backend : str
@@ -400,7 +436,7 @@ class RK4Integrator(IntegratorBase):
     def step(
         self,
         x: ArrayLike,
-        u: ArrayLike,
+        u: Optional[ArrayLike] = None,
         dt: Optional[float] = None
     ) -> ArrayLike:
         """
@@ -410,8 +446,8 @@ class RK4Integrator(IntegratorBase):
         ----------
         x : ArrayLike
             Current state
-        u : ArrayLike
-            Control input (assumed constant over step)
+        u : Optional[ArrayLike]
+            Control input (None for autonomous systems, assumed constant over step)
         dt : Optional[float]
             Time step (uses self.dt if None)
             
@@ -424,10 +460,11 @@ class RK4Integrator(IntegratorBase):
         -----
         Assumes control is constant over the time step. For time-varying
         control, use integrate() with a control policy u(t, x).
+        For autonomous systems, pass u=None.
         """
         dt = dt if dt is not None else self.dt
         
-        # RK4 stages
+        # RK4 stages (all use same control u, which may be None)
         k1 = self._evaluate_dynamics(x, u)
         k2 = self._evaluate_dynamics(x + 0.5 * dt * k1, u)
         k3 = self._evaluate_dynamics(x + 0.5 * dt * k2, u)
@@ -443,7 +480,7 @@ class RK4Integrator(IntegratorBase):
     def integrate(
         self,
         x0: ArrayLike,
-        u_func: Callable[[float, ArrayLike], ArrayLike],
+        u_func: Callable[[float, ArrayLike], Optional[ArrayLike]],
         t_span: Tuple[float, float],
         t_eval: Optional[ArrayLike] = None,
         dense_output: bool = False
@@ -456,7 +493,7 @@ class RK4Integrator(IntegratorBase):
         x0 : ArrayLike
             Initial state (nx,)
         u_func : Callable
-            Control policy (t, x) → u
+            Control policy (t, x) → u (or None for autonomous systems)
         t_span : Tuple[float, float]
             Integration interval (t_start, t_end)
         t_eval : Optional[ArrayLike]
@@ -471,14 +508,19 @@ class RK4Integrator(IntegratorBase):
             
         Examples
         --------
-        >>> # Integrate with zero control
+        >>> # Integrate controlled system
         >>> result = integrator.integrate(
         ...     x0=np.array([1.0, 0.0]),
-        ...     u_func=lambda t, x: np.zeros(1),
+        ...     u_func=lambda t, x: np.array([0.5]),
         ...     t_span=(0.0, 10.0)
         ... )
-        >>> print(f"Solved {result.nsteps} steps")
-        >>> print(f"Function evaluations: {result.nfev}")
+        >>> 
+        >>> # Integrate autonomous system
+        >>> result = integrator.integrate(
+        ...     x0=np.array([1.0, 0.0]),
+        ...     u_func=lambda t, x: None,
+        ...     t_span=(0.0, 10.0)
+        ... )
         """
         start_time = time.time()
         
@@ -508,10 +550,10 @@ class RK4Integrator(IntegratorBase):
             t = float(t_points[i])
             dt_step = float(t_points[i+1] - t_points[i])
             
-            # Evaluate control
+            # Evaluate control (may be None for autonomous systems)
             u = u_func(t, x)
             
-            # Take RK4 step
+            # Take RK4 step (handles u=None)
             x = self.step(x, u, dt=dt_step)
             trajectory.append(x)
         
@@ -561,7 +603,7 @@ def create_fixed_step_integrator(
     method : str
         'euler', 'midpoint', or 'rk4'
     system : SymbolicDynamicalSystem
-        System to integrate
+        System to integrate (controlled or autonomous)
     dt : float
         Time step
     backend : str

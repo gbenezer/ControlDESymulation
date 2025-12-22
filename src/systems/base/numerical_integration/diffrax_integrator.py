@@ -5,6 +5,7 @@ This module provides adaptive and fixed-step ODE integration with automatic
 differentiation support through JAX's JIT compilation.
 
 Supports explicit, implicit, IMEX, and special solvers from Diffrax.
+Supports both controlled and autonomous systems (nu=0).
 """
 
 from typing import Optional, Callable, Tuple
@@ -31,7 +32,7 @@ class DiffraxIntegrator(IntegratorBase):
     Parameters
     ----------
     system : SymbolicDynamicalSystem
-        Continuous-time system to integrate
+        Continuous-time system to integrate (controlled or autonomous)
     dt : Optional[float]
         Time step size
     step_mode : StepMode
@@ -82,6 +83,7 @@ class DiffraxIntegrator(IntegratorBase):
     - Implicit and IMEX solvers require Diffrax 0.8.0 or later
     - The integrator will automatically detect which solvers are available
     - Use `integrator._solver_map.keys()` to see available solvers
+    - Supports autonomous systems (nu=0) by passing u=None
     """
 
     def __init__(
@@ -230,7 +232,7 @@ class DiffraxIntegrator(IntegratorBase):
     def step(
         self,
         x: ArrayLike,
-        u: ArrayLike,
+        u: Optional[ArrayLike] = None,
         dt: Optional[float] = None
     ) -> ArrayLike:
         """
@@ -240,8 +242,8 @@ class DiffraxIntegrator(IntegratorBase):
         ----------
         x : ArrayLike
             Current state (nx,) or (batch, nx)
-        u : ArrayLike
-            Control input (nu,) or (batch, nu)
+        u : Optional[ArrayLike]
+            Control input (nu,) or (batch, nu), or None for autonomous systems
         dt : Optional[float]
             Step size (uses self.dt if None)
             
@@ -257,7 +259,11 @@ class DiffraxIntegrator(IntegratorBase):
         
         # Convert to JAX arrays if needed
         x = jnp.asarray(x)
-        u = jnp.asarray(u)
+        
+        # Handle autonomous systems - keep None as None
+        # Do NOT convert None to jax array
+        if u is not None:
+            u = jnp.asarray(u)
         
         # Define ODE function - MUST accept (t, y, args) even if args unused
         def ode_func(t, state, args):
@@ -295,7 +301,7 @@ class DiffraxIntegrator(IntegratorBase):
     def integrate(
         self,
         x0: ArrayLike,
-        u_func: Callable[[float, ArrayLike], ArrayLike],
+        u_func: Callable[[float, ArrayLike], Optional[ArrayLike]],
         t_span: Tuple[float, float],
         t_eval: Optional[ArrayLike] = None,
         dense_output: bool = False
@@ -307,8 +313,8 @@ class DiffraxIntegrator(IntegratorBase):
         ----------
         x0 : ArrayLike
             Initial state (nx,)
-        u_func : Callable[[float, ArrayLike], ArrayLike]
-            Control policy: (t, x) → u
+        u_func : Callable[[float, ArrayLike], Optional[ArrayLike]]
+            Control policy: (t, x) → u (or None for autonomous systems)
         t_span : Tuple[float, float]
             Integration interval (t_start, t_end)
         t_eval : Optional[ArrayLike]
@@ -320,6 +326,22 @@ class DiffraxIntegrator(IntegratorBase):
         -------
         IntegrationResult
             Object containing t, x, success, and metadata
+            
+        Examples
+        --------
+        >>> # Controlled system
+        >>> result = integrator.integrate(
+        ...     x0=jnp.array([1.0, 0.0]),
+        ...     u_func=lambda t, x: jnp.array([0.5]),
+        ...     t_span=(0.0, 10.0)
+        ... )
+        >>> 
+        >>> # Autonomous system
+        >>> result = integrator.integrate(
+        ...     x0=jnp.array([1.0, 0.0]),
+        ...     u_func=lambda t, x: None,
+        ...     t_span=(0.0, 10.0)
+        ... )
         """
         t0, tf = t_span
         x0 = jnp.asarray(x0)
@@ -347,6 +369,12 @@ class DiffraxIntegrator(IntegratorBase):
         def ode_func(t, state, args):
             t_actual = t if not backward else (t0 + tf - t)
             u = u_func(t_actual, state)
+            
+            # Handle autonomous systems - keep None as None
+            # Do NOT convert None to jax array
+            if u is not None and not isinstance(u, jnp.ndarray):
+                u = jnp.asarray(u)
+            
             xdot = self.system(state, u, backend=self.backend)
             return -xdot if backward else xdot
         
@@ -458,7 +486,7 @@ class DiffraxIntegrator(IntegratorBase):
     def integrate_with_gradient(
         self,
         x0: ArrayLike,
-        u_func: Callable[[float, ArrayLike], ArrayLike],
+        u_func: Callable[[float, ArrayLike], Optional[ArrayLike]],
         t_span: Tuple[float, float],
         loss_fn: Callable[[IntegrationResult], float],
         t_eval: Optional[ArrayLike] = None,
@@ -484,7 +512,10 @@ class DiffraxIntegrator(IntegratorBase):
         def jitted_step(x, u, dt):
             # Pure JIT-compatible step (no stats tracking)
             x = jnp.asarray(x)
-            u = jnp.asarray(u)
+            
+            # Handle autonomous systems
+            if u is not None:
+                u = jnp.asarray(u)
             
             def ode_func(t, state, args):
                 return system(state, u, backend=backend)
@@ -512,14 +543,15 @@ class DiffraxIntegrator(IntegratorBase):
         
         return jitted_step
 
-    def vectorized_step(self, x_batch: ArrayLike, u_batch: ArrayLike, dt: Optional[float] = None):
+    def vectorized_step(self, x_batch: ArrayLike, u_batch: Optional[ArrayLike] = None, 
+                       dt: Optional[float] = None):
         """Vectorized step over batch of states and controls."""
         return jax.vmap(lambda x, u: self.step(x, u, dt))(x_batch, u_batch)
 
     def vectorized_integrate(
         self,
         x0_batch: ArrayLike,
-        u_func: Callable[[float, ArrayLike], ArrayLike],
+        u_func: Callable[[float, ArrayLike], Optional[ArrayLike]],
         t_span: Tuple[float, float],
         t_eval: Optional[ArrayLike] = None,
     ):

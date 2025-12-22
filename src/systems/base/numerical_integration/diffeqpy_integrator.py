@@ -4,6 +4,8 @@ DiffEqPyIntegrator: Julia DifferentialEquations.jl ODE solver via diffeqpy.
 Provides access to Julia's DifferentialEquations.jl ecosystem - the most
 comprehensive and performant ODE solver suite available in any language.
 
+Supports both controlled and autonomous systems (nu=0).
+
 Features:
 - 100+ ODE solvers (explicit, implicit, IMEX, stabilized, geometric)
 - Automatic stiffness detection
@@ -32,15 +34,44 @@ DiffEqPyIntegrator is ideal for:
 - Problems where Julia's specialized solvers excel
 - Non-gradient workflows where accuracy/performance matter most
 
+DiffEqPyIntegrator: Julia DifferentialEquations.jl ODE solver via diffeqpy.
+
+
 Known Limitations:
-- Rosenbrock methods (Rosenbrock23, Rodas4, Rodas5) may fail with Jacobian 
-  autodiff errors when using Python-defined ODE functions. This is a 
-  fundamental limitation of the Python-Julia bridge.
-  
-  Workarounds:
-  1. Use alternative stiff solvers: RadauIIA5, TRBDF2, KenCarp4
-  2. Use scipy.BDF for stiff systems (recommended for Python workflows)
-  3. Provide analytical Jacobian (advanced, not currently supported)
+------------------
+**Jacobian Autodiff Failures with Python ODEs**
+
+Many Julia implicit/Rosenbrock methods fail when used with Python-defined ODE 
+functions due to autodiff errors in the Julia-Python bridge. The error message 
+is typically:
+
+    "First call to automatic differentiation for the Jacobian"
+
+**Methods Known to Fail:**
+- Rosenbrock family: Rosenbrock23, Rosenbrock32, Rodas4, Rodas4P, Rodas5
+- Implicit RK: RadauIIA5
+- ESDIRK: TRBDF2, KenCarp3, KenCarp4, KenCarp5
+
+**Methods That Work Reliably:**
+- Non-stiff explicit: Tsit5, Vern6-9, DP5, DP8
+- Stabilized explicit: ROCK2, ROCK4 (handle moderate stiffness)
+- Auto-switching: May fail if it switches to a problematic method
+- Geometric: SymplecticEuler, VelocityVerlet
+
+**Recommended Workarounds for Stiff Systems:**
+1. **Use scipy instead**: `scipy.BDF` or `scipy.Radau` work excellently for 
+   stiff systems in Python and don't have this limitation.
+   
+2. **Use ROCK methods**: For moderately stiff problems, ROCK2/ROCK4 are 
+   stabilized explicit methods that work with Python ODEs.
+   
+3. **Pure Julia**: If you need Julia's Rosenbrock methods, write your ODE 
+   function directly in Julia (not via Python/diffeqpy).
+   
+4. **Analytical Jacobian**: Provide the Jacobian analytically (advanced, 
+   not currently supported in this framework).
+
+This is a fundamental limitation of the diffeqpy bridge, not a bug.
 
 Examples
 --------
@@ -63,6 +94,14 @@ Examples
 >>> integrator = DiffEqPyIntegrator(
 ...     system,
 ...     algorithm='AutoTsit5(Rosenbrock23())'
+... )
+>>> 
+>>> # Autonomous system
+>>> integrator = DiffEqPyIntegrator(autonomous_system, algorithm='Tsit5')
+>>> result = integrator.integrate(
+...     x0=np.array([1.0, 0.0]),
+...     u_func=lambda t, x: None,
+...     t_span=(0.0, 10.0)
 ... )
 """
 
@@ -121,7 +160,7 @@ class DiffEqPyIntegrator(IntegratorBase):
     Parameters
     ----------
     system : SymbolicDynamicalSystem
-        Continuous-time system to integrate
+        Continuous-time system to integrate (controlled or autonomous)
     dt : Optional[float]
         Time step (initial guess for adaptive, fixed for ConstantStepSize)
     step_mode : StepMode
@@ -158,9 +197,17 @@ class DiffEqPyIntegrator(IntegratorBase):
     
     Examples
     --------
-    >>> # Default high-quality solver
+    >>> # Controlled system - default high-quality solver
     >>> integrator = DiffEqPyIntegrator(system, backend='numpy')
     >>> result = integrator.integrate(x0, u_func, (0, 10))
+    >>> 
+    >>> # Autonomous system
+    >>> integrator = DiffEqPyIntegrator(autonomous_system)
+    >>> result = integrator.integrate(
+    ...     x0=np.array([1.0, 0.0]),
+    ...     u_func=lambda t, x: None,
+    ...     t_span=(0.0, 10.0)
+    ... )
     >>> 
     >>> # Very high accuracy
     >>> integrator = DiffEqPyIntegrator(
@@ -192,6 +239,7 @@ class DiffEqPyIntegrator(IntegratorBase):
     - Subsequent calls are very fast (Julia's strength)
     - For difficult ODEs, this is often the best choice
     - Set DEBUG_DIFFEQPY=1 environment variable for debug output
+    - Supports autonomous systems (nu=0) by passing u_func that returns None
     """
     
     def __init__(
@@ -212,7 +260,7 @@ class DiffEqPyIntegrator(IntegratorBase):
         Parameters
         ----------
         system : SymbolicDynamicalSystem
-            System to integrate
+            System to integrate (controlled or autonomous)
         dt : Optional[float]
             Time step (initial for adaptive, fixed for FIXED mode)
         step_mode : StepMode
@@ -376,7 +424,7 @@ class DiffEqPyIntegrator(IntegratorBase):
     def step(
         self,
         x: ArrayLike,
-        u: ArrayLike,
+        u: Optional[ArrayLike] = None,
         dt: Optional[float] = None
     ) -> ArrayLike:
         """
@@ -388,8 +436,8 @@ class DiffEqPyIntegrator(IntegratorBase):
         ----------
         x : ArrayLike
             Current state (nx,)
-        u : ArrayLike
-            Control input (nu,) - assumed constant over step
+        u : Optional[ArrayLike]
+            Control input (nu,), or None for autonomous systems (assumed constant over step)
         dt : Optional[float]
             Step size (uses self.dt if None)
             
@@ -403,12 +451,17 @@ class DiffEqPyIntegrator(IntegratorBase):
             raise ValueError("Step size dt must be specified")
         
         x = np.asarray(x)
-        u = np.asarray(u)
+        
+        # Handle autonomous systems - keep None as None
+        if u is not None:
+            u = np.asarray(u)
         
         # Use integrate for single step
+        u_func = lambda t, x_cur: u  # May be None for autonomous
+        
         result = self.integrate(
             x0=x,
-            u_func=lambda t, x_cur: u,
+            u_func=u_func,
             t_span=(0.0, step_size),
             t_eval=np.array([0.0, step_size])
         )
@@ -418,7 +471,7 @@ class DiffEqPyIntegrator(IntegratorBase):
     def integrate(
         self,
         x0: ArrayLike,
-        u_func: Callable[[float, ArrayLike], ArrayLike],
+        u_func: Callable[[float, ArrayLike], Optional[ArrayLike]],
         t_span: Tuple[float, float],
         t_eval: Optional[ArrayLike] = None,
         dense_output: bool = False
@@ -430,8 +483,8 @@ class DiffEqPyIntegrator(IntegratorBase):
         ----------
         x0 : ArrayLike
             Initial state (nx,)
-        u_func : Callable[[float, ArrayLike], ArrayLike]
-            Control policy (t, x) → u
+        u_func : Callable[[float, ArrayLike], Optional[ArrayLike]]
+            Control policy (t, x) → u (or None for autonomous systems)
         t_span : Tuple[float, float]
             Time interval (t_start, t_end)
         t_eval : Optional[ArrayLike]
@@ -453,10 +506,17 @@ class DiffEqPyIntegrator(IntegratorBase):
             
         Examples
         --------
-        >>> # Adaptive integration
+        >>> # Controlled system - adaptive integration
         >>> result = integrator.integrate(
         ...     x0=np.array([1.0, 0.0]),
         ...     u_func=lambda t, x: -K @ x,
+        ...     t_span=(0.0, 10.0)
+        ... )
+        >>> 
+        >>> # Autonomous system
+        >>> result = integrator.integrate(
+        ...     x0=np.array([1.0, 0.0]),
+        ...     u_func=lambda t, x: None,
         ...     t_span=(0.0, 10.0)
         ... )
         >>> 
@@ -519,9 +579,15 @@ class DiffEqPyIntegrator(IntegratorBase):
             
             # Evaluate control policy
             u_control = u_func(float(t), x_np)
-            u_np = np.asarray(u_control, dtype=np.float64)
             
-            # Evaluate system dynamics
+            # Handle autonomous systems - keep None as None
+            # Do NOT convert None to array, as np.asarray(None) creates array(None, dtype=object)
+            if u_control is not None:
+                u_np = np.asarray(u_control, dtype=np.float64)
+            else:
+                u_np = None  # Keep as None for autonomous systems
+            
+            # Evaluate system dynamics (DynamicsEvaluator handles u_np=None correctly)
             dx = self.system(x_np, u_np, backend='numpy')
             
             # Track function evaluations
@@ -699,74 +765,144 @@ def list_algorithms() -> Dict[str, List[str]]:
     Dict[str, List[str]]
         Dictionary mapping algorithm categories to lists of algorithm names
     
+    Notes
+    -----
+     WARNING: Many stiff/implicit methods in 'stiff_rosenbrock', 
+    'stiff_esdirk', and 'stiff_implicit' categories FAIL when used with 
+    Python-defined ODE functions due to Jacobian autodiff limitations in 
+    the Julia-Python bridge.
+    
+    **Safe to use:** 'nonstiff', 'stabilized', 'geometric', 'low_order'
+    **Problematic:** 'stiff_rosenbrock', 'stiff_esdirk', 'stiff_implicit'
+    **Use scipy instead:** For stiff systems, use scipy.BDF or scipy.Radau
+    
     Examples
     --------
     >>> algos = list_algorithms()
-    >>> print(algos['nonstiff'])
+    >>> print(algos['nonstiff'])  # These work
     ['Tsit5', 'Vern7', 'Vern9', 'DP5', 'DP8', ...]
     >>> 
-    >>> # Print all categories
-    >>> for category, methods in algos.items():
-    ...     print(f"{category}: {', '.join(methods)}")
+    >>> print(algos['stiff_rosenbrock'])  # These fail with Python ODEs
+    ['Rosenbrock23', 'Rosenbrock32', 'Rodas4', 'Rodas4P', 'Rodas5']
+    >>> 
+    >>> print(algos['stabilized'])  # These work (moderate stiffness)
+    ['ROCK2', 'ROCK4', 'ESERK4', 'ESERK5']
     """
     return {
         'nonstiff': [
-            'Tsit5',       # Tsitouras 5(4) - RECOMMENDED DEFAULT
-            'Vern6',       # Verner 6(5)
-            'Vern7',       # Verner 7(6)
-            'Vern8',       # Verner 8(7)
-            'Vern9',       # Verner 9(8) - very high accuracy
-            'DP5',         # Dormand-Prince 5(4)
-            'DP8',         # Dormand-Prince 8
-            'TanYam7',     # Tanaka-Yamashita 7
-            'TsitPap8',    # Tsitouras-Papakostas 8
+            'Tsit5',       # ✅ Works - RECOMMENDED DEFAULT
+            'Vern6',       # ✅ Works
+            'Vern7',       # ✅ Works
+            'Vern8',       # ✅ Works
+            'Vern9',       # ✅ Works - very high accuracy
+            'DP5',         # ✅ Works
+            'DP8',         # ✅ Works
+            'TanYam7',     # ✅ Works
+            'TsitPap8',    # ✅ Works
         ],
         'stiff_rosenbrock': [
-            'Rosenbrock23',   # RECOMMENDED for moderately stiff
-            'Rosenbrock32',   # Alternative Rosenbrock
-            'Rodas4',         # High accuracy
-            'Rodas4P',        # Rodas4 with Predictive step
-            'Rodas5',         # Very high accuracy
+            # All fail with Python ODEs - use scipy.BDF instead
+            'Rosenbrock23',   # FAILS: Jacobian autodiff error
+            'Rosenbrock32',   # FAILS: Jacobian autodiff error
+            'Rodas4',         # FAILS: Jacobian autodiff error
+            'Rodas4P',        # FAILS: Jacobian autodiff error
+            'Rodas5',         # FAILS: Jacobian autodiff error
         ],
         'stiff_esdirk': [
-            'TRBDF2',      # Trapezoidal + BDF2
-            'KenCarp3',    # Kennedy-Carpenter ESDIRK 3
-            'KenCarp4',    # Kennedy-Carpenter ESDIRK 4
-            'KenCarp5',    # Kennedy-Carpenter ESDIRK 5
+            # May fail with Python ODEs
+            'TRBDF2',      # FAILS: Jacobian autodiff error
+            'KenCarp3',    # FAILS: Jacobian autodiff error
+            'KenCarp4',    # FAILS: Jacobian autodiff error
+            'KenCarp5',    # FAILS: Jacobian autodiff error
         ],
         'stiff_implicit': [
-            'RadauIIA5',   # Implicit Runge-Kutta (very stable)
-            'QNDF',        # Variable-order BDF
-            'FBDF',        # Fixed-order BDF
+            # May fail with Python ODEs
+            'RadauIIA5',   # FAILS: Jacobian autodiff error
+            'QNDF',        # Untested
+            'FBDF',        # Untested
         ],
         'auto_switching': [
-            'AutoTsit5(Rosenbrock23())',    # RECOMMENDED auto-switch
-            'AutoVern7(Rodas5())',          # High-accuracy auto-switch
+            #  May fail if switches to problematic method
+            'AutoTsit5(Rosenbrock23())',    # May fail when switching to Rosenbrock
+            'AutoVern7(Rodas5())',          # May fail when switching to Rodas
             'AutoVern8(Rodas5())',
             'AutoVern9(Rodas5())',
         ],
         'stabilized': [
-            'ROCK2',       # Stabilized explicit (moderately stiff)
-            'ROCK4',       # Higher-order ROCK
-            'ESERK4',      # Stabilized ERK 4
-            'ESERK5',      # Stabilized ERK 5
+            # These work - good for moderate stiffness
+            'ROCK2',       # Works - stabilized explicit
+            'ROCK4',       # Works - higher-order ROCK
+            'ESERK4',      # Untested but should work
+            'ESERK5',      # Untested but should work
         ],
         'geometric': [
-            'SymplecticEuler',   # 1st order symplectic
-            'VelocityVerlet',    # 2nd order symplectic
-            'VerletLeapfrog',    # Leapfrog method
-            'McAte2',            # McClellan-Aitken 2
-            'McAte4',            # McClellan-Aitken 4
-            'McAte5',            # McClellan-Aitken 5
+            # These work - structure-preserving
+            'SymplecticEuler',   # Works
+            'VelocityVerlet',    # Works
+            'VerletLeapfrog',    # Untested but should work
+            'McAte2',            # Untested but should work
+            'McAte4',            # Untested but should work
+            'McAte5',            # Untested but should work
         ],
         'low_order': [
-            'Euler',         # Forward Euler (1st order)
-            'Midpoint',      # Explicit midpoint (2nd order)
-            'Heun',          # Heun's method (2nd order)
+            # These work
+            'Euler',         # Works (but use with small dt)
+            'Midpoint',      # Works
+            'Heun',          # Works
         ],
     }
 
+def get_safe_algorithms() -> List[str]:
+    """
+    Get list of Julia algorithms that work reliably with Python ODEs.
+    
+    Returns algorithms that don't require Jacobian autodiff across the
+    Julia-Python bridge.
+    
+    Returns
+    -------
+    List[str]
+        Algorithm names that are safe to use
+        
+    Examples
+    --------
+    >>> safe = get_safe_algorithms()
+    >>> print(safe[:5])
+    ['Tsit5', 'Vern6', 'Vern7', 'Vern8', 'Vern9']
+    """
+    all_algos = list_algorithms()
+    safe = []
+    safe.extend(all_algos['nonstiff'])
+    safe.extend(all_algos['stabilized'])
+    safe.extend(all_algos['geometric'])
+    safe.extend(all_algos['low_order'])
+    return safe
 
+
+def get_problematic_algorithms() -> List[str]:
+    """
+    Get list of Julia algorithms that fail with Python ODEs.
+    
+    These require Jacobian computation that fails across the Julia-Python bridge.
+    
+    Returns
+    -------
+    List[str]
+        Algorithm names that are known to fail
+        
+    Examples
+    --------
+    >>> problematic = get_problematic_algorithms()
+    >>> if 'Rosenbrock23' in problematic:
+    ...     print("Use scipy.BDF instead")
+    """
+    all_algos = list_algorithms()
+    problematic = []
+    problematic.extend(all_algos['stiff_rosenbrock'])
+    problematic.extend(all_algos['stiff_esdirk'])
+    problematic.extend(all_algos['stiff_implicit'])
+    return problematic
+    
 def print_algorithm_recommendations():
     """
     Print recommendations for algorithm selection.
@@ -831,7 +967,7 @@ def create_diffeqpy_integrator(
     Parameters
     ----------
     system : SymbolicDynamicalSystem
-        System to integrate
+        System to integrate (controlled or autonomous)
     algorithm : str
         Julia algorithm name (default: 'Tsit5')
     dt : Optional[float]
