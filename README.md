@@ -631,7 +631,6 @@ ControlODESymulation/
 Currently not open to contributions, though may change after Phase 4 and once I learn how open-source development works
 
 #### Phase 1 (Current):
-- Finish debugging autonomous system integration tests (test_backward_integration)
 - Finish implementation of SDE Integration utilities
     - Instantiate/code SDEIntegratorBase unit tests and debug base class
     - Instantiate/code DiffraxSDEIntegrator, TorchSDEIntegrator, and DiffEqPySDEIntegrator classes with associated unit tests
