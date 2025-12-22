@@ -784,13 +784,15 @@ class TestPyTorchFeatures:
         t_span = (0.0, 0.5)
         
         result = integrator.integrate(x0, u_func, t_span)
+
+        assert result.x.device.type == 'cuda'
         
-        # May fail due to torchsde GPU issues - be lenient
-        if result.success:
-            assert result.x.device.type == 'cuda'
-        else:
-            # GPU integration might not work in all environments
-            pytest.skip(f"GPU integration failed: {result.message}")
+        # # May fail due to torchsde GPU issues - be lenient
+        # if result.success:
+        #     assert result.x.device.type == 'cuda'
+        # else:
+        #     # GPU integration might not work in all environments
+        #     pytest.skip(f"GPU integration failed: {result.message}")
 
 
 # ============================================================================
