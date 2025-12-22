@@ -367,7 +367,16 @@ class DiffraxIntegrator(IntegratorBase):
         
         # Define ODE function - MUST accept (t, y, args) even if args unused
         def ode_func(t, state, args):
-            t_actual = t if not backward else (t0 + tf - t)
+            # For autonomous systems (nu=0), u_func returns None and doesn't use time
+            # For non-autonomous, we need to transform time for backward integration
+            if backward and self.system.nu > 0:
+                # Only transform time for non-autonomous systems
+                t_actual = t0 + tf - t
+            else:
+                # Autonomous systems: time doesn't matter, don't transform
+                # Forward integration: use time as-is
+                t_actual = t
+            
             u = u_func(t_actual, state)
             
             # Handle autonomous systems - keep None as None
