@@ -269,14 +269,34 @@ class IntegratorFactory:
         """
         Create NumPy-based integrator.
         
-        Automatically detects whether to use Scipy or DiffEqPy based on method name.
-        Convention: Capital first letter (Tsit5, Vern9) = Julia, otherwise Scipy.
+        Routes to appropriate integrator based on method type:
+        - Manual fixed-step: euler, midpoint, rk4
+        - Julia DiffEqPy: Tsit5, Vern9, Rosenbrock23, etc.
+        - Scipy: LSODA, RK45, BDF, Radau, etc.
         """
-        # Check if this is a Julia/DiffEqPy method
-        is_julia_method = cls._is_julia_method(method)
         
-        if is_julia_method:
-            # Use DiffEqPy integrator
+        # 1. Manual fixed-step implementations
+        if cls._is_fixed_step_method(method):
+            if dt is None:
+                raise ValueError(f"Fixed-step method '{method}' requires dt")
+
+            from src.systems.base.numerical_integration.fixed_step_integrators import (
+                ExplicitEulerIntegrator,
+                MidpointIntegrator,
+                RK4Integrator,
+            )
+
+            integrator_map = {
+                "euler": ExplicitEulerIntegrator,
+                "midpoint": MidpointIntegrator,
+                "rk4": RK4Integrator,
+            }
+
+            integrator_class = integrator_map[method]
+            return integrator_class(system, dt=dt, backend="numpy", **options)
+        
+        # 2. Julia DiffEqPy methods
+        elif cls._is_julia_method(method):
             try:
                 from src.systems.base.numerical_integration.diffeqpy_integrator import (
                     DiffEqPyIntegrator
@@ -297,27 +317,7 @@ class IntegratorFactory:
                     f"or use a scipy method instead."
                 )
         
-        # Fixed-step methods (manual implementations)
-        elif method in ["euler", "midpoint", "rk4"]:
-            if dt is None:
-                raise ValueError(f"Fixed-step method '{method}' requires dt")
-
-            from src.systems.base.numerical_integration.fixed_step_integrators import (
-                ExplicitEulerIntegrator,
-                MidpointIntegrator,
-                RK4Integrator,
-            )
-
-            integrator_map = {
-                "euler": ExplicitEulerIntegrator,
-                "midpoint": MidpointIntegrator,
-                "rk4": RK4Integrator,
-            }
-
-            integrator_class = integrator_map[method]
-            return integrator_class(system, dt=dt, backend="numpy", **options)
-
-        # Scipy adaptive methods
+        # 3. Scipy methods (default fallback)
         else:
             from src.systems.base.numerical_integration.scipy_integrator import ScipyIntegrator
 
@@ -363,8 +363,45 @@ class IntegratorFactory:
             if method[0].isupper() and not method.isupper():
                 return True
             return False
+    
+    @classmethod
+    def _is_fixed_step_method(cls, method: str) -> bool:
+        """
+        Check if method is a manual fixed-step implementation.
         
-        return method in julia_algorithms
+        These methods are backend-agnostic and available everywhere.
+        
+        Parameters
+        ----------
+        method : str
+            Method name
+            
+        Returns
+        -------
+        bool
+            True if manual fixed-step method, False otherwise
+        """
+        return method in ['euler', 'midpoint', 'rk4']
+    
+    @classmethod
+    def _is_scipy_method(cls, method: str) -> bool:
+        """
+        Check if method is a scipy solver.
+        
+        Scipy methods are typically all-caps or specific well-known names.
+        
+        Parameters
+        ----------
+        method : str
+            Method name
+            
+        Returns
+        -------
+        bool
+            True if scipy method, False otherwise
+        """
+        scipy_methods = {'LSODA', 'RK45', 'RK23', 'DOP853', 'Radau', 'BDF'}
+        return method in scipy_methods
 
     @classmethod
     def _create_torch_integrator(cls, system, method: str, dt, step_mode, **options):
@@ -1006,6 +1043,8 @@ class IntegratorFactory:
     def get_info(backend: str, method: str) -> Dict[str, Any]:
         """
         Get information about a specific integrator configuration.
+        
+        Delegates to integrator-specific info functions where available.
 
         Parameters
         ----------
@@ -1027,14 +1066,35 @@ class IntegratorFactory:
         >>>
         >>> info = IntegratorFactory.get_info('numpy', 'Tsit5')
         >>> print(info['description'])
-        'Julia: Tsitouras 5(4) - Excellent general purpose'
+        'Excellent general-purpose solver with good efficiency'
         """
+        # Try to get info from Julia algorithms if it's a Julia method
+        if backend == 'numpy':
+            try:
+                from src.systems.base.numerical_integration.diffeqpy_integrator import (
+                    get_algorithm_info
+                )
+                from src.systems.base.numerical_integration.integrator_factory import (
+                    IntegratorFactory
+                )
+                
+                if IntegratorFactory._is_julia_method(method):
+                    julia_info = get_algorithm_info(method)
+                    # Add backend info
+                    julia_info['backend'] = 'numpy'
+                    julia_info['library'] = 'Julia DifferentialEquations.jl'
+                    return julia_info
+            except ImportError:
+                pass  # diffeqpy not installed, fall through to defaults
+        
+        # Default method info for scipy, diffrax, torchdiffeq
         method_info = {
             # Scipy
             "LSODA": {
                 "name": "LSODA",
                 "order": "Variable (1-12)",
                 "type": "Adaptive",
+                "library": "scipy",
                 "description": "Auto-detects stiffness, switches Adams↔BDF",
                 "best_for": "Production, unknown stiffness",
                 "function_evals_per_step": "1-4",
@@ -1043,6 +1103,7 @@ class IntegratorFactory:
                 "name": "Dormand-Prince 5(4)",
                 "order": 5,
                 "type": "Adaptive",
+                "library": "scipy",
                 "description": "General purpose, robust",
                 "best_for": "Non-stiff systems",
                 "function_evals_per_step": "6",
@@ -1051,6 +1112,7 @@ class IntegratorFactory:
                 "name": "Dormand-Prince 8(5,3)",
                 "order": 8,
                 "type": "Adaptive",
+                "library": "scipy",
                 "description": "Very high accuracy",
                 "best_for": "Precision requirements",
                 "function_evals_per_step": "12",
@@ -1059,58 +1121,18 @@ class IntegratorFactory:
                 "name": "Backward Differentiation Formula",
                 "order": "Variable (1-5)",
                 "type": "Implicit",
+                "library": "scipy",
                 "description": "For very stiff systems",
                 "best_for": "Chemistry, circuits",
                 "function_evals_per_step": "1 + Jacobian",
             },
             
-            # Julia (DiffEqPy)
-            "Tsit5": {
-                "name": "Julia: Tsitouras 5(4)",
-                "order": 5,
-                "type": "Adaptive",
-                "description": "Excellent general purpose, Julia-optimized",
-                "best_for": "General use, difficult ODEs",
-                "function_evals_per_step": "7",
-            },
-            "Vern9": {
-                "name": "Julia: Verner 9(8)",
-                "order": 9,
-                "type": "Adaptive",
-                "description": "Very high accuracy",
-                "best_for": "High precision requirements",
-                "function_evals_per_step": "16",
-            },
-            "Rosenbrock23": {
-                "name": "Julia: Rosenbrock 2/3",
-                "order": 2,
-                "type": "Adaptive (Stiff)",
-                "description": "Stiff solver with automatic Jacobian",
-                "best_for": "Moderately stiff problems",
-                "function_evals_per_step": "2-3 + Jacobian",
-            },
-            "Rodas5": {
-                "name": "Julia: Rodas 5(4)",
-                "order": 5,
-                "type": "Adaptive (Stiff)",
-                "description": "High-accuracy stiff solver",
-                "best_for": "Very stiff, high precision",
-                "function_evals_per_step": "5-6 + Jacobian",
-            },
-            "AutoTsit5(Rosenbrock23())": {
-                "name": "Julia: Auto-switching",
-                "order": "Variable (2-5)",
-                "type": "Adaptive (Auto-stiffness)",
-                "description": "Automatically switches between non-stiff and stiff",
-                "best_for": "Unknown stiffness, set-and-forget",
-                "function_evals_per_step": "Variable",
-            },
-            
-            # Diffrax
+            # Diffrax (JAX)
             "tsit5": {
                 "name": "Tsitouras 5(4)",
                 "order": 5,
                 "type": "Adaptive",
+                "library": "Diffrax",
                 "description": "Excellent general purpose, JAX-optimized",
                 "best_for": "JAX optimization workflows",
                 "function_evals_per_step": "7",
@@ -1119,6 +1141,7 @@ class IntegratorFactory:
                 "name": "Dormand-Prince 5(4)",
                 "order": 5,
                 "type": "Adaptive",
+                "library": "Diffrax/TorchDiffEq",
                 "description": "Classic robust solver (torch & jax)",
                 "best_for": "General purpose",
                 "function_evals_per_step": "6",
@@ -1127,6 +1150,7 @@ class IntegratorFactory:
                 "name": "Dormand-Prince 8(7)",
                 "order": 8,
                 "type": "Adaptive",
+                "library": "Diffrax/TorchDiffEq",
                 "description": "High accuracy (torch & jax)",
                 "best_for": "Precision requirements",
                 "function_evals_per_step": "12",
@@ -1135,6 +1159,7 @@ class IntegratorFactory:
                 "name": "Bogacki-Shampine 3(2)",
                 "order": 3,
                 "type": "Adaptive",
+                "library": "Diffrax/TorchDiffEq",
                 "description": "Lower order adaptive (torch & jax)",
                 "best_for": "Fast simulations",
                 "function_evals_per_step": "4",
@@ -1145,6 +1170,7 @@ class IntegratorFactory:
                 "name": "Explicit Euler",
                 "order": 1,
                 "type": "Fixed-step",
+                "library": "Manual implementation",
                 "description": "Simplest method, educational",
                 "best_for": "Learning, prototyping",
                 "function_evals_per_step": "1",
@@ -1153,6 +1179,7 @@ class IntegratorFactory:
                 "name": "Explicit Midpoint (RK2)",
                 "order": 2,
                 "type": "Fixed-step",
+                "library": "Manual implementation",
                 "description": "Second-order accuracy",
                 "best_for": "Simple simulations",
                 "function_evals_per_step": "2",
@@ -1161,13 +1188,21 @@ class IntegratorFactory:
                 "name": "Classic Runge-Kutta 4",
                 "order": 4,
                 "type": "Fixed-step",
+                "library": "Manual implementation",
                 "description": "Excellent accuracy/cost trade-off",
                 "best_for": "Fixed-step simulations",
                 "function_evals_per_step": "4",
             },
         }
 
-        return method_info.get(method, {"name": method, "description": "No information available"})
+        return method_info.get(
+            method, 
+            {
+                "name": method, 
+                "description": "No information available",
+                "backend": backend
+            }
+        )
 
 
 # ============================================================================
