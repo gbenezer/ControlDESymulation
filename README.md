@@ -632,8 +632,7 @@ Currently not open to contributions, though may change after Phase 4 and once I 
 
 #### Phase 1 (Current):
 - Finish implementation of SDE Integration utilities
-    - Generate unit tests for DiffEqPySDEIntegrator and debug any issues
-    - Instantiate/code DiffraxSDEIntegrator, TorchSDEIntegrator, and  classes with associated unit tests
+    - Fully debug TorchSDEIntegrator
     - Make analogous SDEIntegratorFactory class and unit tests
 - Look back and assess if any additional refactoring needs to occur
     - Mainly looking for
