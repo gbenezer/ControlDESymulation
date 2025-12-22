@@ -15,9 +15,15 @@ Examples
 ...     system, backend='jax', method='tsit5'
 ... )
 >>>
+>>> # Julia DiffEqPy solver
+>>> integrator = IntegratorFactory.create(
+...     system, backend='numpy', method='Tsit5'
+... )
+>>>
 >>> # Quick helpers
 >>> integrator = IntegratorFactory.auto(system)  # Best for system
 >>> integrator = IntegratorFactory.for_optimization(system)  # Best for gradients
+>>> integrator = IntegratorFactory.for_julia(system)  # Best Julia solver
 """
 
 from typing import Optional, Dict, Any, TYPE_CHECKING
@@ -36,9 +42,10 @@ class IntegratorType(Enum):
     Used for automatic selection based on use case.
     """
 
-    PRODUCTION = "production"  # Scipy (LSODA)
+    PRODUCTION = "production"  # Scipy (LSODA) or DiffEqPy (AutoTsit5)
     OPTIMIZATION = "optimization"  # Diffrax (tsit5)
     NEURAL_ODE = "neural_ode"  # TorchDiffEq (dopri5, adjoint)
+    JULIA = "julia"  # DiffEqPy (Tsit5 or specialized)
     SIMPLE = "simple"  # RK4 fixed-step
     EDUCATIONAL = "educational"  # Euler fixed-step
 
@@ -49,8 +56,15 @@ class IntegratorFactory:
 
     Provides convenient methods for creating integrators based on:
     - Backend (numpy, torch, jax)
-    - Method (RK45, dopri5, tsit5, etc.)
-    - Use case (production, optimization, neural ODE)
+    - Method (RK45, dopri5, tsit5, Tsit5, etc.)
+    - Use case (production, optimization, neural ODE, julia)
+
+    Supports:
+    - Scipy (numpy): LSODA, RK45, BDF, Radau, etc.
+    - DiffEqPy (numpy): Tsit5, Vern9, Rosenbrock23, etc. (Julia solvers)
+    - TorchDiffEq (torch): dopri5, dopri8, etc.
+    - Diffrax (jax): tsit5, dopri5, etc.
+    - Manual (any): euler, midpoint, rk4
 
     Examples
     --------
@@ -61,13 +75,20 @@ class IntegratorFactory:
     ...     method='LSODA'
     ... )
     >>>
+    >>> # Julia solver
+    >>> integrator = IntegratorFactory.create(
+    ...     system,
+    ...     backend='numpy',
+    ...     method='Tsit5'  # Capital T = Julia
+    ... )
+    >>>
     >>> # Automatic selection
     >>> integrator = IntegratorFactory.auto(system)
     >>>
     >>> # Use case-specific
     >>> integrator = IntegratorFactory.for_optimization(system)
     >>> integrator = IntegratorFactory.for_production(system)
-    >>> integrator = IntegratorFactory.for_neural_ode(neural_system)
+    >>> integrator = IntegratorFactory.for_julia(system, algorithm='Vern9')
     """
 
     # Default methods for each backend
@@ -77,7 +98,7 @@ class IntegratorFactory:
         "jax": "tsit5",
     }
 
-    # Method to integrator class mapping
+    # Method to backend/integrator mapping
     _METHOD_TO_BACKEND = {
         # Scipy methods (numpy only)
         "RK45": "numpy",
@@ -86,6 +107,34 @@ class IntegratorFactory:
         "Radau": "numpy",
         "BDF": "numpy",
         "LSODA": "numpy",
+        
+        # DiffEqPy (Julia) methods (numpy only)
+        # Convention: Capital first letter = Julia solver
+        "Tsit5": "numpy",
+        "Vern6": "numpy",
+        "Vern7": "numpy",
+        "Vern8": "numpy",
+        "Vern9": "numpy",
+        "DP5": "numpy",
+        "DP8": "numpy",
+        "Rosenbrock23": "numpy",
+        "Rosenbrock32": "numpy",
+        "Rodas4": "numpy",
+        "Rodas4P": "numpy",
+        "Rodas5": "numpy",
+        "TRBDF2": "numpy",
+        "KenCarp3": "numpy",
+        "KenCarp4": "numpy",
+        "KenCarp5": "numpy",
+        "RadauIIA5": "numpy",
+        "ROCK2": "numpy",
+        "ROCK4": "numpy",
+        "VelocityVerlet": "numpy",
+        "SymplecticEuler": "numpy",
+        # Special Julia auto-switching (contains parentheses)
+        "AutoTsit5(Rosenbrock23())": "numpy",
+        "AutoVern7(Rodas5())": "numpy",
+        
         # TorchDiffEq-only methods (torch only)
         "adaptive_heun": "torch",
         "fehlberg2": "torch",
@@ -93,28 +142,18 @@ class IntegratorFactory:
         "implicit_adams": "torch",
         "fixed_adams": "torch",
         "scipy_solver": "torch",
+        
         # Shared adaptive methods (available in BOTH torch and jax)
         "dopri5": ["torch", "jax"],
         "dopri8": ["torch", "jax"],
         "bosh3": ["torch", "jax"],
+        
         # Diffrax-only explicit methods (jax only)
-        "tsit5": "jax",
+        "tsit5": "jax",  # lowercase = Diffrax
         "heun": "jax",
         "ralston": "jax",
         "reversible_heun": "jax",
-        # TODO: Implicit and IMEX methods are listed in list_methods()
-        # but not yet implemented in DiffraxIntegrator
-        # Uncomment these when DiffraxIntegrator supports them:
-        # 'implicit_euler': 'jax',
-        # 'kvaerno3': 'jax',
-        # 'kvaerno4': 'jax',
-        # 'kvaerno5': 'jax',
-        # 'sil3': 'jax',
-        # 'kencarp3': 'jax',
-        # 'kencarp4': 'jax',
-        # 'kencarp5': 'jax',
-        # 'semi_implicit_euler': 'jax',
-        # 'leapfrog_midpoint': 'jax',
+        
         # Fixed-step methods (available in all backends via manual implementation)
         "euler": "any",
         "midpoint": "any",
@@ -142,7 +181,8 @@ class IntegratorFactory:
             Backend: 'numpy', 'torch', 'jax'. Default: 'numpy'
         method : Optional[str]
             Solver method. If None, uses backend default.
-            - numpy: 'LSODA' (auto-stiffness)
+            - numpy: 'LSODA' (scipy, auto-stiffness)
+            - numpy with capital: 'Tsit5' (Julia via DiffEqPy)
             - torch: 'dopri5' (general adaptive)
             - jax: 'tsit5' (general adaptive)
         dt : Optional[float]
@@ -166,10 +206,15 @@ class IntegratorFactory:
 
         Examples
         --------
-        >>> # Use defaults
+        >>> # Use defaults (scipy)
         >>> integrator = IntegratorFactory.create(system)
         >>>
-        >>> # Specify method
+        >>> # Julia solver
+        >>> integrator = IntegratorFactory.create(
+        ...     system, backend='numpy', method='Tsit5'
+        ... )
+        >>>
+        >>> # Specify JAX method
         >>> integrator = IntegratorFactory.create(
         ...     system, backend='jax', method='dopri5'
         ... )
@@ -200,7 +245,7 @@ class IntegratorFactory:
             if isinstance(required_backend, list):
                 if backend not in required_backend:
                     raise ValueError(
-                        f"Method '{method}' requires backend in {required_backend}, "  # Add "in"
+                        f"Method '{method}' requires backend in {required_backend}, "
                         f"got backend='{backend}'"
                     )
             elif required_backend != "any" and required_backend != backend:
@@ -221,9 +266,39 @@ class IntegratorFactory:
     def _create_numpy_integrator(
         cls, system, method: str, dt: Optional[float], step_mode: StepMode, **options
     ):
-        """Create NumPy-based integrator."""
-        # Fixed-step methods
-        if method in ["euler", "midpoint", "rk4"]:
+        """
+        Create NumPy-based integrator.
+        
+        Automatically detects whether to use Scipy or DiffEqPy based on method name.
+        Convention: Capital first letter (Tsit5, Vern9) = Julia, otherwise Scipy.
+        """
+        # Check if this is a Julia/DiffEqPy method
+        is_julia_method = cls._is_julia_method(method)
+        
+        if is_julia_method:
+            # Use DiffEqPy integrator
+            try:
+                from src.systems.base.numerical_integration.diffeqpy_integrator import (
+                    DiffEqPyIntegrator
+                )
+                
+                return DiffEqPyIntegrator(
+                    system,
+                    dt=dt,
+                    step_mode=step_mode,
+                    backend='numpy',
+                    algorithm=method,
+                    **options
+                )
+            except ImportError:
+                raise ImportError(
+                    f"Julia method '{method}' requires diffeqpy. "
+                    f"Install Julia + DifferentialEquations.jl + diffeqpy, "
+                    f"or use a scipy method instead."
+                )
+        
+        # Fixed-step methods (manual implementations)
+        elif method in ["euler", "midpoint", "rk4"]:
             if dt is None:
                 raise ValueError(f"Fixed-step method '{method}' requires dt")
 
@@ -247,6 +322,49 @@ class IntegratorFactory:
             from src.systems.base.numerical_integration.scipy_integrator import ScipyIntegrator
 
             return ScipyIntegrator(system, dt=dt, method=method, backend="numpy", **options)
+
+    @classmethod
+    def _is_julia_method(cls, method: str) -> bool:
+        """
+        Determine if a method name refers to a Julia/DiffEqPy solver.
+        
+        Uses list_algorithms() from diffeqpy_integrator as single source of truth.
+        
+        Parameters
+        ----------
+        method : str
+            Method name
+            
+        Returns
+        -------
+        bool
+            True if Julia method, False otherwise
+        """
+        if not method:
+            return False
+        
+        # Auto-switching algorithms contain parentheses
+        if '(' in method:
+            return True
+        
+        # Check against known Julia algorithms
+        try:
+            from src.systems.base.numerical_integration.diffeqpy_integrator import list_algorithms
+            
+            all_algorithms = list_algorithms()
+            known_julia_algorithms = set()
+            for category, algos in all_algorithms.items():
+                known_julia_algorithms.update(algos)
+            
+            return method in known_julia_algorithms
+        except ImportError:
+            # diffeqpy not installed - fall back to heuristic
+            # Julia algorithms start with capital letter but aren't all uppercase
+            if method[0].isupper() and not method.isupper():
+                return True
+            return False
+        
+        return method in julia_algorithms
 
     @classmethod
     def _create_torch_integrator(cls, system, method: str, dt, step_mode, **options):
@@ -318,14 +436,12 @@ class IntegratorFactory:
 
         try:
             import jax
-
             backends_available.append("jax")
         except ImportError:
             pass
 
         try:
             import torch
-
             backends_available.append("torch")
         except ImportError:
             pass
@@ -345,42 +461,161 @@ class IntegratorFactory:
         return cls.create(system, backend=backend, **options)
 
     @classmethod
-    def for_production(cls, system: "SymbolicDynamicalSystem", **options) -> IntegratorBase:
+    def for_production(
+        cls, 
+        system: "SymbolicDynamicalSystem",
+        use_julia: bool = False,
+        **options
+    ) -> IntegratorBase:
         """
         Create integrator for production use.
 
-        Uses scipy.LSODA with automatic stiffness detection.
-        Most reliable choice for production simulations.
+        Uses scipy.LSODA (default) or Julia's AutoTsit5 (if use_julia=True)
+        with automatic stiffness detection. Most reliable choices.
 
         Parameters
         ----------
         system : SymbolicDynamicalSystem
             System to integrate
+        use_julia : bool
+            If True, use Julia's AutoTsit5. Default: False (scipy)
         **options
             Additional options (rtol, atol, etc.)
 
         Returns
         -------
         IntegratorBase
-            Scipy integrator with LSODA
+            Production-grade integrator
 
         Examples
         --------
+        >>> # Scipy (default)
         >>> integrator = IntegratorFactory.for_production(
         ...     system, rtol=1e-9, atol=1e-11
         ... )
+        >>>
+        >>> # Julia (if installed)
+        >>> integrator = IntegratorFactory.for_production(
+        ...     system, use_julia=True
+        ... )
         """
-        from src.systems.base.numerical_integration.scipy_integrator import ScipyIntegrator
+        if use_julia:
+            try:
+                from src.systems.base.numerical_integration.diffeqpy_integrator import (
+                    DiffEqPyIntegrator
+                )
+                
+                # Set conservative defaults
+                default_options = {
+                    "rtol": 1e-8,
+                    "atol": 1e-10,
+                }
+                default_options.update(options)
+                
+                return DiffEqPyIntegrator(
+                    system,
+                    backend='numpy',
+                    algorithm='AutoTsit5(Rosenbrock23())',  # Auto-stiffness
+                    **default_options
+                )
+            except ImportError:
+                raise ImportError(
+                    "use_julia=True requires diffeqpy. "
+                    "Install Julia + DifferentialEquations.jl + diffeqpy, "
+                    "or use use_julia=False for scipy."
+                )
+        else:
+            from src.systems.base.numerical_integration.scipy_integrator import ScipyIntegrator
 
-        # Set conservative defaults
-        default_options = {
-            "rtol": 1e-8,
-            "atol": 1e-10,
-        }
-        default_options.update(options)
+            # Set conservative defaults
+            default_options = {
+                "rtol": 1e-8,
+                "atol": 1e-10,
+            }
+            default_options.update(options)
 
-        return ScipyIntegrator(
-            system, method="LSODA", backend="numpy", **default_options  # Auto stiffness detection
+            return ScipyIntegrator(
+                system, method="LSODA", backend="numpy", **default_options
+            )
+
+    @classmethod
+    def for_julia(
+        cls,
+        system: "SymbolicDynamicalSystem",
+        algorithm: str = 'Tsit5',
+        **options
+    ) -> IntegratorBase:
+        """
+        Create Julia DiffEqPy integrator.
+        
+        Provides access to Julia's extensive ODE solver ecosystem.
+        Best for difficult ODEs, high accuracy, or specialized solvers.
+
+        Parameters
+        ----------
+        system : SymbolicDynamicalSystem
+            System to integrate
+        algorithm : str
+            Julia algorithm name. Default: 'Tsit5'
+            Options: Tsit5, Vern9, Rosenbrock23, AutoTsit5(Rosenbrock23()), etc.
+        **options
+            Additional options (rtol, atol, etc.)
+
+        Returns
+        -------
+        IntegratorBase
+            DiffEqPy integrator
+
+        Raises
+        ------
+        ImportError
+            If Julia/diffeqpy not installed
+
+        Examples
+        --------
+        >>> # Default (Tsit5)
+        >>> integrator = IntegratorFactory.for_julia(system)
+        >>>
+        >>> # High accuracy
+        >>> integrator = IntegratorFactory.for_julia(
+        ...     system,
+        ...     algorithm='Vern9',
+        ...     rtol=1e-12
+        ... )
+        >>>
+        >>> # Auto-switching
+        >>> integrator = IntegratorFactory.for_julia(
+        ...     system,
+        ...     algorithm='AutoTsit5(Rosenbrock23())'
+        ... )
+        >>>
+        >>> # Stiff system
+        >>> integrator = IntegratorFactory.for_julia(
+        ...     system,
+        ...     algorithm='Rodas5'
+        ... )
+        """
+        try:
+            from src.systems.base.numerical_integration.diffeqpy_integrator import (
+                DiffEqPyIntegrator
+            )
+        except ImportError:
+            raise ImportError(
+                "Julia integration requires diffeqpy.\n\n"
+                "Installation:\n"
+                "1. Install Julia from https://julialang.org/downloads/\n"
+                "2. Install DifferentialEquations.jl:\n"
+                "   julia> using Pkg\n"
+                "   julia> Pkg.add('DifferentialEquations')\n"
+                "3. Install Python package:\n"
+                "   pip install diffeqpy"
+            )
+        
+        return DiffEqPyIntegrator(
+            system,
+            backend='numpy',
+            algorithm=algorithm,
+            **options
         )
 
     @classmethod
@@ -593,15 +828,46 @@ class IntegratorFactory:
 
     @staticmethod
     def list_methods(backend: Optional[str] = None) -> Dict[str, list]:
-        """List available methods for each backend."""
+        """
+        List available methods for each backend.
+        
+        Returns
+        -------
+        Dict[str, list]
+            Methods available for each backend
+            
+        Examples
+        --------
+        >>> methods = IntegratorFactory.list_methods()
+        >>> print(methods['numpy'][:5])
+        ['LSODA', 'RK45', 'Tsit5', 'Vern9', ...]
+        >>>
+        >>> # Just one backend
+        >>> numpy_methods = IntegratorFactory.list_methods('numpy')
+        """
         all_methods = {
             "numpy": [
+                # Scipy methods
                 "LSODA",
                 "RK45",
                 "RK23",
                 "DOP853",
                 "Radau",
                 "BDF",
+                # Julia methods (if diffeqpy installed)
+                "Tsit5",
+                "Vern6",
+                "Vern7",
+                "Vern8",
+                "Vern9",
+                "DP5",
+                "DP8",
+                "Rosenbrock23",
+                "Rodas5",
+                "AutoTsit5(Rosenbrock23())",
+                "ROCK4",
+                "VelocityVerlet",
+                # Manual implementations
                 "euler",
                 "midpoint",
                 "rk4",
@@ -651,7 +917,7 @@ class IntegratorFactory:
         ----------
         use_case : str
             One of: 'production', 'optimization', 'neural_ode',
-            'prototype', 'educational', 'real_time'
+            'prototype', 'educational', 'real_time', 'julia'
         has_jax : bool
             Whether JAX is available
         has_torch : bool
@@ -689,6 +955,12 @@ class IntegratorFactory:
                 "step_mode": StepMode.ADAPTIVE,
                 "adjoint": True,  # Note: This is an option, not integrator attribute
                 "reason": "Memory-efficient backprop through ODE",
+            },
+            "julia": {
+                "backend": "numpy",
+                "method": "Tsit5",
+                "step_mode": StepMode.ADAPTIVE,
+                "reason": "Access to Julia's powerful solver ecosystem",
             },
             "prototype": {
                 "backend": "numpy",
@@ -752,6 +1024,10 @@ class IntegratorFactory:
         >>> info = IntegratorFactory.get_info('jax', 'tsit5')
         >>> print(info['description'])
         'Tsitouras 5(4) - Excellent general purpose solver'
+        >>>
+        >>> info = IntegratorFactory.get_info('numpy', 'Tsit5')
+        >>> print(info['description'])
+        'Julia: Tsitouras 5(4) - Excellent general purpose'
         """
         method_info = {
             # Scipy
@@ -787,6 +1063,49 @@ class IntegratorFactory:
                 "best_for": "Chemistry, circuits",
                 "function_evals_per_step": "1 + Jacobian",
             },
+            
+            # Julia (DiffEqPy)
+            "Tsit5": {
+                "name": "Julia: Tsitouras 5(4)",
+                "order": 5,
+                "type": "Adaptive",
+                "description": "Excellent general purpose, Julia-optimized",
+                "best_for": "General use, difficult ODEs",
+                "function_evals_per_step": "7",
+            },
+            "Vern9": {
+                "name": "Julia: Verner 9(8)",
+                "order": 9,
+                "type": "Adaptive",
+                "description": "Very high accuracy",
+                "best_for": "High precision requirements",
+                "function_evals_per_step": "16",
+            },
+            "Rosenbrock23": {
+                "name": "Julia: Rosenbrock 2/3",
+                "order": 2,
+                "type": "Adaptive (Stiff)",
+                "description": "Stiff solver with automatic Jacobian",
+                "best_for": "Moderately stiff problems",
+                "function_evals_per_step": "2-3 + Jacobian",
+            },
+            "Rodas5": {
+                "name": "Julia: Rodas 5(4)",
+                "order": 5,
+                "type": "Adaptive (Stiff)",
+                "description": "High-accuracy stiff solver",
+                "best_for": "Very stiff, high precision",
+                "function_evals_per_step": "5-6 + Jacobian",
+            },
+            "AutoTsit5(Rosenbrock23())": {
+                "name": "Julia: Auto-switching",
+                "order": "Variable (2-5)",
+                "type": "Adaptive (Auto-stiffness)",
+                "description": "Automatically switches between non-stiff and stiff",
+                "best_for": "Unknown stiffness, set-and-forget",
+                "function_evals_per_step": "Variable",
+            },
+            
             # Diffrax
             "tsit5": {
                 "name": "Tsitouras 5(4)",
@@ -820,6 +1139,7 @@ class IntegratorFactory:
                 "best_for": "Fast simulations",
                 "function_evals_per_step": "4",
             },
+            
             # Fixed-step
             "euler": {
                 "name": "Explicit Euler",
@@ -870,6 +1190,7 @@ def create_integrator(
     --------
     >>> integrator = create_integrator(system)
     >>> integrator = create_integrator(system, backend='jax', method='tsit5')
+    >>> integrator = create_integrator(system, backend='numpy', method='Tsit5')  # Julia
     """
     return IntegratorFactory.create(system, backend, method, **options)
 
