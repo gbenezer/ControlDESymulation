@@ -425,14 +425,17 @@ class IntegratorFactory:
         """Create JAX-based integrator - always use Diffrax."""
         from src.systems.base.numerical_integration.diffrax_integrator import DiffraxIntegrator
         
+        # Remove 'solver' from options if present (avoid duplicate keyword argument)
+        options_clean = {k: v for k, v in options.items() if k != 'solver'}
+        
         # Let Diffrax handle ALL methods, including euler/midpoint
         return DiffraxIntegrator(
             system,
             dt=dt,
             step_mode=step_mode,
             backend='jax',
-            solver=method,
-            **options
+            solver=method,  # Pass method as solver parameter
+            **options_clean  # Pass cleaned options without 'solver'
         )
 
     # ========================================================================
