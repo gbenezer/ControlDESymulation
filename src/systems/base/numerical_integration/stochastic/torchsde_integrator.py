@@ -249,11 +249,19 @@ class TorchSDEIntegrator(SDEIntegratorBase):
                 f"Available: {available_methods}"
             )
         
+        # Validate method compatibility with SDE type
+        self._validate_method_sde_compatibility()
+        
         # Auto-detect noise type if not specified
+        # Priority for torchsde compatibility:
+        # 1. Check if truly scalar (nw=1 AND nx=1) -> 'scalar'
+        # 2. Check if additive (constant) -> 'additive' 
+        # 3. Check if diagonal -> 'diagonal'
+        # 4. Otherwise -> 'general'
         if noise_type is None:
-            if self.sde_system.is_scalar_noise():
-                self.noise_type = 'scalar'
-            elif self.sde_system.is_additive_noise():
+            # For torchsde, 'scalar' means nw=1 AND nx=1
+            # Otherwise, even with nw=1, we need full (batch, nx, nw) shape
+            if self.sde_system.is_additive_noise():
                 self.noise_type = 'additive'
             elif self.sde_system.is_diagonal_noise():
                 self.noise_type = 'diagonal'
@@ -264,6 +272,46 @@ class TorchSDEIntegrator(SDEIntegratorBase):
         
         # Device management
         self.device = torch.device('cpu')
+    
+    def _validate_method_sde_compatibility(self):
+        """
+        Validate that the selected method is compatible with the SDE type.
+        
+        Some torchsde solvers only work with specific SDE interpretations.
+        
+        Raises
+        ------
+        ValueError
+            If method is incompatible with SDE type
+        """
+        # Methods that only work with Stratonovich
+        stratonovich_only = ['midpoint', 'reversible_heun']
+        
+        # Methods that only work with Ito
+        ito_only = ['milstein']  # Standard Milstein is Ito
+        
+        # Methods that work with both
+        both = ['euler', 'srk', 'adaptive_heun']
+        
+        if self.method in stratonovich_only and self.sde_type == SDEType.ITO:
+            raise ValueError(
+                f"Method '{self.method}' only supports Stratonovich SDEs, "
+                f"but system SDE type is Ito.\n"
+                f"Solutions:\n"
+                f"  1. Use an Ito-compatible method: {ito_only + both}\n"
+                f"  2. Change system to Stratonovich (set sde_type='stratonovich')\n"
+                f"  3. Override integrator SDE type: sde_type=SDEType.STRATONOVICH"
+            )
+        
+        if self.method in ito_only and self.sde_type == SDEType.STRATONOVICH:
+            raise ValueError(
+                f"Method '{self.method}' only supports Ito SDEs, "
+                f"but system SDE type is Stratonovich.\n"
+                f"Solutions:\n"
+                f"  1. Use a Stratonovich-compatible method: {stratonovich_only + both}\n"
+                f"  2. Change system to Ito (set sde_type='ito')\n"
+                f"  3. Override integrator SDE type: sde_type=SDEType.ITO"
+            )
     
     @property
     def name(self) -> str:
@@ -341,8 +389,8 @@ class TorchSDEIntegrator(SDEIntegratorBase):
                 Returns
                 -------
                 Tensor
-                    Diffusion with shape (batch, nx, nw) for general noise
-                    Or (batch, nx) for diagonal/scalar noise
+                    Diffusion with shape (batch, nx, nw) for general/additive noise
+                    Or (batch, nx) for diagonal noise (if torchsde expects it)
                 """
                 # Handle batched input
                 if y.ndim == 1:
@@ -357,7 +405,7 @@ class TorchSDEIntegrator(SDEIntegratorBase):
                     u = u_func(float(t), y_i)
                     g_i = sde_system.diffusion(y_i, u, backend=backend)
                     
-                    # Ensure proper shape
+                    # Ensure proper shape: (nx, nw)
                     if g_i.ndim == 1:
                         g_i = g_i.unsqueeze(-1)  # (nx,) -> (nx, 1)
                     
@@ -366,15 +414,10 @@ class TorchSDEIntegrator(SDEIntegratorBase):
                 # Stack: (batch, nx, nw)
                 result = torch.stack(diffusions, dim=0)
                 
-                # Handle noise type specific formats
-                if noise_type == 'scalar' and result.shape[2] == 1:
-                    # Scalar noise: squeeze to (batch, nx)
-                    result = result.squeeze(-1)
-                elif noise_type == 'diagonal':
-                    # Diagonal noise: torchsde might expect (batch, nx)
-                    if result.shape[1] == result.shape[2]:  # Square matrix
-                        # Extract diagonal
-                        result = torch.stack([torch.diag(result[i]) for i in range(batch_size)])
+                # torchsde expects (batch, nx, nw) for general/additive noise
+                # Keep this shape - don't squeeze!
+                # The error message says it wants (batch, state_channels, noise_channels)
+                # which is exactly (batch, nx, nw)
                 
                 return result
         
@@ -822,15 +865,17 @@ class TorchSDEIntegrator(SDEIntegratorBase):
                 'name': 'Midpoint',
                 'strong_order': 0.5,
                 'weak_order': 1.0,
-                'description': 'Better stability than Euler',
-                'best_for': 'Neural networks',
+                'description': 'Better stability than Euler (Stratonovich only)',
+                'best_for': 'Neural networks with Stratonovich SDEs',
+                'sde_type': 'stratonovich',
             },
             'reversible_heun': {
                 'name': 'Reversible Heun',
                 'strong_order': 0.5,
                 'weak_order': 1.0,
-                'description': 'Adaptive with error control',
-                'best_for': 'When adaptive stepping needed',
+                'description': 'Adaptive with error control (Stratonovich only)',
+                'best_for': 'Adaptive stepping with Stratonovich',
+                'sde_type': 'stratonovich',
             },
         }
         
