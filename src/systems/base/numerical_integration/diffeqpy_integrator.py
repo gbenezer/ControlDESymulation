@@ -305,15 +305,15 @@ class DiffEqPyIntegrator(IntegratorBase):
     
     @property
     def name(self) -> str:
-        """Return integrator name (uses list_algorithms for categorization)."""
         mode_str = "Fixed" if self.step_mode == StepMode.FIXED else "Adaptive"
         
-        # Dynamically determine type from algorithm categories
+        # USE DYNAMIC LOOKUP:
         all_algos = list_algorithms()
         
         if 'Auto' in self.algorithm:
             type_str = " (Auto-Stiffness)"
-        elif any(self.algorithm in all_algos[cat] for cat in ['stiff_rosenbrock', 'stiff_esdirk', 'stiff_implicit']):
+        elif any(self.algorithm in all_algos.get(cat, []) 
+                for cat in ['stiff_rosenbrock', 'stiff_esdirk', 'stiff_implicit']):
             type_str = " (Stiff)"
         elif self.algorithm in all_algos.get('stabilized', []):
             type_str = " (Stabilized)"
