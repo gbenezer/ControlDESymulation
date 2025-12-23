@@ -613,63 +613,50 @@ class TestPureDiffusionSystems:
     
     def test_pure_diffusion_state_evolution(self, brownian_system):
         """Test that pure diffusion actually moves the state."""
-        x0 = torch.tensor([0.0])
-        u_func = lambda t, x: None
-        t_span = (0.0, 2.0)
+        torch.manual_seed(42)
+        integrator = TorchSDEIntegrator(
+            brownian_system, dt=0.01, method='euler', seed=42
+        )
         
-        # Run a few times with different seeds
-        final_states = []
-        for seed in range(10):
-            torch.manual_seed(seed)
-            integrator = TorchSDEIntegrator(
-                brownian_system, dt=0.01, method='euler', seed=seed
-            )
-            result = integrator.integrate(x0, u_func, t_span)
-            final_states.append(result.x[-1, 0].item())
+        # Batched
+        x0_batch = torch.zeros(10, 1)
+        result = integrator.integrate(x0_batch, lambda t, x: None, (0.0, 2.0))
+        final_states = result.x[-1, :, 0].numpy()
         
         # States should vary
         unique_values = len(set([round(s, 6) for s in final_states]))
-        assert unique_values > 5, "States should vary across runs"
+        assert unique_values > 5
     
     @pytest.mark.slow
     def test_pure_diffusion_variance_growth(self, brownian_system):
         """Test that variance grows linearly: Var(X(t)) = sigma^2 * t."""
-        x0 = torch.tensor([0.0])
-        u_func = lambda t, x: None
-        
-        # Test at two different times
-        t1 = 0.5
-        t2 = 1.5
+        t1, t2 = 0.5, 1.5
         n_paths = 100
         
-        # Collect samples at t1
-        states_t1 = []
-        for seed in range(n_paths):
-            torch.manual_seed(seed)
-            integrator = TorchSDEIntegrator(
-                brownian_system, dt=0.01, method='euler', seed=seed
-            )
-            result = integrator.integrate(x0, u_func, (0.0, t1))
-            states_t1.append(result.x[-1, 0].item())
+        # Batched samples at t1
+        torch.manual_seed(42)
+        integrator = TorchSDEIntegrator(
+            brownian_system, dt=0.01, method='euler', seed=42
+        )
+        x0_batch = torch.zeros(n_paths, 1)
+        result_t1 = integrator.integrate(x0_batch, lambda t, x: None, (0.0, t1))
+        states_t1 = result_t1.x[-1, :, 0]
         
-        # Collect samples at t2
-        states_t2 = []
-        for seed in range(n_paths):
-            torch.manual_seed(seed)
-            integrator = TorchSDEIntegrator(
-                brownian_system, dt=0.01, method='euler', seed=seed
-            )
-            result = integrator.integrate(x0, u_func, (0.0, t2))
-            states_t2.append(result.x[-1, 0].item())
+        # Batched samples at t2 (need new integrator for different seed)
+        torch.manual_seed(43)
+        integrator2 = TorchSDEIntegrator(
+            brownian_system, dt=0.01, method='euler', seed=43
+        )
+        result_t2 = integrator2.integrate(x0_batch, lambda t, x: None, (0.0, t2))
+        states_t2 = result_t2.x[-1, :, 0]
         
-        var_t1 = np.var(states_t1)
-        var_t2 = np.var(states_t2)
+        var_t1 = states_t1.var().item()
+        var_t2 = states_t2.var().item()
         
         # Variance ratio should equal time ratio
         time_ratio = t2 / t1
         var_ratio = var_t2 / var_t1
         
-        # Allow 50% tolerance (torchsde has more variance than theory predicts)
         assert abs(var_ratio - time_ratio) / time_ratio < 0.5
 
 
@@ -1186,49 +1173,43 @@ class TestQualitativeBehavior:
     
     def test_ou_mean_reversion(self, ou_system):
         """Test that OU process shows mean reversion."""
+        torch.manual_seed(42)
         integrator = TorchSDEIntegrator(
-            ou_system,
-            dt=0.01,
-            method='euler',
-            seed=42
+            ou_system, dt=0.01, method='euler', seed=42
         )
         
-        x0 = torch.tensor([5.0])  # Start far from equilibrium
-        u_func = lambda t, x: None
-        t_span = (0.0, 3.0)
+        x0_batch = torch.full((10, 1), 5.0)  # All start at 5.0
+        result = integrator.integrate(x0_batch, lambda t, x: None, (0.0, 3.0))
         
-        # Run a few trajectories
-        final_states = []
-        for seed in range(10):
-            torch.manual_seed(seed)
-            integrator_fresh = TorchSDEIntegrator(
-                ou_system, dt=0.01, method='euler', seed=seed
-            )
-            result = integrator_fresh.integrate(x0, u_func, t_span)
-            final_states.append(result.x[-1, 0].item())
-        
-        # Mean should be closer to zero than initial
-        mean_final = np.mean(final_states)
-        assert abs(mean_final) < abs(x0.item())
+        # Mean of final states
+        mean_final = result.x[-1, :, 0].mean().item()
+        assert abs(mean_final) < 5.0
     
     def test_diffusion_increases_spread(self, ou_system):
-        """Test that diffusion causes trajectories to spread."""
-        x0 = torch.tensor([0.0])
+        """
+        Test that diffusion causes trajectories to spread.
+        
+        Uses batched integration for speed (~10x faster than sequential).
+        """
+        # Batched integration - all paths start at 0
+        n_paths = 20
+        x0_batch = torch.zeros(n_paths, 1)
         u_func = lambda t, x: None
         t_span = (0.0, 0.5)
         
-        # Multiple runs with different seeds
-        states = []
-        for seed in range(20):
-            torch.manual_seed(seed)
-            integrator = TorchSDEIntegrator(
-                ou_system, dt=0.01, method='euler', seed=seed
-            )
-            result = integrator.integrate(x0, u_func, t_span)
-            states.append(result.x[-1, 0].item())
+        torch.manual_seed(42)
+        integrator = TorchSDEIntegrator(
+            ou_system, dt=0.01, method='euler', seed=42
+        )
         
-        # States should have non-zero spread
-        spread = np.std(states)
+        # Single batched call instead of 20 sequential integrations
+        result = integrator.integrate(x0_batch, u_func, t_span)
+        
+        # Extract final states: result.x has shape (T, n_paths, 1)
+        final_states = result.x[-1, :, 0]  # (n_paths,)
+        
+        # States should have non-zero spread due to diffusion
+        spread = final_states.std().item()
         assert spread > 0.05, f"Too little spread: {spread}"
 
 
