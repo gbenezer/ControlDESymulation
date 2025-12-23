@@ -310,7 +310,7 @@ class TestStepFunction:
 
         ou_system.set_default_backend("jax")
         discretizer = StochasticDiscretizer(
-            ou_system, dt=dt, method="EM", backend="jax"
+            ou_system, dt=dt, method="Euler", backend="jax"
         )
 
         x = jnp.array([1.0])
