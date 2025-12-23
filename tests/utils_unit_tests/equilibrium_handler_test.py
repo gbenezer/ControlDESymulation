@@ -229,8 +229,9 @@ class TestBackendConversion:
         
         assert isinstance(x_eq, torch.Tensor)
         assert isinstance(u_eq, torch.Tensor)
-        assert x_eq.dtype == torch.float32
-        assert torch.allclose(x_eq, torch.tensor([1.0, 2.0]))
+        # Should preserve NumPy's default float64 dtype
+        assert x_eq.dtype == torch.float64
+        assert torch.allclose(x_eq, torch.tensor([1.0, 2.0], dtype=torch.float64))
 
     def test_jax_backend(self):
         """JAX backend should return JAX arrays"""
@@ -421,7 +422,8 @@ class TestEdgeCases:
         x_jax = handler.get_x("multi", backend="jax")
         
         assert np.allclose(x_np, x_ref)
-        assert torch.allclose(x_torch, torch.tensor(x_ref))
+        # torch should preserve float64 from numpy
+        assert torch.allclose(x_torch, torch.tensor(x_ref, dtype=torch.float64))
         assert np.allclose(np.array(x_jax), x_ref)
 
 if __name__ == "__main__":
