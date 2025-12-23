@@ -22,7 +22,7 @@ from numpy.testing import assert_allclose, assert_array_equal
 import warnings
 
 # Import components to test
-from src.systems.base.discretizer import Discretizer, DiscretizationMethod
+from src.systems.base.discretization.discretizer import Discretizer, DiscretizationMethod
 from src.systems.base.numerical_integration.integrator_factory import IntegratorFactory
 from src.systems.base.numerical_integration.integrator_base import StepMode
 
