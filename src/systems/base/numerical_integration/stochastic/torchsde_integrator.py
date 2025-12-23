@@ -433,6 +433,10 @@ class TorchSDEIntegrator(SDEIntegratorBase):
         """
         Take one SDE integration step.
         
+        Handles both single and batched inputs automatically:
+        - Input (nx,) → Output (nx,)
+        - Input (batch, nx) → Output (batch, nx)
+        
         Parameters
         ----------
         x : ArrayLike
@@ -442,12 +446,24 @@ class TorchSDEIntegrator(SDEIntegratorBase):
         dt : Optional[float]
             Step size (uses self.dt if None)
         dW : Optional[ArrayLike]
-            Brownian increments (not used - torchsde generates internally)
+            Brownian increments (nw,) or (batch, nw)
+            Note: torchsde generates noise internally, this parameter
+            is accepted but may not be used reliably
             
         Returns
         -------
         ArrayLike
-            Next state x(t + dt)
+            Next state x(t + dt), same shape as input x
+        
+        Examples
+        --------
+        >>> # Single trajectory
+        >>> x_next = integrator.step(torch.tensor([1.0]), torch.tensor([0.0]))
+        >>> 
+        >>> # Batched
+        >>> x_batch = torch.tensor([[1.0], [2.0], [3.0]])  # (3, 1)
+        >>> u_batch = torch.tensor([[0.0], [0.5], [1.0]])  # (3, 1)
+        >>> x_next = integrator.step(x_batch, u_batch)  # (3, 1)
         """
         step_size = dt if dt is not None else self.dt
         
@@ -461,33 +477,76 @@ class TorchSDEIntegrator(SDEIntegratorBase):
         if u is not None and not isinstance(u, torch.Tensor):
             u = torch.tensor(u, dtype=torch.float32, device=self.device)
         
-        # Define constant control function
-        u_func = lambda t, x_state: u
+        # Track if we need to squeeze output
+        squeeze_output = False
+        
+        # Normalize x to 2D: (batch, nx)
+        if x.ndim == 1:
+            x = x.unsqueeze(0)  # (nx,) → (1, nx)
+            squeeze_output = True
+        elif x.ndim == 2:
+            # Already correct shape
+            pass
+        else:
+            raise ValueError(
+                f"x must be 1D (nx,) or 2D (batch, nx), got shape {x.shape}"
+            )
+        
+        batch_size = x.shape[0]
+        
+        # Normalize u to match batch size
+        if u is not None:
+            if u.ndim == 1:
+                u = u.unsqueeze(0)  # (nu,) → (1, nu)
+            
+            # Expand u to match batch size if needed
+            if u.shape[0] == 1 and batch_size > 1:
+                u = u.expand(batch_size, -1)
+            elif u.shape[0] != batch_size:
+                raise ValueError(
+                    f"Batch size mismatch: x has {batch_size}, u has {u.shape[0]}"
+                )
+        
+        # Define control function that handles batching
+        def u_func_batched(t, x_state):
+            if u is None:
+                return None
+            # Return appropriate slice of u for current batch
+            if x_state.shape[0] == u.shape[0]:
+                return u
+            else:
+                # Single control broadcast to batch
+                return u.expand(x_state.shape[0], -1) if u.shape[0] == 1 else u
         
         # Create SDE wrapper
-        sde = self._create_sde_wrapper(u_func)
+        sde = self._create_sde_wrapper(u_func_batched)
         sde = sde.to(self.device)
         
         # Time points
         ts = torch.tensor([0.0, step_size], dtype=x.dtype, device=self.device)
         
         # Integrate using torchsde
+        # x is already (batch, nx) which is what torchsde expects
         if self.use_adjoint:
             ys = self.torchsde.sdeint_adjoint(
-                sde, x.unsqueeze(0), ts, method=self.method, dt=step_size
+                sde, x, ts, method=self.method, dt=step_size
             )
         else:
             ys = self.torchsde.sdeint(
-                sde, x.unsqueeze(0), ts, method=self.method, dt=step_size
+                sde, x, ts, method=self.method, dt=step_size
             )
         
-        # Extract final state
-        x_next = ys[-1, 0]
+        # Extract final state: ys has shape (time_steps, batch, nx)
+        x_next = ys[-1]  # (batch, nx)
+        
+        # Remove batch dimension if input was 1D
+        if squeeze_output:
+            x_next = x_next.squeeze(0)  # (1, nx) → (nx,)
         
         # Update statistics
         self._stats['total_steps'] += 1
-        self._stats['total_fev'] += 1
-        self._stats['diffusion_evals'] += 1
+        self._stats['total_fev'] += batch_size
+        self._stats['diffusion_evals'] += batch_size
         
         return x_next
     
