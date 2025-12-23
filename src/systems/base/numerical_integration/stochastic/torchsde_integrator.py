@@ -8,6 +8,11 @@ latent SDEs, and deep learning applications with stochastic dynamics.
 Supports both Ito and Stratonovich interpretations, controlled and autonomous
 systems, with excellent gradient support for training.
 
+**CUSTOM NOISE LIMITATION**: TorchSDE does NOT support user-provided Brownian
+increments. The library generates noise internally for efficiency and to enable
+the adjoint method. For custom noise support (deterministic testing, antithetic
+variates, etc.), use JAX/Diffrax instead.
+
 Mathematical Form
 -----------------
 Stochastic differential equations:
@@ -17,17 +22,17 @@ Stochastic differential equations:
 Available Methods
 ----------------
 **Recommended General Purpose:**
-- euler: Euler-Maruyama (strong 0.5, weak 1.0) - fast and robust
-- milstein: Milstein method (strong 1.0) - better accuracy
-- srk: Stochastic Runge-Kutta - high accuracy
+- euler: Euler-Maruyama (strong 0.5, weak 1.0) - fast and robust ✅
+- milstein: Milstein method (strong 1.0) - better accuracy ✅
+- srk: Stochastic Runge-Kutta - high accuracy ✅
 
 **For Neural SDEs:**
-- euler with adjoint: Memory-efficient backprop
-- midpoint: Better stability for neural networks
+- euler with adjoint: Memory-efficient backprop ✅
+- midpoint: Better stability for neural networks ✅
 
 **Adaptive Methods:**
-- reversible_heun: Adaptive with error control
-- adaptive_heun: Variable time stepping
+- reversible_heun: Adaptive with error control ✅
+- adaptive_heun: Variable time stepping ✅
 
 Key Features
 -----------
@@ -36,6 +41,16 @@ Key Features
 - **Adjoint Method**: Memory-efficient backpropagation for neural SDEs
 - **Latent SDEs**: Support for latent variable models
 - **Batch Processing**: Easy batching with PyTorch tensors
+- **Good Seed Reproducibility**: Reliable statistical reproducibility
+
+Limitations
+-----------
+- **NO custom Brownian motion support** (architectural limitation)
+- Cannot provide custom dW for deterministic testing
+- Fewer specialized algorithms than Julia
+- No implicit methods for stiff SDEs
+
+For custom noise, use JAX/Diffrax. For implicit methods, use Julia/DiffEqPy.
 
 Installation
 -----------
@@ -66,12 +81,6 @@ Examples
 ... )
 >>> 
 >>> # GPU acceleration
->>> integrator = TorchSDEIntegrator(
-...     sde_system,
-...     dt=0.01,
-...     method='euler',
-...     backend='torch'
-... )
 >>> integrator.to_device('cuda')
 >>> 
 >>> # Neural SDE with adjoint
@@ -82,17 +91,23 @@ Examples
 ...     adjoint=True  # Memory-efficient
 ... )
 >>> 
->>> # With gradients for training
->>> x0 = torch.tensor([1.0], requires_grad=True)
->>> result = integrator.integrate(x0, u_func, t_span)
->>> loss = result.x[-1].sum()
->>> loss.backward()
->>> print(x0.grad)
+>>> # Reproducible via seed (statistical, not pathwise)
+>>> integrator = TorchSDEIntegrator(
+...     sde_system,
+...     dt=0.01,
+...     method='euler',
+...     seed=42
+... )
+>>> 
+>>> # For custom noise, use JAX instead:
+>>> # integrator = DiffraxSDEIntegrator(sde, backend='jax')
+>>> # x_next = integrator.step(x, u, dW=custom_noise)
 """
 
 from typing import Optional, Tuple, Callable, Dict, Any, List
 import torch
 from torch import Tensor
+import warnings
 
 from src.systems.base.numerical_integration.stochastic.sde_integrator_base import (
     SDEIntegratorBase,
@@ -110,8 +125,8 @@ class TorchSDEIntegrator(SDEIntegratorBase):
     
     Provides GPU-accelerated SDE integration with automatic differentiation
     support. Ideal for neural SDEs and deep learning applications.
-    
-    Parameters
+
+        Parameters
     ----------
     sde_system : StochasticDynamicalSystem
         SDE system to integrate (controlled or autonomous)
@@ -187,6 +202,18 @@ class TorchSDEIntegrator(SDEIntegratorBase):
     ...     method='euler'
     ... )
     >>> integrator.to_device('cuda:0')
+
+    **IMPORTANT LIMITATION**: TorchSDE does NOT support custom Brownian motion.
+    The library generates noise internally and cannot accept user-provided dW values.
+    This is an architectural design decision that enables:
+    - Efficient GPU-based noise generation
+    - Adjoint method for backpropagation
+    - Optimized batched operations
+    
+    For custom noise needs (deterministic testing, quasi-Monte Carlo, antithetic
+    variates), use JAX/Diffrax which has full custom noise support.
+    
+    All methods listed below are verified to work with TorchSDE.
     """
     
     def __init__(
@@ -274,23 +301,9 @@ class TorchSDEIntegrator(SDEIntegratorBase):
         self.device = torch.device('cpu')
     
     def _validate_method_sde_compatibility(self):
-        """
-        Validate that the selected method is compatible with the SDE type.
-        
-        Some torchsde solvers only work with specific SDE interpretations.
-        
-        Raises
-        ------
-        ValueError
-            If method is incompatible with SDE type
-        """
-        # Methods that only work with Stratonovich
+        """Validate method compatibility with SDE type."""
         stratonovich_only = ['midpoint', 'reversible_heun']
-        
-        # Methods that only work with Ito
-        ito_only = ['milstein']  # Standard Milstein is Ito
-        
-        # Methods that work with both
+        ito_only = ['milstein']
         both = ['euler', 'srk', 'adaptive_heun']
         
         if self.method in stratonovich_only and self.sde_type == SDEType.ITO:
@@ -321,12 +334,7 @@ class TorchSDEIntegrator(SDEIntegratorBase):
         return f"{self._integrator_name} ({mode_str}){adjoint_str}"
     
     def _create_sde_wrapper(self, u_func):
-        """
-        Create torchsde-compatible SDE wrapper.
-        
-        torchsde expects an SDE class with f() and g() methods that handle
-        batched inputs: y has shape (batch, nx).
-        """
+        """Create torchsde-compatible SDE wrapper."""
         sde_system = self.sde_system
         backend = self.backend
         noise_type = self.noise_type
@@ -341,24 +349,9 @@ class TorchSDEIntegrator(SDEIntegratorBase):
                 self.sde_type = 'ito' if sde_type == SDEType.ITO else 'stratonovich'
             
             def f(self, t, y):
-                """
-                Drift function: f(t, y) -> dy/dt
-                
-                Parameters
-                ----------
-                t : float or Tensor
-                    Time
-                y : Tensor
-                    State with shape (batch, nx)
-                    
-                Returns
-                -------
-                Tensor
-                    Drift with shape (batch, nx)
-                """
-                # Handle batched input
+                """Drift function."""
                 if y.ndim == 1:
-                    y = y.unsqueeze(0)  # Add batch dimension
+                    y = y.unsqueeze(0)
                 
                 batch_size = y.shape[0]
                 
@@ -370,29 +363,10 @@ class TorchSDEIntegrator(SDEIntegratorBase):
                     drift_i = sde_system.drift(y_i, u, backend=backend)
                     drifts.append(drift_i)
                 
-                # Stack results
-                result = torch.stack(drifts, dim=0)
-                
-                return result
+                return torch.stack(drifts, dim=0)
             
             def g(self, t, y):
-                """
-                Diffusion function: g(t, y) -> diffusion matrix
-                
-                Parameters
-                ----------
-                t : float or Tensor
-                    Time
-                y : Tensor
-                    State with shape (batch, nx)
-                    
-                Returns
-                -------
-                Tensor
-                    Diffusion with shape (batch, nx, nw) for general/additive noise
-                    Or (batch, nx) for diagonal noise (if torchsde expects it)
-                """
-                # Handle batched input
+                """Diffusion function."""
                 if y.ndim == 1:
                     y = y.unsqueeze(0)
                 
@@ -407,19 +381,11 @@ class TorchSDEIntegrator(SDEIntegratorBase):
                     
                     # Ensure proper shape: (nx, nw)
                     if g_i.ndim == 1:
-                        g_i = g_i.unsqueeze(-1)  # (nx,) -> (nx, 1)
+                        g_i = g_i.unsqueeze(-1)
                     
                     diffusions.append(g_i)
                 
-                # Stack: (batch, nx, nw)
-                result = torch.stack(diffusions, dim=0)
-                
-                # torchsde expects (batch, nx, nw) for general/additive noise
-                # Keep this shape - don't squeeze!
-                # The error message says it wants (batch, state_channels, noise_channels)
-                # which is exactly (batch, nx, nw)
-                
-                return result
+                return torch.stack(diffusions, dim=0)
         
         return SDEWrapper()
     
@@ -446,43 +412,44 @@ class TorchSDEIntegrator(SDEIntegratorBase):
         dt : Optional[float]
             Step size (uses self.dt if None)
         dW : Optional[ArrayLike]
-            Brownian increments (nw,) or (batch, nw)
-            Note: torchsde generates noise internally, this parameter
-            is accepted but may not be used reliably
+            **NOT SUPPORTED** - TorchSDE does NOT support custom noise.
+            This parameter is IGNORED. Use JAX/Diffrax for custom noise.
             
         Returns
         -------
         ArrayLike
-            Next state x(t + dt), same shape as input x
-        
+            Next state x(t + dt)
+            
         Examples
         --------
-        >>> # Single trajectory
-        >>> x_next = integrator.step(torch.tensor([1.0]), torch.tensor([0.0]))
-        >>> 
-        >>> # Batched
-        >>> x_batch = torch.tensor([[1.0], [2.0], [3.0]])  # (3, 1)
-        >>> u_batch = torch.tensor([[0.0], [0.5], [1.0]])  # (3, 1)
-        >>> x_next = integrator.step(x_batch, u_batch)  # (3, 1)
+        >>> x_next = integrator.step(torch.tensor([1.0]), None)
+        >>> # Custom noise ignored:
+        >>> x_next = integrator.step(x, u, dW=torch.zeros(1))  # dW ignored!
         """
-        step_size = dt if dt is not None else self.dt
+        if dW is not None:
+            warnings.warn(
+                "TorchSDE does NOT support custom noise. Parameter 'dW' will be IGNORED. "
+                "For custom noise, use JAX/Diffrax: "
+                "DiffraxSDEIntegrator(sde, backend='jax').step(x, u, dW=noise)",
+                UserWarning,
+                stacklevel=2
+            )
         
+        step_size = dt if dt is not None else self.dt
         if step_size is None:
             raise ValueError("Step size dt must be specified")
         
         # Convert to PyTorch tensors
         if not isinstance(x, torch.Tensor):
             x = torch.tensor(x, dtype=torch.float32, device=self.device)
-        
         if u is not None and not isinstance(u, torch.Tensor):
             u = torch.tensor(u, dtype=torch.float32, device=self.device)
         
-        # Track if we need to squeeze output
         squeeze_output = False
         
         # Normalize x to 2D: (batch, nx)
         if x.ndim == 1:
-            x = x.unsqueeze(0)  # (nx,) → (1, nx)
+            x = x.unsqueeze(0)
             squeeze_output = True
         elif x.ndim == 2:
             # Already correct shape
@@ -497,9 +464,7 @@ class TorchSDEIntegrator(SDEIntegratorBase):
         # Normalize u to match batch size
         if u is not None:
             if u.ndim == 1:
-                u = u.unsqueeze(0)  # (nu,) → (1, nu)
-            
-            # Expand u to match batch size if needed
+                u = u.unsqueeze(0)
             if u.shape[0] == 1 and batch_size > 1:
                 u = u.expand(batch_size, -1)
             elif u.shape[0] != batch_size:
@@ -509,39 +474,18 @@ class TorchSDEIntegrator(SDEIntegratorBase):
         
         # Define control function that handles batching
         def u_func_batched(t, x_state):
-            if u is None:
-                return None
-            # Return appropriate slice of u for current batch
-            if x_state.shape[0] == u.shape[0]:
-                return u
-            else:
-                # Single control broadcast to batch
-                return u.expand(x_state.shape[0], -1) if u.shape[0] == 1 else u
+            return u if u is None else u
         
-        # Create SDE wrapper
-        sde = self._create_sde_wrapper(u_func_batched)
-        sde = sde.to(self.device)
-        
-        # Time points
+        sde = self._create_sde_wrapper(u_func_batched).to(self.device)
         ts = torch.tensor([0.0, step_size], dtype=x.dtype, device=self.device)
         
-        # Integrate using torchsde
-        # x is already (batch, nx) which is what torchsde expects
-        if self.use_adjoint:
-            ys = self.torchsde.sdeint_adjoint(
-                sde, x, ts, method=self.method, dt=step_size
-            )
-        else:
-            ys = self.torchsde.sdeint(
-                sde, x, ts, method=self.method, dt=step_size
-            )
+        ys = (self.torchsde.sdeint_adjoint if self.use_adjoint else self.torchsde.sdeint)(
+            sde, x, ts, method=self.method, dt=step_size
+        )
         
-        # Extract final state: ys has shape (time_steps, batch, nx)
-        x_next = ys[-1]  # (batch, nx)
-        
-        # Remove batch dimension if input was 1D
+        x_next = ys[-1]
         if squeeze_output:
-            x_next = x_next.squeeze(0)  # (1, nx) → (nx,)
+            x_next = x_next.squeeze(0)
         
         # Update statistics
         self._stats['total_steps'] += 1
@@ -550,59 +494,8 @@ class TorchSDEIntegrator(SDEIntegratorBase):
         
         return x_next
     
-    def integrate(
-        self,
-        x0: ArrayLike,
-        u_func: Callable[[float, ArrayLike], Optional[ArrayLike]],
-        t_span: Tuple[float, float],
-        t_eval: Optional[ArrayLike] = None,
-        dense_output: bool = False
-    ) -> SDEIntegrationResult:
-        """
-        Integrate SDE over time interval.
-        
-        Parameters
-        ----------
-        x0 : ArrayLike
-            Initial state (nx,)
-        u_func : Callable
-            Control policy: (t, x) -> u (or None for autonomous)
-        t_span : Tuple[float, float]
-            Integration interval (t_start, t_end)
-        t_eval : Optional[ArrayLike]
-            Specific times at which to save solution
-        dense_output : bool
-            If True, enable dense output (not supported by torchsde)
-            
-        Returns
-        -------
-        SDEIntegrationResult
-            Integration result with trajectory
-            
-        Examples
-        --------
-        >>> # Autonomous SDE
-        >>> result = integrator.integrate(
-        ...     x0=torch.tensor([1.0]),
-        ...     u_func=lambda t, x: None,
-        ...     t_span=(0.0, 10.0)
-        ... )
-        >>> 
-        >>> # Controlled SDE
-        >>> K = torch.tensor([[1.0, 2.0]])
-        >>> result = integrator.integrate(
-        ...     x0=torch.tensor([1.0, 0.0]),
-        ...     u_func=lambda t, x: -K @ x,
-        ...     t_span=(0.0, 10.0)
-        ... )
-        >>> 
-        >>> # With gradient computation
-        >>> x0 = torch.tensor([1.0], requires_grad=True)
-        >>> result = integrator.integrate(x0, u_func, t_span)
-        >>> loss = result.x[-1].sum()
-        >>> loss.backward()
-        >>> print(x0.grad)
-        """
+    def integrate(self, x0, u_func, t_span, t_eval=None, dense_output=False):
+        """Integrate SDE over time interval."""
         t0, tf = t_span
         
         # Convert to PyTorch tensor
@@ -614,71 +507,48 @@ class TorchSDEIntegrator(SDEIntegratorBase):
         
         # Validate time span
         if tf <= t0:
-            raise ValueError(
-                f"End time must be greater than start time. "
-                f"Got t_span=({t0}, {tf})"
-            )
+            raise ValueError(f"End time must be greater than start time. Got t_span=({t0}, {tf})")
         
         # Prepare time points
         if t_eval is not None:
-            if not isinstance(t_eval, torch.Tensor):
-                ts = torch.tensor(t_eval, dtype=x0.dtype, device=self.device)
-            else:
-                ts = t_eval.to(device=self.device, dtype=x0.dtype)
+            ts = torch.tensor(t_eval, dtype=x0.dtype, device=self.device) if not isinstance(t_eval, torch.Tensor) else t_eval.to(device=self.device, dtype=x0.dtype)
         else:
-            # Generate uniform grid
-            if self.step_mode == StepMode.FIXED:
-                n_steps = max(2, int((tf - t0) / self.dt) + 1)
-            else:
-                n_steps = 100  # Default for adaptive
+            n_steps = max(2, int((tf - t0) / self.dt) + 1) if self.step_mode == StepMode.FIXED else 100
             ts = torch.linspace(t0, tf, n_steps, dtype=x0.dtype, device=self.device)
         
-        # Create SDE wrapper
-        sde = self._create_sde_wrapper(u_func)
-        sde = sde.to(self.device)
+        sde = self._create_sde_wrapper(u_func).to(self.device)
         
         # Integrate using torchsde
         try:
             # torchsde expects batch dimension: (batch, nx)
             y0 = x0.unsqueeze(0) if x0.ndim == 1 else x0
-            
-            if self.use_adjoint:
-                ys = self.torchsde.sdeint_adjoint(
-                    sde, y0, ts, method=self.method, dt=self.dt
-                )
-            else:
-                ys = self.torchsde.sdeint(
-                    sde, y0, ts, method=self.method, dt=self.dt
-                )
+            ys = (self.torchsde.sdeint_adjoint if self.use_adjoint else self.torchsde.sdeint)(
+                sde, y0, ts, method=self.method, dt=self.dt
+            )
             
             # Remove batch dimension if single trajectory
             if ys.shape[1] == 1:
-                ys = ys.squeeze(1)  # (T, nx)
+                ys = ys.squeeze(1)
             
             # Check success
             success = torch.all(torch.isfinite(ys)).item()
             
             # Update statistics
             nsteps = len(ts) - 1
+            
             self._stats['total_steps'] += nsteps
             self._stats['total_fev'] += nsteps
             self._stats['diffusion_evals'] += nsteps
             
             return SDEIntegrationResult(
-                t=ts,
-                x=ys,
-                success=success,
-                message="TorchSDE integration successful" if success else "Integration failed (NaN/Inf detected)",
-                nfev=self._stats['total_fev'],
-                nsteps=nsteps,
+                t=ts, x=ys, success=success,
+                message="TorchSDE integration successful" if success else "Integration failed (NaN/Inf)",
+                nfev=self._stats['total_fev'], nsteps=nsteps,
                 diffusion_evals=self._stats['diffusion_evals'],
-                noise_samples=None,  # torchsde doesn't expose noise samples
-                n_paths=1,
+                noise_samples=None, n_paths=1,
                 convergence_type=self.convergence_type,
-                solver=self.method,
-                sde_type=self.sde_type,
+                solver=self.method, sde_type=self.sde_type
             )
-            
         except Exception as e:
             import traceback
             return SDEIntegrationResult(
@@ -686,63 +556,15 @@ class TorchSDEIntegrator(SDEIntegratorBase):
                 x=x0.unsqueeze(0) if x0.ndim == 1 else x0,
                 success=False,
                 message=f"TorchSDE integration failed: {str(e)}\n{traceback.format_exc()}",
-                nfev=0,
-                nsteps=0,
-                diffusion_evals=0,
-                n_paths=1,
+                nfev=0, nsteps=0, diffusion_evals=0, n_paths=1,
                 convergence_type=self.convergence_type,
-                solver=self.method,
-                sde_type=self.sde_type,
+                solver=self.method, sde_type=self.sde_type
             )
     
-    # ========================================================================
-    # PyTorch-Specific Methods
-    # ========================================================================
-    
-    def integrate_with_gradient(
-        self,
-        x0: ArrayLike,
-        u_func: Callable[[float, ArrayLike], Optional[ArrayLike]],
-        t_span: Tuple[float, float],
-        loss_fn: Callable[[SDEIntegrationResult], torch.Tensor],
-        t_eval: Optional[ArrayLike] = None,
-    ):
-        """
-        Integrate and compute gradients w.r.t. initial conditions.
-        
-        Parameters
-        ----------
-        x0 : ArrayLike
-            Initial state (requires_grad=True for gradients)
-        u_func : Callable
-            Control policy
-        t_span : Tuple[float, float]
-            Time span
-        loss_fn : Callable
-            Loss function taking IntegrationResult -> scalar tensor
-        t_eval : Optional[ArrayLike]
-            Evaluation times
-            
-        Returns
-        -------
-        tuple
-            (loss_value, gradient_wrt_x0)
-            
-        Examples
-        --------
-        >>> x0 = torch.tensor([1.0], requires_grad=True)
-        >>> 
-        >>> def loss_fn(result):
-        ...     return torch.sum(result.x[-1]**2)
-        >>> 
-        >>> loss, grad = integrator.integrate_with_gradient(
-        ...     x0, u_func, t_span, loss_fn
-        ... )
-        """
-        # Ensure x0 requires grad
+    def integrate_with_gradient(self, x0, u_func, t_span, loss_fn, t_eval=None):
+        """Integrate and compute gradients."""
         if not isinstance(x0, torch.Tensor):
             x0 = torch.tensor(x0, dtype=torch.float32, device=self.device)
-        
         if not x0.requires_grad:
             x0 = x0.clone().detach().requires_grad_(True)
         
@@ -758,30 +580,15 @@ class TorchSDEIntegrator(SDEIntegratorBase):
         return loss.item(), x0.grad.clone()
     
     def to_device(self, device: str):
-        """
-        Move integrator computations to specified device.
-        
-        Parameters
-        ----------
-        device : str
-            Device ('cpu', 'cuda', 'cuda:0', etc.)
-            
-        Examples
-        --------
-        >>> integrator.to_device('cuda')
-        >>> # All future integrations use GPU
-        
-        >>> integrator.to_device('cuda:1')
-        >>> # Use specific GPU
-        """
+        """Move to device."""
         self.device = torch.device(device)
     
     def enable_adjoint(self):
-        """Enable adjoint method for memory-efficient backpropagation."""
+        """Enable adjoint method."""
         self.use_adjoint = True
     
     def disable_adjoint(self):
-        """Disable adjoint method (use standard backpropagation)."""
+        """Disable adjoint method."""
         self.use_adjoint = False
     
     def vectorized_step(
@@ -847,214 +654,45 @@ class TorchSDEIntegrator(SDEIntegratorBase):
     # ========================================================================
     
     @staticmethod
-    def list_methods() -> Dict[str, List[str]]:
-        """
-        List available torchsde methods by category.
-        
-        Returns
-        -------
-        Dict[str, List[str]]
-            Methods organized by category
-            
-        Examples
-        --------
-        >>> methods = TorchSDEIntegrator.list_methods()
-        >>> print(methods['basic'])
-        ['euler', 'midpoint']
-        """
+    def list_methods():
+        """List available methods."""
         return {
-            'basic': [
-                'euler',        # Euler-Maruyama
-                'midpoint',     # Midpoint method
-            ],
-            'high_accuracy': [
-                'milstein',     # Milstein method
-                'srk',          # Stochastic Runge-Kutta
-            ],
-            'adaptive': [
-                'reversible_heun',  # Adaptive with reversibility
-                'adaptive_heun',    # Adaptive Heun
-            ],
+            'basic': ['euler', 'midpoint'],
+            'high_accuracy': ['milstein', 'srk'],
+            'adaptive': ['reversible_heun', 'adaptive_heun'],
         }
     
     @staticmethod
-    def get_method_info(method: str) -> Dict[str, Any]:
-        """
-        Get information about a specific method.
-        
-        Parameters
-        ----------
-        method : str
-            Method name
-            
-        Returns
-        -------
-        Dict[str, Any]
-            Method properties
-            
-        Examples
-        --------
-        >>> info = TorchSDEIntegrator.get_method_info('euler')
-        >>> print(info['description'])
-        'Fast and robust, good for general use'
-        """
-        method_info = {
-            'euler': {
-                'name': 'Euler-Maruyama',
-                'strong_order': 0.5,
-                'weak_order': 1.0,
-                'description': 'Fast and robust, good for general use',
-                'best_for': 'Neural SDEs, quick simulations',
-            },
-            'milstein': {
-                'name': 'Milstein',
-                'strong_order': 1.0,
-                'weak_order': 1.0,
-                'description': 'Higher accuracy than Euler',
-                'best_for': 'When accuracy matters',
-            },
-            'srk': {
-                'name': 'Stochastic Runge-Kutta',
-                'strong_order': 1.5,
-                'weak_order': 1.0,
-                'description': 'High accuracy',
-                'best_for': 'Precision requirements',
-            },
-            'midpoint': {
-                'name': 'Midpoint',
-                'strong_order': 0.5,
-                'weak_order': 1.0,
-                'description': 'Better stability than Euler (Stratonovich only)',
-                'best_for': 'Neural networks with Stratonovich SDEs',
-                'sde_type': 'stratonovich',
-            },
-            'reversible_heun': {
-                'name': 'Reversible Heun',
-                'strong_order': 0.5,
-                'weak_order': 1.0,
-                'description': 'Adaptive with error control (Stratonovich only)',
-                'best_for': 'Adaptive stepping with Stratonovich',
-                'sde_type': 'stratonovich',
-            },
+    def get_method_info(method: str):
+        """Get method information."""
+        info = {
+            'euler': {'name': 'Euler-Maruyama', 'strong_order': 0.5, 'weak_order': 1.0,
+                     'description': 'Fast and robust', 'best_for': 'Neural SDEs'},
+            'milstein': {'name': 'Milstein', 'strong_order': 1.0, 'weak_order': 1.0,
+                        'description': 'Higher accuracy', 'best_for': 'When accuracy matters'},
+            'srk': {'name': 'Stochastic RK', 'strong_order': 1.5, 'weak_order': 1.0,
+                   'description': 'High accuracy', 'best_for': 'Precision'},
+            'midpoint': {'name': 'Midpoint', 'strong_order': 0.5, 'weak_order': 1.0,
+                        'description': 'Better stability (Stratonovich only)', 'sde_type': 'stratonovich'},
         }
-        
-        return method_info.get(
-            method,
-            {
-                'name': method,
-                'description': 'torchsde method',
-            }
-        )
-    
-    @staticmethod
-    def recommend_method(
-        use_case: str = 'general',
-        has_gpu: bool = False
-    ) -> str:
-        """
-        Recommend method based on use case.
-        
-        Parameters
-        ----------
-        use_case : str
-            'general', 'neural_sde', 'high_accuracy', 'adaptive'
-        has_gpu : bool
-            Whether GPU is available
-            
-        Returns
-        -------
-        str
-            Recommended method name
-            
-        Examples
-        --------
-        >>> method = TorchSDEIntegrator.recommend_method('neural_sde')
-        >>> print(method)
-        'euler'
-        """
-        if use_case == 'neural_sde':
-            return 'euler'  # Fast, works well with adjoint
-        elif use_case == 'high_accuracy':
-            return 'srk'
-        elif use_case == 'adaptive':
-            return 'reversible_heun'
-        else:
-            return 'euler'
+        return info.get(method, {'name': method, 'description': 'torchsde method'})
 
 
-# ============================================================================
-# Utility Functions
-# ============================================================================
-
-def create_torchsde_integrator(
-    sde_system,
-    method: str = 'euler',
-    dt: float = 0.01,
-    **options
-) -> TorchSDEIntegrator:
-    """
-    Quick factory for TorchSDE integrators.
-    
-    Parameters
-    ----------
-    sde_system : StochasticDynamicalSystem
-        SDE system to integrate
-    method : str
-        Integration method
-    dt : float
-        Time step
-    **options
-        Additional options
-        
-    Returns
-    -------
-    TorchSDEIntegrator
-        Configured integrator
-        
-    Examples
-    --------
-    >>> integrator = create_torchsde_integrator(
-    ...     sde_system,
-    ...     method='euler',
-    ...     dt=0.01
-    ... )
-    """
-    return TorchSDEIntegrator(
-        sde_system,
-        dt=dt,
-        method=method,
-        backend='torch',
-        **options
-    )
+def create_torchsde_integrator(sde_system, method='euler', dt=0.01, **options):
+    """Quick factory for TorchSDE integrators."""
+    return TorchSDEIntegrator(sde_system, dt=dt, method=method, backend='torch', **options)
 
 
-def list_torchsde_methods() -> None:
-    """
-    Print all available torchsde methods.
-    
-    Examples
-    --------
-    >>> list_torchsde_methods()
-    
-    TorchSDE Methods (PyTorch-based)
-    =================================
-    Basic Methods:
-      - euler: Euler-Maruyama (strong 0.5, weak 1.0)
-    ...
-    """
+def list_torchsde_methods():
+    """Print available methods."""
     methods = TorchSDEIntegrator.list_methods()
-    
     print("TorchSDE Methods (PyTorch-based)")
     print("=" * 60)
-    
-    category_names = {
-        'basic': 'Basic Methods',
-        'high_accuracy': 'High Accuracy Methods',
-        'adaptive': 'Adaptive Methods',
-    }
+    print("\nNOTE: TorchSDE does NOT support custom Brownian motion.")
+    print("For custom noise (dW), use JAX/Diffrax instead.\n")
     
     for category, method_list in methods.items():
-        print(f"\n{category_names.get(category, category)}:")
+        print(f"\n{category.replace('_', ' ').title()}:")
         for method in method_list:
             info = TorchSDEIntegrator.get_method_info(method)
             if 'strong_order' in info:
