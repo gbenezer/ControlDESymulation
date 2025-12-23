@@ -639,7 +639,6 @@ Currently not open to contributions, though may change after Phase 4 and once I 
             - test_zero_noise_matches_deterministic (both versions)
             - test_set_seed_changes_results
     - Construct DiscreteSimulator that uses Discretizer to handle trajectory simulation
-        - Make sure it can be used for stochastic (pure diffusion and diffusion + drift) and deterministic systems
         - Make sure this can support both autonomous and controlled systems
     - Construct StochasticDiscreteSimulator
     - Construct DiscreteLinearization that caches numerical linearization
