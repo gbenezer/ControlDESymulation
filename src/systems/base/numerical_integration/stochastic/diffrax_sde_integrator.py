@@ -92,23 +92,6 @@ Examples
 ...     rtol=1e-6,
 ...     atol=1e-8
 ... )
->>> 
->>> # GPU acceleration
->>> integrator = DiffraxSDEIntegrator(
-...     sde_system,
-...     dt=0.01,
-...     solver='Euler',
-...     backend='jax'
-... )
->>> integrator.to_device('gpu')
->>> 
->>> # With gradients for optimization
->>> def loss_fn(x0_val):
-...     result = integrator.integrate(x0_val, u_func, t_span)
-...     return jnp.sum(result.x[-1]**2)
->>> 
->>> grad_fn = jax.grad(loss_fn)
->>> gradient = grad_fn(jnp.array([1.0]))
 """
 
 from typing import Optional, Tuple, Callable, Dict, Any, List
@@ -199,22 +182,6 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
     ...     additive_noise_system,
     ...     dt=0.001,
     ...     solver='SEA'  # Specialized for additive noise
-    ... )
-    >>> 
-    >>> # High-order accuracy
-    >>> integrator = DiffraxSDEIntegrator(
-    ...     sde_system,
-    ...     dt=0.001,
-    ...     solver='ItoMilstein',
-    ...     levy_area='space-time'
-    ... )
-    >>> 
-    >>> # For gradient-based optimization
-    >>> integrator = DiffraxSDEIntegrator(
-    ...     sde_system,
-    ...     dt=0.01,
-    ...     solver='Euler',
-    ...     adjoint='recursive_checkpoint'
     ... )
     """
     
@@ -350,7 +317,6 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
             
         Returns
         -------
-        dfx.BrownianPath
         Brownian motion object
         
         Notes
@@ -368,7 +334,7 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
             from src.systems.base.numerical_integration.stochastic.custom_brownian import (
                 CustomBrownianPath
             )
-            return CustomBrownianPath(t0, t1, dW, shape)
+            return CustomBrownianPath(t0, t1, dW)
         
         # Otherwise generate random noise based on levy_area setting
         if self.levy_area == 'none':
@@ -378,7 +344,6 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
             )
         elif self.levy_area == 'space-time':
             # Space-time Levy area (for Milstein)
-            # Note: API may vary by Diffrax version
             try:
                 return dfx.SpaceTimeLevyArea(
                     t0, t1, tol=1e-3, shape=shape, key=key

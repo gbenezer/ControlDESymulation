@@ -7,14 +7,14 @@ This allows deterministic testing and custom noise patterns.
 import jax.numpy as jnp
 from jax import Array
 import diffrax as dfx
-from typing import Optional
+from typing import Optional, Tuple
 
 
-class CustomBrownianPath:
+class CustomBrownianPath(dfx.AbstractPath):
     """
     Custom Brownian motion that uses provided dW increments.
     
-    This is a minimal implementation that allows Diffrax to use
+    This implements Diffrax's AbstractPath interface to allow
     user-specified noise instead of generating random noise.
     
     Parameters
@@ -26,40 +26,54 @@ class CustomBrownianPath:
     dW : Array
         Brownian increment for interval (t0, t1)
         Shape: (nw,) for the noise dimensions
-    shape : tuple
-        Shape of noise (nw,)
     
     Examples
     --------
     >>> # Zero noise for deterministic testing
     >>> dW = jnp.zeros(1)
-    >>> brownian = CustomBrownianPath(0.0, 0.01, dW, shape=(1,))
+    >>> brownian = CustomBrownianPath(0.0, 0.01, dW)
     >>> 
     >>> # Custom noise pattern
     >>> dW = jnp.array([0.5])
-    >>> brownian = CustomBrownianPath(0.0, 0.01, dW, shape=(1,))
+    >>> brownian = CustomBrownianPath(0.0, 0.01, dW)
     """
     
-    def __init__(self, t0: float, t1: float, dW: Array, shape: tuple):
+    def __init__(self, t0: float, t1: float, dW: Array):
         self.t0 = t0
         self.t1 = t1
         self.dW = dW
-        self.shape = shape
         self.dt = t1 - t0
-        
-        # Verify shape matches
-        if dW.shape != shape:
-            raise ValueError(
-                f"dW shape {dW.shape} doesn't match expected shape {shape}"
-            )
+        self._shape = dW.shape
     
-    def evaluate(self, t0: float, t1: Optional[float] = None, 
-                 left: bool = True) -> Array:
+    @property
+    def t0(self) -> float:
+        """Start time of the interval."""
+        return self._t0
+    
+    @t0.setter
+    def t0(self, value: float):
+        self._t0 = value
+    
+    @property
+    def t1(self) -> float:
+        """End time of the interval."""
+        return self._t1
+    
+    @t1.setter
+    def t1(self, value: float):
+        self._t1 = value
+    
+    def evaluate(
+        self, 
+        t0: float, 
+        t1: Optional[float] = None, 
+        left: bool = True
+    ) -> Array:
         """
         Evaluate Brownian increment between t0 and t1.
         
-        For custom noise, we assume a single step from self.t0 to self.t1.
-        Any query within this interval returns the scaled increment.
+        For custom noise, we provide the exact increment for our interval.
+        Diffrax will call this to get dW values.
         
         Parameters
         ----------
@@ -76,34 +90,37 @@ class CustomBrownianPath:
             Brownian increment or value
         """
         if t1 is None:
-            # Query for B(t0) - return scaled position
-            if jnp.abs(t0 - self.t0) < 1e-10:
+            # Query for B(t0) - return cumulative value
+            # For simplicity, linear interpolation
+            if jnp.abs(t0 - self._t0) < 1e-10:
                 return jnp.zeros_like(self.dW)
-            elif jnp.abs(t0 - self.t1) < 1e-10:
+            elif jnp.abs(t0 - self._t1) < 1e-10:
                 return self.dW
             else:
-                # Linear interpolation for intermediate times
-                alpha = (t0 - self.t0) / (self.t1 - self.t0)
+                # Linear interpolation
+                alpha = (t0 - self._t0) / self.dt
                 return self.dW * alpha
         else:
-            # Query for B(t1) - B(t0)
-            # For our single-step case, just return the full increment
-            # if querying the full interval
-            if (jnp.abs(t0 - self.t0) < 1e-10 and 
-                jnp.abs(t1 - self.t1) < 1e-10):
+            # Query for B(t1) - B(t0) = increment
+            # Check if this is our full interval
+            if (jnp.abs(t0 - self._t0) < 1e-10 and 
+                jnp.abs(t1 - self._t1) < 1e-10):
                 return self.dW
             else:
-                # For sub-intervals, scale proportionally
+                # Sub-interval: scale proportionally by sqrt(time)
                 dt_query = t1 - t0
-                scale = jnp.sqrt(dt_query / self.dt)
-                return self.dW * scale
+                if self.dt > 0:
+                    scale = jnp.sqrt(dt_query / self.dt)
+                    return self.dW * scale
+                else:
+                    return jnp.zeros_like(self.dW)
 
 
 def create_custom_or_random_brownian(
     key, 
     t0: float, 
     t1: float, 
-    shape: tuple,
+    shape: Tuple[int, ...],
     dW: Optional[Array] = None
 ):
     """
@@ -138,7 +155,7 @@ def create_custom_or_random_brownian(
     """
     if dW is not None:
         # Use custom noise
-        return CustomBrownianPath(t0, t1, dW, shape)
+        return CustomBrownianPath(t0, t1, dW)
     else:
         # Use Diffrax's random noise generator
         return dfx.VirtualBrownianTree(

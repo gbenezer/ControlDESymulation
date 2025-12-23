@@ -6,16 +6,21 @@ Tests JAX-based SDE integration via Diffrax, including:
 - Solver selection and availability
 - Integration with autonomous and controlled systems
 - Pure diffusion systems (zero drift)
+- **NEW: Custom noise support (deterministic testing)**
 - JAX-specific features (JIT, gradients, GPU)
 - Levy area handling for Milstein methods
 - Error handling and edge cases
 
 NOTE: JAX has good seed control, so reproducibility is possible.
 Tests leverage this for deterministic validation.
+
+NEW FEATURE: Custom Brownian increments (dW) are now fully supported,
+enabling deterministic testing with zero noise and custom noise patterns.
 """
 
 import pytest
 import numpy as np
+from numpy.testing import assert_allclose
 
 # Check if JAX and Diffrax are available
 try:
@@ -280,6 +285,297 @@ class TestDiffraxSDEInitialization:
 
 
 # ============================================================================
+# Test Class: Custom Noise Support (NEW!)
+# ============================================================================
+
+class TestCustomNoiseSupport:
+    """
+    Test custom Brownian increment support.
+    
+    This is a NEW feature that enables:
+    - Deterministic testing with zero noise
+    - Custom noise patterns (quasi-Monte Carlo, antithetic variates)
+    - Reproducible single-step integration
+    """
+    
+    def test_zero_noise_deterministic(self, ou_system):
+        """
+        Test that zero noise gives deterministic dynamics.
+        
+        This is the KEY TEST for custom noise support.
+        With dW=0, we should get exact deterministic drift dynamics.
+        """
+        integrator = DiffraxSDEIntegrator(
+            ou_system,
+            dt=0.01,
+            solver='Euler'
+        )
+        
+        x = jnp.array([1.0])
+        u = None
+        dt = 0.01
+        dW = jnp.zeros(1)  # Zero noise!
+        
+        # Step with zero noise
+        x_next = integrator.step(x, u, dt, dW=dW)
+        
+        # Should match pure deterministic dynamics: x + f(x)*dt
+        # For OU: f(x) = -alpha * x = -1.0 * 1.0 = -1.0
+        expected = x + jnp.array([-1.0]) * dt
+        expected = jnp.array([0.99])
+        
+        assert_allclose(x_next, expected, rtol=1e-6, atol=1e-8)
+    
+    def test_same_noise_same_result(self, ou_system):
+        """Test that same custom noise gives identical results."""
+        integrator = DiffraxSDEIntegrator(
+            ou_system,
+            dt=0.01,
+            solver='Euler'
+        )
+        
+        x = jnp.array([1.0])
+        u = None
+        dt = 0.01
+        dW = jnp.array([0.5])  # Fixed noise
+        
+        # Two steps with same noise
+        x_next1 = integrator.step(x, u, dt, dW=dW)
+        x_next2 = integrator.step(x, u, dt, dW=dW)
+        
+        # Should be identical
+        assert_allclose(x_next1, x_next2, rtol=1e-10, atol=1e-12)
+    
+    def test_different_noise_different_result(self, ou_system):
+        """Test that different noise gives different results."""
+        integrator = DiffraxSDEIntegrator(
+            ou_system,
+            dt=0.01,
+            solver='Euler'
+        )
+        
+        x = jnp.array([1.0])
+        u = None
+        dt = 0.01
+        
+        # Two different noise values
+        dW1 = jnp.array([0.5])
+        dW2 = jnp.array([-0.5])
+        
+        x_next1 = integrator.step(x, u, dt, dW=dW1)
+        x_next2 = integrator.step(x, u, dt, dW=dW2)
+        
+        # Should be different
+        assert not jnp.allclose(x_next1, x_next2)
+    
+    def test_custom_noise_vs_expected_formula(self, ou_system):
+        """
+        Test that custom noise follows Euler-Maruyama formula exactly.
+        
+        EM formula: x_{n+1} = x_n + f(x_n)*dt + g(x_n)*dW
+        For OU: x_{n+1} = x_n - alpha*x_n*dt + sigma*dW
+        """
+        integrator = DiffraxSDEIntegrator(
+            ou_system,
+            dt=0.01,
+            solver='Euler'
+        )
+        
+        x = jnp.array([1.0])
+        dt = 0.01
+        dW = jnp.array([0.3])
+        
+        # OU parameters
+        alpha = 1.0
+        sigma = 0.5
+        
+        # Expected: x + (-alpha*x)*dt + sigma*dW
+        expected = x + (-alpha * x) * dt + sigma * dW
+        
+        x_next = integrator.step(x, None, dt, dW=dW)
+        
+        assert_allclose(x_next, expected, rtol=1e-6, atol=1e-8)
+    
+    def test_zero_noise_matches_deterministic_ode(self, ou_system):
+        """
+        Test that SDE with zero noise matches deterministic ODE.
+        
+        This verifies that zero noise truly gives drift-only dynamics.
+        """
+        from src.systems.base.discretization.discretizer import Discretizer
+        
+        integrator_sde = DiffraxSDEIntegrator(
+            ou_system,
+            dt=0.01,
+            solver='Euler'
+        )
+        
+        # Create deterministic version
+        det_system = ou_system.to_deterministic()
+        integrator_ode = Discretizer(
+            det_system,
+            dt=0.01,
+            method='euler',
+            backend='jax'
+        )
+        
+        x = jnp.array([1.0])
+        u = None
+        dt = 0.01
+        
+        # SDE with zero noise
+        x_sde = integrator_sde.step(x, u, dt, dW=jnp.zeros(1))
+        
+        # ODE (no noise)
+        x_ode = integrator_ode.step(x, u, dt)
+        
+        # Should be identical
+        assert_allclose(x_sde, x_ode, rtol=1e-10, atol=1e-12)
+    
+    def test_custom_noise_with_controlled_system(self, controlled_system):
+        """Test custom noise with controlled SDE."""
+        integrator = DiffraxSDEIntegrator(
+            controlled_system,
+            dt=0.01,
+            solver='Euler'
+        )
+        
+        x = jnp.array([1.0])
+        u = jnp.array([0.5])
+        dt = 0.01
+        dW = jnp.array([0.2])
+        
+        # Expected: x + (-alpha*x + u)*dt + sigma*dW
+        alpha = 1.0
+        sigma = 0.5
+        expected = x + (-alpha * x + u) * dt + sigma * dW
+        
+        x_next = integrator.step(x, u, dt, dW=dW)
+        
+        assert_allclose(x_next, expected, rtol=1e-6, atol=1e-8)
+    
+    def test_custom_noise_shape_validation(self, ou_system):
+        """Test that wrong dW shape raises error."""
+        integrator = DiffraxSDEIntegrator(
+            ou_system,
+            dt=0.01,
+            solver='Euler'
+        )
+        
+        x = jnp.array([1.0])
+        u = None
+        dt = 0.01
+        dW_wrong = jnp.array([0.5, 0.3])  # Wrong shape! nw=1, not 2
+        
+        with pytest.raises(ValueError, match="dW shape must be"):
+            integrator.step(x, u, dt, dW=dW_wrong)
+    
+    def test_custom_noise_with_2d_system(self, ou_2d_system):
+        """Test custom noise with 2D system (diagonal noise)."""
+        integrator = DiffraxSDEIntegrator(
+            ou_2d_system,
+            dt=0.01,
+            solver='Euler'
+        )
+        
+        x = jnp.array([1.0, 2.0])
+        u = None
+        dt = 0.01
+        dW = jnp.array([0.3, -0.2])  # Two independent noise sources
+        
+        x_next = integrator.step(x, u, dt, dW=dW)
+        
+        # Should produce valid result
+        assert x_next.shape == (2,)
+        assert jnp.all(jnp.isfinite(x_next))
+    
+    def test_antithetic_variates_pattern(self, ou_system):
+        """
+        Test antithetic variates variance reduction technique.
+        
+        This demonstrates a practical use of custom noise.
+        """
+        integrator = DiffraxSDEIntegrator(
+            ou_system,
+            dt=0.01,
+            solver='Euler'
+        )
+        
+        x = jnp.array([1.0])
+        u = None
+        dt = 0.01
+        
+        # Antithetic pair: +noise and -noise
+        dW_plus = jnp.array([0.5])
+        dW_minus = jnp.array([-0.5])
+        
+        x_plus = integrator.step(x, u, dt, dW=dW_plus)
+        x_minus = integrator.step(x, u, dt, dW=dW_minus)
+        
+        # Average should be close to deterministic
+        x_avg = (x_plus + x_minus) / 2.0
+        x_det = integrator.step(x, u, dt, dW=jnp.zeros(1))
+        
+        assert_allclose(x_avg, x_det, rtol=1e-6, atol=1e-8)
+    
+    def test_custom_noise_reproducibility(self, ou_system):
+        """
+        Test that custom noise provides perfect reproducibility.
+        
+        Unlike seed-based methods, custom noise should be 100% deterministic.
+        """
+        integrator = DiffraxSDEIntegrator(
+            ou_system,
+            dt=0.01,
+            solver='Euler'
+        )
+        
+        x0 = jnp.array([1.0])
+        u = None
+        dt = 0.01
+        
+        # Fixed sequence of noise values
+        noise_sequence = [0.3, -0.2, 0.5, -0.4, 0.1]
+        
+        # Run trajectory twice with same noise
+        def run_trajectory(noise_seq):
+            x = x0
+            trajectory = [x]
+            for dW_val in noise_seq:
+                x = integrator.step(x, u, dt, dW=jnp.array([dW_val]))
+                trajectory.append(x)
+            return jnp.stack(trajectory)
+        
+        traj1 = run_trajectory(noise_sequence)
+        traj2 = run_trajectory(noise_sequence)
+        
+        # Should be EXACTLY identical (not just close)
+        assert_allclose(traj1, traj2, rtol=0, atol=0)
+    
+    def test_custom_noise_none_uses_random(self, ou_system):
+        """Test that dW=None falls back to random noise generation."""
+        integrator = DiffraxSDEIntegrator(
+            ou_system,
+            dt=0.01,
+            solver='Euler',
+            seed=42
+        )
+        
+        x = jnp.array([1.0])
+        u = None
+        dt = 0.01
+        
+        # Two steps without custom noise (should use random)
+        x_next1 = integrator.step(x, u, dt, dW=None)
+        x_next2 = integrator.step(x, u, dt, dW=None)
+        
+        # Should be valid but different (random noise)
+        assert jnp.all(jnp.isfinite(x_next1))
+        assert jnp.all(jnp.isfinite(x_next2))
+        # Note: May or may not be different depending on seed behavior
+
+
+# ============================================================================
 # Test Class: Autonomous Systems
 # ============================================================================
 
@@ -382,6 +678,25 @@ class TestPureDiffusionSystems:
         assert result.success
         assert result.x.shape[0] > 10
         assert result.nsteps > 0
+    
+    def test_pure_diffusion_with_zero_noise(self, brownian_system):
+        """Test that Brownian motion with zero noise doesn't move."""
+        integrator = DiffraxSDEIntegrator(
+            brownian_system,
+            dt=0.01,
+            solver='Euler'
+        )
+        
+        x = jnp.array([1.0])
+        u = None
+        dt = 0.01
+        dW = jnp.zeros(1)  # Zero noise
+        
+        # Pure diffusion with zero noise should not move
+        x_next = integrator.step(x, u, dt, dW=dW)
+        
+        # Should stay exactly at x (no drift, no noise)
+        assert_allclose(x_next, x, rtol=1e-10, atol=1e-12)
     
     def test_pure_diffusion_reproducibility(self, brownian_system):
         """Test reproducibility of pure diffusion with seeds."""
