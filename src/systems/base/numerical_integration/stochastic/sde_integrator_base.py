@@ -404,59 +404,67 @@ class SDEIntegratorBase(IntegratorBase):
     # SDE-Specific Evaluation Methods
     # ========================================================================
     
-    def _evaluate_drift(
-        self,
-        x: ArrayLike,
-        u: Optional[ArrayLike] = None
-    ) -> ArrayLike:
+    def _evaluate_drift(self, x, u=None):
         """
-        Evaluate drift term with statistics tracking.
+        Evaluate drift term f(x, u).
         
         Parameters
         ----------
         x : ArrayLike
-            State
-        u : Optional[ArrayLike]
-            Control (None for autonomous)
-            
+            Current state
+        u : ArrayLike, optional
+            Current control (None for autonomous systems)
+        
         Returns
         -------
         ArrayLike
-            Drift vector f(x, u)
-        """
-        self._stats['total_fev'] += 1
-        return self.sde_system.drift(x, u, backend=self.backend)
-    
-    def _evaluate_diffusion(
-        self,
-        x: ArrayLike,
-        u: Optional[ArrayLike] = None
-    ) -> ArrayLike:
-        """
-        Evaluate diffusion term with statistics tracking and caching.
+            Drift vector f(x, u), shape (nx,)
+            Type matches self.backend
         
-        For additive noise, returns cached constant matrix.
-        For multiplicative noise, evaluates g(x, u).
+        Notes
+        -----
+        Ensures backend consistency by passing backend parameter.
+        """
+        # CRITICAL: Pass backend to ensure type consistency
+        f = self.sde_system.drift(x, u, backend=self.backend)  # Add backend parameter
+        self._stats['total_fev'] += 1
+        return f
+    
+    def _evaluate_diffusion(self, x, u=None):
+        """
+        Evaluate diffusion term g(x, u).
+        
+        For additive noise, uses cached constant matrix.
+        For multiplicative noise, evaluates at current state.
         
         Parameters
         ----------
         x : ArrayLike
-            State
-        u : Optional[ArrayLike]
-            Control (None for autonomous)
-            
+            Current state
+        u : ArrayLike, optional
+            Current control (None for autonomous systems)
+        
         Returns
         -------
         ArrayLike
             Diffusion matrix g(x, u), shape (nx, nw)
+            Type matches self.backend
+        
+        Notes
+        -----
+        This method ensures backend consistency by explicitly passing
+        backend parameter to system.diffusion().
         """
         if self._is_additive and self._cached_diffusion is not None:
-            # Return cached constant diffusion
+            # Use cached constant diffusion
+            self._stats['diffusion_cache_hits'] = self._stats.get('diffusion_cache_hits', 0) + 1
             return self._cached_diffusion
-        
-        # Evaluate diffusion (not constant or not cached)
-        self._stats['diffusion_evals'] += 1
-        return self.sde_system.diffusion(x, u, backend=self.backend)
+        else:
+            # Evaluate diffusion (multiplicative or not cached)
+            # CRITICAL: Pass backend to ensure type consistency
+            g = self.sde_system.diffusion(x, u, backend=self.backend)  # Add backend parameter
+            self._stats['diffusion_evals'] += 1
+            return g
     
     def _generate_noise(
         self,
