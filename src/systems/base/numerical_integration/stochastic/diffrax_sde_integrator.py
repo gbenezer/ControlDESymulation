@@ -8,6 +8,9 @@ Ideal for optimization, parameter estimation, and neural SDEs.
 Supports explicit SDE solvers with both Ito and Stratonovich interpretations,
 controlled and autonomous systems.
 
+**CUSTOM NOISE SUPPORT**: This integrator now supports user-provided Brownian
+increments (dW) for deterministic testing and custom noise patterns.
+
 Mathematical Form
 -----------------
 Stochastic differential equations:
@@ -40,6 +43,7 @@ Key Features
 - **GPU Acceleration**: Native GPU support via JAX
 - **Vectorization**: Easy batching with vmap
 - **Adjoint Methods**: Memory-efficient backpropagation
+- **Custom Noise**: Support for user-provided Brownian increments
 
 Installation
 -----------
@@ -70,6 +74,14 @@ Examples
 ...     x0=jnp.array([1.0]),
 ...     u_func=lambda t, x: None,
 ...     t_span=(0.0, 10.0)
+... )
+>>> 
+>>> # With custom noise (deterministic)
+>>> x_next = integrator.step(
+...     x=jnp.array([1.0]),
+...     u=None,
+...     dt=0.01,
+...     dW=jnp.zeros(1)  # Zero noise = deterministic!
 ... )
 >>> 
 >>> # High accuracy with specialized solver
@@ -120,7 +132,7 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
     JAX-based SDE integrator using the Diffrax library.
     
     Provides high-performance SDE integration with automatic differentiation,
-    JIT compilation, and GPU support via JAX.
+    JIT compilation, GPU support, and custom noise support via JAX.
     
     Parameters
     ----------
@@ -162,7 +174,7 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
     Notes
     -----
     - Backend must be 'jax' (Diffrax is JAX-only)
-    - Diffrax generates noise internally with high-quality PRNG
+    - Supports custom Brownian increments via dW parameter
     - JIT compilation happens on first call (may be slow)
     - For optimization, use adjoint='recursive_checkpoint'
     - Milstein methods require levy_area approximation
@@ -175,6 +187,12 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
     ...     dt=0.01,
     ...     solver='Euler'
     ... )
+    >>> 
+    >>> # Deterministic testing with zero noise
+    >>> x_next = integrator.step(x, u, dt=0.01, dW=jnp.zeros(nw))
+    >>> 
+    >>> # Custom noise pattern
+    >>> x_next = integrator.step(x, u, dt=0.01, dW=jnp.array([0.5]))
     >>> 
     >>> # Optimized for additive noise
     >>> integrator = DiffraxSDEIntegrator(
@@ -312,7 +330,7 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
         
         return solver_class()
     
-    def _get_brownian_motion(self, key, t0, t1, shape):
+    def _get_brownian_motion(self, key, t0, t1, shape, dW=None):
         """
         Create Brownian motion for the integration interval.
         
@@ -326,12 +344,33 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
             End time
         shape : tuple
             Shape of noise (nw,) or similar
+        dW : Optional[Array]
+            Custom Brownian increment. If provided, uses this instead
+            of generating random noise. This enables deterministic testing.
             
         Returns
         -------
         dfx.BrownianPath
-            Brownian motion object
+        Brownian motion object
+        
+        Notes
+        -----
+        When dW is provided, it uses CustomBrownianPath for deterministic
+        behavior. This is the key feature that enables:
+        - Deterministic testing with dW=0
+        - Quasi-Monte Carlo methods
+        - Antithetic variates
+        - Custom noise patterns
         """
+        # If custom noise provided, use it
+        if dW is not None:
+            # Import custom brownian path
+            from src.systems.base.numerical_integration.stochastic.custom_brownian import (
+                CustomBrownianPath
+            )
+            return CustomBrownianPath(t0, t1, dW, shape)
+        
+        # Otherwise generate random noise based on levy_area setting
         if self.levy_area == 'none':
             # Standard Brownian motion (no Levy area)
             return dfx.VirtualBrownianTree(
@@ -376,6 +415,8 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
         """
         Take one SDE integration step.
         
+        **NEW**: Now supports custom Brownian increments via dW parameter!
+        
         Parameters
         ----------
         x : ArrayLike
@@ -385,7 +426,15 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
         dt : Optional[float]
             Step size (uses self.dt if None)
         dW : Optional[ArrayLike]
-            Brownian increments (not used - Diffrax generates internally)
+            Brownian increments (nw,)
+            If provided, uses this deterministic noise instead of random.
+            Shape must match (nw,) where nw is number of Wiener processes.
+            
+            **Key feature**: Providing dW enables:
+            - Deterministic testing: dW=jnp.zeros(nw)
+            - Custom noise patterns: dW=jnp.array([0.5, -0.3])
+            - Quasi-Monte Carlo methods
+            - Antithetic variates for variance reduction
             
         Returns
         -------
@@ -394,8 +443,26 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
             
         Notes
         -----
-        Single-step interface is less efficient than full integration
-        due to overhead of setting up Diffrax problem each time.
+        - Single-step interface less efficient than full integration
+        - Custom noise (dW) is FULLY SUPPORTED by JAX/Diffrax
+        - Same dW always gives same result (deterministic)
+        - This is the RECOMMENDED backend for custom noise needs
+        
+        Examples
+        --------
+        >>> # Random noise (default)
+        >>> x_next = integrator.step(x, u, dt=0.01)
+        >>> 
+        >>> # Zero noise (deterministic dynamics only)
+        >>> x_next = integrator.step(x, u, dt=0.01, dW=jnp.zeros(nw))
+        >>> 
+        >>> # Custom noise pattern
+        >>> x_next = integrator.step(x, u, dt=0.01, dW=jnp.array([0.5]))
+        >>> 
+        >>> # Verify determinism
+        >>> x1 = integrator.step(x, u, dt=0.01, dW=jnp.zeros(1))
+        >>> x2 = integrator.step(x, u, dt=0.01, dW=jnp.zeros(1))
+        >>> assert jnp.allclose(x1, x2)  # Passes!
         """
         step_size = dt if dt is not None else self.dt
         
@@ -406,8 +473,15 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
         x = jnp.asarray(x)
         if u is not None:
             u = jnp.asarray(u)
+        if dW is not None:
+            dW = jnp.asarray(dW)
+            # Validate shape
+            if dW.shape != (self.sde_system.nw,):
+                raise ValueError(
+                    f"dW shape must be ({self.sde_system.nw},), got {dW.shape}"
+                )
         
-        # Generate random key
+        # Generate random key (only used if dW is None)
         if self.seed is not None:
             key = jax.random.PRNGKey(self.seed)
         else:
@@ -420,12 +494,12 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
         def diffusion(t, y, args):
             return self.sde_system.diffusion(y, u, backend=self.backend)
         
-        # Create SDE terms
+        # Create SDE terms with custom or random Brownian motion
         drift_term = dfx.ODETerm(drift)
-        diffusion_term = dfx.ControlTerm(
-            diffusion,
-            self._get_brownian_motion(key, 0.0, step_size, (self.sde_system.nw,))
+        brownian = self._get_brownian_motion(
+            key, 0.0, step_size, (self.sde_system.nw,), dW=dW
         )
+        diffusion_term = dfx.ControlTerm(diffusion, brownian)
         terms = dfx.MultiTerm(drift_term, diffusion_term)
         
         # Get solver
@@ -532,6 +606,7 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
             return g
         
         # Create SDE terms
+        # Note: integrate() doesn't support custom dW (only step() does)
         drift_term = dfx.ODETerm(drift)
         brownian = self._get_brownian_motion(
             key, t0, tf, (self.sde_system.nw,)
