@@ -11,6 +11,10 @@ gold standard for SDE integration with:
 
 Supports both Ito and Stratonovich interpretations, controlled and autonomous systems.
 
+**CUSTOM NOISE SUPPORT**: Julia's DifferentialEquations.jl supports custom noise
+via NoiseGrid and NoiseFunction, but implementation through diffeqpy for single-step
+integration is complex. For reliable custom noise, use JAX/Diffrax instead.
+
 Mathematical Form
 -----------------
 Stochastic differential equations:
@@ -94,6 +98,7 @@ Examples
 
 from typing import Optional, Tuple, Callable, Dict, Any, List
 import numpy as np
+import warnings
 
 from src.systems.base.numerical_integration.stochastic.sde_integrator_base import (
     SDEIntegratorBase,
@@ -156,6 +161,7 @@ class DiffEqPySDEIntegrator(SDEIntegratorBase):
     - Statistics tracking is estimated (Julia doesn't expose call counts)
     - Random seed control is limited (Julia manages its own RNG)
     - For reproducible Monte Carlo, use JAX or PyTorch integrators
+    - For custom noise specification, use JAX/Diffrax (simpler API)
     
     Examples
     --------
@@ -291,7 +297,8 @@ class DiffEqPySDEIntegrator(SDEIntegratorBase):
         self,
         x0: np.ndarray,
         u_func: Callable,
-        t_span: Tuple[float, float]
+        t_span: Tuple[float, float],
+        noise_process = None
     ):
         """
         Setup Julia SDE problem.
@@ -307,6 +314,9 @@ class DiffEqPySDEIntegrator(SDEIntegratorBase):
             Control policy (or None for autonomous)
         t_span : Tuple[float, float]
             Time span (t0, tf)
+        noise_process : Optional
+            Custom Julia noise process object (NoiseGrid, NoiseFunction, etc.)
+            If None, Julia generates default Brownian motion
             
         Returns
         -------
@@ -375,13 +385,21 @@ class DiffEqPySDEIntegrator(SDEIntegratorBase):
             # Ensure x0 has correct dtype
             x0_julia = np.asarray(x0, dtype=np.float64)
             
-            # Create SDEProblem
+            # Create SDEProblem with optional noise process
+            problem_kwargs = {
+                'noise_rate_prototype': g0
+            }
+            
+            # Add custom noise if provided
+            if noise_process is not None:
+                problem_kwargs['noise'] = noise_process
+            
             problem = self.de.SDEProblem(
                 drift_func_julia,
                 diffusion_func_julia,
                 x0_julia,
                 (float(t0), float(tf)),
-                noise_rate_prototype=g0
+                **problem_kwargs
             )
             
             return problem
@@ -393,6 +411,51 @@ class DiffEqPySDEIntegrator(SDEIntegratorBase):
                 f"g0 shape: {g0.shape}, dtype: {g0.dtype}\n"
                 f"System: nx={self.sde_system.nx}, nw={self.sde_system.nw}\n"
                 f"t_span: {t_span}"
+            )
+    
+    def _create_noise_grid(
+        self,
+        t_array: np.ndarray,
+        W_array: np.ndarray
+    ):
+        """
+        Create Julia NoiseGrid from time and noise arrays.
+        
+        This allows providing custom Brownian increments to Julia.
+        
+        Parameters
+        ----------
+        t_array : np.ndarray
+            Time points (T,)
+        W_array : np.ndarray
+            Brownian motion values at each time point (T, nw)
+            
+        Returns
+        -------
+        NoiseGrid object for Julia
+        
+        Notes
+        -----
+        This is complex because:
+        1. NoiseGrid expects cumulative Brownian values, not increments
+        2. Must handle Python-Julia array bridging
+        3. Requires proper DiffEqNoiseProcess structure
+        
+        For most use cases, use JAX/Diffrax for custom noise instead.
+        """
+        try:
+            # Access Julia's DiffEqNoiseProcess
+            # This may not be directly accessible via diffeqpy
+            noise_grid = self.de.NoiseGrid(
+                list(t_array),
+                [list(w) for w in W_array]
+            )
+            return noise_grid
+        except AttributeError:
+            raise NotImplementedError(
+                "NoiseGrid not accessible via diffeqpy. "
+                "This may require direct Julia calls or a newer diffeqpy version. "
+                "For custom noise, use JAX/Diffrax backend instead."
             )
     
     def step(
@@ -417,21 +480,85 @@ class DiffEqPySDEIntegrator(SDEIntegratorBase):
         dt : Optional[float]
             Step size
         dW : Optional[ArrayLike]
-            Brownian increments (not used - Julia generates internally)
+            Brownian increments (nw,)
+            
+            **EXPERIMENTAL**: Julia DOES support custom noise via NoiseGrid,
+            but implementing it reliably for single-step integration through
+            diffeqpy is complex and may not work as expected.
+            
+            Current behavior:
+            - If dW provided: Attempts to create NoiseGrid (may fail or be ignored)
+            - If dW is None: Uses Julia's default random Brownian motion
+            
+            For reliable custom noise, use backend='jax' (Diffrax) instead.
             
         Returns
         -------
         ArrayLike
             Next state
+            
+        Notes
+        -----
+        Custom noise limitations with Julia/diffeqpy:
+        1. NoiseGrid requires cumulative Brownian values, not just increments
+        2. Python-Julia bridging for noise objects is fragile
+        3. Single-step interface makes this awkward (need full grid)
+        4. May require DiffEqNoiseProcess.jl which isn't always exposed
+        
+        Recommendation: For custom noise (deterministic testing, antithetic
+        variates, etc.), use JAX/Diffrax which has clean custom noise support.
+        
+        Examples
+        --------
+        >>> # Standard usage (random noise)
+        >>> x_next = integrator.step(x, u, dt=0.01)
+        >>> 
+        >>> # Attempted custom noise (experimental, may not work)
+        >>> x_next = integrator.step(x, u, dt=0.01, dW=np.array([0.5]))
+        >>> # Warning: May generate random noise anyway
         """
         step_size = dt if dt is not None else self.dt
         
         # Define constant control function
         u_func = lambda t, x_state: u
         
+        # Handle custom noise if provided
+        noise_process = None
+        if dW is not None:
+            # Attempt to create NoiseGrid for custom noise
+            # This is experimental and complex for single steps
+            try:
+                # Convert dW (increment) to cumulative Brownian values
+                # For single step: W(t0) = 0, W(t1) = dW
+                t_array = np.array([0.0, step_size], dtype=np.float64)
+                
+                # Cumulative Brownian motion values
+                # W(0) = 0, W(dt) = dW
+                dW_np = np.asarray(dW, dtype=np.float64)
+                if dW_np.ndim == 0:
+                    dW_np = dW_np.reshape(1)
+                
+                W_array = np.zeros((2, len(dW_np)), dtype=np.float64)
+                W_array[0, :] = 0.0  # W(t0) = 0
+                W_array[1, :] = dW_np  # W(t1) = dW
+                
+                # Try to create NoiseGrid
+                noise_process = self._create_noise_grid(t_array, W_array)
+                
+            except (AttributeError, NotImplementedError, Exception) as e:
+                # NoiseGrid creation failed
+                warnings.warn(
+                    f"Failed to create custom noise for Julia: {e}. "
+                    f"Falling back to random noise generation. "
+                    f"For reliable custom noise, use backend='jax' (Diffrax).",
+                    UserWarning,
+                    stacklevel=3
+                )
+                noise_process = None
+        
         # Setup problem for single step
         problem = self._setup_julia_problem(
-            x, u_func, (0.0, step_size)
+            x, u_func, (0.0, step_size), noise_process=noise_process
         )
         
         # Create algorithm instance
@@ -508,7 +635,7 @@ class DiffEqPySDEIntegrator(SDEIntegratorBase):
         x0 = np.asarray(x0, dtype=np.float64)
         t0, tf = t_span
         
-        # Setup Julia SDE problem
+        # Setup Julia SDE problem (no custom noise for full integration)
         problem = self._setup_julia_problem(x0, u_func, t_span)
         
         # Create algorithm instance
