@@ -5,18 +5,14 @@
 A Python library for constructing, analyzing, and simulating nonlinear dynamical systems using symbolic mathematics with multi-backend numerical execution. I developed it because I couldn't find an easy-to-use, reproducible, modular library for simulating simple physical systems in terms of symbolic variables. The main goal of this library is to enable realistic synthetic data generation for nonlinear dynamical systems, enable nonlinear state-space control theory research, build a framework for defining physical reinforcement learning environments in terms of state-space models, and allowing for reproducible specification of physical model systems for use in verifiable machine learning and safe/constrained RL contexts.
 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: AGPLv3](https://img.shields.io/badge/License-AGPLv3-yellow.svg)](https://opensource.org/license/agpl-v3)
+[![Experimental](https://img.shields.io/badge/status-experimental-orange?logo=beaker)]
 
 ---
 
 ## Key Features
 
-- **Symbolic System Definition**: Define dynamics using SymPy's symbolic mathematics
-- **Multi-Backend Execution**: Seamlessly execute on NumPy, PyTorch, or JAX
-- **Support for Nonlinear State-Space Control**: LQR, LQG, Kalman filtering, and observers
-- **Flexible Discretization**: Multiple integration schemes (Euler, Midpoint, RK4)
-- **Rich Visualization**: Interactive Plotly plots with automatic layout
-- **High Performance**: JIT compilation (JAX), GPU acceleration (PyTorch), symbolic optimization
+- TODO: Re-do section
 
 ---
 
@@ -36,24 +32,22 @@ import sympy as sp
 from src.systems.base import SymbolicDynamicalSystem
 
 class Pendulum(SymbolicDynamicalSystem):
-    def __init__(self, m=0.15, l=0.5, beta=0.1, g=9.81):
-        super().__init__(m, l, beta, g)
     
-    def define_system(self, m_val, l_val, beta_val, g_val):
+    def define_system(self, m_val=0.15, l_val=0.5, beta_val=0.1, g_val=9.81):
         """Define pendulum dynamics symbolically"""
 
         # Create symbols
         m, l, beta, g = sp.symbols('m l beta g', real=True, positive=True)
-        θ, θ_dot = sp.symbols('theta theta_dot', real=True)
+        theta_sym, theta_dot_sym = sp.symbols('theta theta_dot', real=True)
         u = sp.symbols('u', real=True)
         
         # Dynamics
-        θ_ddot = -(g/l)*sp.sin(θ) - (beta/m)*θ_dot + u/(m*l**2)
+        theta_ddot = -(g/l)*sp.sin(theta_sym) - (beta/m)*theta_dot_sym + u/(m*l**2)
         
         # Assign
-        self.state_vars = [θ, θ_dot]
+        self.state_vars = [theta_sym, theta_dot_sym]
         self.control_vars = [u]
-        self._f_sym = sp.Matrix([θ_ddot])
+        self._f_sym = sp.Matrix([theta_ddot])
         self.parameters = {m: m_val, l: l_val, beta: beta_val, g: g_val}
         self.order = 2
 
@@ -104,37 +98,72 @@ pip install jax[cuda12]  # For CUDA 12.x
 
 ### Basic Usage
 
+
 ```python
 import torch
 import numpy as np
 from src.systems.builtin import SymbolicPendulum
-from src.systems.base import GenericDiscreteTimeSystem, IntegrationMethod
+from src.systems.base import DiscreteTimeSystem
+from src.controllers.control_designer import ControlDesigner
+from src.visualization.trajectory_plotter import TrajectoryPlotter
 
-# 1. Create continuous-time system
-pendulum = SymbolicPendulum(m=0.15, l=0.5, beta=0.1, g=9.81)
+# 1. Create continuous-time system and add equilibria
+continuous_pendulum = SymbolicPendulum(
+        m_val=1.0,
+        l_val=0.5,
+        beta_val=0.1,
+        g_val=9.81
+    )
+    
+# Add equilibria after creation
+continuous_pendulum.add_equilibrium(
+    'downward',
+    x_eq=np.array([0.0, 0.0]),
+    u_eq=np.array([0.0]),
+    verify=True
+)
+
+continuous_pendulum.add_equilibrium(
+    'upright',
+    x_eq=np.array([np.pi, 0.0]),
+    u_eq=np.array([0.0]),
+    verify=True
+)
+
+# TODO: method needs to be added
+continuous_pendulum.set_default_equilibrium('downward')
 
 # 2. Discretize for simulation
+# TODO: update once API is fully refactored
 dt = 0.01
-system = GenericDiscreteTimeSystem(
-    pendulum, 
+discrete_pendulum = DiscreteTimeSystem(
+    continuous_pendulum, 
     dt=dt,
-    integration_method=IntegrationMethod.RK4
+    method='euler'
 )
 
 # 3. Design LQR controller
+# TODO: update once fully refactored
+# current vision is to hand continuous-time
+# and discrete-time systems to the same interface
 Q = np.diag([10.0, 1.0])  # State cost
 R = np.array([[0.1]])      # Control cost
-K, S = system.dlqr_control(Q, R)
+continuous_designer = ControlDesigner(continuous_pendulum) # continuous time
+Kc, Sc = continuous_designer.lqr_control(Q, R) # continuous system gain
+discrete_designer = ControlDesigner(discrete_pendulum) # discrete system
+Kd, Sd = discrete_designer.lqr_control(Q, R) # discrete system gain
 
-# 4. Simulate closed-loop system
+# 4. Simulate closed-loop system (simulation only for discrete systems)
 x0 = torch.tensor([0.5, 0.0])  # Initial state: 0.5 rad, 0 rad/s
 horizon = 1000
 
-controller = lambda x: torch.tensor(K @ (x - system.x_equilibrium).numpy() + system.u_equilibrium.numpy())
-trajectory = system.simulate(x0, controller=controller, horizon=horizon)
+controller = lambda x: torch.tensor(Kd @ (x - discrete_pendulum.default_equilibrium_state).numpy() + discrete_pendulum.default_equilibrium_control.numpy())
+trajectory = discrete_pendulum.simulate(x0, controller=controller, horizon=horizon)
 
 # 5. Visualize results
-system.plot_trajectory(
+# TODO: update after full refactoring
+plotter = TrajectoryPlotter(discrete_pendulum)
+closed_loop_plotly_trajectory = TrajectoryPlotter.plot_2d_trajectory(
     trajectory,
     state_names=['θ (rad)', 'θ̇ (rad/s)'],
     title='Pendulum Stabilization with LQR'
@@ -152,10 +181,7 @@ Define your dynamical system using SymPy:
 ```python
 class MySystem(SymbolicDynamicalSystem):
 
-    def __init__(self, param1 = 1.0, param2 = 0.5):
-        super().__init__(param1, param2)
-
-    def define_system(self, param1_val, param2_val):
+    def define_system(self, param1_val= 1.0, param2_val = 0.5):
         # Define symbolic variables
         x1, x2 = sp.symbols('x1 x2')
         u = sp.symbols('u')
@@ -175,9 +201,13 @@ class MySystem(SymbolicDynamicalSystem):
 
 ### 2. Multi-Backend Execution
 
-The library automatically detects the backend from input types:
+- TODO: elaborate on backend functionality
+The library can automatically detect backend from the input type:
 
 ```python
+
+system = MySystem()
+
 # NumPy backend (CPU)
 dx_numpy = system(np.array([1.0, 0.0]), np.array([0.5]))
 
@@ -193,41 +223,36 @@ dx_jax = system(jnp.array([1.0, 0.0]), jnp.array([0.5]))
 Convert continuous-time systems to discrete-time:
 
 ```python
-from src.systems.base import GenericDiscreteTimeSystem, IntegrationMethod
-
-discrete_system = GenericDiscreteTimeSystem(
-    continuous_system,
+discrete_system = DiscreteTimeSystem(
+    system,
     dt=0.01,
-    integration_method=IntegrationMethod.RK4,      # For velocities
-    position_integration=IntegrationMethod.MidPoint  # For positions (2nd order)
+    method='euler'
 )
 
 # Now system computes x[k+1] = f_discrete(x[k], u[k])
 x_next = discrete_system(x_current, u_current)
 ```
 
-Available integration methods:
-- `ExplicitEuler`: Fast, first-order accuracy
-- `MidPoint`: Moderate speed, second-order accuracy  
-- `RK4`: Slower, fourth-order accuracy (recommended)
-
-Planned to be extended with support for scipy.integrate.solve_ivp, Diffrax, and torchdiffeq
+- TODO: Elaborate on extremely extensive refactoring
 
 ### 4. Control Design
 
 ```python
+
+discrete_control_designer = ControlDesigner(discrete_system)
+
 # LQR (state feedback)
 Q = np.eye(nx) * 10.0  # State cost
 R = np.eye(nu) * 0.1   # Control cost
-K, S = system.dlqr_control(Q, R)
+K, S = discrete_control_designer.lqr(Q, R)
 
 # Kalman Filter (state estimation)
 Q_process = np.eye(nx) * 0.01      # Process noise
 R_measurement = np.eye(ny) * 0.1   # Measurement noise
-L = system.discrete_kalman_gain(Q_process, R_measurement)
+L = discrete_control_designer.kalman_gain(Q_process, R_measurement)
 
 # LQG (output feedback)
-K, L = system.dlqg_control(Q, R, Q_process, R_measurement)
+K, L = discrete_control_designer.lqg_control(Q, R, Q_process, R_measurement)
 ```
 
 ### 5. Simulation
@@ -235,14 +260,14 @@ K, L = system.dlqg_control(Q, R, Q_process, R_measurement)
 ```python
 # Simulation with pre-computed controls
 u_sequence = torch.zeros(horizon, nu)
-trajectory = system.simulate(x0, controller=u_sequence)
+trajectory = discrete_system.simulate(x0, controller=u_sequence)
 
 # Simulation with feedback controller
 controller = lambda x: -K @ x
-trajectory = system.simulate(x0, controller=controller, horizon=1000)
+trajectory = discrete_system.simulate(x0, controller=controller, horizon=1000)
 
 # Simulation with observer (output feedback)
-trajectory = system.simulate(
+trajectory = discrete_system.simulate(
     x0, 
     controller=controller,
     observer=observer,
@@ -255,49 +280,15 @@ trajectory = system.simulate(
 ## Built-in Systems
 
 The library includes several pre-defined mechanical and aerial systems:
+- TODO: Elaborate and fix
 
 ### Mechanical Systems
 
-```python
-from src.systems.builtin import (
-    SymbolicPendulum,        # Simple pendulum
-    CartPole,        # Inverted pendulum on cart
-    Manipulator2Link, # Two-link planar robotic manipulator model
-    PathTracking, # Simplistic model of a car on a circular track
-)
-
-# Example: CartPole
-cartpole = CartPole(
-    m_cart: float = 1.0,
-    m_pole: float = 0.1,
-    length: float = 0.5,
-    gravity: float = 9.81,
-    friction: float = 0.1,
-)
-```
-
 ### Aerial Systems
 
-```python
-from src.systems.builtin import (
-    SymbolicQuadrotor2D,     # Planar quadrotor
-    SymbolicQuadrotor2DLidar, # Planar quadrotor where only output are 4 LIDAR readings
-    PVTOL, # Planar quadrotor, velocities relative to body frame rather than world frame
-)
+### Linear Systems
 
-# Example: 2D Quadrotor
-quad = SymbolicQuadrotor2D(
-    m=0.5,      # Mass
-    Ixx=0.01,   # Moment of inertia
-    g=9.81      # Gravity
-)
-```
-
-All systems support:
-- Automatic linearization
-- LQR/LQG control design
-- Multi-backend execution
-- Rich visualization
+### Stochastic Systems
 
 ---
 
@@ -305,41 +296,8 @@ All systems support:
 
 ### Trajectory Plots
 
-```python
-system.plot_trajectory(
-    trajectory,
-    state_names=['x', 'y', 'θ', 'ẋ', 'ẏ', 'θ̇'],
-    control_sequence=controls,
-    control_names=['F_left', 'F_right'],
-    title='Quadrotor Trajectory',
-    colorway='Plotly',  # or 'D3', 'Set1', etc.
-    save_html='trajectory.html'
-)
-```
-
-Features:
-- **Adaptive layout**: Automatically arranges subplots based on number of states
-- **Interactive**: Zoom, pan, hover for values
-- **Batch support**: Compare multiple trajectories
-- **Compact mode**: For systems with many state variables
 
 ### 3D Visualization
-
-```python
-# 3D trajectory with time coloring (single trajectory only)
-# otherwise analogous to plot_phase_portrait_3d
-# (for theoretical 3D Quadrotor system)
-system.plot_trajectory_3d(
-    trajectory,
-    state_indices=(0, 1, 2),
-    state_names=('x', 'y', 'z'),
-    title='Quadrotor 3D Path'
-)
-
-# Phase portraits
-system.plot_phase_portrait_2d(trajectory, state_indices=(0, 1))
-system.plot_phase_portrait_3d(trajectory, state_indices=(0, 2, 4))
-```
 
 ---
 
@@ -352,10 +310,7 @@ The library automatically handles arbitrary-order systems:
 ```python
 class SecondOrderSystem(SymbolicDynamicalSystem):
 
-    def __init__(self, k=10.0, c=0.5):
-        super().__init__(k, c)
-
-    def define_system(self, k_val, c_val):
+    def define_system(self, k_val=10.0, c_val=0.5):
         q, q_dot = sp.symbols('q q_dot')
         u = sp.symbols('u')
         k, c = sp.symbols('k c', real=True, positive=True)
@@ -387,40 +342,10 @@ print(f"B matches: {results['B_match']}, error: {results['B_error']:.2e}")
 
 ### Performance Diagnostics
 
-```python
-# Check backend installation and capabilities
-from src.systems.base.backend_utils import print_installation_summary
-print_installation_summary()
-
-# Output:
-# ======================================================================
-# Backend Installation Summary
-# ======================================================================
-# 
-# 📊 NumPy
-#   ✓ Installed: 2.0.1
-#   Device: cpu
-# 
-# 🔥 PyTorch
-#   ✓ Installed: 2.3.0
-#   CUDA available: True
-#   CUDA version: 12.1
-#   GPU count: 1
-#     [0] NVIDIA RTX 4090
-# 
-# ⚡ JAX
-#   ✓ Installed: 0.4.30
-#   GPU available: True
-#   GPU count: 1
-# ======================================================================
-```
-
 ### Custom Output Functions
 
 ```python
 class CustomOutputSystem(SymbolicDynamicalSystem):
-    def __init__(self):
-        super().__init__()
 
     def define_system(self):
         x1, x2 = sp.symbols('x1 x2', real=True)
@@ -472,38 +397,8 @@ pytest --cov=src tests/
 
 ### System Properties
 
-Every `SymbolicDynamicalSystem` provides:
-
-```python
-system.nx          # Number of states
-system.nu          # Number of controls
-system.ny          # Number of outputs
-system.nq          # Number of generalized coordinates
-system.order       # System order (1, 2, 3, ...)
-
-system.x_equilibrium  # Equilibrium state
-system.u_equilibrium  # Equilibrium control
-
-system.state_vars     # List of SymPy symbols
-system.control_vars   # List of SymPy symbols
-system.parameters     # Dict of parameters
-```
-
 ### Printing System Information
 
-```python
-# Print symbolic equations
-system.print_equations(simplify=True)
-
-# Comprehensive system info
-discrete_system.print_info(
-    include_equations=True,
-    include_linearization=True
-)
-
-# Quick summary
-print(discrete_system.summary())
-```
 
 ---
 
@@ -511,126 +406,23 @@ print(discrete_system.summary())
 
 ### 1. Prototyping Control Algorithms
 
-```python
-# Quickly test different LQR weights
-for q_theta in [1, 10, 100]:
-    Q = np.diag([q_theta, 1.0])
-    K, _ = system.dlqr_control(Q, R)
-    traj = system.simulate(x0, lambda x: K @ x, horizon=1000)
-    system.plot_trajectory(traj, title=f'Q_θ = {q_theta}')
-```
-
 ### 2. Neural Network Integration
-
-```python
-import torch.nn as nn
-
-class NeuralController(nn.Module):
-    def __init__(self, nx, nu):
-        super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(nx, 64),
-            nn.Tanh(),
-            nn.Linear(64, nu)
-        )
-    
-    def forward(self, x):
-        return self.net(x)
-
-# Train with gradient-based optimization
-controller = NeuralController(system.nx, system.nu)
-optimizer = torch.optim.Adam(controller.parameters())
-
-for epoch in range(num_epochs):
-    trajectory = system.simulate(x0, controller, horizon=100)
-    loss = compute_cost(trajectory)
-    
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
-```
 
 ### 3. Sim-to-Real Transfer
 
-```python
-# High-fidelity simulation (JAX, RK4)
-jax_system = GenericDiscreteTimeSystem(
-    dynamics, 
-    dt=0.001,
-    integration_method=IntegrationMethod.RK4
-)
-
-# Real-time controller (NumPy, fast Euler)
-real_time_system = GenericDiscreteTimeSystem(
-    dynamics,
-    dt=0.01,
-    integration_method=IntegrationMethod.ExplicitEuler
-)
-
-# Same controller works on both!
-K, L = jax_system.dlqg_control(Q, R, Q_proc, R_meas)
-```
-
 ### 4. Research: Learning Lyapunov Functions
-
-```python
-class NeuralLyapunov(nn.Module):
-    def __init__(self, nx):
-        super().__init__()
-        self.V_net = nn.Sequential(...)
-    
-    def forward(self, x):
-        return self.V_net(x)
-
-# Verify Lyapunov conditions using symbolic Jacobians
-V_network = NeuralLyapunov(system.nx)
-
-x = torch.randn(batch_size, system.nx, requires_grad=True)
-u = controller(x)
-
-V = V_network(x)
-dV_dx = torch.autograd.grad(V.sum(), x, create_graph=True)[0]
-dx = system(x, u)  # Get dynamics
-
-V_dot = (dV_dx * dx).sum(dim=1)  # dV/dt = (dV/dx) · f(x,u)
-
-# Train: V_dot < 0 for stability
-loss = torch.relu(V_dot + margin).mean()
-```
 
 ---
 
 ## Development
-
-<!-- ### Current Project Structure
-
-```
-ControlODESymulation/
-├── src/
-│   ├── systems/
-│   │   ├── base/              # Core abstractions
-│   │   │   ├── symbolic_dynamical_system.py
-│   │   │   ├── generic_discrete_time_system.py
-│   │   │   ├── codegen_utils.py
-│   │   │   ├── array_backend.py
-│   │   │   └── backend_utils.py
-│   │   └── builtin/           # Pre-defined systems
-│   │       ├── mechanical_systems.py
-│   │       ├── abstract_symbolic_systems.py
-│   │       └── aerial_systems.py
-│   ├── controllers/           # Control algorithms
-│   ├── observers/             # State estimators
-│   └── lyapunov_functions/    # Legacy functions (need to be refactored)
-├── tests/                     # Test suite
-├── example_notebooks/         # Jupyter tutorials
-└── requirements.txt
-``` -->
 
 ### Contributing and Future Work
 
 Currently not open to contributions, though may change after Phase 4 and once I learn how open-source development works
 
 #### Phase 2 (Current):
+- Create unit tests for EquilibriumHandler and debug if necessary
+- Update SymbolicDynamicalSystem and StochasticDynamicalSystem along with unit tests to actually handle equilibria
 - Refactoring of DiscreteTimeSystem
     - Assess what additional tests to add to StochasticDiscretizer unit test suite and debug if necessary
     - Construct DiscreteSimulator that uses Discretizer to handle trajectory simulation
