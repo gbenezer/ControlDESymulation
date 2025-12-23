@@ -642,7 +642,6 @@ Currently not open to contributions, though may change after Phase 4 and once I 
         - Make sure this can support both autonomous and controlled systems
     - Construct StochasticDiscreteSimulator
     - Construct DiscreteLinearization that caches numerical linearization
-        - Assess whether this is needed/can be implemented for stochastic systems
     - Construct StochasticDiscreteLinearization
     - Construct unified DiscreteTimeSystem class from the above sub-object classes
         - Should
