@@ -631,13 +631,13 @@ ControlODESymulation/
 Currently not open to contributions, though may change after Phase 4 and once I learn how open-source development works
 
 #### Phase 2 (Current):
+- Resolve uncovered issues regarding setting custom noise with SDE Integrators
+    - Create unit test for CustomBrownianPath class used for interfacing with Diffrax and debug
+    - Fix DiffraxSDEIntegrator after new unit tests uncovered problems
+    - Fix DiffEqPySDEIntegrator as good as possible, update unit tests, and debug
+    - If possible, fix TorchSDE to support custom noise as best as possible (given atypical support)
 - Refactoring of DiscreteTimeSystem
     - Finish debugging StochasticDiscretizer
-        - Switch batching test and reproducibility tests away from Julia DiffEqPy backend
-        - Other failing tests
-            - test_step_callable_interface
-            - test_zero_noise_matches_deterministic (both versions)
-            - test_set_seed_changes_results
     - Construct DiscreteSimulator that uses Discretizer to handle trajectory simulation
         - Make sure this can support both autonomous and controlled systems
     - Construct StochasticDiscreteSimulator
