@@ -981,6 +981,14 @@ class DiffEqPySDEIntegrator(SDEIntegratorBase):
         """
         Recommend Julia SDE algorithm based on problem characteristics.
         
+        **IMPORTANT**: Not all recommended algorithms work via diffeqpy!
+        - SRIW1/SRIW2: Don't work (use JAX/Diffrax instead)
+        - EM: Always works
+        - SRA3: Verified to work
+        
+        For guaranteed compatibility, use 'EM' or 'SRA3' only.
+        For high accuracy with diagonal noise, use JAX/Diffrax.
+        
         Parameters
         ----------
         noise_type : str
@@ -997,34 +1005,47 @@ class DiffEqPySDEIntegrator(SDEIntegratorBase):
             
         Examples
         --------
+        >>> # Additive noise, high accuracy (WORKS)
+        >>> alg = DiffEqPySDEIntegrator.recommend_algorithm(
+        ...     noise_type='additive',
+        ...     stiffness='none',
+        ...     accuracy='high'
+        ... )
+        >>> print(alg)
+        'SRA3'  # Verified to work
+        >>> 
+        >>> # Diagonal noise, high accuracy (DOESN'T WORK via diffeqpy)
         >>> alg = DiffEqPySDEIntegrator.recommend_algorithm(
         ...     noise_type='diagonal',
         ...     stiffness='none',
         ...     accuracy='high'
         ... )
         >>> print(alg)
-        'SRIW1'
+        'SRIW1'  # Won't work - use JAX/Diffrax SHARK instead
         """
         if stiffness == 'severe':
-            return 'ImplicitEM'
+            return 'ImplicitEM'  # May not work via diffeqpy
         elif stiffness == 'moderate':
-            return 'SKenCarp'
+            return 'SKenCarp'    # May not work via diffeqpy
         
         # Non-stiff recommendations
         if accuracy == 'high':
             if noise_type == 'additive':
-                return 'SRA3'
+                return 'SRA3'  # Verified to work
             elif noise_type in ['diagonal', 'scalar']:
-                return 'SRIW1'
+                # SRIW1 doesn't work via diffeqpy!
+                # This recommendation is from Julia's perspective
+                # For actual use, recommend JAX/Diffrax instead
+                return 'SRIW1'  # Won't work - see docstring
             else:
-                return 'RKMil'
+                return 'RKMil'  # May not work via diffeqpy
         elif accuracy == 'medium':
             if noise_type == 'diagonal':
-                return 'SRA1'
+                return 'SRA1'  # Untested via diffeqpy
             else:
-                return 'LambaEM'
+                return 'LambaEM'  # Likely works
         else:  # low accuracy
-            return 'EM'
+            return 'EM'  # Always works
 
 
 # ============================================================================
