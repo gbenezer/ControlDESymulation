@@ -71,7 +71,7 @@ Examples
 ...     sde_system, dt=0.01, method='euler', backend='torch', seed=42
 ... )
 """
-
+import warnings
 from typing import Optional, Tuple, Union, Dict, Any, TYPE_CHECKING
 import numpy as np
 
@@ -391,12 +391,43 @@ class StochasticDiscretizer:
                 sde_system, dt=dt, backend='torch'
             )
             x_next_batch = discretizer_torch.step(x_batch, u_batch)
+
+        Custom Noise Support by Backend
+        --------------------------------
+        **JAX (Diffrax):**
+        - Full support for custom noise `w`
+        - Providing `w=0` gives exact deterministic dynamics
+        - Same `w` always gives same result
+        - Use for: Deterministic testing, quasi-random methods
         
+        **PyTorch (TorchSDE):**
+        - Does NOT support custom noise
+        - Parameter `w` is ignored if provided
+        - TorchSDE generates noise internally
+        - Use `seed` for statistical reproducibility only
+        
+        **NumPy (Julia DiffEqPy):**
+        - Unreliable custom noise support
+        - May partially use `w` but not guaranteed
+        - Use `seed` for best-effort reproducibility
+        
+        If you need custom noise control (e.g., for quasi-Monte Carlo,
+        antithetic variates, or deterministic testing), use JAX backend.
+    
         Examples
         --------
         >>> # Single trajectory (all backends)
         >>> x_next = discretizer.step(np.array([1.0]), np.array([0.0]))
         >>> 
+        >>> # JAX - custom noise works
+        >>> disc_jax = StochasticDiscretizer(sde, dt=0.01, backend='jax')
+        >>> w_zero = jnp.array([0.0])
+        >>> x_next = disc_jax.step(x, u, w=w_zero)  # Deterministic!
+        >>> 
+        >>> # PyTorch - custom noise ignored
+        >>> disc_torch = StochasticDiscretizer(sde, dt=0.01, backend='torch')
+        >>> w_zero = torch.tensor([0.0])
+        >>> x_next = disc_torch.step(x, u, w=w_zero)  # Still random!
         >>> # Batched (PyTorch only)
         >>> if discretizer.backend == 'torch':
         ...     x_batch = torch.randn(100, nx)
@@ -428,6 +459,27 @@ class StochasticDiscretizer:
                     f"(method='{self.method}'). Julia does not support batched SDE "
                     f"evaluation. For batched simulations, use backend='torch' or 'jax', "
                     f"or loop over trajectories manually.",
+                    UserWarning,
+                    stacklevel=2
+                )
+        
+        # Warn if custom noise provided with unsupported backend
+        if w is not None:
+            if self.backend == 'torch':
+                warnings.warn(
+                    "Custom noise 'w' provided but TorchSDE does not support custom "
+                    "Brownian motion. The noise will be ignored and generated randomly. "
+                    "For custom noise support, use backend='jax' (Diffrax) instead.",
+                    UserWarning,
+                    stacklevel=2
+                )
+                
+            # Julia also doesn't support it reliably
+            elif self.backend == 'numpy' and self._is_julia_sde_method(self.method):
+                warnings.warn(
+                    "Custom noise 'w' provided but Julia DiffEqPy has limited support "
+                    "for custom Brownian motion. Results may not be deterministic. "
+                    "For reliable custom noise, use backend='jax' (Diffrax) instead.",
                     UserWarning,
                     stacklevel=2
                 )
