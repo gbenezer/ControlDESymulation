@@ -22,17 +22,17 @@ Stochastic differential equations:
 Available Methods
 ----------------
 **Recommended General Purpose:**
-- euler: Euler-Maruyama (strong 0.5, weak 1.0) - fast and robust ✅
-- milstein: Milstein method (strong 1.0) - better accuracy ✅
-- srk: Stochastic Runge-Kutta - high accuracy ✅
+- euler: Euler-Maruyama (strong 0.5, weak 1.0) - fast and robust
+- milstein: Milstein method (strong 1.0) - better accuracy
+- srk: Stochastic Runge-Kutta - high accuracy
 
 **For Neural SDEs:**
-- euler with adjoint: Memory-efficient backprop ✅
-- midpoint: Better stability for neural networks ✅
+- euler with adjoint: Memory-efficient backprop
+- midpoint: Better stability for neural networks
 
 **Adaptive Methods:**
-- reversible_heun: Adaptive with error control ✅
-- adaptive_heun: Variable time stepping ✅
+- reversible_heun: Adaptive with error control
+- adaptive_heun: Variable time stepping
 
 Key Features
 -----------
@@ -591,68 +591,6 @@ class TorchSDEIntegrator(SDEIntegratorBase):
         """Disable adjoint method."""
         self.use_adjoint = False
     
-    def vectorized_step(
-        self,
-        x_batch: ArrayLike,
-        u_batch: Optional[ArrayLike] = None,
-        dt: Optional[float] = None
-    ):
-        """
-        Vectorized step over batch of states and controls.
-        
-        PyTorch naturally handles batched operations.
-        
-        Parameters
-        ----------
-        x_batch : ArrayLike
-            Batch of states (batch, nx)
-        u_batch : Optional[ArrayLike]
-            Batch of controls (batch, nu), or None for autonomous
-        dt : Optional[float]
-            Step size
-            
-        Returns
-        -------
-        ArrayLike
-            Batch of next states (batch, nx)
-        """
-        # Convert to tensors
-        if not isinstance(x_batch, torch.Tensor):
-            x_batch = torch.tensor(x_batch, dtype=torch.float32, device=self.device)
-        
-        if u_batch is not None and not isinstance(u_batch, torch.Tensor):
-            u_batch = torch.tensor(u_batch, dtype=torch.float32, device=self.device)
-        
-        step_size = dt if dt is not None else self.dt
-        
-        # Define vectorized control function
-        if u_batch is not None:
-            def u_func(t, x_state):
-                # Return corresponding control for each state
-                batch_size = x_state.shape[0] if x_state.ndim > 1 else 1
-                if batch_size == u_batch.shape[0]:
-                    return u_batch
-                else:
-                    return u_batch[0:1].expand(batch_size, -1)
-        else:
-            u_func = lambda t, x_state: None
-        
-        # Create SDE wrapper
-        sde = self._create_sde_wrapper(u_func)
-        sde = sde.to(self.device)
-        
-        # Time points
-        ts = torch.tensor([0.0, step_size], dtype=x_batch.dtype, device=self.device)
-        
-        # Integrate
-        ys = self.torchsde.sdeint(sde, x_batch, ts, method=self.method, dt=step_size)
-        
-        return ys[-1]
-    
-    # ========================================================================
-    # Algorithm Information
-    # ========================================================================
-    
     @staticmethod
     def list_methods():
         """List available methods."""
@@ -666,41 +604,108 @@ class TorchSDEIntegrator(SDEIntegratorBase):
     def get_method_info(method: str):
         """Get method information."""
         info = {
-            'euler': {'name': 'Euler-Maruyama', 'strong_order': 0.5, 'weak_order': 1.0,
-                     'description': 'Fast and robust', 'best_for': 'Neural SDEs'},
-            'milstein': {'name': 'Milstein', 'strong_order': 1.0, 'weak_order': 1.0,
-                        'description': 'Higher accuracy', 'best_for': 'When accuracy matters'},
-            'srk': {'name': 'Stochastic RK', 'strong_order': 1.5, 'weak_order': 1.0,
-                   'description': 'High accuracy', 'best_for': 'Precision'},
-            'midpoint': {'name': 'Midpoint', 'strong_order': 0.5, 'weak_order': 1.0,
-                        'description': 'Better stability (Stratonovich only)', 'sde_type': 'stratonovich'},
+            'euler': {
+                'name': 'Euler-Maruyama',
+                'strong_order': 0.5,
+                'weak_order': 1.0,
+                'description': 'Fast and robust, good for general use',
+                'best_for': 'Neural SDEs, quick simulations',
+            },
+            'milstein': {
+                'name': 'Milstein',
+                'strong_order': 1.0,
+                'weak_order': 1.0,
+                'description': 'Higher accuracy than Euler',
+                'best_for': 'When accuracy matters',
+            },
+            'srk': {
+                'name': 'Stochastic Runge-Kutta',
+                'strong_order': 1.5,
+                'weak_order': 1.0,
+                'description': 'High accuracy',
+                'best_for': 'Precision requirements',
+            },
+            'midpoint': {
+                'name': 'Midpoint',
+                'strong_order': 0.5,
+                'weak_order': 1.0,
+                'description': 'Better stability than Euler (Stratonovich only)',
+                'best_for': 'Neural networks with Stratonovich SDEs',
+                'sde_type': 'stratonovich',
+            },
+            'reversible_heun': {
+                'name': 'Reversible Heun',
+                'strong_order': 0.5,
+                'weak_order': 1.0,
+                'description': 'Adaptive with error control (Stratonovich only)',
+                'best_for': 'Adaptive stepping with Stratonovich',
+                'sde_type': 'stratonovich',
+            },
+            'adaptive_heun': {
+                'name': 'Adaptive Heun',
+                'strong_order': 0.5,
+                'weak_order': 1.0,
+                'description': 'Adaptive stepping (both Ito and Stratonovich)',
+                'best_for': 'When step size needs automatic adjustment',
+            },
         }
         return info.get(method, {'name': method, 'description': 'torchsde method'})
-
-
-    def create_torchsde_integrator(sde_system, method='euler', dt=0.01, **options):
-        """Quick factory for TorchSDE integrators."""
-        return TorchSDEIntegrator(sde_system, dt=dt, method=method, backend='torch', **options)
-
-
-    def list_torchsde_methods():
-        """Print available methods."""
-        methods = TorchSDEIntegrator.list_methods()
-        print("TorchSDE Methods (PyTorch-based)")
-        print("=" * 60)
-        print("\nNOTE: TorchSDE does NOT support custom Brownian motion.")
-        print("For custom noise (dW), use JAX/Diffrax instead.\n")
+    
+    @staticmethod
+    def recommend_method(use_case: str = 'general', has_gpu: bool = False):
+        """Recommend method based on use case."""
+        if use_case == 'neural_sde':
+            return 'euler'
+        elif use_case == 'high_accuracy':
+            return 'srk'
+        elif use_case == 'adaptive':
+            return 'reversible_heun'
+        else:
+            return 'euler'
+    
+    def vectorized_step(self, x_batch, u_batch=None, dt=None):
+        """Vectorized step over batch."""
+        if not isinstance(x_batch, torch.Tensor):
+            x_batch = torch.tensor(x_batch, dtype=torch.float32, device=self.device)
+        if u_batch is not None and not isinstance(u_batch, torch.Tensor):
+            u_batch = torch.tensor(u_batch, dtype=torch.float32, device=self.device)
         
-        for category, method_list in methods.items():
-            print(f"\n{category.replace('_', ' ').title()}:")
-            for method in method_list:
-                info = TorchSDEIntegrator.get_method_info(method)
-                if 'strong_order' in info:
-                    print(f"  - {method}: {info['description']} "
-                        f"(strong {info['strong_order']}, weak {info['weak_order']})")
-                else:
-                    print(f"  - {method}: {info['description']}")
+        step_size = dt if dt is not None else self.dt
         
-        print("\n" + "=" * 60)
-        print("Use get_method_info(name) for details")
-        print("Use recommend_method() for automatic selection")
+        def u_func(t, x_state):
+            if u_batch is None:
+                return None
+            batch_size = x_state.shape[0] if x_state.ndim > 1 else 1
+            return u_batch if batch_size == u_batch.shape[0] else u_batch[0:1].expand(batch_size, -1)
+        
+        sde = self._create_sde_wrapper(u_func).to(self.device)
+        ts = torch.tensor([0.0, step_size], dtype=x_batch.dtype, device=self.device)
+        ys = self.torchsde.sdeint(sde, x_batch, ts, method=self.method, dt=step_size)
+        
+        return ys[-1]
+
+
+def create_torchsde_integrator(sde_system, method='euler', dt=0.01, **options):
+    """Quick factory for TorchSDE integrators."""
+    return TorchSDEIntegrator(sde_system, dt=dt, method=method, backend='torch', **options)
+
+
+def list_torchsde_methods():
+    """Print available methods."""
+    methods = TorchSDEIntegrator.list_methods()
+    print("TorchSDE Methods (PyTorch-based)")
+    print("=" * 60)
+    print("\nNOTE: TorchSDE does NOT support custom Brownian motion.")
+    print("For custom noise (dW), use JAX/Diffrax instead.\n")
+    
+    for category, method_list in methods.items():
+        print(f"\n{category.replace('_', ' ').title()}:")
+        for method in method_list:
+            info = TorchSDEIntegrator.get_method_info(method)
+            if 'strong_order' in info:
+                print(f"  - {method}: {info['description']} "
+                      f"(strong {info['strong_order']}, weak {info['weak_order']})")
+            else:
+                print(f"  - {method}: {info['description']}")
+    
+    print("\n" + "=" * 60)
