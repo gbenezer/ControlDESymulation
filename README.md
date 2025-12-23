@@ -741,10 +741,8 @@ This library was inspired by and built from a class project for CS 7268, Verifia
 ---
 
 ## License
-
 This project is licensed under the GNU Affero General Public License v3.0
-(or later). The licence file in the repository ([LICENSE](LICENSE)) takes
-precedence
+(or later). The licence file is in the repository here: [LICENSE](LICENSE)
 
 If you run a modified version of this software on a network, you must
 provide the complete corresponding source code to users of that service,
