@@ -766,6 +766,57 @@ In practice, this means:
 
 This ensures that advances made using this project, especially in publicly accessible systems, remain available for others to learn from, build upon, and verify.
 
+### License FAQ
+
+This section answers common questions from organizations and researchers who are not software specialists.
+
+- Can I use this software inside my organization?
+    - Yes, you can:
+        - Use it internally
+        - Run it on your own servers
+        - Use it for research, analysis, or operations
+    - You do not need to release your own code unless you modify this software itself and make those modifications available over a network.
+    
+- Can I use this software for commercial purposes?
+    - Yes, commercial use is explicitly allowed. The AGPL does not restrict charging for services, consulting, or results produced using the software.
+    
+- Do I have to open-source my entire system?
+    - No, you only need to share
+        - Modifications you make to this software, and
+        - Only if those modifications are used in a network-accessible service
+    - Your own proprietary systems, data, models, and workflows remain yours.
+
+- What counts as a “modification”?
+    - Examples of modifications:
+        - Changing how this software works internally
+        - Adding features directly inside this codebase
+        - Fixing bugs in this project’s source code
+    - Examples that are not modifications:
+        - Writing scripts that use the software
+        - Importing it as a dependency
+        - Running it unchanged
+        - Wrapping it with external tools
+
+- What if we don’t change the code at all?
+    - Then you have no obligation to publish anything. Simply using the software, even in a service, does not trigger AGPL requirements if the software itself is unmodified.
+
+- Why does this license mention network use?
+    - Many modern tools are used as services rather than distributed as files.
+    - The AGPL ensures that improvements made for publicly accessible services are shared just like improvements made to distributed software. This supports fairness, transparency, and reproducibility.
+
+- Is this license common in academia?
+    - Yes, AGPL is widely used and accepted in:
+        - Academic research software
+        - Public-sector tools
+        - Infrastructure and data platforms
+    - It aligns well with open science and reproducible research practices.
+
+- We’re unsure if our use case triggers AGPL. What should we do?
+    - If you are:
+        - Using the software unchanged → you’re fine
+        - Unsure whether a modification applies → contact us or consult your legal/compliance team
+            - I aim to be reasonable and collaborative, not adversarial.
+
 ---
 
 ## Links
