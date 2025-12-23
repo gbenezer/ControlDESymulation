@@ -450,6 +450,33 @@ class TestNoiseHandling:
         assert 0.9 < x_next[0] < 1.1, (
             f"Result {x_next[0]:.4f} should be near {expected[0]:.4f}"
         )
+
+    @pytest.mark.skipif(
+        not _torch_available(),
+        reason="PyTorch required for deterministic zero-noise test"
+    )
+    def test_zero_noise_equals_deterministic_torch(self, dt):
+        """Test that zero noise gives deterministic dynamics (PyTorch)."""
+        import torch
+        
+        ou_system = OrnsteinUhlenbeck(alpha=2.0, sigma=0.5)
+        ou_system.set_default_backend('torch')
+        
+        discretizer = StochasticDiscretizer(
+            ou_system, dt=dt, method='euler', backend='torch'
+        )
+        
+        x = torch.tensor([1.0])
+        u = torch.tensor([0.0])
+        w = torch.tensor([0.0])  # Zero noise
+        
+        x_next = discretizer.step(x, u, w=w)
+        
+        # Deterministic: x + (-alpha*x + u)*dt = 1 + (-2*1 + 0)*0.01 = 0.98
+        expected = x + (-2.0 * x + u) * dt
+        
+        # PyTorch should give exact deterministic result with zero noise
+        assert_allclose(x_next.numpy(), expected.numpy(), rtol=1e-6, atol=1e-8)
     
     @pytest.mark.skipif(
         not _torch_available(),
@@ -477,6 +504,79 @@ class TestNoiseHandling:
         # Should get different results
         unique_count = len(set(np.round(results, decimals=6).tolist()))
         assert unique_count >= 2, f"Expected different results, got: {results}"
+
+    @pytest.mark.skipif(
+        not _jax_available(),
+        reason="JAX required for deterministic zero-noise test"
+    )
+    def test_zero_noise_equals_deterministic_jax(self, dt):
+        """Test that zero noise gives deterministic dynamics (JAX)."""
+        import jax.numpy as jnp
+        
+        ou_system = OrnsteinUhlenbeck(alpha=2.0, sigma=0.5)
+        ou_system.set_default_backend('jax')
+        
+        discretizer = StochasticDiscretizer(
+            ou_system, dt=dt, method='Euler', backend='jax', seed=42
+        )
+        
+        x = jnp.array([1.0])
+        u = jnp.array([0.0])
+        w = jnp.array([0.0])
+        
+        x_next = discretizer.step(x, u, w=w)
+        
+        # Deterministic: x + (-alpha*x + u)*dt
+        expected = x + (-2.0 * x + u) * dt
+        
+        # JAX should give exact deterministic result
+        assert_allclose(x_next, expected, rtol=1e-6, atol=1e-8)
+
+    @pytest.mark.parametrize("backend,method", [
+        pytest.param('torch', 'euler', marks=pytest.mark.skipif(
+            not _torch_available(), reason="PyTorch not available"
+        )),
+        pytest.param('jax', 'Euler', marks=pytest.mark.skipif(
+            not _jax_available(), reason="JAX not available"
+        )),
+    ])
+    def test_zero_noise_equals_deterministic_reliable(self, backend, method, dt):
+        """Test zero noise = deterministic on reliable backends."""
+        if backend == 'torch':
+            import torch
+            ou_system = OrnsteinUhlenbeck(alpha=2.0, sigma=0.5)
+            ou_system.set_default_backend('torch')
+            
+            discretizer = StochasticDiscretizer(
+                ou_system, dt=dt, method=method, backend=backend
+            )
+            
+            x = torch.tensor([1.0])
+            u = torch.tensor([0.0])
+            w = torch.tensor([0.0])
+            
+            x_next = discretizer.step(x, u, w=w)
+            expected = x + (-2.0 * x + u) * dt
+            
+            assert_allclose(x_next.numpy(), expected.numpy(), rtol=1e-6)
+        
+        elif backend == 'jax':
+            import jax.numpy as jnp
+            ou_system = OrnsteinUhlenbeck(alpha=2.0, sigma=0.5)
+            ou_system.set_default_backend('jax')
+            
+            discretizer = StochasticDiscretizer(
+                ou_system, dt=dt, method=method, backend=backend, seed=42
+            )
+            
+            x = jnp.array([1.0])
+            u = jnp.array([0.0])
+            w = jnp.array([0.0])
+            
+            x_next = discretizer.step(x, u, w=w)
+            expected = x + (-2.0 * x + u) * dt
+            
+            assert_allclose(x_next, expected, rtol=1e-6)
 
 
 # ============================================================================
@@ -1159,6 +1259,33 @@ class TestDeterministicComparison:
         
         # Mean of stochastic should be close to deterministic
         assert_allclose(stoch_mean, x_next_det[0], rtol=0.1, atol=0.01)
+
+    @pytest.mark.skipif(
+        not _torch_available(),
+        reason="PyTorch required for deterministic zero-noise test"
+    )
+    def test_zero_noise_equals_deterministic_torch(self, dt):
+        """Test that zero noise gives deterministic dynamics (PyTorch)."""
+        import torch
+        
+        ou_system = OrnsteinUhlenbeck(alpha=2.0, sigma=0.5)
+        ou_system.set_default_backend('torch')
+        
+        discretizer = StochasticDiscretizer(
+            ou_system, dt=dt, method='euler', backend='torch'
+        )
+        
+        x = torch.tensor([1.0])
+        u = torch.tensor([0.0])
+        w = torch.tensor([0.0])  # Zero noise
+        
+        x_next = discretizer.step(x, u, w=w)
+        
+        # Deterministic: x + (-alpha*x + u)*dt = 1 + (-2*1 + 0)*0.01 = 0.98
+        expected = x + (-2.0 * x + u) * dt
+        
+        # PyTorch should give exact deterministic result with zero noise
+        assert_allclose(x_next.numpy(), expected.numpy(), rtol=1e-6, atol=1e-8)
     
     def test_linearization_drift_matches_deterministic(self, ou_system, dt):
         """Test that drift linearization matches deterministic system."""
@@ -1175,7 +1302,7 @@ class TestDeterministicComparison:
         Ad_stoch, Bd_stoch, Gd = stoch_disc.linearize(x_eq, u_eq, method='euler')
         Ad_det, Bd_det = det_disc.linearize(x_eq, u_eq, method='euler')
         
-        # Drift terms should match
+        # Drift linearization should match (this is just symbolic math)
         assert_allclose(Ad_stoch, Ad_det, rtol=1e-10)
         assert_allclose(Bd_stoch, Bd_det, rtol=1e-10)
         

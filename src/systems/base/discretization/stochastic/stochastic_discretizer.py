@@ -16,21 +16,60 @@ where:
     - g_d: Discretized diffusion term (includes sqrt(dt))
     - w[k] ~ N(0, I): Standard normal random variable
 
+Backend-Specific Capabilities
+------------------------------
+Different backends have different strengths and limitations:
+
+**NumPy (Julia DiffEqPy):**
+- Highest accuracy (specialized SDE algorithms: SRIW1, SRA3, etc.)
+- Best for production and high-precision needs
+- Weak and strong convergence methods
+- Limited seed reproducibility (Julia RNG behavior)
+- No native batched evaluation (use loop instead)
+- Slower for large-scale simulations
+
+**PyTorch (TorchSDE):**
+- Excellent batched evaluation support
+- GPU acceleration for large-scale simulations
+- Automatic differentiation through SDE
+- Good seed reproducibility
+- Neural SDE support (adjoint method)
+- Fewer specialized algorithms (euler, milstein, srk)
+
+**JAX (Diffrax):**
+- JIT compilation for performance
+- Batched evaluation support
+- Functional programming style
+- Good reproducibility
+- Gradient computation
+- Moderate algorithm selection
+
+Recommendations
+---------------
+- **Production/High Accuracy**: Use NumPy/Julia backend
+- **Batched Simulations**: Use PyTorch or JAX backend
+- **Neural SDEs**: Use PyTorch backend
+- **Optimization**: Use JAX backend
+- **Reproducibility Critical**: Use PyTorch or JAX backend
+
 Examples
 --------
->>> # Create stochastic discretizer
->>> ou_process = OrnsteinUhlenbeck(alpha=2.0, sigma=0.5)
->>> discretizer = StochasticDiscretizer(ou_process, dt=0.01, method='euler')
+>>> # High accuracy (Julia)
+>>> disc_prod = StochasticDiscretizer(
+...     sde_system, dt=0.01, method='SRIW1', backend='numpy'
+... )
 >>> 
->>> # Single step (automatic noise generation)
->>> x_next = discretizer.step(x, u)
+>>> # Batched simulation (PyTorch)
+>>> disc_batch = StochasticDiscretizer(
+...     sde_system, dt=0.01, method='euler', backend='torch'
+... )
+>>> x_batch = torch.randn(1000, nx)  # 1000 trajectories
+>>> x_next = disc_batch.step(x_batch, u_batch)
 >>> 
->>> # Single step with custom noise (reproducibility)
->>> w = np.random.randn(discretizer.nw)
->>> x_next = discretizer.step(x, u, w=w)
->>> 
->>> # Linearize (returns Ad, Bd, Gd where Gd is noise gain)
->>> Ad, Bd, Gd = discretizer.linearize(x_eq, u_eq)
+>>> # Reproducible (PyTorch)
+>>> disc_repro = StochasticDiscretizer(
+...     sde_system, dt=0.01, method='euler', backend='torch', seed=42
+... )
 """
 
 from typing import Optional, Tuple, Union, Dict, Any, TYPE_CHECKING
@@ -329,22 +368,43 @@ class StochasticDiscretizer:
         ArrayLike
             Next state x[k+1], same shape and backend as input
         
+        Batched Evaluation
+        ------------------
+        **PyTorch and JAX backends** support batched evaluation:
+            x_batch: (batch, nx)
+            u_batch: (batch, nu)
+            w_batch: (batch, nw) or None
+            → returns: (batch, nx)
+        
+        **NumPy (Julia) backend** does NOT support batched evaluation.
+        For multiple trajectories with Julia, use a loop:
+            
+            results = []
+            for i in range(batch_size):
+                x_next_i = discretizer.step(x_batch[i], u_batch[i])
+                results.append(x_next_i)
+            x_next_batch = np.stack(results, axis=0)
+        
+        Or use PyTorch/JAX backend for batching:
+            
+            discretizer_torch = StochasticDiscretizer(
+                sde_system, dt=dt, backend='torch'
+            )
+            x_next_batch = discretizer_torch.step(x_batch, u_batch)
+        
         Examples
         --------
-        >>> # Automatic noise generation
-        >>> x_next = discretizer.step(np.array([1.0]), np.array([0.5]))
+        >>> # Single trajectory (all backends)
+        >>> x_next = discretizer.step(np.array([1.0]), np.array([0.0]))
         >>> 
-        >>> # Custom noise for reproducibility
-        >>> w = np.random.randn(1)
-        >>> x_next = discretizer.step(np.array([1.0]), np.array([0.5]), w=w)
-        >>> 
-        >>> # Autonomous SDE
-        >>> x_next = discretizer.step(np.array([1.0]), u=None)
-        >>> 
-        >>> # Batched
-        >>> x_batch = np.array([[1.0], [2.0]])
-        >>> u_batch = np.array([[0.5], [0.3]])
-        >>> x_next_batch = discretizer.step(x_batch, u_batch)
+        >>> # Batched (PyTorch only)
+        >>> if discretizer.backend == 'torch':
+        ...     x_batch = torch.randn(100, nx)
+        ...     x_next = discretizer.step(x_batch, u_batch)
+        >>> else:
+        ...     # Loop for Julia backend
+        ...     x_next = np.stack([discretizer.step(x[i], u[i]) 
+        ...                        for i in range(len(x))], axis=0)
         
         Notes
         -----
@@ -352,7 +412,26 @@ class StochasticDiscretizer:
         The integrator internally converts: dW = sqrt(dt) * w
         
         For reproducibility, use the same sequence of w values or set seed.
+
+        # TODO: Refactor backend detection logic to shared utility module
+        # Future: Create src/systems/base/utils/backend_utils.py with:
+        #   - is_julia_SDE_method(method) -> bool
+        #   - supports_batching(backend, method) -> bool
+        #   - get_backend_capabilities(backend, method) -> dict
         """
+
+        # Check if Julia SDE method (similar pattern to ODE)
+        if self.backend == 'numpy' and self._is_julia_sde_method(self.method):
+            if hasattr(x, 'shape') and x.ndim > 1 and x.shape[0] > 1:
+                warnings.warn(
+                    f"Batched input detected (shape={x.shape}) with Julia SDE backend "
+                    f"(method='{self.method}'). Julia does not support batched SDE "
+                    f"evaluation. For batched simulations, use backend='torch' or 'jax', "
+                    f"or loop over trajectories manually.",
+                    UserWarning,
+                    stacklevel=2
+                )
+
         # Use default dt if not specified
         if dt is None:
             dt = self.dt
@@ -366,15 +445,38 @@ class StochasticDiscretizer:
                 dW = w * np.sqrt(dt)
             elif self.backend == 'torch':
                 import torch
-                dW = w * torch.sqrt(torch.tensor(dt))
+                dW = w * torch.sqrt(torch.tensor(dt, dtype=x.dtype, device=x.device))
             elif self.backend == 'jax':
                 import jax.numpy as jnp
                 dW = w * jnp.sqrt(dt)
         else:
-            dW = None  # Let integrator generate
+            dW = None
+        
+        # Check if integrator actually supports custom dW
+        # Some integrators ignore dW parameter
+        try:
+            return self.integrator.step(x, u, dt=dt, dW=dW)
+        except TypeError:
+            # Integrator doesn't accept dW parameter
+            if w is not None:
+                warnings.warn(
+                    f"Custom noise 'w' provided but integrator '{self.integrator.name}' "
+                    f"doesn't support custom noise. Noise will be generated randomly.",
+                    UserWarning
+                )
+            return self.integrator.step(x, u, dt=dt)
         
         # Delegate to SDE integrator
         return self.integrator.step(x, u, dt=dt, dW=dW)
+    
+    def _is_julia_sde_method(self, method: str) -> bool:
+        """Check if method is Julia SDE algorithm."""
+        # Reuse logic: Julia SDE methods are in the METHOD_TO_BACKEND mapping
+        julia_sde_methods = [
+            m for m, backend in SDEIntegratorFactory._METHOD_TO_BACKEND.items()
+            if backend == 'numpy'
+        ]
+        return method in julia_sde_methods
     
     def __call__(
         self,
