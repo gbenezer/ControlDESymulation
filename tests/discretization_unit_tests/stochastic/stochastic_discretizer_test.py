@@ -273,7 +273,7 @@ class TestStepFunction:
         
         assert x_next.shape == (1,)
     
-    def test_step_reproducibility_with_noise(self, ou_system, dt):
+    def test_step_reproducibility_with_noise_diffeqpy(self, ou_system, dt):
         """
         Test that same custom noise produces same result.
         
@@ -301,66 +301,70 @@ class TestStepFunction:
         # If they're wildly different, that's a problem
         diff = np.abs(x_next1 - x_next2)
         assert diff < 0.5, f"Results too different: {diff[0]:.4f}"
-    
-    @pytest.mark.skipif(
-        not _torch_available(),
-        reason="PyTorch required for reproducibility test"
-    )
-    @pytest.mark.flaky(reruns=2)  # TorchSDE reproducibility can be flaky
-    def test_step_with_seed_reproducibility_torch(self, dt, seed):
-        """Test reproducibility with PyTorch backend."""
-        import torch
-        
-        ou_system = OrnsteinUhlenbeck(alpha=2.0, sigma=0.5)
-        ou_system.set_default_backend('torch')
-        
-        x = torch.tensor([1.0])
-        u = torch.tensor([0.0])
-        
-        # Use custom noise for determinism instead of relying on seed
-        w = torch.tensor([0.5])
-        
-        # Two steps with same custom noise
-        torch.manual_seed(seed)
+
+    def test_step_reproducibility_with_noise_jax(self, ou_system, dt):
+        """
+        Test that same custom noise produces reasonable results with JAX backend.
+        """
+        import jax.numpy as jnp
+
+        ou_system.set_default_backend("jax")
         discretizer = StochasticDiscretizer(
-            ou_system, dt=dt, method='euler', backend='torch', seed=seed
+            ou_system, dt=dt, method="EM", backend="jax"
         )
-        
+
+        x = jnp.array([1.0])
+        u = jnp.array([0.0])
+        w = jnp.array([0.5])
+
+        # Two steps with the same provided noise
         x_next1 = discretizer.step(x, u, w=w)
         x_next2 = discretizer.step(x, u, w=w)
-        
-        # With same custom noise, should be identical
-        assert_allclose(x_next1.numpy(), x_next2.numpy(), rtol=1e-6)
-    
+
+        # Shape checks
+        assert x_next1.shape == (1,)
+        assert x_next2.shape == (1,)
+
+        # NaN checks
+        assert not jnp.isnan(x_next1).any()
+        assert not jnp.isnan(x_next2).any()
+
+        # Sanity check: results should not diverge wildly
+        diff = jnp.abs(x_next1 - x_next2)
+        assert diff < 0.5, f"Results too different: {float(diff[0]):.4f}"
+        assert_allclose(x_next1, x_next2, rtol=1e-6)
+
     @pytest.mark.skipif(
-        not _torch_available(),
-        reason="PyTorch required for reproducibility test"
+        not _jax_available(),
+        reason="JAX required for reproducibility test"
     )
-    @pytest.mark.flaky(reruns=2)  # TorchSDE reproducibility can be flaky
-    def test_step_with_seed_reproducibility_torch(self, dt, seed):
-        """Test reproducibility with PyTorch backend."""
-        import torch
-        
+    def test_step_with_seed_reproducibility_jax(self, dt, seed):
+        """Test reproducibility with JAX backend."""
+        import jax
+        import jax.numpy as jnp
+
         ou_system = OrnsteinUhlenbeck(alpha=2.0, sigma=0.5)
-        ou_system.set_default_backend('torch')
-        
-        x = torch.tensor([1.0])
-        u = torch.tensor([0.0])
-        
-        # Use custom noise for determinism instead of relying on seed
-        w = torch.tensor([0.5])
-        
-        # Two steps with same custom noise
-        torch.manual_seed(seed)
+        ou_system.set_default_backend('jax')
+
+        x = jnp.array([1.0])
+        u = jnp.array([0.0])
+
+        # Explicit noise for determinism (same as Torch test)
+        w = jnp.array([0.5])
+
         discretizer = StochasticDiscretizer(
-            ou_system, dt=dt, method='euler', backend='torch', seed=seed
+            ou_system, dt=dt, method='Euler', backend='jax', seed=seed
         )
-        
+
         x_next1 = discretizer.step(x, u, w=w)
         x_next2 = discretizer.step(x, u, w=w)
-        
-        # With same custom noise, should be identical
-        assert_allclose(x_next1.numpy(), x_next2.numpy(), rtol=1e-6)
+
+        # JAX arrays → NumPy for assertion
+        assert_allclose(
+            jnp.asarray(x_next1),
+            jnp.asarray(x_next2),
+            rtol=1e-6
+        )
     
     @pytest.mark.skipif(
         not _torch_available(),
