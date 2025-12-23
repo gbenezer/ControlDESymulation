@@ -678,29 +678,29 @@ class TorchSDEIntegrator(SDEIntegratorBase):
         return info.get(method, {'name': method, 'description': 'torchsde method'})
 
 
-def create_torchsde_integrator(sde_system, method='euler', dt=0.01, **options):
-    """Quick factory for TorchSDE integrators."""
-    return TorchSDEIntegrator(sde_system, dt=dt, method=method, backend='torch', **options)
+    def create_torchsde_integrator(sde_system, method='euler', dt=0.01, **options):
+        """Quick factory for TorchSDE integrators."""
+        return TorchSDEIntegrator(sde_system, dt=dt, method=method, backend='torch', **options)
 
 
-def list_torchsde_methods():
-    """Print available methods."""
-    methods = TorchSDEIntegrator.list_methods()
-    print("TorchSDE Methods (PyTorch-based)")
-    print("=" * 60)
-    print("\nNOTE: TorchSDE does NOT support custom Brownian motion.")
-    print("For custom noise (dW), use JAX/Diffrax instead.\n")
-    
-    for category, method_list in methods.items():
-        print(f"\n{category.replace('_', ' ').title()}:")
-        for method in method_list:
-            info = TorchSDEIntegrator.get_method_info(method)
-            if 'strong_order' in info:
-                print(f"  - {method}: {info['description']} "
-                      f"(strong {info['strong_order']}, weak {info['weak_order']})")
-            else:
-                print(f"  - {method}: {info['description']}")
-    
-    print("\n" + "=" * 60)
-    print("Use get_method_info(name) for details")
-    print("Use recommend_method() for automatic selection")
+    def list_torchsde_methods():
+        """Print available methods."""
+        methods = TorchSDEIntegrator.list_methods()
+        print("TorchSDE Methods (PyTorch-based)")
+        print("=" * 60)
+        print("\nNOTE: TorchSDE does NOT support custom Brownian motion.")
+        print("For custom noise (dW), use JAX/Diffrax instead.\n")
+        
+        for category, method_list in methods.items():
+            print(f"\n{category.replace('_', ' ').title()}:")
+            for method in method_list:
+                info = TorchSDEIntegrator.get_method_info(method)
+                if 'strong_order' in info:
+                    print(f"  - {method}: {info['description']} "
+                        f"(strong {info['strong_order']}, weak {info['weak_order']})")
+                else:
+                    print(f"  - {method}: {info['description']}")
+        
+        print("\n" + "=" * 60)
+        print("Use get_method_info(name) for details")
+        print("Use recommend_method() for automatic selection")
