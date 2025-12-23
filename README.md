@@ -6,7 +6,7 @@ A Python library for constructing, analyzing, and simulating nonlinear dynamical
 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: AGPLv3](https://img.shields.io/badge/License-AGPLv3-yellow.svg)](https://opensource.org/license/agpl-v3)
-[![Experimental](https://img.shields.io/badge/status-experimental-orange?logo=beaker)]
+![Experimental](https://img.shields.io/badge/status-experimental-orange?logo=beaker)
 
 ---
 
