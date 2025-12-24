@@ -379,9 +379,33 @@ class DiscreteStochasticSystem(StochasticDynamicalSystem):
             w_k = self._generate_noise(noise_shape, backend)
         
         # Full stochastic step: x[k+1] = f + g*w
-        if self._is_batched(x_k):
-            # Batched: need proper matrix multiplication
-            # f: (batch, nx), g: (batch, nx, nw), w: (batch, nw)
+        # Need to handle different g shapes:
+        # - Single: g is (nx, nw)
+        # - Batched additive: g is (nx, nw) (constant, not batched)
+        # - Batched multiplicative: g is (batch, nx, nw)
+        
+        is_batched = self._is_batched(x_k)
+        g_is_batched = (self._get_ndim(g) == 3)
+        
+        if is_batched and not g_is_batched:
+            # Batched input but constant diffusion (additive noise)
+            # g: (nx, nw), w: (batch, nw) → need to broadcast
+            if backend == 'numpy':
+                # Expand g to (1, nx, nw) then broadcast multiply
+                # w: (batch, nw) → (batch, nw, 1)
+                # Result: (batch, nx)
+                stochastic_term = (g @ w_k.T).T  # (nx,nw)@(nw,batch) = (nx,batch) → T → (batch,nx)
+            elif backend == 'torch':
+                import torch
+                # g: (nx, nw), w: (batch, nw)
+                stochastic_term = (g @ w_k.T).T
+            elif backend == 'jax':
+                import jax.numpy as jnp
+                stochastic_term = (g @ w_k.T).T
+        
+        elif is_batched and g_is_batched:
+            # Both batched (multiplicative noise)
+            # g: (batch, nx, nw), w: (batch, nw)
             if backend == 'numpy':
                 # Use einsum for batched matmul: (batch,nx,nw) @ (batch,nw) → (batch,nx)
                 stochastic_term = np.einsum('ijk,ik->ij', g, w_k)
@@ -392,8 +416,9 @@ class DiscreteStochasticSystem(StochasticDynamicalSystem):
             elif backend == 'jax':
                 import jax.numpy as jnp
                 stochastic_term = jnp.einsum('ijk,ik->ij', g, w_k)
+        
         else:
-            # Single trajectory: simple matrix multiply
+            # Single trajectory (not batched)
             # f: (nx,), g: (nx, nw), w: (nw,)
             if backend == 'numpy':
                 stochastic_term = g @ w_k
@@ -520,8 +545,16 @@ class DiscreteStochasticSystem(StochasticDynamicalSystem):
         >>> config['is_stochastic']
         True
         """
+        # Get parent's config (from StochasticDynamicalSystem)
         config = super().get_config_dict()
+        
+        # Add discrete flag
         config['is_discrete'] = True
+        
+        # Ensure is_stochastic is present (should be from parent)
+        if 'is_stochastic' not in config:
+            config['is_stochastic'] = True
+        
         return config
     
     def __repr__(self) -> str:
