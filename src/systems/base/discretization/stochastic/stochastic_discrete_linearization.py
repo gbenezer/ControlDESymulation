@@ -35,7 +35,7 @@ Architecture
 Extends DiscreteLinearization to handle stochastic systems with diffusion terms.
 Delegates to:
 - DiscreteStochasticSystem.linearized_dynamics() for pure discrete stochastic
-- Discretizer.linearize() for discretized continuous SDEs
+- StochasticDiscretizer.linearize() for discretized continuous SDEs
 
 The caching strategy uses equilibrium name or state/control hash as key,
 storing both drift linearization (Ad, Bd) and diffusion linearization (Gd).
@@ -75,7 +75,8 @@ Examples
 >>> 
 >>> # Discretized continuous SDE
 >>> sde_system = OrnsteinUhlenbeck()
->>> discretizer = Discretizer(sde_system, dt=0.01, method='euler-maruyama')
+>>> from src.systems.base.discretization.stochastic_discretizer import StochasticDiscretizer
+>>> discretizer = StochasticDiscretizer(sde_system, dt=0.01, method='euler')
 >>> lin = StochasticDiscreteLinearization(sde_system, discretizer=discretizer)
 >>> 
 >>> # Linearize at equilibrium
@@ -157,7 +158,7 @@ class StochasticDiscreteLinearization(DiscreteLinearization):
     def __init__(
         self,
         system: Union['DiscreteStochasticSystem', 'StochasticDynamicalSystem'],
-        discretizer: Optional['Discretizer'] = None,
+        discretizer: Optional['StochasticDiscretizer'] = None,
     ):
         """
         Initialize stochastic discrete linearization cache.
@@ -166,13 +167,13 @@ class StochasticDiscreteLinearization(DiscreteLinearization):
         ----------
         system : Union[DiscreteStochasticSystem, StochasticDynamicalSystem]
             Stochastic system to linearize
-        discretizer : Optional[Discretizer]
+        discretizer : Optional[StochasticDiscretizer]
             Required for continuous SDEs, None for discrete stochastic
         
         Raises
         ------
         TypeError
-            If continuous system without discretizer
+            If continuous system without discretizer, or if wrong discretizer type
         ValueError
             If system is not stochastic
         """
@@ -198,6 +199,16 @@ class StochasticDiscreteLinearization(DiscreteLinearization):
                 f"{system.__class__.__name__} is not a DiscreteStochasticSystem or StochasticDynamicalSystem. "
                 f"Use DiscreteLinearization for deterministic systems."
             )
+        
+        # Validate discretizer type for continuous SDEs
+        if discretizer is not None:
+            from src.systems.base.discretization.stochastic.stochastic_discretizer import StochasticDiscretizer
+            if not isinstance(discretizer, StochasticDiscretizer):
+                raise TypeError(
+                    f"For stochastic systems, discretizer must be StochasticDiscretizer, "
+                    f"got {type(discretizer).__name__}. "
+                    f"Use StochasticDiscretizer instead of Discretizer for SDEs."
+                )
         
         # Initialize parent class (this handles all the drift linearization)
         super().__init__(system, discretizer)
@@ -289,85 +300,13 @@ class StochasticDiscreteLinearization(DiscreteLinearization):
             Ad, Bd = self.system.linearized_dynamics(x_eq, u_eq, backend=self.backend)
         
         # Compute diffusion linearization (Gd)
-        # Handle autonomous systems (nu=0) by passing u_eq=None
-        if self.system.nu == 0:
-            Gd = self._compute_diffusion_linearization(x_eq, None, method)
-        else:
-            Gd = self._compute_diffusion_linearization(x_eq, u_eq, method)
+        Gd = self._compute_diffusion_linearization(x_eq, u_eq, method)
         
         # Cache it
         self._cache[cache_key] = (Ad, Bd, Gd)
         self._stats['computes'] += 1
         
         return Ad, Bd, Gd
-    
-    def _compute_diffusion_linearization(
-        self,
-        x_eq: ArrayLike,
-        u_eq: Optional[ArrayLike],
-        method: str = 'euler'
-    ) -> ArrayLike:
-        """
-        Compute diffusion matrix linearization.
-        
-        For discrete systems: Gd = G(x_eq, u_eq) or G(x_eq) for autonomous
-        For continuous SDEs: depends on discretization method
-        
-        Parameters
-        ----------
-        x_eq : ArrayLike
-            Equilibrium state
-        u_eq : Optional[ArrayLike]
-            Equilibrium control (None for autonomous systems with nu=0)
-        method : str
-            Discretization method
-        
-        Returns
-        -------
-        Gd : ArrayLike
-            Discrete-time diffusion matrix (nx, nw)
-        
-        Notes
-        -----
-        For autonomous systems (nu=0), u_eq should be None and will be handled
-        correctly by the underlying system.diffusion() method.
-        """
-        if self.discretizer is not None:
-            # Discretized continuous SDE
-            # Get continuous-time diffusion matrix
-            # Pass u_eq=None for autonomous systems (nu=0)
-            G_continuous = self.system.diffusion(x_eq, u_eq, backend=self.backend)
-            
-            dt = self.discretizer.dt
-            
-            if method in ['euler', 'euler-maruyama']:
-                # Euler-Maruyama: x[k+1] = x[k] + f*dt + G*sqrt(dt)*w
-                if TORCH_AVAILABLE and isinstance(G_continuous, torch.Tensor):
-                    Gd = G_continuous * torch.sqrt(torch.tensor(dt, dtype=G_continuous.dtype))
-                elif JAX_AVAILABLE and isinstance(G_continuous, jnp.ndarray):
-                    Gd = G_continuous * jnp.sqrt(dt)
-                else:
-                    Gd = G_continuous * np.sqrt(dt)
-            else:
-                # For other methods, use sqrt(dt) scaling as approximation
-                warnings.warn(
-                    f"Diffusion discretization for method '{method}' not fully implemented. "
-                    f"Using Euler-Maruyama approximation.",
-                    UserWarning
-                )
-                if TORCH_AVAILABLE and isinstance(G_continuous, torch.Tensor):
-                    Gd = G_continuous * torch.sqrt(torch.tensor(dt, dtype=G_continuous.dtype))
-                elif JAX_AVAILABLE and isinstance(G_continuous, jnp.ndarray):
-                    Gd = G_continuous * jnp.sqrt(dt)
-                else:
-                    Gd = G_continuous * np.sqrt(dt)
-        else:
-            # Pure discrete stochastic system
-            # Diffusion is already in discrete-time form
-            # Pass u_eq=None for autonomous systems (nu=0)
-            Gd = self.system.diffusion(x_eq, u_eq, backend=self.backend)
-        
-        return Gd
     
     def compute_at_equilibria(
         self,
