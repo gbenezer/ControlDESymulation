@@ -13,21 +13,6 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-# Copyright (C) 2025 Gil Benezer
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as published
-# by the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
 """
 Discrete Linearization - Cached Linearization for Discrete Systems
 
@@ -182,6 +167,31 @@ class DiscreteLinearization:
             raise TypeError(
                 f"Continuous system {system.__class__.__name__} requires a Discretizer. "
                 f"Provide discretizer parameter."
+            )
+        
+        # Check if stochastic system and warn
+        is_stochastic = False
+        try:
+            from src.systems.base.discrete_stochastic_system import DiscreteStochasticSystem
+            if isinstance(system, DiscreteStochasticSystem):
+                is_stochastic = True
+        except ImportError:
+            pass
+        
+        try:
+            from src.systems.base.stochastic_dynamical_system import StochasticDynamicalSystem
+            if isinstance(system, StochasticDynamicalSystem):
+                is_stochastic = True
+        except ImportError:
+            pass
+        
+        if is_stochastic:
+            import warnings
+            warnings.warn(
+                f"Using DiscreteLinearization with stochastic system {system.__class__.__name__}. "
+                f"Consider using StochasticDiscreteLinearization for proper handling of stochastic dynamics.",
+                UserWarning,
+                stacklevel=2
             )
         
         # Cache storage
@@ -535,18 +545,19 @@ class DiscreteLinearization:
         max_magnitude = np.max(magnitudes)
         
         # Stability determination
-        is_stable = max_magnitude < 1.0
-        is_marginally_stable = np.abs(max_magnitude - 1.0) < 1e-6
-        is_unstable = max_magnitude > 1.0
+        # Use bool() to convert numpy bool to Python bool
+        is_stable = bool(max_magnitude < 1.0)
+        is_marginally_stable = bool(np.abs(max_magnitude - 1.0) < 1e-6)
+        is_unstable = bool(max_magnitude > 1.0)
         
         return {
             'eigenvalues': eigenvalues,
             'magnitudes': magnitudes,
-            'max_magnitude': max_magnitude,
+            'max_magnitude': float(max_magnitude),
             'is_stable': is_stable,
             'is_marginally_stable': is_marginally_stable,
             'is_unstable': is_unstable,
-            'spectral_radius': max_magnitude,
+            'spectral_radius': float(max_magnitude),
         }
     
     def compute_controllability_matrix(

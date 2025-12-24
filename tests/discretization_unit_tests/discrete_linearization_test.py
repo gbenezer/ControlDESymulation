@@ -270,20 +270,21 @@ class TestCaching:
     
     def test_cache_different_points(self):
         """Test that different points are cached separately."""
-        system = DiscreteLinearSystem()
+        # Use NONLINEAR system so linearizations actually differ
+        system = DiscreteNonlinearSystem()
         lin = DiscreteLinearization(system)
         
-        x_eq1 = np.array([0.0, 0.0])
-        x_eq2 = np.array([1.0, 0.0])
+        x_eq1 = np.array([0.0])
+        x_eq2 = np.array([1.0])
         u_eq = np.array([0.0])
         
         Ad1, Bd1 = lin.compute(x_eq1, u_eq)
         Ad2, Bd2 = lin.compute(x_eq2, u_eq)
         
-        # Should be different (different linearization points)
-        assert not np.array_equal(Ad1, Ad2)
+        # Should be different (nonlinear system, different points)
+        assert not np.allclose(Ad1, Ad2, rtol=1e-6)
         
-        # Both should be cached
+        # Both should be cached (2 different keys)
         assert len(lin._cache) == 2
     
     def test_cache_different_methods(self):
