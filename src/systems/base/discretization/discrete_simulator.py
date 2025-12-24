@@ -37,7 +37,7 @@ DiscreteSimulator is a THIN wrapper that delegates to:
 The simulator's job is orchestration, not computation.
 """
 
-from typing import Optional, Union, Callable, Tuple
+from typing import Optional, Union, Callable, Tuple, Any, TYPE_CHECKING
 import numpy as np
 
 # Conditional imports for optional backends
@@ -58,7 +58,6 @@ try:
 except ImportError:
     JAX_AVAILABLE = False
 
-from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from src.systems.base.discrete_symbolic_system import DiscreteSymbolicSystem
     from src.systems.base.symbolic_dynamical_system import SymbolicDynamicalSystem
@@ -109,8 +108,12 @@ class DiscreteSimulator:
         The discrete-time system (or continuous system, requires discretizer)
     discretizer : Optional[Discretizer]
         Discretizer for continuous systems (None for pure discrete)
-    observer : Optional[Observer]
+    observer : Optional[Any]
         Optional observer for output feedback control
+        Note: Observer base class not yet implemented.
+        When implemented, observer should have:
+        - initialize(x0) -> x_hat: Initialize observer state
+        - update(x_hat, u, y) -> x_hat_next: Update from measurement
     
     Raises
     ------
@@ -152,7 +155,7 @@ class DiscreteSimulator:
         self,
         system: Union['DiscreteSymbolicSystem', 'SymbolicDynamicalSystem'],
         discretizer: Optional['Discretizer'] = None,
-        observer: Optional['Observer'] = None,
+        observer: Optional[Any] = None,
     ):
         """
         Initialize discrete-time simulator.
@@ -163,8 +166,12 @@ class DiscreteSimulator:
             System to simulate
         discretizer : Optional[Discretizer]
             Required if system is continuous, None if system is discrete
-        observer : Optional[Observer]
+        observer : Optional[Any]
             Observer for output feedback control
+            Note: Observer base class not yet implemented.
+            When provided, should implement:
+            - initialize(x0) -> x_hat
+            - update(x_hat, u, y) -> x_hat_next
         
         Raises
         ------
@@ -537,14 +544,35 @@ class DiscreteSimulator:
                 return u.T
         else:
             raise ValueError(
-                f"Control shape {u_shape} doesn't match expected ({batch_size}, {self.nu}). "
-                f"Controller returned incompatible shape. "
-                f"For single trajectory, return (nu,). "
-                f"For batched ({batch_size} trajectories), return ({batch_size}, {self.nu})."
+                f"Control shape {u_shape} doesn't match expected "
+                f"({batch_size}, {self.nu}) or ({self.nu}, {batch_size})"
             )
         
         return u
 
+
+    def _validate_control_output(self, u, expected_batch_size, k):
+        """Validate control output shape and values."""
+        shape = self._get_shape(u)
+        
+        if len(shape) != 2:
+            raise ValueError(
+                f"Controller at step {k} returned {len(shape)}D array. "
+                f"Expected 2D with shape ({expected_batch_size}, {self.nu})"
+            )
+        
+        if shape[0] != expected_batch_size:
+            raise ValueError(
+                f"Controller at step {k} returned batch_size={shape[0]}, "
+                f"expected {expected_batch_size}"
+            )
+        
+        if shape[1] != self.nu:
+            raise ValueError(
+                f"Controller at step {k} returned nu={shape[1]}, expected {self.nu}"
+            )
+    
+    
     def _validate_control_output(self, u, expected_batch_size, k):
         """Validate control output shape and values."""
         shape = self._get_shape(u)
@@ -656,7 +684,7 @@ class DiscreteSimulator:
         
         # Otherwise return as-is and let numpy/torch raise error
         return x_next
-        
+    
     # ========================================================================
     # Backend-Agnostic Array Operations
     # ========================================================================
@@ -1069,7 +1097,7 @@ def simulate_discretized(
     ...     pendulum, x0, steps=1000, dt=0.01, method='rk4'
     ... )
     """
-    from src.systems.base.discretization.discretizer import Discretizer
+    from src.discretization.discretizer import Discretizer
     
     discretizer = Discretizer(system, dt=dt, method=method)
     sim = DiscreteSimulator(system, discretizer=discretizer)
