@@ -25,7 +25,7 @@ term and diffusion matrices (Gd) at equilibrium or operating points.
 Use Cases
 ---------
 - LQG (Linear Quadratic Gaussian) controller design
-- Kalman filter design (need A, G at operating point)
+- Kalman filter design (need A, G, C at operating point)
 - Stochastic stability analysis
 - Certainty equivalence control with noise characterization
 - Covariance propagation in stochastic systems
@@ -39,6 +39,26 @@ Delegates to:
 
 The caching strategy uses equilibrium name or state/control hash as key,
 storing both drift linearization (Ad, Bd) and diffusion linearization (Gd).
+
+Output/Observation Linearization
+--------------------------------
+The observation/output linearization (Cd, Dd) is NOT cached by this class as it:
+1. Depends only on state (not control), making separate caching less beneficial
+2. Is typically much cheaper to compute than dynamics linearization
+3. Is already available via system.linearized_observation(x, backend)
+
+For complete Kalman filter design, retrieve Cd separately:
+
+>>> Ad, Bd, Gd = lin.compute('origin')  # Cached
+>>> Cd = system.linearized_observation(x_eq, backend='numpy')  # Direct call
+>>> Dd = system.linearized_observation_control(x_eq, u_eq, backend='numpy')  # If needed
+>>> 
+>>> # Now have all matrices for Kalman filter
+>>> Q = Gd @ Gd.T  # Process noise
+>>> K = design_kalman_filter(Ad, Cd, Q, R)
+
+This design keeps the linearization cache focused on the expensive dynamics
+computations while observation matrices remain readily accessible.
 
 Examples
 --------
@@ -62,7 +82,8 @@ Examples
 >>> system.add_equilibrium('origin', x_eq, u_eq)
 >>> Ad, Bd, Gd = lin.compute('origin')
 >>> 
->>> # Design Kalman filter
+>>> # Design Kalman filter (get Cd separately)
+>>> Cd = system.linearized_observation(x_eq, backend='numpy')
 >>> Q = Gd @ Gd.T  # Process noise covariance
 >>> K = design_kalman_filter(Ad, Cd, Q, R)
 """
