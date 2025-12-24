@@ -734,12 +734,14 @@ class TestConstantNoiseOptimization:
         
         G_numpy = handler.get_constant_noise("numpy")
         G_torch = handler.get_constant_noise("torch")
+        # Now that handlers preserve backend array type,
+        # conversion needs to occur for this test
+        G_torch_numpy = G_torch.detach().numpy()
         
-        # Both should be numpy arrays (cached as numpy)
         assert isinstance(G_numpy, np.ndarray)
-        assert isinstance(G_torch, np.ndarray)
+        assert isinstance(G_torch_numpy, np.ndarray)
         
-        np.testing.assert_array_almost_equal(G_numpy, G_torch)
+        np.testing.assert_array_almost_equal(G_numpy, G_torch_numpy)
     
     def test_constant_noise_error_for_multiplicative(self, multiplicative_noise_1d):
         """Test error when requesting constant noise for multiplicative noise."""
