@@ -433,6 +433,12 @@ class SDEIntegratorBase(IntegratorBase):
         -----
         Ensures backend consistency by passing backend parameter.
         """
+        # Defensive check
+        if hasattr(x, 'shape') and x.ndim > 1 and x.shape[0] == 0:
+            raise RuntimeError(
+                f"Internal error: SDE integrator received empty batch. "
+                f"x.shape={x.shape}. This is a bug - please report."
+            )
         # CRITICAL: Pass backend to ensure type consistency
         f = self.sde_system.drift(x, u, backend=self.backend)  # Add backend parameter
         self._stats['total_fev'] += 1
@@ -463,6 +469,13 @@ class SDEIntegratorBase(IntegratorBase):
         This method ensures backend consistency by explicitly passing
         backend parameter to system.diffusion().
         """
+        # Defensive check
+        if hasattr(x, 'shape') and x.ndim > 1 and x.shape[0] == 0:
+            raise RuntimeError(
+                f"Internal error: SDE integrator received empty batch in diffusion. "
+                f"x.shape={x.shape}. This is a bug - please report."
+            )
+            
         if self._is_additive and self._cached_diffusion is not None:
             # Use cached constant diffusion
             self._stats['diffusion_cache_hits'] = self._stats.get('diffusion_cache_hits', 0) + 1

@@ -320,6 +320,9 @@ class LinearizationEngine:
         NumPy implementation using cached functions or symbolic evaluation.
         
         Supports both controlled (nu > 0) and autonomous (nu = 0) systems.
+        
+        Raises:
+            ValueError: If batch is empty (batch_size=0)
         """
         start_time = time.time()
         
@@ -336,6 +339,17 @@ class LinearizationEngine:
             squeeze_output = False
         
         batch_size = x.shape[0]
+        
+        # Check for empty batch BEFORE processing
+        if batch_size == 0:
+            u_shape_str = f"{u.shape}" if self.system.nu > 0 else "None"
+            raise ValueError(
+                f"Empty batch detected in linearization (batch_size=0). "
+                f"Cannot compute Jacobian matrices for zero samples. "
+                f"Received x.shape={x.shape}, u.shape={u_shape_str}. "
+                f"This usually indicates a bug in data preparation or loop logic. "
+                f"Check your data loading, filtering, or iteration code."
+            )
         
         A_batch = np.zeros((batch_size, self.system.nx, self.system.nx))
         B_batch = np.zeros((batch_size, self.system.nx, self.system.nu))  # (nx, 0) if nu=0
@@ -399,7 +413,8 @@ class LinearizationEngine:
         B_batch = self.backend_mgr.ensure_type(B_batch, 'numpy')
         
         return A_batch, B_batch
-    
+
+
     def _compute_dynamics_torch(
         self, x: "torch.Tensor", u: "torch.Tensor"
     ) -> Tuple["torch.Tensor", "torch.Tensor"]:
@@ -407,6 +422,9 @@ class LinearizationEngine:
         PyTorch implementation using cached functions or symbolic evaluation.
         
         Supports both controlled (nu > 0) and autonomous (nu = 0) systems.
+        
+        Raises:
+            ValueError: If batch is empty (batch_size=0)
         """
         import torch
         
@@ -425,6 +443,18 @@ class LinearizationEngine:
             squeeze_output = False
         
         batch_size = x.shape[0]
+        
+        # Check for empty batch BEFORE processing
+        if batch_size == 0:
+            u_shape_str = f"{tuple(u.shape)}" if self.system.nu > 0 else "None"
+            raise ValueError(
+                f"Empty batch detected in linearization (batch_size=0). "
+                f"Cannot compute Jacobian matrices for zero samples. "
+                f"Received x.shape={tuple(x.shape)}, u.shape={u_shape_str}. "
+                f"This usually indicates a bug in data preparation or loop logic. "
+                f"Check your DataLoader, filtering, or iteration code."
+            )
+        
         device = x.device
         dtype = x.dtype
         
@@ -496,7 +526,8 @@ class LinearizationEngine:
         B_batch = self.backend_mgr.ensure_type(B_batch, 'torch')
         
         return A_batch, B_batch
-    
+
+
     def _compute_dynamics_jax(
         self, x: "jnp.ndarray", u: "jnp.ndarray"
     ) -> Tuple["jnp.ndarray", "jnp.ndarray"]:
@@ -505,6 +536,9 @@ class LinearizationEngine:
         
         Supports both controlled (nu > 0) and autonomous (nu = 0) systems.
         For autonomous systems, uses only state variables for differentiation.
+        
+        Raises:
+            ValueError: If batch is empty (batch_size=0)
         """
         import jax
         import jax.numpy as jnp
@@ -525,6 +559,19 @@ class LinearizationEngine:
             squeeze_output = True
         else:
             squeeze_output = False
+        
+        batch_size = x.shape[0]
+        
+        # Check for empty batch BEFORE processing
+        if batch_size == 0:
+            u_shape_str = f"{u.shape}" if self.system.nu > 0 else "None"
+            raise ValueError(
+                f"Empty batch detected in linearization (batch_size=0). "
+                f"Cannot compute Jacobian matrices for zero samples. "
+                f"Received x.shape={x.shape}, u.shape={u_shape_str}. "
+                f"This usually indicates a bug in data preparation or loop logic. "
+                f"Check your data loading, filtering, or vmap usage."
+            )
         
         # Define dynamics function for Jacobian computation
         def dynamics_fn(x_i, u_i):

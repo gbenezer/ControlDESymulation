@@ -531,6 +531,11 @@ class StochasticDynamicalSystem(SymbolicDynamicalSystem):
         ArrayLike
             Diffusion matrix g(x, u), shape (nx, nw) or (batch, nx, nw)
         
+        Raises
+        ------
+        ValueError
+            If batch is empty (batch_size=0)
+        
         Notes
         -----
         Delegates to DiffusionHandler for code generation and evaluation.
@@ -590,14 +595,49 @@ class StochasticDynamicalSystem(SymbolicDynamicalSystem):
             import numpy as np
             x_arr = np.atleast_1d(np.asarray(x))
             u_arr = np.atleast_1d(np.asarray(u)) if self.nu > 0 else np.array([])
+            
+            # Check for empty batch BEFORE processing
+            if x_arr.ndim > 1 and x_arr.shape[0] == 0:
+                u_shape_str = f"{u_arr.shape}" if self.nu > 0 else "None"
+                raise ValueError(
+                    f"Empty batch detected in diffusion evaluation (batch_size=0). "
+                    f"Cannot compute diffusion matrix for zero samples. "
+                    f"Received x.shape={x_arr.shape}, u.shape={u_shape_str}. "
+                    f"This usually indicates a bug in data preparation or loop logic. "
+                    f"Check your data loading, filtering, or iteration code."
+                )
+                
         elif backend_to_use == 'torch':
             import torch
             x_arr = torch.atleast_1d(torch.as_tensor(x))
             u_arr = torch.atleast_1d(torch.as_tensor(u)) if self.nu > 0 else torch.tensor([])
+            
+            # Check for empty batch BEFORE processing
+            if len(x_arr.shape) > 1 and x_arr.shape[0] == 0:
+                u_shape_str = f"{tuple(u_arr.shape)}" if self.nu > 0 else "None"
+                raise ValueError(
+                    f"Empty batch detected in diffusion evaluation (batch_size=0). "
+                    f"Cannot compute diffusion matrix for zero samples. "
+                    f"Received x.shape={tuple(x_arr.shape)}, u.shape={u_shape_str}. "
+                    f"This usually indicates a bug in data preparation or loop logic. "
+                    f"Check your DataLoader, filtering, or iteration code."
+                )
+                
         elif backend_to_use == 'jax':
             import jax.numpy as jnp
             x_arr = jnp.atleast_1d(jnp.asarray(x))
             u_arr = jnp.atleast_1d(jnp.asarray(u)) if self.nu > 0 else jnp.array([])
+            
+            # Check for empty batch BEFORE processing
+            if x_arr.ndim > 1 and x_arr.shape[0] == 0:
+                u_shape_str = f"{u_arr.shape}" if self.nu > 0 else "None"
+                raise ValueError(
+                    f"Empty batch detected in diffusion evaluation (batch_size=0). "
+                    f"Cannot compute diffusion matrix for zero samples. "
+                    f"Received x.shape={x_arr.shape}, u.shape={u_shape_str}. "
+                    f"This usually indicates a bug in data preparation or loop logic. "
+                    f"Check your data loading, filtering, or vmap usage."
+                )
         else:
             raise ValueError(f"Unknown backend: {backend_to_use}")
         

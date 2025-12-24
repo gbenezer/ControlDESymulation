@@ -126,7 +126,12 @@ class ObservationEngine:
             raise ValueError(f"Unknown backend: {target_backend}")
     
     def _evaluate_numpy(self, x: np.ndarray) -> np.ndarray:
-        """NumPy implementation of output evaluation."""
+        """
+        NumPy implementation of output evaluation.
+        
+        Raises:
+            ValueError: If batch is empty (batch_size=0)
+        """
         
         # If no custom output, return full state
         if self.system._h_sym is None:
@@ -145,6 +150,17 @@ class ObservationEngine:
             squeeze_output = False
         
         batch_size = x.shape[0]
+        
+        # Check for empty batch BEFORE processing
+        if batch_size == 0:
+            raise ValueError(
+                f"Empty batch detected in output evaluation (batch_size=0). "
+                f"Cannot compute outputs for zero samples. "
+                f"Received x.shape={x.shape}. "
+                f"This usually indicates a bug in data preparation or loop logic. "
+                f"Check your data loading, filtering, or iteration code."
+            )
+        
         results = []
         
         for i in range(batch_size):
@@ -152,6 +168,13 @@ class ObservationEngine:
             result = h_numpy(*x_list)
             result = np.atleast_1d(np.array(result))
             results.append(result)
+        
+        # Defensive check (should never happen after batch_size check above)
+        if len(results) == 0:
+            raise RuntimeError(
+                "Internal error: No results generated despite non-empty input validation. "
+                "This is a bug in the observation engine - please report this."
+            )
         
         result = np.stack(results)
         
@@ -162,9 +185,15 @@ class ObservationEngine:
         result = self.backend_mgr.ensure_type(result, 'numpy')
         
         return result
-    
+
+
     def _evaluate_torch(self, x: "torch.Tensor") -> "torch.Tensor":
-        """PyTorch implementation of output evaluation."""
+        """
+        PyTorch implementation of output evaluation.
+        
+        Raises:
+            ValueError: If batch is empty (batch_size=0)
+        """
         
         if self.system._h_sym is None:
             return x
@@ -180,6 +209,18 @@ class ObservationEngine:
             squeeze_output = True
         else:
             squeeze_output = False
+        
+        batch_size = x.shape[0]
+        
+        # Check for empty batch BEFORE processing
+        if batch_size == 0:
+            raise ValueError(
+                f"Empty batch detected in output evaluation (batch_size=0). "
+                f"Cannot compute outputs for zero samples. "
+                f"Received x.shape={tuple(x.shape)}. "
+                f"This usually indicates a bug in data preparation or loop logic. "
+                f"Check your DataLoader, filtering, or iteration code."
+            )
         
         # Prepare input arguments
         x_list = [x[:, i] for i in range(self.system.nx)]
@@ -206,9 +247,15 @@ class ObservationEngine:
         result = self.backend_mgr.ensure_type(result, 'torch')
         
         return result
-    
+
+
     def _evaluate_jax(self, x: "jnp.ndarray") -> "jnp.ndarray":
-        """JAX implementation of output evaluation."""
+        """
+        JAX implementation of output evaluation.
+        
+        Raises:
+            ValueError: If batch is empty (batch_size=0)
+        """
         import jax
         import jax.numpy as jnp
         
@@ -226,6 +273,18 @@ class ObservationEngine:
             squeeze_output = True
         else:
             squeeze_output = False
+        
+        batch_size = x.shape[0]
+        
+        # Check for empty batch BEFORE processing
+        if batch_size == 0:
+            raise ValueError(
+                f"Empty batch detected in output evaluation (batch_size=0). "
+                f"Cannot compute outputs for zero samples. "
+                f"Received x.shape={x.shape}. "
+                f"This usually indicates a bug in data preparation or loop logic. "
+                f"Check your data loading, filtering, or vmap usage."
+            )
         
         # For batched computation, use vmap
         if x.shape[0] > 1:
@@ -349,7 +408,12 @@ class ObservationEngine:
         return C
     
     def _compute_jacobian_numpy(self, x: np.ndarray) -> np.ndarray:
-        """NumPy implementation of observation Jacobian."""
+        """
+        NumPy implementation of observation Jacobian.
+        
+        Raises:
+            ValueError: If batch is empty (batch_size=0)
+        """
         
         # Handle batched input
         if x.ndim == 1:
@@ -359,6 +423,17 @@ class ObservationEngine:
             squeeze_output = False
         
         batch_size = x.shape[0]
+        
+        # Check for empty batch BEFORE processing
+        if batch_size == 0:
+            raise ValueError(
+                f"Empty batch detected in observation linearization (batch_size=0). "
+                f"Cannot compute observation Jacobian for zero samples. "
+                f"Received x.shape={x.shape}. "
+                f"This usually indicates a bug in data preparation or loop logic. "
+                f"Check your data loading, filtering, or iteration code."
+            )
+        
         C_batch = np.zeros((batch_size, self.system.ny, self.system.nx))
         
         # Try to get cached Jacobian function
@@ -386,9 +461,15 @@ class ObservationEngine:
         C_batch = self.backend_mgr.ensure_type(C_batch, 'numpy')
         
         return C_batch
-    
+
+
     def _compute_jacobian_torch(self, x: "torch.Tensor") -> "torch.Tensor":
-        """PyTorch implementation of observation Jacobian."""
+        """
+        PyTorch implementation of observation Jacobian.
+        
+        Raises:
+            ValueError: If batch is empty (batch_size=0)
+        """
         import torch
         
         # Handle batched input
@@ -399,6 +480,17 @@ class ObservationEngine:
             squeeze_output = False
         
         batch_size = x.shape[0]
+        
+        # Check for empty batch BEFORE processing
+        if batch_size == 0:
+            raise ValueError(
+                f"Empty batch detected in observation linearization (batch_size=0). "
+                f"Cannot compute observation Jacobian for zero samples. "
+                f"Received x.shape={tuple(x.shape)}. "
+                f"This usually indicates a bug in data preparation or loop logic. "
+                f"Check your DataLoader, filtering, or iteration code."
+            )
+        
         device = x.device
         dtype = x.dtype
         
@@ -432,9 +524,15 @@ class ObservationEngine:
         C_batch = self.backend_mgr.ensure_type(C_batch, 'torch')
 
         return C_batch
-    
+
+
     def _compute_jacobian_jax(self, x: "jnp.ndarray") -> "jnp.ndarray":
-        """JAX implementation using automatic differentiation."""
+        """
+        JAX implementation using automatic differentiation.
+        
+        Raises:
+            ValueError: If batch is empty (batch_size=0)
+        """
         import jax
         import jax.numpy as jnp
         
@@ -447,6 +545,18 @@ class ObservationEngine:
             squeeze_output = True
         else:
             squeeze_output = False
+        
+        batch_size = x.shape[0]
+        
+        # Check for empty batch BEFORE processing
+        if batch_size == 0:
+            raise ValueError(
+                f"Empty batch detected in observation linearization (batch_size=0). "
+                f"Cannot compute observation Jacobian for zero samples. "
+                f"Received x.shape={x.shape}. "
+                f"This usually indicates a bug in data preparation or loop logic. "
+                f"Check your data loading, filtering, or vmap usage."
+            )
         
         # Define observation function for Jacobian computation
         def observation_fn(x_i):

@@ -387,6 +387,14 @@ class IntegratorBase(ABC):
         -----
         This wrapper counts function evaluations for performance analysis.
         """
+        # Defensive check (should be caught earlier by evaluators)
+        if hasattr(x, 'shape') and x.ndim > 1 and x.shape[0] == 0:
+            raise RuntimeError(
+                f"Internal error: Integrator received empty batch. "
+                f"This should have been caught by DynamicsEvaluator. "
+                f"x.shape={x.shape}. This is a bug - please report."
+            )
+        
         self._stats['total_fev'] += 1
         return self.system(x, u, backend=self.backend)
     
