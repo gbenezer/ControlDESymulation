@@ -189,6 +189,9 @@ class DynamicsEvaluator:
         
         Handles both single and batched evaluation.
         Supports both controlled (nu > 0) and autonomous (nu = 0) systems.
+        
+        Raises:
+            ValueError: If batch is empty (batch_size=0)
         """
         start_time = time.time()
         
@@ -200,6 +203,19 @@ class DynamicsEvaluator:
             raise ValueError(
                 f"Expected state dimension {self.system.nx}, got {x.shape[-1]}"
             )
+        
+        # Check for empty batch BEFORE processing
+        if x.ndim > 1:
+            batch_size = x.shape[0]
+            if batch_size == 0:
+                u_shape_str = f"{u.shape}" if u is not None and u.size > 0 else "None"
+                raise ValueError(
+                    f"Empty batch detected (batch_size=0). "
+                    f"System evaluation requires at least one sample. "
+                    f"Received x.shape={x.shape}, u.shape={u_shape_str}. "
+                    f"This usually indicates a bug in data preparation or loop logic. "
+                    f"Check your data loading, filtering, or iteration code."
+                )
         
         # For autonomous systems, u should be empty
         if self.system.nu == 0:
@@ -213,6 +229,14 @@ class DynamicsEvaluator:
                 raise ValueError(
                     f"Expected control dimension {self.system.nu}, got {u.shape[-1]}"
                 )
+            
+            # Check for mismatched batch sizes
+            if x.ndim > 1 and u.ndim > 1:
+                if x.shape[0] != u.shape[0]:
+                    raise ValueError(
+                        f"Batch size mismatch: x has {x.shape[0]} samples, "
+                        f"u has {u.shape[0]} samples"
+                    )
         
         # Generate function (uses cache if available)
         f_numpy = self.code_gen.generate_dynamics('numpy')
@@ -244,6 +268,14 @@ class DynamicsEvaluator:
                     result = f_numpy(*x_list)
                 
                 results.append(np.array(result).flatten())
+            
+            # Defensive check (should never happen after batch_size check above)
+            if len(results) == 0:
+                raise RuntimeError(
+                    "Internal error: No results generated despite non-empty input validation. "
+                    "This is a bug in the dynamics evaluator - please report this."
+                )
+            
             result = np.stack(results)
         
         # Update performance stats
@@ -261,6 +293,9 @@ class DynamicsEvaluator:
         
         Handles both single and batched evaluation with GPU support.
         Supports both controlled (nu > 0) and autonomous (nu = 0) systems.
+        
+        Raises:
+            ValueError: If batch is empty (batch_size=0)
         """
         import torch
         
@@ -275,6 +310,19 @@ class DynamicsEvaluator:
                 f"Expected state dimension {self.system.nx}, got {x.shape[-1]}"
             )
         
+        # Check for empty batch BEFORE processing
+        if len(x.shape) > 1:
+            batch_size = x.shape[0]
+            if batch_size == 0:
+                u_shape_str = f"{tuple(u.shape)}" if u is not None and u.numel() > 0 else "None"
+                raise ValueError(
+                    f"Empty batch detected (batch_size=0). "
+                    f"System evaluation requires at least one sample. "
+                    f"Received x.shape={tuple(x.shape)}, u.shape={u_shape_str}. "
+                    f"This usually indicates a bug in data preparation or loop logic. "
+                    f"Check your DataLoader, filtering, or iteration code."
+                )
+        
         # For autonomous systems, u should be empty
         if self.system.nu == 0:
             if u.numel() != 0:
@@ -287,6 +335,14 @@ class DynamicsEvaluator:
                 raise ValueError(
                     f"Expected control dimension {self.system.nu}, got {u.shape[-1]}"
                 )
+            
+            # Check for mismatched batch sizes
+            if len(x.shape) > 1 and len(u.shape) > 1:
+                if x.shape[0] != u.shape[0]:
+                    raise ValueError(
+                        f"Batch size mismatch: x has {x.shape[0]} samples, "
+                        f"u has {u.shape[0]} samples"
+                    )
         
         # Generate function (uses cache if available)
         f_torch = self.code_gen.generate_dynamics('torch')
@@ -347,6 +403,9 @@ class DynamicsEvaluator:
         
         Handles both single and batched evaluation with vmap for efficiency.
         Supports both controlled (nu > 0) and autonomous (nu = 0) systems.
+        
+        Raises:
+            ValueError: If batch is empty (batch_size=0)
         """
         import jax
         import jax.numpy as jnp
@@ -362,6 +421,19 @@ class DynamicsEvaluator:
                 f"Expected state dimension {self.system.nx}, got {x.shape[-1]}"
             )
         
+        # Check for empty batch BEFORE processing
+        if x.ndim > 1:
+            batch_size = x.shape[0]
+            if batch_size == 0:
+                u_shape_str = f"{u.shape}" if u is not None and u.size > 0 else "None"
+                raise ValueError(
+                    f"Empty batch detected (batch_size=0). "
+                    f"System evaluation requires at least one sample. "
+                    f"Received x.shape={x.shape}, u.shape={u_shape_str}. "
+                    f"This usually indicates a bug in data preparation or loop logic. "
+                    f"Check your data loading, filtering, or vmap usage."
+                )
+        
         # For autonomous systems, u should be empty
         if self.system.nu == 0:
             if u.size != 0:
@@ -374,6 +446,14 @@ class DynamicsEvaluator:
                 raise ValueError(
                     f"Expected control dimension {self.system.nu}, got {u.shape[-1]}"
                 )
+            
+            # Check for mismatched batch sizes
+            if x.ndim > 1 and u.ndim > 1:
+                if x.shape[0] != u.shape[0]:
+                    raise ValueError(
+                        f"Batch size mismatch: x has {x.shape[0]} samples, "
+                        f"u has {u.shape[0]} samples"
+                    )
         
         # Generate function (uses cache if available)
         f_jax = self.code_gen.generate_dynamics('jax', jit=True)
