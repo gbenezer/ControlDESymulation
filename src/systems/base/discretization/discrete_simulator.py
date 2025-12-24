@@ -399,7 +399,7 @@ class DiscreteSimulator:
         controller : Optional[Union[ArrayLike, Callable, nn.Module]]
             Controller specification
         x : ArrayLike
-            Current state (batch_size, nx)
+            Current state (batch_size, nx) - ALWAYS 2D internally
         k : int
             Current time step
         batch_size : int
@@ -409,6 +409,12 @@ class DiscreteSimulator:
         -------
         ArrayLike
             Control input (batch_size, nu)
+        
+        Notes
+        -----
+        State x is always 2D internally (batch_size, nx), even for batch_size=1.
+        For single-trajectory controllers that expect 1D input, we squeeze
+        before calling and expand result.
         """
         if controller is None:
             # Autonomous system
@@ -421,7 +427,11 @@ class DiscreteSimulator:
             if ndim == 2:
                 # Single trajectory: (steps, nu)
                 u_k = self._get_item(controller, k)
-                return self._expand_to_batch(u_k, batch_size)
+                # Expand to batch if needed
+                if batch_size > 1:
+                    return self._expand_to_batch(u_k, batch_size)
+                else:
+                    return self._expand_batch(u_k, 0)  # Add batch dim
             else:
                 # Batched: (batch_size, steps, nu)
                 return self._get_batch_item(controller, k)
@@ -433,16 +443,127 @@ class DiscreteSimulator:
                     f"Neural network controllers require PyTorch backend, "
                     f"but system uses {self.backend}"
                 )
-            return controller(x)
+            # x is already (batch_size, nx)
+            u = controller(x)
+            
+            # Ensure output has correct shape (batch_size, nu)
+            if u.ndim == 1:
+                u = u.unsqueeze(1)  # (batch_size,) -> (batch_size, 1)
+            elif u.ndim == 2 and u.shape[1] != self.nu:
+                # Handle transposed output
+                if u.shape[0] == self.nu and u.shape[1] == batch_size:
+                    u = u.T
+            
+            return u
         
         elif callable(controller):
             # Function controller: u = f(x, k)
-            return controller(x, k)
+            # x has shape (batch_size, nx)
+            
+            # For single trajectory (batch_size=1), try calling with 1D state
+            if batch_size == 1:
+                # Squeeze to 1D for controller
+                x_1d = self._squeeze_if_needed(x, True)
+                
+                try:
+                    u = controller(x_1d, k)
+                    # Ensure u is array-like
+                    u = np.atleast_1d(np.asarray(u))
+                    # Add batch dimension
+                    return self._expand_batch(u, 0)
+                except (IndexError, ValueError, TypeError):
+                    # Controller expects 2D, try with original x
+                    u = controller(x, k)
+                    return self._ensure_control_shape(u, batch_size)
+            else:
+                # Batched: call with 2D state
+                u = controller(x, k)
+                return self._ensure_control_shape(u, batch_size)
         
         else:
             raise TypeError(
                 f"Unsupported controller type: {type(controller).__name__}. "
                 f"Must be None, array/tensor, callable, or nn.Module"
+            )
+    
+    def _ensure_control_shape(self, u: ArrayLike, batch_size: int) -> ArrayLike:
+        """Ensure control has shape (batch_size, nu)."""
+        # Convert to numpy-like for inspection
+        if TORCH_AVAILABLE and isinstance(u, torch.Tensor):
+            u_ndim = len(u.shape)
+            u_shape = tuple(u.shape)
+        elif JAX_AVAILABLE and isinstance(u, jnp.ndarray):
+            u_ndim = u.ndim
+            u_shape = tuple(u.shape)
+        else:
+            u_arr = np.atleast_1d(np.asarray(u))
+            u_ndim = u_arr.ndim
+            u_shape = u_arr.shape
+            u = u_arr
+        
+        # Handle scalar control
+        if u_ndim == 0:
+            u = np.atleast_1d(np.asarray(u))
+            return self._expand_batch(u, 0)
+        
+        # Handle 1D control
+        if u_ndim == 1:
+            # Could be (nu,) or (batch_size,)
+            if len(u) == self.nu:
+                # Single control (nu,), expand to batch
+                return self._expand_to_batch(u, batch_size)
+            elif len(u) == batch_size and self.nu == 1:
+                # Batch of scalar controls (batch_size,), reshape to (batch_size, 1)
+                if isinstance(u, np.ndarray):
+                    return u.reshape(batch_size, 1)
+                elif TORCH_AVAILABLE and isinstance(u, torch.Tensor):
+                    return u.reshape(batch_size, 1)
+                elif JAX_AVAILABLE and isinstance(u, jnp.ndarray):
+                    return u.reshape(batch_size, 1)
+            else:
+                # Assume (nu,), expand to batch
+                return self._expand_to_batch(u, batch_size)
+        
+        # Already 2D - verify shape
+        if u_shape[0] == batch_size and u_shape[1] == self.nu:
+            return u
+        elif u_shape[0] == self.nu and u_shape[1] == batch_size:
+            # Transposed
+            if isinstance(u, np.ndarray):
+                return u.T
+            elif TORCH_AVAILABLE and isinstance(u, torch.Tensor):
+                return u.T
+            elif JAX_AVAILABLE and isinstance(u, jnp.ndarray):
+                return u.T
+        else:
+            raise ValueError(
+                f"Control shape {u_shape} doesn't match expected ({batch_size}, {self.nu}). "
+                f"Controller returned incompatible shape. "
+                f"For single trajectory, return (nu,). "
+                f"For batched ({batch_size} trajectories), return ({batch_size}, {self.nu})."
+            )
+        
+        return u
+
+    def _validate_control_output(self, u, expected_batch_size, k):
+        """Validate control output shape and values."""
+        shape = self._get_shape(u)
+        
+        if len(shape) != 2:
+            raise ValueError(
+                f"Controller at step {k} returned {len(shape)}D array. "
+                f"Expected 2D with shape ({expected_batch_size}, {self.nu})"
+            )
+        
+        if shape[0] != expected_batch_size:
+            raise ValueError(
+                f"Controller at step {k} returned batch_size={shape[0]}, "
+                f"expected {expected_batch_size}"
+            )
+        
+        if shape[1] != self.nu:
+            raise ValueError(
+                f"Controller at step {k} returned nu={shape[1]}, expected {self.nu}"
             )
     
     # ========================================================================
@@ -463,7 +584,7 @@ class DiscreteSimulator:
         x : ArrayLike
             Current state (batch_size, nx)
         u : ArrayLike
-            Control input (batch_size, nu)
+            Control input (batch_size, nu) or (batch_size, 0) for autonomous
         dt : Optional[float]
             Time step (only used if discretizer present)
         
@@ -474,15 +595,68 @@ class DiscreteSimulator:
         """
         if self.discretizer is not None:
             # Use discretizer for continuous system
-            return self.discretizer.step(x, u, dt)
+            # Discretizer handles autonomous systems internally
+            if self.nu == 0:
+                x_next = self.discretizer.step(x, u=None, dt=dt)
+            else:
+                x_next = self.discretizer.step(x, u, dt)
         else:
             # Direct discrete-time update
-            # Handle autonomous systems
+            # Handle autonomous systems - don't pass u at all
             if self.nu == 0:
-                return self.system.forward(x, u=None, backend=self.backend)
+                x_next = self.system(x, backend=self.backend)
             else:
-                return self.system.forward(x, u, backend=self.backend)
+                x_next = self.system(x, u, backend=self.backend)
+        
+        # Ensure output has correct shape (batch_size, nx)
+        # Some backends may return flattened or wrong shape
+        x_next = self._ensure_state_shape(x_next, x)
+        
+        return x_next
     
+    def _ensure_state_shape(self, x_next: ArrayLike, x_template: ArrayLike) -> ArrayLike:
+        """
+        Ensure x_next has same shape as x_template.
+        
+        Parameters
+        ----------
+        x_next : ArrayLike
+            State from dynamics evaluation (might be wrong shape)
+        x_template : ArrayLike
+            Template state with correct shape (batch_size, nx)
+        
+        Returns
+        -------
+        ArrayLike
+            x_next reshaped to match template
+        """
+        template_shape = self._get_shape(x_template)
+        next_shape = self._get_shape(x_next)
+        
+        # If shapes match, nothing to do
+        if next_shape == template_shape:
+            return x_next
+        
+        # If x_next is flattened, reshape it
+        expected_size = template_shape[0] * template_shape[1]
+        
+        if len(next_shape) == 1 and next_shape[0] == expected_size:
+            # Flattened: reshape to (batch_size, nx)
+            if isinstance(x_next, np.ndarray):
+                return x_next.reshape(template_shape)
+            elif TORCH_AVAILABLE and isinstance(x_next, torch.Tensor):
+                return x_next.reshape(template_shape)
+            elif JAX_AVAILABLE and isinstance(x_next, jnp.ndarray):
+                return x_next.reshape(template_shape)
+        
+        # If x_next has wrong number of dimensions, try to fix
+        if len(next_shape) == 1 and next_shape[0] == template_shape[1]:
+            # Missing batch dimension: (nx,) → (1, nx)
+            return self._expand_batch(x_next, 0)
+        
+        # Otherwise return as-is and let numpy/torch raise error
+        return x_next
+        
     # ========================================================================
     # Backend-Agnostic Array Operations
     # ========================================================================
@@ -572,17 +746,35 @@ class DiscreteSimulator:
     
     def _expand_to_batch(self, arr: ArrayLike, batch_size: int) -> ArrayLike:
         """Expand single item to batch."""
+        if batch_size == 1:
+            # Just add batch dimension
+            return self._expand_batch(arr, 0)
+        
         if isinstance(arr, np.ndarray):
             return np.tile(arr, (batch_size, 1))
         elif TORCH_AVAILABLE and isinstance(arr, torch.Tensor):
             return arr.unsqueeze(0).expand(batch_size, -1)
         elif JAX_AVAILABLE and isinstance(arr, jnp.ndarray):
             return jnp.tile(arr, (batch_size, 1))
+        else:
+            # Convert to numpy and tile
+            arr_np = np.asarray(arr)
+            return np.tile(arr_np, (batch_size, 1))
     
     def _set_initial(self, arr: ArrayLike, x0: ArrayLike) -> ArrayLike:
         """Set initial state in trajectory array."""
-        arr[:, 0] = x0
-        return arr
+        if isinstance(arr, np.ndarray):
+            arr[:, 0] = x0
+            return arr
+        elif TORCH_AVAILABLE and isinstance(arr, torch.Tensor):
+            arr[:, 0] = x0
+            return arr
+        elif JAX_AVAILABLE and isinstance(arr, jnp.ndarray):
+            # JAX arrays are immutable
+            return arr.at[:, 0].set(x0)
+        else:
+            arr[:, 0] = x0
+            return arr
     
     def _get_state(self, states: ArrayLike, k: int) -> ArrayLike:
         """Get state at time step k."""
@@ -590,13 +782,33 @@ class DiscreteSimulator:
     
     def _set_state(self, states: ArrayLike, k: int, x: ArrayLike) -> ArrayLike:
         """Set state at time step k."""
-        states[:, k] = x
-        return states
+        if isinstance(states, np.ndarray):
+            states[:, k] = x
+            return states
+        elif TORCH_AVAILABLE and isinstance(states, torch.Tensor):
+            states[:, k] = x
+            return states
+        elif JAX_AVAILABLE and isinstance(states, jnp.ndarray):
+            # JAX arrays are immutable
+            return states.at[:, k].set(x)
+        else:
+            states[:, k] = x
+            return states
     
     def _set_control(self, controls: ArrayLike, k: int, u: ArrayLike) -> ArrayLike:
         """Set control at time step k."""
-        controls[:, k] = u
-        return controls
+        if isinstance(controls, np.ndarray):
+            controls[:, k] = u
+            return controls
+        elif TORCH_AVAILABLE and isinstance(controls, torch.Tensor):
+            controls[:, k] = u
+            return controls
+        elif JAX_AVAILABLE and isinstance(controls, jnp.ndarray):
+            # JAX arrays are immutable
+            return controls.at[:, k].set(u)
+        else:
+            controls[:, k] = u
+            return controls
     
     # ========================================================================
     # Utility Methods
@@ -700,8 +912,11 @@ class DiscreteSimulator:
             
             # Add disturbance
             d_k = disturbance_func(k)
+            
+            # Ensure disturbance has proper shape
             if self._get_ndim(d_k) == 1:
                 d_k = self._expand_to_batch(d_k, batch_size)
+            
             x_next = x_next + d_k
             
             states = self._set_state(states, k + 1, x_next)
