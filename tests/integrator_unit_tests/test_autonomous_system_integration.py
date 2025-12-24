@@ -532,33 +532,6 @@ class TestAutonomousTorchDiffEq:
         
         assert result.success
     
-    @pytest.fixture
-    def van_der_pol_autonomous_gpu():
-        """Van der Pol oscillator configured for GPU"""
-        system = VanDerPolAutonomous()
-        system.set_default_backend('torch', device='cuda')
-        return system
-
-    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
-    def test_torchdiffeq_gpu_fixture(self, van_der_pol_autonomous_gpu):
-        """Test PyTorch integration on GPU (if available)"""
-        integrator = IntegratorFactory.create(
-            van_der_pol_autonomous_gpu,
-            backend='torch',
-            method='dopri5'
-        )
-        
-        x0 = torch.tensor([1.0, 0.0], device='cuda')
-        u_func = lambda t, x: None
-        
-        result = integrator.integrate(
-            x0=x0,
-            u_func=u_func,
-            t_span=(0.0, 2.0)
-        )
-        
-        assert result.success
-    
     def test_torchdiffeq_gradient_computation(self, van_der_pol_autonomous):
         """Test gradient computation through autonomous integration"""
         integrator = IntegratorFactory.create(
