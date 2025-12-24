@@ -69,108 +69,12 @@ if TYPE_CHECKING:
     from src.discretization.stochastic_discretizer import StochasticDiscretizer
     from src.observers.observer_base import Observer
 
-# Import base simulator
+# Import base simulator and result container
 from src.systems.base.discretization.discrete_simulator import DiscreteSimulator
+from src.systems.base.discretization.stochastic.monte_carlo_result import MonteCarloResult
 
 # Type alias
 ArrayLike = Union[np.ndarray, "torch.Tensor", "jnp.ndarray"]
-
-
-class MonteCarloResult:
-    """
-    Container for Monte Carlo simulation results.
-    
-    Stores multiple trajectories and provides statistical analysis.
-    
-    Attributes
-    ----------
-    states : ArrayLike
-        All trajectories, shape (n_paths, steps+1, nx)
-    controls : Optional[ArrayLike]
-        All control sequences, shape (n_paths, steps, nu)
-    noise : Optional[ArrayLike]
-        All noise samples, shape (n_paths, steps, nw)
-    n_paths : int
-        Number of trajectories
-    steps : int
-        Number of time steps per trajectory
-    """
-    
-    def __init__(
-        self,
-        states: ArrayLike,
-        controls: Optional[ArrayLike] = None,
-        noise: Optional[ArrayLike] = None,
-        n_paths: int = 0,
-        steps: int = 0
-    ):
-        self.states = states
-        self.controls = controls
-        self.noise = noise
-        self.n_paths = n_paths
-        self.steps = steps
-    
-    def get_statistics(self) -> Dict[str, ArrayLike]:
-        """
-        Compute trajectory statistics across paths.
-        
-        Returns
-        -------
-        dict
-            Statistics with keys:
-            - 'mean': Mean trajectory (steps+1, nx)
-            - 'std': Standard deviation (steps+1, nx)
-            - 'min': Minimum values (steps+1, nx)
-            - 'max': Maximum values (steps+1, nx)
-            - 'median': Median trajectory (steps+1, nx)
-            - 'q25': 25th percentile (steps+1, nx)
-            - 'q75': 75th percentile (steps+1, nx)
-        
-        Examples
-        --------
-        >>> result = sim.simulate_monte_carlo(x0, steps=100, n_paths=1000)
-        >>> stats = result.get_statistics()
-        >>> 
-        >>> import matplotlib.pyplot as plt
-        >>> plt.plot(stats['mean'], label='Mean')
-        >>> plt.fill_between(range(101), 
-        ...                  stats['mean'] - stats['std'],
-        ...                  stats['mean'] + stats['std'],
-        ...                  alpha=0.3, label='±1σ')
-        """
-        if isinstance(self.states, np.ndarray):
-            return {
-                'mean': np.mean(self.states, axis=0),
-                'std': np.std(self.states, axis=0),
-                'min': np.min(self.states, axis=0),
-                'max': np.max(self.states, axis=0),
-                'median': np.median(self.states, axis=0),
-                'q25': np.quantile(self.states, 0.25, axis=0),
-                'q75': np.quantile(self.states, 0.75, axis=0),
-            }
-        elif TORCH_AVAILABLE and isinstance(self.states, torch.Tensor):
-            return {
-                'mean': torch.mean(self.states, dim=0),
-                'std': torch.std(self.states, dim=0),
-                'min': torch.min(self.states, dim=0).values,
-                'max': torch.max(self.states, dim=0).values,
-                'median': torch.median(self.states, dim=0).values,
-                'q25': torch.quantile(self.states, 0.25, dim=0),
-                'q75': torch.quantile(self.states, 0.75, dim=0),
-            }
-        elif JAX_AVAILABLE and isinstance(self.states, jnp.ndarray):
-            return {
-                'mean': jnp.mean(self.states, axis=0),
-                'std': jnp.std(self.states, axis=0),
-                'min': jnp.min(self.states, axis=0),
-                'max': jnp.max(self.states, axis=0),
-                'median': jnp.median(self.states, axis=0),
-                'q25': jnp.quantile(self.states, 0.25, axis=0),
-                'q75': jnp.quantile(self.states, 0.75, axis=0),
-            }
-    
-    def __repr__(self) -> str:
-        return f"MonteCarloResult(n_paths={self.n_paths}, steps={self.steps})"
 
 
 class StochasticDiscreteSimulator(DiscreteSimulator):
