@@ -421,11 +421,7 @@ pytest --cov=src tests/
 Currently not open to contributions, though may change after Phase 4 and once I learn how open-source development works
 
 #### Phase 2 (Current):
-- Debug tests/integrator_unit_tests/test_autonomous_system_integration.py::TestAutonomousTorchDiffEq::test_torchdiffeq_gpu test
 - Refactoring of DiscreteTimeSystem
-    - Construct DiscreteSimulator that uses Discretizer to handle trajectory simulation
-        - Make sure this can support both autonomous and controlled systems
-    - Construct StochasticDiscreteSimulator
     - Construct DiscreteLinearization that caches numerical linearization
     - Construct StochasticDiscreteLinearization
     - Construct unified DiscreteTimeSystem class from the above sub-object classes
