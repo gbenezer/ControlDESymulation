@@ -26,8 +26,8 @@ from typing import List, Optional, Dict, Any, Union
 import sympy as sp
 import numpy as np
 
-from .stochastic_dynamical_system import StochasticDynamicalSystem
-from .utils.stochastic.noise_analysis import SDEType, NoiseType
+from src.systems.base.stochastic_dynamical_system import StochasticDynamicalSystem
+from src.systems.base.utils.stochastic.noise_analysis import SDEType, NoiseType
 
 
 class DiscreteStochasticSystem(StochasticDynamicalSystem):
@@ -567,80 +567,3 @@ class DiscreteStochasticSystem(StochasticDynamicalSystem):
             f"{self.nw} noise source{'s' if self.nw != 1 else ''}, "
             f"discrete-time ({self.noise_characteristics.noise_type.value})"
         )
-
-
-# ============================================================================
-# Common Discrete Stochastic Systems
-# ============================================================================
-
-class DiscreteWhiteNoise(DiscreteStochasticSystem):
-    """
-    Pure white noise process: x[k+1] = w[k]
-    
-    Useful for testing and noise modeling.
-    """
-    
-    def define_system(self, sigma=1.0):
-        x = sp.symbols('x', real=True)
-        sigma_sym = sp.symbols('sigma', positive=True)
-        
-        self.state_vars = [x]
-        self.control_vars = []
-        
-        # No deterministic evolution
-        self._f_sym = sp.Matrix([0])
-        
-        # Pure noise
-        self.diffusion_expr = sp.Matrix([[sigma_sym]])
-        self.parameters = {sigma_sym: sigma}
-        self.order = 1
-        self.sde_type = 'ito'
-
-
-class DiscreteRandomWalk(DiscreteStochasticSystem):
-    """
-    Random walk: x[k+1] = x[k] + σ*w[k]
-    
-    Classic discrete stochastic process.
-    """
-    
-    def define_system(self, sigma=1.0):
-        x = sp.symbols('x', real=True)
-        sigma_sym = sp.symbols('sigma', positive=True)
-        
-        self.state_vars = [x]
-        self.control_vars = []
-        
-        # Persistence: x[k+1] = x[k] + noise
-        self._f_sym = sp.Matrix([x])
-        
-        # Additive noise
-        self.diffusion_expr = sp.Matrix([[sigma_sym]])
-        self.parameters = {sigma_sym: sigma}
-        self.order = 1
-        self.sde_type = 'ito'
-
-
-class DiscreteAR1(DiscreteStochasticSystem):
-    """
-    AR(1) process: x[k+1] = φ*x[k] + u[k] + σ*w[k]
-    
-    Autoregressive process with optional control input.
-    """
-    
-    def define_system(self, phi=0.9, sigma=0.1):
-        x = sp.symbols('x', real=True)
-        u = sp.symbols('u', real=True)
-        phi_sym, sigma_sym = sp.symbols('phi sigma', real=True)
-        
-        self.state_vars = [x]
-        self.control_vars = [u]
-        
-        # AR(1) dynamics
-        self._f_sym = sp.Matrix([phi_sym * x + u])
-        
-        # Additive noise
-        self.diffusion_expr = sp.Matrix([[sigma_sym]])
-        self.parameters = {phi_sym: phi, sigma_sym: sigma}
-        self.order = 1
-        self.sde_type = 'ito'
