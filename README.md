@@ -421,10 +421,8 @@ pytest --cov=src tests/
 Currently not open to contributions, though may change after Phase 4 and once I learn how open-source development works
 
 #### Phase 2 (Current):
-- Create unit tests for EquilibriumHandler and debug if necessary
-- Update SymbolicDynamicalSystem and StochasticDynamicalSystem along with unit tests to actually handle equilibria
+- Debug tests/integrator_unit_tests/test_autonomous_system_integration.py::TestAutonomousTorchDiffEq::test_torchdiffeq_gpu test
 - Refactoring of DiscreteTimeSystem
-    - Assess what additional tests to add to StochasticDiscretizer unit test suite and debug if necessary
     - Construct DiscreteSimulator that uses Discretizer to handle trajectory simulation
         - Make sure this can support both autonomous and controlled systems
     - Construct StochasticDiscreteSimulator
