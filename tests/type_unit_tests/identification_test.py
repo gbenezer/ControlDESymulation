@@ -169,15 +169,15 @@ class TestSubspaceIDResult:
             'controllability_matrix': np.random.randn(4, 10),
             'hankel_matrix': np.random.randn(20, 50),
             'projection_matrix': np.random.randn(20, 4),
-            'singular_values': np.array([10.0, 8.0, 1.0, 0.5, 0.05, 0.01]),
+            'singular_values': np.array([10.0, 8.0, 5.0, 2.0, 0.1, 0.01]),
             'order': 4,
             'fit_quality': 93.0,
         }
         
         # Significant singular values indicate order
         sv = result['singular_values']
-        # Gap after 4th singular value
-        assert sv[3] > sv[4] * 10
+        # Gap after 4th singular value (sv[3] >> sv[4])
+        assert sv[3] > sv[4] * 10  # 2.0 > 0.1 * 10 = 1.0 ✓
 
 
 class TestERAResult:
