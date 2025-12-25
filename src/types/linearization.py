@@ -79,7 +79,7 @@ Usage
 from typing import Union, Tuple
 from .core import (
     StateMatrix,
-    ControlMatrix,
+    InputMatrix,
     OutputMatrix,
     DiffusionMatrix,
     FeedthroughMatrix,
@@ -90,7 +90,7 @@ from .core import (
 # Linearization Result Types
 # ============================================================================
 
-DeterministicLinearization = Tuple[StateMatrix, ControlMatrix]
+DeterministicLinearization = Tuple[StateMatrix, InputMatrix]
 """
 Linearization result for deterministic systems: (A, B).
 
@@ -138,7 +138,7 @@ Examples
 >>> is_stable = np.all(np.abs(eigenvalues) < 1.0)
 """
 
-StochasticLinearization = Tuple[StateMatrix, ControlMatrix, DiffusionMatrix]
+StochasticLinearization = Tuple[StateMatrix, InputMatrix, DiffusionMatrix]
 """
 Linearization result for stochastic systems: (A, B, G).
 
@@ -340,7 +340,7 @@ Examples
 # Linearization with Output
 # ============================================================================
 
-FullLinearization = Tuple[StateMatrix, ControlMatrix, OutputMatrix, FeedthroughMatrix]
+FullLinearization = Tuple[StateMatrix, InputMatrix, OutputMatrix, FeedthroughMatrix]
 """
 Complete linearization including output: (A, B, C, D).
 
@@ -368,7 +368,7 @@ Examples
 
 FullStochasticLinearization = Tuple[
     StateMatrix, 
-    ControlMatrix, 
+    InputMatrix, 
     DiffusionMatrix,
     OutputMatrix, 
     FeedthroughMatrix
@@ -409,7 +409,7 @@ Examples
 >>> # For pendulum: Ac = [[0, 1], [-g/L*cos(θ), -b]]
 """
 
-ControlJacobian = ControlMatrix
+ControlJacobian = InputMatrix
 """
 Control Jacobian ∂f/∂u.
 
