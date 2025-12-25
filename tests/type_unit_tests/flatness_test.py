@@ -241,7 +241,11 @@ class TestPracticalUseCases:
         t = np.linspace(0, 2, N+1)
         
         # Desired flat trajectory (5th order polynomial)
-        y_flat = 3 * (t/2)**3 - 2 * (t/2)**5
+        # Normalized time s = t/T ∈ [0, 1]
+        s = t / 2.0
+        # Polynomial that goes from 0 to 1: p(s) = 10s³ - 15s⁴ + 6s⁵
+        # Scale to go from 0 to 3
+        y_flat = 3.0 * (10*s**3 - 15*s**4 + 6*s**5)
         dy_flat = np.gradient(y_flat, t)
         ddy_flat = np.gradient(dy_flat, t)
         
@@ -265,6 +269,9 @@ class TestPracticalUseCases:
         # Verify boundary conditions
         assert np.isclose(result['state_trajectory'][0, 0], 0.0, atol=0.1)
         assert np.isclose(result['state_trajectory'][-1, 0], 3.0, atol=0.1)
+        # Velocity should be zero at endpoints
+        assert np.isclose(result['state_trajectory'][0, 1], 0.0, atol=0.2)
+        assert np.isclose(result['state_trajectory'][-1, 1], 0.0, atol=0.2)
     
     def test_quadrotor_trajectory_planning(self):
         """Test quadrotor trajectory planning using flatness."""
