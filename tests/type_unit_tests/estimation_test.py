@@ -271,7 +271,9 @@ class TestParticleFilterResult:
         # Weights favor first particle
         weights = np.array([0.7, 0.1, 0.1, 0.1])
         
-        # Weighted mean
+        # Weighted mean: 0.7*[0,0] + 0.1*[1,0] + 0.1*[0,1] + 0.1*[1,1]
+        # = [0, 0] + [0.1, 0] + [0, 0.1] + [0.1, 0.1]
+        # = [0.2, 0.2]
         x_hat = np.sum(particles.T * weights, axis=1)
         
         result: ParticleFilterResult = {
@@ -283,8 +285,8 @@ class TestParticleFilterResult:
             'resampled': False,
         }
         
-        # Should be close to first particle
-        assert np.allclose(result['state_estimate'], np.array([0.3, 0.3]))
+        # Should be [0.2, 0.2] with weight 0.7 on origin
+        assert np.allclose(result['state_estimate'], np.array([0.2, 0.2]))
     
     def test_particle_filter_resampling_indicator(self):
         """Test resampling indicator."""
