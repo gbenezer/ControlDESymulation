@@ -253,9 +253,9 @@ local-env.txt
 remote-env.txt
 
 # Refactoring notes (temporary, can remove after refactoring)
-refactoring_checklist.md
-type_system_integration_details.md
-dependency_analysis_phase_0_2.md
+docs/refactoring_checklist.md
+docs/type_system_integration_details.md
+docs/dependency_analysis_phase_0_2.md
 
 # Data files (if any)
 data/
