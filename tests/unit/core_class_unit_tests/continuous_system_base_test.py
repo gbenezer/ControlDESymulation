@@ -26,24 +26,18 @@ class SimpleContinuousSystem(ContinuousSystemBase):
         self.nx = nx
         self.nu = nu
         self.ny = nx
-
-    def __call__(
-        self, x: StateVector, u: Optional[ControlVector] = None, t: float = 0.0
-    ) -> StateVector:
-        """dx/dt = -x + u"""
+        # Store linearization matrices
+        self.A = -np.eye(nx)
+        self.B = np.ones((nx, nu))
+    
+    def __call__(self, x, u=None, t=0.0):
         if u is None:
             u = np.zeros(self.nu)
+        
         if x.ndim == 2:
             u = u if u.ndim == 2 else u.reshape(-1, 1)
-            return -x + self.Bd @ u
-        # For 1D: need to broadcast u correctly
-        # If nx != nu, can't just add, need proper mapping
-        if self.nx == self.nu:
-            return -x + u
-        else:
-            # Use B matrix for proper dimensions
-            B = np.ones((self.nx, self.nu))
-            return -x + B @ u
+        
+        return self.A @ x + self.B @ u  # Explicit and clear
 
     def integrate(
         self, x0: StateVector, u=None, t_span=(0.0, 1.0), method="RK45", **kwargs
@@ -114,13 +108,8 @@ class SimpleContinuousSystem(ContinuousSystemBase):
             "status": 0
         }
 
-    def linearize(
-        self, x_eq: StateVector, u_eq: Optional[ControlVector] = None
-    ) -> ContinuousLinearization:
-        """Linearization: A = -I, B = I"""
-        a = -np.eye(self.nx)
-        b = np.ones((self.nx, self.nu))
-        return (a, b)
+    def linearize(self, x_eq, u_eq=None):
+        return (self.A, self.B)  # Just return stored matrices
 
 
 class TimeVaryingSystem(ContinuousSystemBase):
