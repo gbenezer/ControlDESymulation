@@ -20,11 +20,7 @@ import numpy as np
 from src.types.core import ControlVector, StateVector
 from src.types.linearization import DiscreteLinearization
 from src.types.trajectories import DiscreteSimulationResult
-
-# Import after src.types
-import sys
-sys.path.insert(0, '/home/claude')
-from discrete_system_base import DiscreteSystemBase
+from src.systems.base.discrete_system_base import DiscreteSystemBase
 
 
 class SimpleDiscreteSystem(DiscreteSystemBase):
