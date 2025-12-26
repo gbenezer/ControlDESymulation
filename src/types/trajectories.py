@@ -399,7 +399,7 @@ class IntegrationResult(TypedDict, total=False):
 
 class SimulationResult(TypedDict, total=False):
     """
-    Result from discrete-time simulation.
+    Result from discretized continuous-time simulation.
 
     Contains trajectories, control sequences, and metadata.
 
@@ -407,7 +407,7 @@ class SimulationResult(TypedDict, total=False):
     ----------
     states : StateTrajectory
         State trajectory (n_steps+1, nx) - includes initial state
-    controls : ControlSequence
+    controls : Optional[ControlSequence]
         Control sequence used (n_steps, nu)
     outputs : Optional[OutputSequence]
         Output sequence (n_steps+1, ny) if computed
@@ -415,7 +415,7 @@ class SimulationResult(TypedDict, total=False):
         Noise sequence (n_steps, nw) for stochastic systems
     time : Optional[TimePoints]
         Time points (n_steps+1,) if applicable
-    info : Dict[str, Any]
+    metadata : Dict[str, Any]
         Additional information (cost, constraints, etc.)
 
     Examples
@@ -451,18 +451,18 @@ class SimulationResult(TypedDict, total=False):
     >>> time = result['time']  # [0, dt, 2*dt, ..., 100*dt]
     >>>
     >>> # Access metadata
-    >>> if 'info' in result:
-    ...     info = result['info']
-    ...     if 'cost' in info:
-    ...         print(f"Trajectory cost: {info['cost']:.2f}")
+    >>> if 'metadata' in result:
+    ...     metadata = result['metadata']
+    ...     if 'cost' in metadata:
+    ...         print(f"Trajectory cost: {metadata['cost']:.2f}")
     """
 
     states: ArrayLike
-    controls: ArrayLike
+    controls: Optional[ArrayLike]
     outputs: Optional[ArrayLike]
     noise: Optional[ArrayLike]
     time: Optional[ArrayLike]
-    info: Dict[str, Any]
+    metadata: Dict[str, Any]
 
 class DiscreteSimulationResult(TypedDict, total=False):
     """
@@ -490,7 +490,7 @@ class DiscreteSimulationResult(TypedDict, total=False):
 
     Notes
     -----
-    The discrete result differs from continuous integration results:
+    The discrete result differs from continuous simulation results:
     - Uses integer time_steps instead of continuous time points
     - Includes dt (sampling period) as a scalar
     - State trajectory has n_steps+1 points (includes x[0])
