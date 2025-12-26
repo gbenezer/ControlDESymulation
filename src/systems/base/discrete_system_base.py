@@ -132,9 +132,10 @@ from typing import Callable, Optional, Sequence, Union
 
 import numpy as np
 
-from src.types.core import ArrayLike, ControlVector, StateVector
-from src.types.linearization import DiscreteLinearization, LinearizationResult
+from src.types.core import ControlVector, StateVector
+from src.types.linearization import DiscreteLinearization
 from src.types.trajectories import DiscreteSimulationResult
+
 
 
 class DiscreteSystemBase(ABC):

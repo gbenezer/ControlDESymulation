@@ -116,7 +116,7 @@ GNU Affero General Public License v3.0
 from abc import ABC, abstractmethod
 from typing import Callable, Optional, Union
 
-from src.types.core import ArrayLike, ControlVector, StateVector, TimeArray
+from src.types.core import ControlVector, StateVector
 from src.types.linearization import LinearizationResult
 from src.types.trajectories import SimulationResult
 
