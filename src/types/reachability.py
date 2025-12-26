@@ -16,7 +16,7 @@
 """
 Reachability and Safety Analysis Types
 
-Result types for reachability analysis, safety verification, and 
+Result types for reachability analysis, safety verification, and
 barrier certificate methods:
 - Forward/backward reachable sets
 - Region of Attraction (ROA)
@@ -32,17 +32,17 @@ Mathematical Background
 Reachable Set:
     Forward reachable set from x0:
         Reach(x0, [0,T]) = {x(T) : x(0) = x0, u(t) ∈ U, t ∈ [0,T]}
-    
+
     Backward reachable set to target:
         Reach^(-1)(X_T, [0,T]) = {x0 : ∃u(·) s.t. x(T) ∈ X_T}
-    
+
     Reachable tube (all intermediate times):
         Tube(x0, [0,T]) = ⋃_{t∈[0,T]} Reach(x0, [0,t])
 
 Region of Attraction (ROA):
     For equilibrium x_eq with Lyapunov V(x):
         ROA = {x : V(x) ≤ c, V̇(x) < 0}
-    
+
     Largest invariant set where trajectories converge to x_eq
 
 Barrier Certificates:
@@ -51,13 +51,13 @@ Barrier Certificates:
         1. B(x) > 0  ∀x ∈ S  (positive on safe)
         2. B(x) < 0  ∀x ∈ U  (negative on unsafe)
         3. Ḃ(x) ≤ 0  ∀x ∈ ∂S (decreasing on boundary)
-    
+
     If exists → S ∩ U = ∅ (safety guaranteed)
 
 Control Barrier Functions (CBF):
     For safety-critical control:
         B̈(x) + γ Ḃ(x) ≥ 0  (exponential decrease condition)
-    
+
     Safety filter:
         u* = argmin ||u - u_nom||²
              s.t. Ḃ(x,u) ≥ -γB(x)
@@ -65,7 +65,7 @@ Control Barrier Functions (CBF):
 Control Lyapunov Functions (CLF):
     For stabilization:
         V̇(x,u) ≤ -αV(x)  (exponential decrease)
-    
+
     Stabilizing control:
         u* = argmin ||u||²
              s.t. V̇(x,u) ≤ -αV(x)
@@ -77,13 +77,13 @@ Usage
 ...     ROAResult,
 ...     CBFResult,
 ... )
->>> 
+>>>
 >>> # Reachability analysis
 >>> result: ReachabilityResult = compute_reachable_set(
 ...     system, x0, u_bounds, horizon=10
 ... )
 >>> tube = result['reachable_tube']  # Set at each time
->>> 
+>>>
 >>> # Safety via CBF
 >>> cbf_result: CBFResult = cbf.filter_control(x, u_desired)
 >>> u_safe = cbf_result['safe_control']
@@ -91,21 +91,20 @@ Usage
 ...     print("Safety constraint engaged!")
 """
 
-from typing import Optional, List, Callable
-from typing_extensions import TypedDict
+from typing import Callable, List, Optional
+
 import numpy as np
+from typing_extensions import TypedDict
 
 from .core import (
-    StateVector,
+    ArrayLike,
     ControlVector,
     CovarianceMatrix,
-    ArrayLike,
+    StateVector,
 )
-
 from .trajectories import (
     StateTrajectory,
 )
-
 
 # ============================================================================
 # Type Aliases for Sets
@@ -147,12 +146,13 @@ Examples
 # Reachability Analysis
 # ============================================================================
 
+
 class ReachabilityResult(TypedDict, total=False):
     """
     Reachability analysis result.
-    
+
     Computes forward/backward reachable sets over time horizon.
-    
+
     Fields
     ------
     reachable_set : ReachableSet
@@ -167,7 +167,7 @@ class ReachabilityResult(TypedDict, total=False):
         Method used ('Hamilton-Jacobi', 'Ellipsoidal', 'Zonotope', 'sampling')
     computation_time : float
         Computation time in seconds
-    
+
     Examples
     --------
     >>> # Forward reachability
@@ -178,21 +178,22 @@ class ReachabilityResult(TypedDict, total=False):
     ...     horizon=10,
     ...     dt=0.1
     ... )
-    >>> 
+    >>>
     >>> # Visualize reachable tube
     >>> import matplotlib.pyplot as plt
     >>> for i, reach_set in enumerate(result['reachable_tube']):
-    ...     plt.plot(reach_set[:, 0], reach_set[:, 1], 
+    ...     plt.plot(reach_set[:, 0], reach_set[:, 1],
     ...              alpha=0.3, color='blue')
-    >>> 
+    >>>
     >>> print(f"Final volume: {result['volume']:.3f}")
     >>> print(f"Method: {result['method']}")
-    >>> 
+    >>>
     >>> # Check if target reached
     >>> x_target = np.array([0, 0])
     >>> final_set = result['reachable_set']
     >>> # Check if x_target in convex hull of final_set
     """
+
     reachable_set: ReachableSet
     reachable_tube: List[ReachableSet]
     volume: float
@@ -205,12 +206,13 @@ class ReachabilityResult(TypedDict, total=False):
 # Region of Attraction
 # ============================================================================
 
+
 class ROAResult(TypedDict):
     """
     Region of Attraction (ROA) analysis result.
-    
+
     Estimates basin of attraction for equilibrium point via Lyapunov analysis.
-    
+
     Fields
     ------
     region_of_attraction : SafeSet
@@ -227,32 +229,33 @@ class ROAResult(TypedDict):
         Number of samples used for verification
     certification_method : str
         Method used ('SOS', 'sampling', 'LMI', 'bisection')
-    
+
     Examples
     --------
     >>> # Quadratic Lyapunov function
     >>> P = np.array([[2, 0], [0, 1]])
     >>> V = lambda x: x.T @ P @ x
-    >>> 
+    >>>
     >>> result: ROAResult = compute_roa(
     ...     system=pendulum,
     ...     equilibrium=np.array([0, 0]),
     ...     lyapunov_function=V,
     ...     method='SOS'
     ... )
-    >>> 
+    >>>
     >>> # Extract ROA
     >>> roa = result['region_of_attraction']
     >>> c = result['level_set']
-    >>> 
+    >>>
     >>> # Check if state in ROA
     >>> x_test = np.array([0.5, 0.1])
     >>> if V(x_test) <= c:
     ...     print("State in ROA - will converge to equilibrium")
-    >>> 
+    >>>
     >>> print(f"ROA volume: {result['volume_estimate']:.3f}")
     >>> print(f"Certified by: {result['certification_method']}")
     """
+
     region_of_attraction: SafeSet
     lyapunov_function: Callable
     lyapunov_matrix: CovarianceMatrix
@@ -266,12 +269,13 @@ class ROAResult(TypedDict):
 # Formal Verification
 # ============================================================================
 
+
 class VerificationResult(TypedDict, total=False):
     """
     Formal verification result.
-    
+
     Proves or disproves safety/reachability properties.
-    
+
     Fields
     ------
     verified : bool
@@ -286,12 +290,12 @@ class VerificationResult(TypedDict, total=False):
         Method used ('SOS', 'SMT', 'abstract-interpretation', 'reachability')
     computation_time : float
         Verification time in seconds
-    
+
     Examples
     --------
     >>> # Verify safety property
     >>> safe_region = np.array([[0, 0], [10, 0], [10, 10], [0, 10]])
-    >>> 
+    >>>
     >>> result: VerificationResult = verify_safety(
     ...     system=quad rotor,
     ...     initial_set=x0_bounds,
@@ -299,14 +303,14 @@ class VerificationResult(TypedDict, total=False):
     ...     horizon=50,
     ...     method='reachability'
     ... )
-    >>> 
+    >>>
     >>> if result['verified']:
     ...     print(f"Safety certified! (confidence: {result['confidence']})")
     ... else:
     ...     print("Safety violation found:")
     ...     counterex = result['counterexample']
     ...     plt.plot(counterex[:, 0], counterex[:, 1])
-    >>> 
+    >>>
     >>> # Verify reachability (can we reach target?)
     >>> reach_result: VerificationResult = verify_reachability(
     ...     system, x0, target_set, horizon=100
@@ -314,6 +318,7 @@ class VerificationResult(TypedDict, total=False):
     >>> if reach_result['verified']:
     ...     print("Target is reachable!")
     """
+
     verified: bool
     property_type: str
     confidence: float
@@ -326,12 +331,13 @@ class VerificationResult(TypedDict, total=False):
 # Barrier Certificates
 # ============================================================================
 
+
 class BarrierCertificateResult(TypedDict):
     """
     Barrier certificate result.
-    
+
     Barrier function separating safe and unsafe regions.
-    
+
     Fields
     ------
     barrier_function : Callable[[StateVector], float]
@@ -346,37 +352,38 @@ class BarrierCertificateResult(TypedDict):
         Unsafe region {x : B(x) < 0}
     method : str
         Synthesis method ('SOS', 'LP', 'neural', 'convex')
-    
+
     Examples
     --------
     >>> # Find barrier separating safe/unsafe
     >>> safe = np.array([[0, 0], [5, 0], [5, 5], [0, 5]])
     >>> unsafe = np.array([[8, 8], [10, 8], [10, 10], [8, 10]])
-    >>> 
+    >>>
     >>> result: BarrierCertificateResult = find_barrier_certificate(
     ...     system=robot,
     ...     safe_set=safe,
     ...     unsafe_set=unsafe,
     ...     method='SOS'
     ... )
-    >>> 
+    >>>
     >>> if result['valid']:
     ...     B = result['barrier_function']
-    ...     
+    ...
     ...     # Verify safety
     ...     x_test = np.array([2, 2])
     ...     if B(x_test) > 0:
     ...         print("State is safe")
-    ...     
+    ...
     ...     # Visualize barrier
     ...     x1 = np.linspace(0, 10, 50)
     ...     x2 = np.linspace(0, 10, 50)
     ...     X1, X2 = np.meshgrid(x1, x2)
-    ...     Z = np.array([[B(np.array([x, y])) 
+    ...     Z = np.array([[B(np.array([x, y]))
     ...                    for x, y in zip(x1_row, x2_row)]
     ...                   for x1_row, x2_row in zip(X1, X2)])
     ...     plt.contour(X1, X2, Z, levels=[0], colors='red')
     """
+
     barrier_function: Callable[[StateVector], float]
     barrier_matrix: Optional[CovarianceMatrix]
     valid: bool
@@ -389,12 +396,13 @@ class BarrierCertificateResult(TypedDict):
 # Control Barrier Functions
 # ============================================================================
 
+
 class CBFResult(TypedDict):
     """
     Control Barrier Function (CBF) result.
-    
+
     Safety filter for control ensuring forward invariance of safe set.
-    
+
     Fields
     ------
     safe_control : ControlVector
@@ -409,35 +417,36 @@ class CBFResult(TypedDict):
         Original desired control u_nom
     modification_magnitude : float
         ||u_safe - u_nom|| control modification
-    
+
     Examples
     --------
     >>> # Define barrier function (distance to obstacle)
     >>> obstacle_center = np.array([5, 5])
     >>> obstacle_radius = 2.0
     >>> B = lambda x: np.linalg.norm(x - obstacle_center)**2 - obstacle_radius**2
-    >>> 
+    >>>
     >>> # Create CBF controller
     >>> cbf = ControlBarrierFunction(barrier=B, system=robot, gamma=1.0)
-    >>> 
+    >>>
     >>> # Filter control at each step
     >>> x = np.array([4, 3])
     >>> u_desired = np.array([1, 1])  # Nominal control (move toward obstacle)
-    >>> 
+    >>>
     >>> result: CBFResult = cbf.filter_control(x, u_desired)
-    >>> 
+    >>>
     >>> u_safe = result['safe_control']
     >>> print(f"Barrier value: {result['barrier_value']:.3f}")
-    >>> 
+    >>>
     >>> if result['constraint_active']:
     ...     print("Safety filter active!")
     ...     print(f"Control modified by: {result['modification_magnitude']:.3f}")
     ... else:
     ...     print("Nominal control is safe")
-    >>> 
+    >>>
     >>> # Apply safe control
     >>> x_next = robot.step(x, u_safe)
     """
+
     safe_control: ControlVector
     barrier_value: float
     barrier_derivative: float
@@ -450,12 +459,13 @@ class CBFResult(TypedDict):
 # Control Lyapunov Functions
 # ============================================================================
 
+
 class CLFResult(TypedDict):
     """
     Control Lyapunov Function (CLF) result.
-    
+
     Stabilizing control with guaranteed convergence.
-    
+
     Fields
     ------
     stabilizing_control : ControlVector
@@ -470,21 +480,21 @@ class CLFResult(TypedDict):
         Exponential rate α in V̇ ≤ -αV
     feasible : bool
         CLF condition feasible
-    
+
     Examples
     --------
     >>> # Quadratic Lyapunov function
     >>> P = np.array([[2, 0], [0, 1]])
     >>> V = lambda x: x.T @ P @ x
-    >>> 
+    >>>
     >>> # Create CLF controller
     >>> clf = ControlLyapunovFunction(lyapunov=V, system=pendulum, alpha=0.5)
-    >>> 
+    >>>
     >>> # Compute stabilizing control
     >>> x = np.array([0.5, 0.1])
-    >>> 
+    >>>
     >>> result: CLFResult = clf.compute_control(x)
-    >>> 
+    >>>
     >>> if result['feasible']:
     ...     u = result['stabilizing_control']
     ...     print(f"V(x) = {result['lyapunov_value']:.3f}")
@@ -493,6 +503,7 @@ class CLFResult(TypedDict):
     ... else:
     ...     print("CLF condition infeasible")
     """
+
     stabilizing_control: ControlVector
     lyapunov_value: float
     lyapunov_derivative: float
@@ -507,14 +518,13 @@ class CLFResult(TypedDict):
 
 __all__ = [
     # Set representations
-    'ReachableSet',
-    'SafeSet',
-    
+    "ReachableSet",
+    "SafeSet",
     # Analysis results
-    'ReachabilityResult',
-    'ROAResult',
-    'VerificationResult',
-    'BarrierCertificateResult',
-    'CBFResult',
-    'CLFResult',
+    "ReachabilityResult",
+    "ROAResult",
+    "VerificationResult",
+    "BarrierCertificateResult",
+    "CBFResult",
+    "CLFResult",
 ]

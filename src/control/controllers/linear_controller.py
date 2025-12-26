@@ -16,6 +16,7 @@
 import numpy as np
 import torch
 
+
 class LinearController:
     """
     Linear state feedback controller with equilibrium offset.

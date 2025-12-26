@@ -37,7 +37,7 @@ Continuous Deterministic:
 
 Continuous Stochastic:
     dx = f(x,u)dt + g(x,u)dW ≈ (Ac*δx + Bc*δu)dt + Gc*dW
-    
+
 Discrete Deterministic:
     x[k+1] = f(x,u) ≈ Ad*δx + Bd*δu
     y[k] = h(x) ≈ Cd*δx + Dd*δu
@@ -60,15 +60,15 @@ Usage
 ...     DeterministicLinearization,
 ...     StochasticLinearization,
 ... )
->>> 
+>>>
 >>> # Deterministic
 >>> result: DeterministicLinearization = system.linearize(x_eq, u_eq)
 >>> Ac, Bc = result
->>> 
+>>>
 >>> # Stochastic
 >>> result: StochasticLinearization = sde_system.linearize(x_eq, u_eq)
 >>> Ac, Bc, Gc = result
->>> 
+>>>
 >>> # Polymorphic (handles both)
 >>> result: LinearizationResult = system.linearize(x_eq, u_eq)
 >>> A, B = result[0], result[1]
@@ -76,15 +76,15 @@ Usage
 ...     G = result[2]  # Stochastic
 """
 
-from typing import Union, Tuple
+from typing import Tuple, Union
+
 from .core import (
-    StateMatrix,
-    InputMatrix,
-    OutputMatrix,
     DiffusionMatrix,
     FeedthroughMatrix,
+    InputMatrix,
+    OutputMatrix,
+    StateMatrix,
 )
-
 
 # ============================================================================
 # Linearization Result Types
@@ -367,11 +367,7 @@ Examples
 """
 
 FullStochasticLinearization = Tuple[
-    StateMatrix, 
-    InputMatrix, 
-    DiffusionMatrix,
-    OutputMatrix, 
-    FeedthroughMatrix
+    StateMatrix, InputMatrix, DiffusionMatrix, OutputMatrix, FeedthroughMatrix
 ]
 """
 Complete stochastic linearization: (A, B, G, C, D).
@@ -484,27 +480,23 @@ Examples
 
 __all__ = [
     # Main result types
-    'DeterministicLinearization',
-    'StochasticLinearization',
-    'LinearizationResult',
-    'ObservationLinearization',
-    
+    "DeterministicLinearization",
+    "StochasticLinearization",
+    "LinearizationResult",
+    "ObservationLinearization",
     # Time-domain specific aliases
-    'ContinuousLinearization',
-    'DiscreteLinearization',
-    'ContinuousStochasticLinearization',
-    'DiscreteStochasticLinearization',
-    
+    "ContinuousLinearization",
+    "DiscreteLinearization",
+    "ContinuousStochasticLinearization",
+    "DiscreteStochasticLinearization",
     # Full linearization
-    'FullLinearization',
-    'FullStochasticLinearization',
-    
+    "FullLinearization",
+    "FullStochasticLinearization",
     # Jacobian-specific
-    'StateJacobian',
-    'ControlJacobian',
-    'OutputJacobian',
-    'DiffusionJacobian',
-    
+    "StateJacobian",
+    "ControlJacobian",
+    "OutputJacobian",
+    "DiffusionJacobian",
     # Cache
-    'LinearizationCacheKey',
+    "LinearizationCacheKey",
 ]

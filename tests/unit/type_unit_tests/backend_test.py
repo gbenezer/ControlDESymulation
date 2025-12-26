@@ -29,143 +29,127 @@ Tests cover:
 - Default value correctness
 """
 
-import pytest
 import numpy as np
+import pytest
 
-from src.types.backends import (
-    # Backend types
-    Backend,
-    Device,
-    BackendConfig,
-    
-    # Method types
-    IntegrationMethod,
-    DiscretizationMethod,
-    SDEIntegrationMethod,
-    OptimizationMethod,
-    
-    # Noise types
-    NoiseType,
-    SDEType,
-    ConvergenceType,
-    
-    # Configuration
-    SystemConfig,
-    IntegratorConfig,
-    DiscretizerConfig,
-    SDEIntegratorConfig,
-    
-    # Constants
-    VALID_BACKENDS,
-    VALID_DEVICES,
+from src.types.backends import (  # Backend types; Method types; Noise types; Configuration; Constants; Utilities
+    ADAPTIVE_ODE_METHODS,
+    ADDITIVE_NOISE_SDE_METHODS,
     DEFAULT_BACKEND,
     DEFAULT_DEVICE,
     DEFAULT_DTYPE,
-    ADAPTIVE_ODE_METHODS,
     FIXED_STEP_ODE_METHODS,
-    STIFF_ODE_METHODS,
-    ADDITIVE_NOISE_SDE_METHODS,
     GENERAL_SDE_METHODS,
-    
-    # Utilities
+    STIFF_ODE_METHODS,
+    VALID_BACKENDS,
+    VALID_DEVICES,
+    Backend,
+    BackendConfig,
+    ConvergenceType,
+    Device,
+    DiscretizationMethod,
+    DiscretizerConfig,
+    IntegrationMethod,
+    IntegratorConfig,
+    NoiseType,
+    OptimizationMethod,
+    SDEIntegrationMethod,
+    SDEIntegratorConfig,
+    SDEType,
+    SystemConfig,
+    get_backend_default_method,
     is_adaptive_method,
     is_stiff_method,
     requires_additive_noise,
-    get_backend_default_method,
     validate_backend,
     validate_device,
 )
-
 
 # ============================================================================
 # Test Backend Type Definitions
 # ============================================================================
 
+
 class TestBackendTypes:
     """Test backend type definitions."""
-    
+
     def test_backend_valid_values(self):
         """Test Backend literal accepts valid values."""
-        backend1: Backend = 'numpy'
-        backend2: Backend = 'torch'
-        backend3: Backend = 'jax'
-        
-        assert backend1 == 'numpy'
-        assert backend2 == 'torch'
-        assert backend3 == 'jax'
-    
+        backend1: Backend = "numpy"
+        backend2: Backend = "torch"
+        backend3: Backend = "jax"
+
+        assert backend1 == "numpy"
+        assert backend2 == "torch"
+        assert backend3 == "jax"
+
     def test_device_is_string(self):
         """Test Device is string type."""
-        device1: Device = 'cpu'
-        device2: Device = 'cuda'
-        device3: Device = 'cuda:0'
-        device4: Device = 'mps'
-        
+        device1: Device = "cpu"
+        device2: Device = "cuda"
+        device3: Device = "cuda:0"
+        device4: Device = "mps"
+
         assert isinstance(device1, str)
         assert isinstance(device2, str)
-    
+
     def test_backend_config_dict(self):
         """Test BackendConfig TypedDict."""
-        config: BackendConfig = {
-            'backend': 'torch',
-            'device': 'cuda:0',
-            'dtype': 'float32'
-        }
-        
-        assert config['backend'] == 'torch'
-        assert config['device'] == 'cuda:0'
-        assert config['dtype'] == 'float32'
-    
+        config: BackendConfig = {"backend": "torch", "device": "cuda:0", "dtype": "float32"}
+
+        assert config["backend"] == "torch"
+        assert config["device"] == "cuda:0"
+        assert config["dtype"] == "float32"
+
     def test_backend_config_minimal(self):
         """Test minimal BackendConfig (total=False)."""
-        config: BackendConfig = {
-            'backend': 'numpy'
-        }
-        
-        assert 'backend' in config
-        assert 'device' not in config  # Optional
+        config: BackendConfig = {"backend": "numpy"}
+
+        assert "backend" in config
+        assert "device" not in config  # Optional
 
 
 # ============================================================================
 # Test Method Type Definitions
 # ============================================================================
 
+
 class TestMethodTypes:
     """Test method type definitions."""
-    
+
     def test_integration_method_examples(self):
         """Test common IntegrationMethod values."""
-        method1: IntegrationMethod = 'RK45'
-        method2: IntegrationMethod = 'DOP853'
-        method3: IntegrationMethod = 'euler'
-        method4: IntegrationMethod = 'Radau'
-        
+        method1: IntegrationMethod = "RK45"
+        method2: IntegrationMethod = "DOP853"
+        method3: IntegrationMethod = "euler"
+        method4: IntegrationMethod = "Radau"
+
         assert isinstance(method1, str)
-    
+
     def test_discretization_method_examples(self):
         """Test common DiscretizationMethod values."""
-        method1: DiscretizationMethod = 'euler'
-        method2: DiscretizationMethod = 'exact'
-        method3: DiscretizationMethod = 'tustin'
-        method4: DiscretizationMethod = 'zoh'
-        
+        method1: DiscretizationMethod = "euler"
+        method2: DiscretizationMethod = "exact"
+        method3: DiscretizationMethod = "tustin"
+        method4: DiscretizationMethod = "zoh"
+
         assert isinstance(method1, str)
-    
+
     def test_sde_integration_method_examples(self):
         """Test common SDEIntegrationMethod values."""
-        method1: SDEIntegrationMethod = 'euler'
-        method2: SDEIntegrationMethod = 'milstein'
-        method3: SDEIntegrationMethod = 'EM'
-        method4: SDEIntegrationMethod = 'SEA'
-        
+        method1: SDEIntegrationMethod = "euler"
+        method2: SDEIntegrationMethod = "milstein"
+        method3: SDEIntegrationMethod = "EM"
+        method4: SDEIntegrationMethod = "SEA"
+
         assert isinstance(method1, str)
-    
+
     def test_optimization_method_examples(self):
         """Test common OptimizationMethod values."""
-        method1: OptimizationMethod = 'SLSQP'
-        method2: OptimizationMethod = 'L-BFGS-B'
-        method3: OptimizationMethod = 'trust-constr'
-        
+        method1: OptimizationMethod = "SLSQP"
+        method2: OptimizationMethod = "L-BFGS-B"
+        method3: OptimizationMethod = "trust-constr"
+
         assert isinstance(method1, str)
 
 
@@ -173,312 +157,317 @@ class TestMethodTypes:
 # Test Noise and Stochastic Types
 # ============================================================================
 
+
 class TestNoiseTypes:
     """Test noise and stochastic type definitions."""
-    
+
     def test_noise_type_valid_values(self):
         """Test NoiseType literal values."""
-        noise1: NoiseType = 'additive'
-        noise2: NoiseType = 'multiplicative'
-        noise3: NoiseType = 'diagonal'
-        noise4: NoiseType = 'scalar'
-        noise5: NoiseType = 'general'
-        
-        assert noise1 == 'additive'
-        assert noise2 == 'multiplicative'
-    
+        noise1: NoiseType = "additive"
+        noise2: NoiseType = "multiplicative"
+        noise3: NoiseType = "diagonal"
+        noise4: NoiseType = "scalar"
+        noise5: NoiseType = "general"
+
+        assert noise1 == "additive"
+        assert noise2 == "multiplicative"
+
     def test_sde_type_valid_values(self):
         """Test SDEType literal values."""
-        sde1: SDEType = 'ito'
-        sde2: SDEType = 'stratonovich'
-        
-        assert sde1 == 'ito'
-        assert sde2 == 'stratonovich'
-    
+        sde1: SDEType = "ito"
+        sde2: SDEType = "stratonovich"
+
+        assert sde1 == "ito"
+        assert sde2 == "stratonovich"
+
     def test_convergence_type_valid_values(self):
         """Test ConvergenceType literal values."""
-        conv1: ConvergenceType = 'strong'
-        conv2: ConvergenceType = 'weak'
-        
-        assert conv1 == 'strong'
-        assert conv2 == 'weak'
+        conv1: ConvergenceType = "strong"
+        conv2: ConvergenceType = "weak"
+
+        assert conv1 == "strong"
+        assert conv2 == "weak"
 
 
 # ============================================================================
 # Test Configuration TypedDicts
 # ============================================================================
 
+
 class TestConfigurationTypes:
     """Test configuration TypedDict structures."""
-    
+
     def test_system_config(self):
         """Test SystemConfig TypedDict."""
         config: SystemConfig = {
-            'name': 'Pendulum',
-            'class_name': 'InvertedPendulum',
-            'nx': 2,
-            'nu': 1,
-            'ny': 2,
-            'is_discrete': False,
-            'is_stochastic': False,
-            'is_autonomous': False,
-            'backend': 'numpy',
-            'device': 'cpu',
+            "name": "Pendulum",
+            "class_name": "InvertedPendulum",
+            "nx": 2,
+            "nu": 1,
+            "ny": 2,
+            "is_discrete": False,
+            "is_stochastic": False,
+            "is_autonomous": False,
+            "backend": "numpy",
+            "device": "cpu",
         }
-        
-        assert config['nx'] == 2
-        assert config['nu'] == 1
-        assert config['backend'] == 'numpy'
-    
+
+        assert config["nx"] == 2
+        assert config["nu"] == 1
+        assert config["backend"] == "numpy"
+
     def test_integrator_config(self):
         """Test IntegratorConfig TypedDict."""
         config: IntegratorConfig = {
-            'method': 'RK45',
-            'rtol': 1e-6,
-            'atol': 1e-9,
-            'max_step': 0.1,
-            'vectorized': True,
-            'dense_output': False,
+            "method": "RK45",
+            "rtol": 1e-6,
+            "atol": 1e-9,
+            "max_step": 0.1,
+            "vectorized": True,
+            "dense_output": False,
         }
-        
-        assert config['method'] == 'RK45'
-        assert config['rtol'] == 1e-6
-        assert config['atol'] == 1e-9
-    
+
+        assert config["method"] == "RK45"
+        assert config["rtol"] == 1e-6
+        assert config["atol"] == 1e-9
+
     def test_discretizer_config(self):
         """Test DiscretizerConfig TypedDict."""
         config: DiscretizerConfig = {
-            'dt': 0.01,
-            'method': 'exact',
-            'backend': 'numpy',
-            'preserve_stability': True,
+            "dt": 0.01,
+            "method": "exact",
+            "backend": "numpy",
+            "preserve_stability": True,
         }
-        
-        assert config['dt'] == 0.01
-        assert config['method'] == 'exact'
-        assert config['preserve_stability'] is True
-    
+
+        assert config["dt"] == 0.01
+        assert config["method"] == "exact"
+        assert config["preserve_stability"] is True
+
     def test_sde_integrator_config(self):
         """Test SDEIntegratorConfig TypedDict."""
         config: SDEIntegratorConfig = {
-            'method': 'milstein',
-            'dt': 0.01,
-            'convergence_type': 'strong',
-            'backend': 'torch',
-            'seed': 42,
+            "method": "milstein",
+            "dt": 0.01,
+            "convergence_type": "strong",
+            "backend": "torch",
+            "seed": 42,
         }
-        
-        assert config['method'] == 'milstein'
-        assert config['convergence_type'] == 'strong'
-        assert config['seed'] == 42
+
+        assert config["method"] == "milstein"
+        assert config["convergence_type"] == "strong"
+        assert config["seed"] == 42
 
 
 # ============================================================================
 # Test Constants
 # ============================================================================
 
+
 class TestConstants:
     """Test constant values and tuples."""
-    
+
     def test_valid_backends_tuple(self):
         """Test VALID_BACKENDS contains expected values."""
-        assert 'numpy' in VALID_BACKENDS
-        assert 'torch' in VALID_BACKENDS
-        assert 'jax' in VALID_BACKENDS
+        assert "numpy" in VALID_BACKENDS
+        assert "torch" in VALID_BACKENDS
+        assert "jax" in VALID_BACKENDS
         assert len(VALID_BACKENDS) == 3
-    
+
     def test_valid_devices_tuple(self):
         """Test VALID_DEVICES contains common devices."""
-        assert 'cpu' in VALID_DEVICES
-        assert 'cuda' in VALID_DEVICES
-    
+        assert "cpu" in VALID_DEVICES
+        assert "cuda" in VALID_DEVICES
+
     def test_default_backend(self):
         """Test default backend is numpy."""
-        assert DEFAULT_BACKEND == 'numpy'
-    
+        assert DEFAULT_BACKEND == "numpy"
+
     def test_default_device(self):
         """Test default device is cpu."""
-        assert DEFAULT_DEVICE == 'cpu'
-    
+        assert DEFAULT_DEVICE == "cpu"
+
     def test_default_dtype(self):
         """Test default dtype is float64."""
         assert DEFAULT_DTYPE == np.float64
-    
+
     def test_adaptive_ode_methods(self):
         """Test adaptive ODE methods tuple."""
-        assert 'RK45' in ADAPTIVE_ODE_METHODS
-        assert 'DOP853' in ADAPTIVE_ODE_METHODS
-        assert 'Radau' in ADAPTIVE_ODE_METHODS
-        assert 'euler' not in ADAPTIVE_ODE_METHODS  # Fixed-step
-    
+        assert "RK45" in ADAPTIVE_ODE_METHODS
+        assert "DOP853" in ADAPTIVE_ODE_METHODS
+        assert "Radau" in ADAPTIVE_ODE_METHODS
+        assert "euler" not in ADAPTIVE_ODE_METHODS  # Fixed-step
+
     def test_fixed_step_ode_methods(self):
         """Test fixed-step ODE methods tuple."""
-        assert 'euler' in FIXED_STEP_ODE_METHODS
-        assert 'rk4' in FIXED_STEP_ODE_METHODS
-        assert 'RK45' not in FIXED_STEP_ODE_METHODS  # Adaptive
-    
+        assert "euler" in FIXED_STEP_ODE_METHODS
+        assert "rk4" in FIXED_STEP_ODE_METHODS
+        assert "RK45" not in FIXED_STEP_ODE_METHODS  # Adaptive
+
     def test_stiff_ode_methods(self):
         """Test stiff ODE methods tuple."""
-        assert 'Radau' in STIFF_ODE_METHODS
-        assert 'BDF' in STIFF_ODE_METHODS
-        assert 'RK45' not in STIFF_ODE_METHODS  # Not for stiff
-    
+        assert "Radau" in STIFF_ODE_METHODS
+        assert "BDF" in STIFF_ODE_METHODS
+        assert "RK45" not in STIFF_ODE_METHODS  # Not for stiff
+
     def test_additive_noise_sde_methods(self):
         """Test additive noise SDE methods."""
-        assert 'SEA' in ADDITIVE_NOISE_SDE_METHODS
-        assert 'SHARK' in ADDITIVE_NOISE_SDE_METHODS
-        assert 'SRA1' in ADDITIVE_NOISE_SDE_METHODS
-        assert 'euler' not in ADDITIVE_NOISE_SDE_METHODS
-    
+        assert "SEA" in ADDITIVE_NOISE_SDE_METHODS
+        assert "SHARK" in ADDITIVE_NOISE_SDE_METHODS
+        assert "SRA1" in ADDITIVE_NOISE_SDE_METHODS
+        assert "euler" not in ADDITIVE_NOISE_SDE_METHODS
+
     def test_general_sde_methods(self):
         """Test general SDE methods."""
-        assert 'euler' in GENERAL_SDE_METHODS
-        assert 'milstein' in GENERAL_SDE_METHODS
-        assert 'SEA' not in GENERAL_SDE_METHODS  # Additive only
+        assert "euler" in GENERAL_SDE_METHODS
+        assert "milstein" in GENERAL_SDE_METHODS
+        assert "SEA" not in GENERAL_SDE_METHODS  # Additive only
 
 
 # ============================================================================
 # Test Utility Functions
 # ============================================================================
 
+
 class TestUtilityFunctions:
     """Test backend utility functions."""
-    
+
     def test_is_adaptive_method_true(self):
         """Test is_adaptive_method for adaptive methods."""
-        assert is_adaptive_method('RK45') is True
-        assert is_adaptive_method('DOP853') is True
-        assert is_adaptive_method('Radau') is True
-    
+        assert is_adaptive_method("RK45") is True
+        assert is_adaptive_method("DOP853") is True
+        assert is_adaptive_method("Radau") is True
+
     def test_is_adaptive_method_false(self):
         """Test is_adaptive_method for fixed-step methods."""
-        assert is_adaptive_method('euler') is False
-        assert is_adaptive_method('rk4') is False
-    
+        assert is_adaptive_method("euler") is False
+        assert is_adaptive_method("rk4") is False
+
     def test_is_stiff_method_true(self):
         """Test is_stiff_method for stiff solvers."""
-        assert is_stiff_method('Radau') is True
-        assert is_stiff_method('BDF') is True
-        assert is_stiff_method('LSODA') is True
-    
+        assert is_stiff_method("Radau") is True
+        assert is_stiff_method("BDF") is True
+        assert is_stiff_method("LSODA") is True
+
     def test_is_stiff_method_false(self):
         """Test is_stiff_method for non-stiff solvers."""
-        assert is_stiff_method('RK45') is False
-        assert is_stiff_method('euler') is False
-    
+        assert is_stiff_method("RK45") is False
+        assert is_stiff_method("euler") is False
+
     def test_requires_additive_noise_true(self):
         """Test requires_additive_noise for specialized methods."""
-        assert requires_additive_noise('SEA') is True
-        assert requires_additive_noise('SHARK') is True
-        assert requires_additive_noise('SRA1') is True
-    
+        assert requires_additive_noise("SEA") is True
+        assert requires_additive_noise("SHARK") is True
+        assert requires_additive_noise("SRA1") is True
+
     def test_requires_additive_noise_false(self):
         """Test requires_additive_noise for general methods."""
-        assert requires_additive_noise('euler') is False
-        assert requires_additive_noise('milstein') is False
-    
+        assert requires_additive_noise("euler") is False
+        assert requires_additive_noise("milstein") is False
+
     def test_get_backend_default_method_deterministic(self):
         """Test default method for deterministic systems."""
-        assert get_backend_default_method('numpy', is_stochastic=False) == 'RK45'
-        assert get_backend_default_method('torch', is_stochastic=False) == 'rk4'
-        assert get_backend_default_method('jax', is_stochastic=False) == 'rk4'
-    
+        assert get_backend_default_method("numpy", is_stochastic=False) == "RK45"
+        assert get_backend_default_method("torch", is_stochastic=False) == "rk4"
+        assert get_backend_default_method("jax", is_stochastic=False) == "rk4"
+
     def test_get_backend_default_method_stochastic(self):
         """Test default method for stochastic systems."""
-        assert get_backend_default_method('numpy', is_stochastic=True) == 'EM'
-        assert get_backend_default_method('torch', is_stochastic=True) == 'euler'
-        assert get_backend_default_method('jax', is_stochastic=True) == 'Euler'
-    
+        assert get_backend_default_method("numpy", is_stochastic=True) == "EM"
+        assert get_backend_default_method("torch", is_stochastic=True) == "euler"
+        assert get_backend_default_method("jax", is_stochastic=True) == "Euler"
+
     def test_validate_backend_valid(self):
         """Test validate_backend accepts valid backends."""
-        assert validate_backend('numpy') == 'numpy'
-        assert validate_backend('torch') == 'torch'
-        assert validate_backend('jax') == 'jax'
-    
+        assert validate_backend("numpy") == "numpy"
+        assert validate_backend("torch") == "torch"
+        assert validate_backend("jax") == "jax"
+
     def test_validate_backend_invalid(self):
         """Test validate_backend rejects invalid backends."""
         with pytest.raises(ValueError, match="Invalid backend"):
-            validate_backend('pytorch')
-        
+            validate_backend("pytorch")
+
         with pytest.raises(ValueError, match="Invalid backend"):
-            validate_backend('tensorflow')
-    
+            validate_backend("tensorflow")
+
     def test_validate_device_cpu_always_valid(self):
         """Test CPU device is valid for all backends."""
-        assert validate_device('cpu', 'numpy') == 'cpu'
-        assert validate_device('cpu', 'torch') == 'cpu'
-        assert validate_device('cpu', 'jax') == 'cpu'
-    
+        assert validate_device("cpu", "numpy") == "cpu"
+        assert validate_device("cpu", "torch") == "cpu"
+        assert validate_device("cpu", "jax") == "cpu"
+
     def test_validate_device_cuda_requires_gpu_backend(self):
         """Test CUDA requires torch or jax."""
         # Valid
-        assert validate_device('cuda', 'torch') == 'cuda'
-        assert validate_device('cuda:0', 'torch') == 'cuda:0'
-        assert validate_device('cuda', 'jax') == 'cuda'
-        
+        assert validate_device("cuda", "torch") == "cuda"
+        assert validate_device("cuda:0", "torch") == "cuda:0"
+        assert validate_device("cuda", "jax") == "cuda"
+
         # Invalid - NumPy is CPU-only
         with pytest.raises(ValueError, match="NumPy backend only supports CPU"):
-            validate_device('cuda', 'numpy')
-    
+            validate_device("cuda", "numpy")
+
     def test_validate_device_mps_requires_torch(self):
         """Test MPS requires PyTorch."""
         # Valid
-        assert validate_device('mps', 'torch') == 'mps'
-        
+        assert validate_device("mps", "torch") == "mps"
+
         # Invalid
         with pytest.raises(ValueError, match="MPS device requires torch"):
-            validate_device('mps', 'jax')
-        
+            validate_device("mps", "jax")
+
         with pytest.raises(ValueError, match="NumPy backend only supports CPU"):
-            validate_device('mps', 'numpy')
+            validate_device("mps", "numpy")
 
 
 # ============================================================================
 # Test Method Classification
 # ============================================================================
 
+
 class TestMethodClassification:
     """Test method classification utilities."""
-    
+
     def test_adaptive_methods_correctly_classified(self):
         """Test all adaptive methods identified."""
-        adaptive_methods = ['RK45', 'RK23', 'DOP853', 'Radau', 'BDF', 'LSODA']
-        
+        adaptive_methods = ["RK45", "RK23", "DOP853", "Radau", "BDF", "LSODA"]
+
         for method in adaptive_methods:
             assert is_adaptive_method(method), f"{method} should be adaptive"
-    
+
     def test_fixed_step_methods_not_adaptive(self):
         """Test fixed-step methods not classified as adaptive."""
-        fixed_methods = ['euler', 'rk4', 'rk2', 'midpoint']
-        
+        fixed_methods = ["euler", "rk4", "rk2", "midpoint"]
+
         for method in fixed_methods:
             assert not is_adaptive_method(method), f"{method} should be fixed-step"
-    
+
     def test_stiff_methods_correctly_classified(self):
         """Test stiff solvers identified."""
-        stiff_methods = ['Radau', 'BDF', 'LSODA']
-        
+        stiff_methods = ["Radau", "BDF", "LSODA"]
+
         for method in stiff_methods:
             assert is_stiff_method(method), f"{method} should be for stiff systems"
-    
+
     def test_non_stiff_methods(self):
         """Test non-stiff methods."""
-        non_stiff = ['RK45', 'euler', 'rk4']
-        
+        non_stiff = ["RK45", "euler", "rk4"]
+
         for method in non_stiff:
             assert not is_stiff_method(method), f"{method} should not be for stiff only"
-    
+
     def test_additive_noise_methods_classified(self):
         """Test additive noise specialized methods."""
-        additive_methods = ['SEA', 'SHARK', 'SRA1', 'SRA3']
-        
+        additive_methods = ["SEA", "SHARK", "SRA1", "SRA3"]
+
         for method in additive_methods:
             assert requires_additive_noise(method), f"{method} requires additive noise"
-    
+
     def test_general_noise_methods(self):
         """Test general (multiplicative) noise methods."""
-        general_methods = ['euler', 'milstein', 'srk']
-        
+        general_methods = ["euler", "milstein", "srk"]
+
         for method in general_methods:
             assert not requires_additive_noise(method), f"{method} works with any noise"
 
@@ -487,189 +476,187 @@ class TestMethodClassification:
 # Test Configuration Validation
 # ============================================================================
 
+
 class TestConfigurationValidation:
     """Test configuration dictionary validation."""
-    
+
     def test_integrator_config_complete(self):
         """Test complete IntegratorConfig."""
         config: IntegratorConfig = {
-            'method': 'RK45',
-            'rtol': 1e-6,
-            'atol': 1e-9,
-            'max_step': 0.1,
-            'first_step': 0.001,
-            'vectorized': True,
-            'dense_output': False,
+            "method": "RK45",
+            "rtol": 1e-6,
+            "atol": 1e-9,
+            "max_step": 0.1,
+            "first_step": 0.001,
+            "vectorized": True,
+            "dense_output": False,
         }
-        
+
         # All fields present
-        assert 'method' in config
-        assert 'rtol' in config
-        assert 'atol' in config
-    
+        assert "method" in config
+        assert "rtol" in config
+        assert "atol" in config
+
     def test_integrator_config_partial(self):
         """Test partial IntegratorConfig (total=False)."""
-        config: IntegratorConfig = {
-            'method': 'RK45'
-        }
-        
+        config: IntegratorConfig = {"method": "RK45"}
+
         # Only method specified
-        assert config['method'] == 'RK45'
-        assert 'rtol' not in config
-    
+        assert config["method"] == "RK45"
+        assert "rtol" not in config
+
     def test_discretizer_config_typical(self):
         """Test typical DiscretizerConfig usage."""
         config: DiscretizerConfig = {
-            'dt': 0.01,
-            'method': 'exact',
-            'backend': 'numpy',
+            "dt": 0.01,
+            "method": "exact",
+            "backend": "numpy",
         }
-        
-        assert config['dt'] == 0.01
-        assert config['method'] == 'exact'
-    
+
+        assert config["dt"] == 0.01
+        assert config["method"] == "exact"
+
     def test_sde_integrator_config_with_seed(self):
         """Test SDEIntegratorConfig with reproducibility."""
         config: SDEIntegratorConfig = {
-            'method': 'euler',
-            'dt': 0.01,
-            'convergence_type': 'strong',
-            'backend': 'torch',
-            'seed': 42,
+            "method": "euler",
+            "dt": 0.01,
+            "convergence_type": "strong",
+            "backend": "torch",
+            "seed": 42,
         }
-        
-        assert config['seed'] == 42
-        assert config['convergence_type'] == 'strong'
+
+        assert config["seed"] == 42
+        assert config["convergence_type"] == "strong"
 
 
 # ============================================================================
 # Test Realistic Usage Patterns
 # ============================================================================
 
+
 class TestRealisticUsage:
     """Test types in realistic scenarios."""
-    
+
     def test_backend_selection_pattern(self):
         """Test backend selection workflow."""
         # User selects backend
-        backend: Backend = 'torch'
-        device: Device = 'cuda:0'
-        
+        backend: Backend = "torch"
+        device: Device = "cuda:0"
+
         # Create config
-        config: BackendConfig = {
-            'backend': backend,
-            'device': device,
-            'dtype': 'float32'
-        }
-        
-        assert config['backend'] == 'torch'
-        assert config['device'] == 'cuda:0'
-    
+        config: BackendConfig = {"backend": backend, "device": device, "dtype": "float32"}
+
+        assert config["backend"] == "torch"
+        assert config["device"] == "cuda:0"
+
     def test_method_selection_for_stiff_system(self):
         """Test selecting method for stiff system."""
         # Detect stiffness or user specifies
         is_stiff = True
-        
+
         if is_stiff:
-            method: IntegrationMethod = 'Radau'
+            method: IntegrationMethod = "Radau"
         else:
-            method: IntegrationMethod = 'RK45'
-        
+            method: IntegrationMethod = "RK45"
+
         assert is_stiff_method(method)
-    
+
     def test_sde_method_selection_by_noise_type(self):
         """Test SDE method selection based on noise."""
-        noise_type: NoiseType = 'additive'
-        
-        if noise_type == 'additive':
-            method: SDEIntegrationMethod = 'SEA'
+        noise_type: NoiseType = "additive"
+
+        if noise_type == "additive":
+            method: SDEIntegrationMethod = "SEA"
         else:
-            method: SDEIntegrationMethod = 'milstein'
-        
+            method: SDEIntegrationMethod = "milstein"
+
         assert requires_additive_noise(method)
-    
+
     def test_auto_select_defaults(self):
         """Test automatic default selection."""
         # For numpy backend, deterministic
-        method1 = get_backend_default_method('numpy', is_stochastic=False)
-        assert method1 == 'RK45'
-        
+        method1 = get_backend_default_method("numpy", is_stochastic=False)
+        assert method1 == "RK45"
+
         # For torch backend, stochastic
-        method2 = get_backend_default_method('torch', is_stochastic=True)
-        assert method2 == 'euler'
+        method2 = get_backend_default_method("torch", is_stochastic=True)
+        assert method2 == "euler"
 
 
 # ============================================================================
 # Test Backend/Device Compatibility
 # ============================================================================
 
+
 class TestBackendDeviceCompatibility:
     """Test backend and device compatibility rules."""
-    
+
     def test_numpy_only_cpu(self):
         """Test NumPy is CPU-only."""
         # Valid
-        validate_device('cpu', 'numpy')
-        
+        validate_device("cpu", "numpy")
+
         # Invalid
         with pytest.raises(ValueError):
-            validate_device('cuda', 'numpy')
-        
+            validate_device("cuda", "numpy")
+
         with pytest.raises(ValueError):
-            validate_device('mps', 'numpy')
-    
+            validate_device("mps", "numpy")
+
     def test_torch_supports_multiple_devices(self):
         """Test PyTorch supports CPU, CUDA, MPS."""
         # All should be valid (actual availability checked at runtime)
-        validate_device('cpu', 'torch')
-        validate_device('cuda', 'torch')
-        validate_device('cuda:0', 'torch')
-        validate_device('mps', 'torch')
-    
+        validate_device("cpu", "torch")
+        validate_device("cuda", "torch")
+        validate_device("cuda:0", "torch")
+        validate_device("mps", "torch")
+
     def test_jax_supports_cpu_cuda(self):
         """Test JAX supports CPU and CUDA."""
-        validate_device('cpu', 'jax')
-        validate_device('cuda', 'jax')
-        
+        validate_device("cpu", "jax")
+        validate_device("cuda", "jax")
+
         # MPS not supported by JAX
         with pytest.raises(ValueError):
-            validate_device('mps', 'jax')
+            validate_device("mps", "jax")
 
 
 # ============================================================================
 # Test Edge Cases
 # ============================================================================
 
+
 class TestEdgeCases:
     """Test edge cases and boundary conditions."""
-    
+
     def test_empty_config_dict(self):
         """Test empty configuration is valid."""
         config: BackendConfig = {}
         assert isinstance(config, dict)
-    
+
     def test_system_config_minimal(self):
         """Test minimal SystemConfig."""
         config: SystemConfig = {
-            'nx': 1,
-            'nu': 0,  # Autonomous
+            "nx": 1,
+            "nu": 0,  # Autonomous
         }
-        
-        assert config['nx'] == 1
-        assert config['nu'] == 0
-    
+
+        assert config["nx"] == 1
+        assert config["nu"] == 0
+
     def test_discretizer_config_minimal(self):
         """Test minimal DiscretizerConfig."""
         config: DiscretizerConfig = {
-            'dt': 0.01,
+            "dt": 0.01,
         }
-        
-        assert config['dt'] == 0.01
-    
+
+        assert config["dt"] == 0.01
+
     def test_method_string_arbitrary(self):
         """Test method types accept arbitrary strings (at type level)."""
         # These are just strings, validation happens at runtime
-        method: IntegrationMethod = 'custom_method'
+        method: IntegrationMethod = "custom_method"
         assert isinstance(method, str)
 
 
@@ -677,50 +664,42 @@ class TestEdgeCases:
 # Test Documentation Examples
 # ============================================================================
 
+
 class TestDocumentationExamples:
     """Test examples from docstrings work correctly."""
-    
+
     def test_backend_example(self):
         """Test Backend docstring example."""
-        backend: Backend = 'torch'
-        assert backend == 'torch'
-    
+        backend: Backend = "torch"
+        assert backend == "torch"
+
     def test_device_example(self):
         """Test Device docstring example."""
-        device: Device = 'cuda:0'
-        assert device == 'cuda:0'
-    
+        device: Device = "cuda:0"
+        assert device == "cuda:0"
+
     def test_backend_config_example(self):
         """Test BackendConfig docstring example."""
-        config: BackendConfig = {
-            'backend': 'torch',
-            'device': 'cuda:0',
-            'dtype': 'float32'
-        }
-        
-        assert config['backend'] == 'torch'
-    
+        config: BackendConfig = {"backend": "torch", "device": "cuda:0", "dtype": "float32"}
+
+        assert config["backend"] == "torch"
+
     def test_integrator_config_example(self):
         """Test IntegratorConfig docstring example."""
-        config: IntegratorConfig = {
-            'method': 'RK45',
-            'rtol': 1e-6,
-            'atol': 1e-9,
-            'max_step': 0.1
-        }
-        
-        assert config['rtol'] == 1e-6
-    
+        config: IntegratorConfig = {"method": "RK45", "rtol": 1e-6, "atol": 1e-9, "max_step": 0.1}
+
+        assert config["rtol"] == 1e-6
+
     def test_noise_type_conditional_example(self):
         """Test NoiseType conditional usage example."""
-        noise_type: NoiseType = 'additive'
-        
-        if noise_type == 'additive':
+        noise_type: NoiseType = "additive"
+
+        if noise_type == "additive":
             # Optimization available
             can_optimize = True
         else:
             can_optimize = False
-        
+
         assert can_optimize is True
 
 
@@ -728,29 +707,30 @@ class TestDocumentationExamples:
 # Test Type Consistency
 # ============================================================================
 
+
 class TestTypeConsistency:
     """Test type consistency across module."""
-    
+
     def test_backend_in_valid_backends(self):
         """Test Backend values are in VALID_BACKENDS."""
-        backends: list[Backend] = ['numpy', 'torch', 'jax']
-        
+        backends: list[Backend] = ["numpy", "torch", "jax"]
+
         for backend in backends:
             assert backend in VALID_BACKENDS
-    
+
     def test_default_backend_is_valid(self):
         """Test DEFAULT_BACKEND is in VALID_BACKENDS."""
         assert DEFAULT_BACKEND in VALID_BACKENDS
-    
+
     def test_default_device_is_valid(self):
         """Test DEFAULT_DEVICE is in VALID_DEVICES."""
         assert DEFAULT_DEVICE in VALID_DEVICES
-    
+
     def test_method_constants_are_strings(self):
         """Test method constants contain strings."""
         for method in ADAPTIVE_ODE_METHODS:
             assert isinstance(method, str)
-        
+
         for method in FIXED_STEP_ODE_METHODS:
             assert isinstance(method, str)
 
@@ -759,107 +739,110 @@ class TestTypeConsistency:
 # Test Integration Patterns
 # ============================================================================
 
+
 class TestIntegrationPatterns:
     """Test realistic integration patterns."""
-    
+
     def test_production_configuration(self):
         """Test production-ready configuration."""
         # Production: NumPy, high accuracy
-        backend: Backend = 'numpy'
-        
+        backend: Backend = "numpy"
+
         integrator_config: IntegratorConfig = {
-            'method': 'DOP853',
-            'rtol': 1e-10,
-            'atol': 1e-12,
+            "method": "DOP853",
+            "rtol": 1e-10,
+            "atol": 1e-12,
         }
-        
-        assert is_adaptive_method(integrator_config['method'])
-        assert integrator_config['rtol'] <= 1e-6
-    
+
+        assert is_adaptive_method(integrator_config["method"])
+        assert integrator_config["rtol"] <= 1e-6
+
     def test_gpu_acceleration_configuration(self):
         """Test GPU acceleration setup."""
         # GPU: PyTorch with CUDA
-        backend: Backend = 'torch'
-        device: Device = 'cuda:0'
-        
+        backend: Backend = "torch"
+        device: Device = "cuda:0"
+
         validate_device(device, backend)
-        
+
         config: BackendConfig = {
-            'backend': backend,
-            'device': device,
-            'dtype': 'float32'  # Faster on GPU
+            "backend": backend,
+            "device": device,
+            "dtype": "float32",  # Faster on GPU
         }
-        
-        assert config['backend'] == 'torch'
-        assert config['device'] == 'cuda:0'
-    
+
+        assert config["backend"] == "torch"
+        assert config["device"] == "cuda:0"
+
     def test_stochastic_simulation_configuration(self):
         """Test stochastic simulation setup."""
-        backend: Backend = 'numpy'
-        
+        backend: Backend = "numpy"
+
         sde_config: SDEIntegratorConfig = {
-            'method': 'EM',
-            'dt': 0.01,
-            'convergence_type': 'strong',
-            'backend': backend,
-            'seed': 42,
+            "method": "EM",
+            "dt": 0.01,
+            "convergence_type": "strong",
+            "backend": backend,
+            "seed": 42,
         }
-        
-        assert sde_config['seed'] == 42
-        assert sde_config['convergence_type'] == 'strong'
-    
+
+        assert sde_config["seed"] == 42
+        assert sde_config["convergence_type"] == "strong"
+
     def test_discretization_for_control_design(self):
         """Test discretization config for controller design."""
         # Control design: exact discretization
         config: DiscretizerConfig = {
-            'dt': 0.01,
-            'method': 'exact',
-            'backend': 'numpy',
-            'preserve_stability': True,
+            "dt": 0.01,
+            "method": "exact",
+            "backend": "numpy",
+            "preserve_stability": True,
         }
-        
-        assert config['method'] == 'exact'
-        assert config['preserve_stability'] is True
+
+        assert config["method"] == "exact"
+        assert config["preserve_stability"] is True
 
 
 # ============================================================================
 # Test Error Messages
 # ============================================================================
 
+
 class TestErrorMessages:
     """Test that error messages are informative."""
-    
+
     def test_invalid_backend_error_message(self):
         """Test validate_backend gives helpful error."""
         with pytest.raises(ValueError) as exc_info:
-            validate_backend('invalid_backend')
-        
-        assert 'Invalid backend' in str(exc_info.value)
-        assert 'numpy' in str(exc_info.value)  # Shows valid options
-    
+            validate_backend("invalid_backend")
+
+        assert "Invalid backend" in str(exc_info.value)
+        assert "numpy" in str(exc_info.value)  # Shows valid options
+
     def test_invalid_device_error_message(self):
         """Test validate_device gives helpful error."""
         with pytest.raises(ValueError) as exc_info:
-            validate_device('cuda', 'numpy')
-        
-        assert 'NumPy' in str(exc_info.value)
-        assert 'CPU' in str(exc_info.value)
+            validate_device("cuda", "numpy")
+
+        assert "NumPy" in str(exc_info.value)
+        assert "CPU" in str(exc_info.value)
 
 
 # ============================================================================
 # Test Constants Immutability
 # ============================================================================
 
+
 class TestConstantsImmutability:
     """Test that constants are properly defined."""
-    
+
     def test_valid_backends_is_tuple(self):
         """Test VALID_BACKENDS is immutable tuple."""
         assert isinstance(VALID_BACKENDS, tuple)
         # Tuples are immutable
         with pytest.raises(TypeError):
-            VALID_BACKENDS[0] = 'other'  # type: ignore
-    
+            VALID_BACKENDS[0] = "other"  # type: ignore
+
     def test_method_tuples_are_immutable(self):
         """Test method constant tuples are immutable."""
         assert isinstance(ADAPTIVE_ODE_METHODS, tuple)
@@ -871,24 +854,25 @@ class TestConstantsImmutability:
 # Test Default Values
 # ============================================================================
 
+
 class TestDefaultValues:
     """Test default constant values are sensible."""
-    
+
     def test_default_backend_is_universal(self):
         """Test default backend works everywhere."""
-        assert DEFAULT_BACKEND == 'numpy'
+        assert DEFAULT_BACKEND == "numpy"
         # NumPy is always available (core dependency)
-    
+
     def test_default_device_is_universal(self):
         """Test default device works everywhere."""
-        assert DEFAULT_DEVICE == 'cpu'
+        assert DEFAULT_DEVICE == "cpu"
         # CPU is always available
-    
+
     def test_default_dtype_is_precise(self):
         """Test default dtype is double precision."""
         assert DEFAULT_DTYPE == np.float64
         # Control/scientific computing needs precision
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

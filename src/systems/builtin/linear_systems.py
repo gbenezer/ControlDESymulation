@@ -28,9 +28,10 @@ Systems included:
 All systems have analytical solutions for verification.
 """
 
-import sympy as sp
-import numpy as np
 from typing import Optional
+
+import numpy as np
+import sympy as sp
 
 from src.systems.base.symbolic_dynamical_system import SymbolicDynamicalSystem
 
@@ -38,16 +39,16 @@ from src.systems.base.symbolic_dynamical_system import SymbolicDynamicalSystem
 class LinearSystem(SymbolicDynamicalSystem):
     """
     First-order linear system: dx/dt = -a*x + b*u
-    
+
     Canonical example for testing and learning.
-    
+
     Parameters
     ----------
     a : float, default=1.0
         State coefficient (positive = stable)
     b : float, default=1.0
         Control gain
-    
+
     Examples
     --------
     >>> system = LinearSystem(a=2.0, b=1.0)
@@ -55,22 +56,22 @@ class LinearSystem(SymbolicDynamicalSystem):
     >>> u = np.array([0.5])
     >>> dx = system(x, u)  # -2*1 + 1*0.5 = -1.5
     """
-    
+
     def define_system(self, a: float = 1.0, b: float = 1.0):
         """Define linear system dynamics."""
         # Symbolic variables
-        x = sp.symbols('x', real=True)
-        u = sp.symbols('u', real=True)
-        a_sym = sp.symbols('a', real=True)
-        b_sym = sp.symbols('b', real=True)
-        
+        x = sp.symbols("x", real=True)
+        u = sp.symbols("u", real=True)
+        a_sym = sp.symbols("a", real=True)
+        b_sym = sp.symbols("b", real=True)
+
         # System definition
         self.state_vars = [x]
         self.control_vars = [u]
         self._f_sym = sp.Matrix([[-a_sym * x + b_sym * u]])
         self.parameters = {a_sym: a, b_sym: b}
         self.order = 1
-        
+
         # NOTE: Don't add equilibrium in define_system()!
         # The EquilibriumHandler is not initialized yet during define_system()
         # Users should add equilibria AFTER system creation if needed
@@ -79,14 +80,14 @@ class LinearSystem(SymbolicDynamicalSystem):
 class AutonomousLinearSystem(SymbolicDynamicalSystem):
     """
     Autonomous first-order linear system: dx/dt = -a*x
-    
+
     No control input (nu=0).
-    
+
     Parameters
     ----------
     a : float, default=1.0
         Decay rate (positive = stable)
-    
+
     Examples
     --------
     >>> system = AutonomousLinearSystem(a=1.0)
@@ -94,13 +95,13 @@ class AutonomousLinearSystem(SymbolicDynamicalSystem):
     0
     >>> dx = system(np.array([1.0]), u=None)  # -1*1 = -1
     """
-    
+
     def define_system(self, a: float = 1.0):
         """Define autonomous linear dynamics."""
         # Symbolic variables
-        x = sp.symbols('x', real=True)
-        a_sym = sp.symbols('a', real=True, positive=True)
-        
+        x = sp.symbols("x", real=True)
+        a_sym = sp.symbols("a", real=True, positive=True)
+
         # System definition
         self.state_vars = [x]
         self.control_vars = []  # ← Empty for autonomous
@@ -112,18 +113,18 @@ class AutonomousLinearSystem(SymbolicDynamicalSystem):
 class LinearSystem2D(SymbolicDynamicalSystem):
     """
     Two-dimensional linear system.
-    
+
     Dynamics:
         dx1/dt = a11*x1 + a12*x2 + b1*u
         dx2/dt = a21*x1 + a22*x2 + b2*u
-    
+
     Parameters
     ----------
     a11, a12, a21, a22 : float
         State matrix coefficients
     b1, b2 : float
         Control gain coefficients
-    
+
     Examples
     --------
     >>> # Stable spiral
@@ -133,7 +134,7 @@ class LinearSystem2D(SymbolicDynamicalSystem):
     >>> eigenvalues = np.linalg.eigvals(np.array([[-1, 2], [-2, -1]]))
     >>> # λ = -1 ± 2j (stable spiral)
     """
-    
+
     def define_system(
         self,
         a11: float = -1.0,
@@ -141,34 +142,36 @@ class LinearSystem2D(SymbolicDynamicalSystem):
         a21: float = 0.0,
         a22: float = -1.0,
         b1: float = 1.0,
-        b2: float = 0.0
+        b2: float = 0.0,
     ):
         """Define 2D linear dynamics."""
         # State and control
-        x1, x2 = sp.symbols('x1 x2', real=True)
-        u = sp.symbols('u', real=True)
-        
+        x1, x2 = sp.symbols("x1 x2", real=True)
+        u = sp.symbols("u", real=True)
+
         # Parameters
-        a11_sym = sp.symbols('a11', real=True)
-        a12_sym = sp.symbols('a12', real=True)
-        a21_sym = sp.symbols('a21', real=True)
-        a22_sym = sp.symbols('a22', real=True)
-        b1_sym = sp.symbols('b1', real=True)
-        b2_sym = sp.symbols('b2', real=True)
-        
+        a11_sym = sp.symbols("a11", real=True)
+        a12_sym = sp.symbols("a12", real=True)
+        a21_sym = sp.symbols("a21", real=True)
+        a22_sym = sp.symbols("a22", real=True)
+        b1_sym = sp.symbols("b1", real=True)
+        b2_sym = sp.symbols("b2", real=True)
+
         self.state_vars = [x1, x2]
         self.control_vars = [u]
-        
+
         # Dynamics
-        self._f_sym = sp.Matrix([
-            [a11_sym*x1 + a12_sym*x2 + b1_sym*u],
-            [a21_sym*x1 + a22_sym*x2 + b2_sym*u]
-        ])
-        
+        self._f_sym = sp.Matrix(
+            [[a11_sym * x1 + a12_sym * x2 + b1_sym * u], [a21_sym * x1 + a22_sym * x2 + b2_sym * u]]
+        )
+
         self.parameters = {
-            a11_sym: a11, a12_sym: a12,
-            a21_sym: a21, a22_sym: a22,
-            b1_sym: b1, b2_sym: b2
+            a11_sym: a11,
+            a12_sym: a12,
+            a21_sym: a21,
+            a22_sym: a22,
+            b1_sym: b1,
+            b2_sym: b2,
         }
         self.order = 1
 
@@ -177,20 +180,21 @@ class LinearSystem2D(SymbolicDynamicalSystem):
 # Convenience Factory Functions
 # ============================================================================
 
+
 def create_stable_system(time_constant: float = 1.0) -> LinearSystem:
     """
     Create stable linear system with specified time constant.
-    
+
     Parameters
     ----------
     time_constant : float
         Time constant τ in seconds (a = 1/τ)
-    
+
     Returns
     -------
     LinearSystem
         System with decay rate a = 1/τ
-    
+
     Examples
     --------
     >>> # Fast system (settles in ~2 seconds)
@@ -204,37 +208,29 @@ def create_stable_system(time_constant: float = 1.0) -> LinearSystem:
 def create_critically_damped_2d() -> LinearSystem2D:
     """
     Create critically damped 2D system (no oscillation).
-    
+
     Returns
     -------
     LinearSystem2D
         System with repeated real eigenvalues
     """
-    return LinearSystem2D(
-        a11=-2.0, a12=1.0,
-        a21=0.0, a22=-2.0,
-        b1=1.0, b2=1.0
-    )
+    return LinearSystem2D(a11=-2.0, a12=1.0, a21=0.0, a22=-2.0, b1=1.0, b2=1.0)
 
 
 def create_oscillatory_2d(omega: float = 2.0, damping: float = 0.1) -> LinearSystem2D:
     """
     Create oscillatory 2D system (damped spiral).
-    
+
     Parameters
     ----------
     omega : float
         Natural frequency (rad/s)
     damping : float
         Damping coefficient
-    
+
     Returns
     -------
     LinearSystem2D
         System with complex eigenvalues λ = -damping ± j*omega
     """
-    return LinearSystem2D(
-        a11=-damping, a12=omega,
-        a21=-omega, a22=-damping,
-        b1=1.0, b2=0.0
-    )
+    return LinearSystem2D(a11=-damping, a12=omega, a21=-omega, a22=-damping, b1=1.0, b2=0.0)

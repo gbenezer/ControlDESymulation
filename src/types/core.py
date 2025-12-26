@@ -42,27 +42,27 @@ Usage
 ...     StateMatrix,
 ...     GainMatrix,
 ... )
->>> 
+>>>
 >>> def compute_control(x: StateVector, K: GainMatrix) -> ControlVector:
 ...     return -K @ x
 """
 
-from typing import Union, Tuple, Dict, List, Callable, Optional, TypeVar, Any
+# Conditional imports for type checking
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, TypeVar, Union
+
 import numpy as np
 
-# Conditional imports for type checking
-from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    import torch
     import jax.numpy as jnp
     import sympy as sp
+    import torch
 
 
 # ============================================================================
 # Basic Array Types - Multi-Backend Support
 # ============================================================================
 
-ArrayLike = Union[np.ndarray, 'torch.Tensor', 'jnp.ndarray']
+ArrayLike = Union[np.ndarray, "torch.Tensor", "jnp.ndarray"]
 """
 Array-like type supporting multiple backends.
 
@@ -97,6 +97,7 @@ Examples
 # Conditional backend types (only if libraries available)
 try:
     import torch
+
     TorchTensor = torch.Tensor
     """PyTorch tensor type."""
 except ImportError:
@@ -104,12 +105,13 @@ except ImportError:
 
 try:
     import jax.numpy as jnp
+
     JaxArray = jnp.ndarray
     """JAX array type."""
 except ImportError:
     JaxArray = type(None)
 
-ScalarLike = Union[float, int, np.number, 'torch.Tensor', 'jnp.ndarray']
+ScalarLike = Union[float, int, np.number, "torch.Tensor", "jnp.ndarray"]
 """
 Scalar value in any backend.
 
@@ -260,7 +262,7 @@ Examples
 
 
 # ============================================================================
-# Matrix Types - Semantic Naming by Role  
+# Matrix Types - Semantic Naming by Role
 # ============================================================================
 
 StateMatrix = ArrayLike
@@ -541,12 +543,13 @@ Examples
 
 from typing_extensions import TypedDict
 
+
 class SystemDimensions(TypedDict, total=False):
     """
     System dimensions as dictionary.
-    
+
     All fields optional to support partial specifications.
-    
+
     Attributes
     ----------
     nx : int
@@ -559,22 +562,23 @@ class SystemDimensions(TypedDict, total=False):
         Noise dimension (stochastic systems only)
     np : int
         Parameter dimension (for learning/adaptation)
-    
+
     Examples
     --------
     >>> # Deterministic system
     >>> dims: SystemDimensions = {'nx': 3, 'nu': 2, 'ny': 3}
-    >>> 
+    >>>
     >>> # Stochastic system
     >>> dims_stochastic: SystemDimensions = {
     ...     'nx': 2, 'nu': 1, 'ny': 2, 'nw': 2
     ... }
-    >>> 
+    >>>
     >>> # With parameters
     >>> dims_adaptive: SystemDimensions = {
     ...     'nx': 3, 'nu': 1, 'ny': 3, 'np': 5
     ... }
     """
+
     nx: int
     nu: int
     ny: int
@@ -1032,7 +1036,7 @@ Examples
 # Generic Type Variables
 # ============================================================================
 
-T = TypeVar('T', bound=ArrayLike)
+T = TypeVar("T", bound=ArrayLike)
 """
 Generic array type variable.
 
@@ -1045,7 +1049,7 @@ Examples
 ...     return x * factor
 """
 
-S = TypeVar('S', bound='DiscreteSystemBase')
+S = TypeVar("S", bound="DiscreteSystemBase")
 """
 Generic discrete system type variable.
 
@@ -1058,7 +1062,7 @@ Examples
 ...     return system.simulate(x0, steps=steps)
 """
 
-C = TypeVar('C', bound='ContinuousSystemBase')
+C = TypeVar("C", bound="ContinuousSystemBase")
 """
 Generic continuous system type variable.
 
@@ -1071,7 +1075,7 @@ Examples
 ...     return system.integrate(x0, t_span=t_span)
 """
 
-MatrixT = TypeVar('MatrixT', StateMatrix, InputMatrix, DiffusionMatrix)
+MatrixT = TypeVar("MatrixT", StateMatrix, InputMatrix, DiffusionMatrix)
 """
 Generic matrix type variable.
 
@@ -1091,61 +1095,54 @@ Examples
 
 __all__ = [
     # Basic arrays
-    'ArrayLike',
-    'NumpyArray',
-    'TorchTensor',
-    'JaxArray',
-    'ScalarLike',
-    'IntegerLike',
-    
+    "ArrayLike",
+    "NumpyArray",
+    "TorchTensor",
+    "JaxArray",
+    "ScalarLike",
+    "IntegerLike",
     # Vectors
-    'StateVector',
-    'ControlVector',
-    'OutputVector',
-    'NoiseVector',
-    'ParameterVector',
-    'ResidualVector',
-    
+    "StateVector",
+    "ControlVector",
+    "OutputVector",
+    "NoiseVector",
+    "ParameterVector",
+    "ResidualVector",
     # Matrices
-    'StateMatrix',
-    'InputMatrix',
-    'OutputMatrix',
-    'DiffusionMatrix',
-    'FeedthroughMatrix',
-    'CovarianceMatrix',
-    'GainMatrix',
-    'ControllabilityMatrix',
-    'ObservabilityMatrix',
-    'CostMatrix',
-    
+    "StateMatrix",
+    "InputMatrix",
+    "OutputMatrix",
+    "DiffusionMatrix",
+    "FeedthroughMatrix",
+    "CovarianceMatrix",
+    "GainMatrix",
+    "ControllabilityMatrix",
+    "ObservabilityMatrix",
+    "CostMatrix",
     # Dimensions
-    'SystemDimensions',
-    'DimensionTuple',
-    
+    "SystemDimensions",
+    "DimensionTuple",
     # Equilibria
-    'EquilibriumState',
-    'EquilibriumControl',
-    'EquilibriumPoint',
-    'EquilibriumName',
-    'EquilibriumIdentifier',
-    
+    "EquilibriumState",
+    "EquilibriumControl",
+    "EquilibriumPoint",
+    "EquilibriumName",
+    "EquilibriumIdentifier",
     # Functions
-    'DynamicsFunction',
-    'OutputFunction',
-    'DiffusionFunction',
-    'ControlPolicy',
-    'StateEstimator',
-    'CostFunction',
-    'Constraint',
-    
+    "DynamicsFunction",
+    "OutputFunction",
+    "DiffusionFunction",
+    "ControlPolicy",
+    "StateEstimator",
+    "CostFunction",
+    "Constraint",
     # Callbacks
-    'IntegrationCallback',
-    'SimulationCallback',
-    'OptimizationCallback',
-    
+    "IntegrationCallback",
+    "SimulationCallback",
+    "OptimizationCallback",
     # Type variables
-    'T',
-    'S',
-    'C',
-    'MatrixT',
+    "T",
+    "S",
+    "C",
+    "MatrixT",
 ]

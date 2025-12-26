@@ -13,9 +13,10 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import sympy as sp
 import numpy as np
+import sympy as sp
 import torch
+
 from src.systems.base.symbolic_dynamical_system import SymbolicDynamicalSystem
 
 
@@ -134,6 +135,7 @@ class SymbolicQuadrotor2D(SymbolicDynamicalSystem):
         mg = self.mass_val * self.gravity_val
         return torch.tensor([mg / 2, mg / 2])
 
+
 class SymbolicQuadrotor2DLidar(SymbolicDynamicalSystem):
     """
     Symbolic representation of a planar (2D) quadrotor with lidar-based partial observations.
@@ -213,9 +215,7 @@ class SymbolicQuadrotor2DLidar(SymbolicDynamicalSystem):
         angle_max: float = 0.149 * np.pi,
         origin_height: float = 1.0,
     ):
-        super().__init__(
-            length, mass, inertia, gravity, b, H, angle_max, origin_height
-        )
+        super().__init__(length, mass, inertia, gravity, b, H, angle_max, origin_height)
 
     def define_system(
         self,
@@ -276,22 +276,18 @@ class SymbolicQuadrotor2DLidar(SymbolicDynamicalSystem):
             soft_relu = (ray_distance + sp.sqrt(ray_distance**2 + eps)) / 2
 
             # Soft min(x, H): H - soft_relu(H - x)
-            clamped_ray = (
-                H_val
-                - (H_val - soft_relu + sp.sqrt((H_val - soft_relu) ** 2 + eps)) / 2
-            )
+            clamped_ray = H_val - (H_val - soft_relu + sp.sqrt((H_val - soft_relu) ** 2 + eps)) / 2
 
             lidar_rays.append(clamped_ray)
 
         self._h_sym = sp.Matrix(lidar_rays)
-        self.output_vars = [
-            sp.Symbol(f"lidar_{i}", real=True) for i in range(ny)
-        ]  # ny = 4
+        self.output_vars = [sp.Symbol(f"lidar_{i}", real=True) for i in range(ny)]  # ny = 4
 
     @property
     def u_equilibrium(self) -> torch.Tensor:
         mg = self.mass_val * self.gravity_val
         return torch.tensor([mg / 2, mg / 2])
+
 
 class PVTOL(SymbolicDynamicalSystem):
     """

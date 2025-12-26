@@ -119,25 +119,27 @@ MIT License
 """
 
 import copy
-from contextlib import contextmanager
-from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Union, Optional, Tuple, List, Dict
 import json
-import sympy as sp
+from abc import ABC, abstractmethod
+from contextlib import contextmanager
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Union
+
 import numpy as np
+import sympy as sp
+
+from src.systems.base.utils.backend_manager import BackendManager
+from src.systems.base.utils.code_generator import CodeGenerator
+from src.systems.base.utils.dynamics_evaluator import DynamicsEvaluator
 
 # necessary sub-object import
 from src.systems.base.utils.equilibrium_handler import EquilibriumHandler
-from src.systems.base.utils.backend_manager import BackendManager
-from src.systems.base.utils.symbolic_validator import SymbolicValidator, ValidationError
-from src.systems.base.utils.code_generator import CodeGenerator
-from src.systems.base.utils.dynamics_evaluator import DynamicsEvaluator
 from src.systems.base.utils.linearization_engine import LinearizationEngine
 from src.systems.base.utils.observation_engine import ObservationEngine
+from src.systems.base.utils.symbolic_validator import SymbolicValidator, ValidationError
 
 if TYPE_CHECKING:
-    import torch
     import jax.numpy as jnp
+    import torch
 
 # Type alias for backend-agnostic arrays
 ArrayLike = Union[np.ndarray, "torch.Tensor", "jnp.ndarray"]
@@ -908,7 +910,7 @@ class SymbolicDynamicalSystem(ABC):
         Compiling numpy... 0.05s
         Compiling torch... 0.12s
         Compiling jax... 0.89s
-        
+
         >>> # Compile specific backends
         >>> timings = system.compile(backends=['numpy', 'torch'])
         >>> print(f"NumPy: {timings['numpy']:.3f}s")
@@ -940,7 +942,7 @@ class SymbolicDynamicalSystem(ABC):
         --------
         >>> # Clear all caches
         >>> system.reset_caches()
-        
+
         >>> # Clear only torch cache
         >>> system.reset_caches(['torch'])
 
@@ -983,7 +985,7 @@ class SymbolicDynamicalSystem(ABC):
         >>> success = system.warmup()
         Warming up jax backend...
         ✓ jax backend ready (test evaluation successful)
-        
+
         >>> # Warm up with custom test point
         >>> x_test = np.array([0.1, 0.0])
         >>> u_test = np.array([0.0])
@@ -1048,7 +1050,7 @@ class SymbolicDynamicalSystem(ABC):
         >>> # Create independent copy
         >>> system2 = system.clone()
         >>> system2.parameters[m] = 2.0  # Doesn't affect original
-        
+
         >>> # Clone and switch to JAX
         >>> jax_system = system.clone(backend='jax')
         >>> jax_system._default_backend
@@ -1335,7 +1337,9 @@ class SymbolicDynamicalSystem(ABC):
     # Forward Dynamics
     # ========================================================================
 
-    def forward(self, x: ArrayLike, u: Optional[ArrayLike] = None, backend: Optional[str] = None) -> ArrayLike:
+    def forward(
+        self, x: ArrayLike, u: Optional[ArrayLike] = None, backend: Optional[str] = None
+    ) -> ArrayLike:
         """
         Evaluate continuous-time dynamics: dx/dt = f(x, u) or dx/dt = f(x) for autonomous.
 
@@ -1398,7 +1402,9 @@ class SymbolicDynamicalSystem(ABC):
         """
         return self._dynamics.evaluate(x, u, backend)
 
-    def __call__(self, x: ArrayLike, u: Optional[ArrayLike] = None, backend: Optional[str] = None) -> ArrayLike:
+    def __call__(
+        self, x: ArrayLike, u: Optional[ArrayLike] = None, backend: Optional[str] = None
+    ) -> ArrayLike:
         """
         Make system callable: system(x, u) or system(x) for autonomous evaluates dynamics.
 
@@ -1423,10 +1429,10 @@ class SymbolicDynamicalSystem(ABC):
         --------
         Controlled system:
         >>> dx = system(x, u)  # Pythonic interface
-        
+
         Autonomous system:
         >>> dx = system(x)  # No control input
-        
+
         # Equivalent to:
         >>> dx = system.forward(x, u)
 
@@ -1443,10 +1449,10 @@ class SymbolicDynamicalSystem(ABC):
     # ========================================================================
 
     def linearized_dynamics(
-        self, 
-        x: Union[ArrayLike, str], 
+        self,
+        x: Union[ArrayLike, str],
         u: Optional[ArrayLike] = None,  # Only ArrayLike, not string
-        backend: Optional[str] = None
+        backend: Optional[str] = None,
     ) -> Tuple[ArrayLike, ArrayLike]:
         """
         Compute numerical linearization of dynamics: A = ∂f/∂x, B = ∂f/∂u.
@@ -1501,7 +1507,7 @@ class SymbolicDynamicalSystem(ABC):
 
         >>> # Direct state/control
         >>> A, B = system.linearized_dynamics(x, u)
-        
+
         >>> # Named equilibrium
         >>> A, B = system.linearized_dynamics('inverted')
         >>> A, B = system.linearized_dynamics('inverted', backend='torch')
@@ -1520,13 +1526,13 @@ class SymbolicDynamicalSystem(ABC):
             equilibrium_name = x
             backend = backend or self._default_backend
             x, u = self.equilibria.get_both(equilibrium_name, backend)
-        
+
         return self._linearization.compute_dynamics(x, u, backend)
 
     def linearized_dynamics_symbolic(
-        self, 
-        x_eq: Optional[Union[sp.Matrix, str]] = None, 
-        u_eq: Optional[sp.Matrix] = None  # Only sp.Matrix, not string
+        self,
+        x_eq: Optional[Union[sp.Matrix, str]] = None,
+        u_eq: Optional[sp.Matrix] = None,  # Only sp.Matrix, not string
     ) -> Tuple[sp.Matrix, sp.Matrix]:
         """
         Compute symbolic linearization: A = ∂f/∂x, B = ∂f/∂u.
@@ -1560,7 +1566,7 @@ class SymbolicDynamicalSystem(ABC):
         >>> x_eq = sp.Matrix([sp.pi, 0])  # Upright pendulum
         >>> u_eq = sp.Matrix([0])
         >>> A_sym, B_sym = system.linearized_dynamics_symbolic(x_eq, u_eq)
-        
+
         >>> # Linearize at named equilibrium (u_eq ignored)
         >>> A_sym, B_sym = system.linearized_dynamics_symbolic('inverted')
 
@@ -1575,11 +1581,11 @@ class SymbolicDynamicalSystem(ABC):
         # If x_eq is a string, get equilibrium from handler
         if isinstance(x_eq, str):
             equilibrium_name = x_eq
-            x_np, u_np = self.equilibria.get_both(equilibrium_name, backend='numpy')
+            x_np, u_np = self.equilibria.get_both(equilibrium_name, backend="numpy")
             # Convert NumPy arrays to SymPy matrices
             x_eq = sp.Matrix(x_np.tolist())
             u_eq = sp.Matrix(u_np.tolist())
-        
+
         return self._linearization.compute_symbolic(x_eq, u_eq)
 
     def verify_jacobians(
@@ -1873,49 +1879,47 @@ class SymbolicDynamicalSystem(ABC):
     def set_default_equilibrium(self, name: str) -> "SymbolicDynamicalSystem":
         """
         Set default equilibrium for get operations without name.
-        
+
         Parameters
         ----------
         name : str
             Name of equilibrium to use as default
-        
+
         Returns
         -------
         SymbolicDynamicalSystem
             Self for method chaining
-        
+
         Examples
         --------
         >>> system.set_default_equilibrium('inverted')
         >>> x_eq = system.equilibria.get_x()  # Gets 'inverted' by default
-        
+
         Method chaining:
         >>> system.set_default_equilibrium('upright').compile()
         """
         self.equilibria.set_default(name)
         return self
-        
+
     def get_equilibrium(
-        self, 
-        name: Optional[str] = None, 
-        backend: Optional[str] = None
+        self, name: Optional[str] = None, backend: Optional[str] = None
     ) -> Tuple[ArrayLike, ArrayLike]:
         """
         Get equilibrium state and control in specified backend,
         or default backend if not specified
-        
+
         Parameters
         ----------
         name : Optional[str]
             Equilibrium name (None = default)
         backend : Optional[str]
             Backend for arrays (None = system default)
-        
+
         Returns
         -------
         Tuple[ArrayLike, ArrayLike]
             (x_eq, u_eq) in requested backend
-        
+
         Examples
         --------
         >>> x_eq, u_eq = system.get_equilibrium('inverted', backend='torch')
@@ -1926,12 +1930,12 @@ class SymbolicDynamicalSystem(ABC):
     def list_equilibria(self) -> List[str]:
         """
         List all equilibrium names.
-        
+
         Returns
         -------
         List[str]
             Names of all defined equilibria
-        
+
         Examples
         --------
         >>> system.list_equilibria()
@@ -1942,17 +1946,17 @@ class SymbolicDynamicalSystem(ABC):
     def get_equilibrium_metadata(self, name: Optional[str] = None) -> Dict:
         """
         Get metadata for equilibrium.
-        
+
         Parameters
         ----------
         name : Optional[str]
             Equilibrium name (None = default)
-        
+
         Returns
         -------
         Dict
             Metadata dictionary
-        
+
         Examples
         --------
         >>> meta = system.get_equilibrium_metadata('inverted')
@@ -1964,32 +1968,32 @@ class SymbolicDynamicalSystem(ABC):
     def remove_equilibrium(self, name: str):
         """
         Remove an equilibrium point.
-        
+
         Parameters
         ----------
         name : str
             Equilibrium name to remove
-        
+
         Raises
         ------
         ValueError
             If trying to remove 'origin' or nonexistent equilibrium
-        
+
         Examples
         --------
         >>> system.remove_equilibrium('test_point')
         """
-        if name == 'origin':
+        if name == "origin":
             raise ValueError("Cannot remove origin equilibrium")
-        
+
         if name not in self.equilibria._equilibria:
             raise ValueError(f"Unknown equilibrium '{name}'")
-        
+
         del self.equilibria._equilibria[name]
-        
+
         # Reset default if we removed it
         if self.equilibria._default == name:
-            self.equilibria._default = 'origin'
+            self.equilibria._default = "origin"
 
     # Convenience: Quick access to control design
     @property

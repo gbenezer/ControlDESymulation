@@ -29,10 +29,11 @@ Tests cover:
 10. Configuration save/load
 """
 
-import pytest
-import numpy as np
-import sympy as sp
 from typing import Dict, List, Tuple
+
+import numpy as np
+import pytest
+import sympy as sp
 
 # Conditional imports for backends
 torch_available = True
@@ -49,7 +50,6 @@ except ImportError:
     jax_available = False
 
 from src.systems.base.symbolic_dynamical_system import SymbolicDynamicalSystem
-
 
 # ============================================================================
 # Test Fixtures - Simple Systems
@@ -104,6 +104,7 @@ class CustomOutputSystem(SymbolicDynamicalSystem):
         self.parameters = {}
         self.order = 1
 
+
 class SimpleAutonomousSystem(SymbolicDynamicalSystem):
     """Simple autonomous system: dx/dt = -a*x"""
 
@@ -132,6 +133,7 @@ class Autonomous2DSystem(SymbolicDynamicalSystem):
         self._f_sym = sp.Matrix([x2, -k_sym * x1])
         self.parameters = {k_sym: k}
         self.order = 1
+
 
 # ============================================================================
 # Test Class 1: Initialization and Validation
@@ -1097,19 +1099,19 @@ class TestPerformanceMonitoring:
     def test_forward_call_counting(self):
         """Test that forward calls are counted"""
         system = SimpleFirstOrderSystem()
-        
+
         x = np.array([1.0])
         u = np.array([0.0])
-        
+
         # Get initial calls from dynamics evaluator
-        initial_calls = system._dynamics.get_stats()['calls']
-        
+        initial_calls = system._dynamics.get_stats()["calls"]
+
         system(x, u)
         system(x, u)
         system(x, u)
-        
+
         # Check calls from dynamics evaluator
-        assert system._dynamics.get_stats()['calls'] == initial_calls + 3
+        assert system._dynamics.get_stats()["calls"] == initial_calls + 3
 
     def test_get_performance_stats(self):
         """Test getting performance statistics"""
@@ -1129,16 +1131,16 @@ class TestPerformanceMonitoring:
     def test_reset_performance_stats(self):
         """Test resetting performance counters"""
         system = SimpleFirstOrderSystem()
-        
+
         x = np.array([1.0])
         u = np.array([0.0])
-        
+
         system(x, u)
-        assert system._dynamics.get_stats()['calls'] > 0
-        
+        assert system._dynamics.get_stats()["calls"] > 0
+
         system.reset_performance_stats()
-        assert system._dynamics.get_stats()['calls'] == 0
-        assert system._dynamics.get_stats()['total_time'] == 0.0
+        assert system._dynamics.get_stats()["calls"] == 0
+        assert system._dynamics.get_stats()["total_time"] == 0.0
 
 
 # ============================================================================
@@ -1455,6 +1457,7 @@ class TestProperties:
         system = SimpleSecondOrderSystem()
         assert system.nq == 1  # nx=2, order=2, so nq=1
 
+
 # ============================================================================
 # Test Class 16: Autonomous Systems - Initialization
 # ============================================================================
@@ -1490,11 +1493,11 @@ class TestAutonomousInitialization:
     def test_empty_control_vars_allowed(self):
         """Test that empty control_vars is explicitly allowed"""
         system = SimpleAutonomousSystem()
-        
+
         # Verify the system has empty control_vars
         assert len(system.control_vars) == 0
         assert system.nu == 0
-        
+
         # Should initialize without errors
         assert system._initialized is True
 
@@ -1512,7 +1515,7 @@ class TestAutonomousForwardDynamics:
         system = SimpleAutonomousSystem(a=2.0)
 
         x = np.array([1.0])
-        
+
         # Call without u argument
         dx = system(x)
 
@@ -1526,7 +1529,7 @@ class TestAutonomousForwardDynamics:
         system = SimpleAutonomousSystem(a=2.0)
 
         x = np.array([1.0])
-        
+
         # Explicitly pass u=None
         dx = system(x, u=None)
 
@@ -1538,7 +1541,7 @@ class TestAutonomousForwardDynamics:
         system = Autonomous2DSystem(k=10.0)
 
         x = np.array([0.1, 0.0])
-        
+
         dx = system(x)
 
         # dx = [x2, -k*x1] = [0.0, -1.0]
@@ -1551,7 +1554,7 @@ class TestAutonomousForwardDynamics:
         system = SimpleAutonomousSystem(a=2.0)
 
         x = torch.tensor([1.0])
-        
+
         dx = system(x)
 
         assert isinstance(dx, torch.Tensor)
@@ -1564,7 +1567,7 @@ class TestAutonomousForwardDynamics:
         system = SimpleAutonomousSystem(a=2.0)
 
         x = jnp.array([1.0])
-        
+
         dx = system(x)
 
         assert isinstance(dx, jnp.ndarray)
@@ -1575,7 +1578,7 @@ class TestAutonomousForwardDynamics:
         system = SimpleAutonomousSystem(a=2.0)
 
         x = np.array([[1.0], [2.0], [3.0]])
-        
+
         dx = system(x)
 
         assert dx.shape == (3, 1)
@@ -1588,7 +1591,7 @@ class TestAutonomousForwardDynamics:
 
         x = np.array([1.0])
         u = np.array([0.5])  # Should be rejected
-        
+
         with pytest.raises(ValueError, match="does not accept control input"):
             system(x, u)
 
@@ -1597,7 +1600,7 @@ class TestAutonomousForwardDynamics:
         system = SimpleFirstOrderSystem(a=2.0)
 
         x = np.array([1.0])
-        
+
         with pytest.raises(ValueError, match="requires control input"):
             system(x)  # Missing u
 
@@ -1615,7 +1618,7 @@ class TestAutonomousLinearization:
         system = SimpleAutonomousSystem(a=2.0)
 
         x = np.array([1.0])
-        
+
         # For autonomous systems, u can be None or omitted
         A, B = system.linearized_dynamics(x, u=None)
 
@@ -1632,7 +1635,7 @@ class TestAutonomousLinearization:
         system = Autonomous2DSystem(k=10.0)
 
         x = np.array([0.1, 0.0])
-        
+
         A, B = system.linearized_dynamics(x)
 
         assert A.shape == (2, 2)
@@ -1647,7 +1650,7 @@ class TestAutonomousLinearization:
         system = SimpleAutonomousSystem(a=2.0)
 
         x = torch.tensor([1.0])
-        
+
         A, B = system.linearized_dynamics(x)
 
         assert isinstance(A, torch.Tensor)
@@ -1661,7 +1664,7 @@ class TestAutonomousLinearization:
         system = SimpleAutonomousSystem(a=2.0)
 
         x_eq = sp.Matrix([0])
-        
+
         A_sym, B_sym = system.linearized_dynamics_symbolic(x_eq, u_eq=None)
 
         assert isinstance(A_sym, sp.Matrix)
@@ -1687,7 +1690,7 @@ class TestAutonomousJacobianVerification:
         system = SimpleAutonomousSystem(a=2.0)
 
         x = torch.tensor([1.0])
-        
+
         results = system.verify_jacobians(x, u=None, backend="torch", tol=1e-4)
 
         assert results["A_match"] is True
@@ -1701,7 +1704,7 @@ class TestAutonomousJacobianVerification:
         system = SimpleAutonomousSystem(a=2.0)
 
         x = jnp.array([1.0])
-        
+
         results = system.verify_jacobians(x, backend="jax", tol=1e-4)
 
         assert results["A_match"] is True
@@ -1726,12 +1729,12 @@ class TestAutonomousEquilibrium:
             x_eq=np.array([0.0]),
             u_eq=np.array([]),  # Empty control for autonomous
             verify=True,
-            tol=1e-10
+            tol=1e-10,
         )
 
         x_eq = system.equilibria.get_x("zero")
         u_eq = system.equilibria.get_u("zero")
-        
+
         assert np.allclose(x_eq, np.array([0.0]))
         assert u_eq.shape == (0,)  # Empty array
 
@@ -1741,11 +1744,7 @@ class TestAutonomousEquilibrium:
 
         # x=0 is valid equilibrium: -2*0 = 0
         system.add_equilibrium(
-            "valid",
-            x_eq=np.array([0.0]),
-            u_eq=np.array([]),
-            verify=True,
-            tol=1e-10
+            "valid", x_eq=np.array([0.0]), u_eq=np.array([]), verify=True, tol=1e-10
         )
 
         assert "valid" in system.equilibria.list_names()
@@ -1756,12 +1755,7 @@ class TestAutonomousEquilibrium:
 
         # x=1 is NOT equilibrium: -2*1 = -2 ≠ 0
         with pytest.warns(UserWarning, match="may not be valid"):
-            system.add_equilibrium(
-                "invalid",
-                x_eq=np.array([1.0]),
-                u_eq=np.array([]),
-                verify=True
-            )
+            system.add_equilibrium("invalid", x_eq=np.array([1.0]), u_eq=np.array([]), verify=True)
 
 
 # ============================================================================
@@ -1778,12 +1772,7 @@ class TestAutonomousIntegration:
         system = SimpleAutonomousSystem(a=2.0)
 
         # Add equilibrium
-        system.add_equilibrium(
-            "zero",
-            x_eq=np.array([0.0]),
-            u_eq=np.array([]),
-            verify=True
-        )
+        system.add_equilibrium("zero", x_eq=np.array([0.0]), u_eq=np.array([]), verify=True)
 
         # Evaluate at equilibrium
         x_eq = system.equilibria.get_x("zero")
@@ -1846,7 +1835,7 @@ class TestAutonomousIntegration:
         system = SimpleAutonomousSystem(a=2.0)
 
         x = torch.tensor([1.0], requires_grad=True)
-        
+
         dx = system(x)
         dx.backward()
 
@@ -1866,56 +1855,57 @@ class TestControlledVsAutonomous:
     def test_controlled_has_control_input(self):
         """Test that controlled system has control variables"""
         system = SimpleFirstOrderSystem()
-        
+
         assert system.nu > 0
         assert len(system.control_vars) > 0
 
     def test_autonomous_has_no_control_input(self):
         """Test that autonomous system has no control variables"""
         system = SimpleAutonomousSystem()
-        
+
         assert system.nu == 0
         assert len(system.control_vars) == 0
 
     def test_controlled_linearization_has_B(self):
         """Test that controlled system linearization has non-empty B"""
         system = SimpleFirstOrderSystem()
-        
+
         x = np.array([0.0])
         u = np.array([0.0])
-        
+
         A, B = system.linearized_dynamics(x, u)
-        
+
         assert B.shape == (1, 1)  # Non-empty
 
     def test_autonomous_linearization_has_empty_B(self):
         """Test that autonomous system linearization has empty B"""
         system = SimpleAutonomousSystem()
-        
+
         x = np.array([0.0])
-        
+
         A, B = system.linearized_dynamics(x)
-        
+
         assert B.shape == (1, 0)  # Empty
 
     def test_controlled_requires_u_argument(self):
         """Test that controlled system requires u"""
         system = SimpleFirstOrderSystem()
-        
+
         x = np.array([0.0])
-        
+
         with pytest.raises(ValueError):
             system(x)  # Missing u
 
     def test_autonomous_does_not_require_u_argument(self):
         """Test that autonomous system doesn't require u"""
         system = SimpleAutonomousSystem()
-        
+
         x = np.array([0.0])
-        
+
         # Should work without u
         dx = system(x)
         assert isinstance(dx, np.ndarray)
+
 
 # ============================================================================
 # Test Class 23: New Equilibrium API Methods
@@ -1929,9 +1919,9 @@ class TestEquilibriumAPIMethods:
         """Test set_default_equilibrium convenience method"""
         system = SimpleFirstOrderSystem()
         system.add_equilibrium("custom", np.array([1.0]), np.array([0.5]), verify=False)
-        
+
         result = system.set_default_equilibrium("custom")
-        
+
         assert system.equilibria._default == "custom"
         assert result is system  # Returns self for chaining
 
@@ -1939,10 +1929,10 @@ class TestEquilibriumAPIMethods:
         """Test method chaining with set_default_equilibrium"""
         system = SimpleFirstOrderSystem()
         system.add_equilibrium("custom", np.array([1.0]), np.array([0.5]), verify=False)
-        
+
         # Should be chainable
         result = system.set_default_equilibrium("custom").compile(backends=["numpy"])
-        
+
         assert system.equilibria._default == "custom"
         assert system._code_gen.get_dynamics("numpy") is not None
 
@@ -1950,9 +1940,9 @@ class TestEquilibriumAPIMethods:
         """Test get_equilibrium uses system default backend"""
         system = SimpleFirstOrderSystem()
         system.add_equilibrium("test", np.array([1.0]), np.array([0.5]), verify=False)
-        
+
         x_eq, u_eq = system.get_equilibrium("test")
-        
+
         # Should return NumPy (system default)
         assert isinstance(x_eq, np.ndarray)
         assert isinstance(u_eq, np.ndarray)
@@ -1962,9 +1952,9 @@ class TestEquilibriumAPIMethods:
         """Test get_equilibrium with explicit backend"""
         system = SimpleFirstOrderSystem()
         system.add_equilibrium("test", np.array([1.0]), np.array([0.5]), verify=False)
-        
+
         x_eq, u_eq = system.get_equilibrium("test", backend="torch")
-        
+
         assert isinstance(x_eq, torch.Tensor)
         assert isinstance(u_eq, torch.Tensor)
 
@@ -1973,9 +1963,9 @@ class TestEquilibriumAPIMethods:
         system = SimpleFirstOrderSystem()
         system.add_equilibrium("eq1", np.array([1.0]), np.array([0.0]), verify=False)
         system.add_equilibrium("eq2", np.array([2.0]), np.array([0.0]), verify=False)
-        
+
         names = system.list_equilibria()
-        
+
         assert len(names) == 3
         assert all(name in names for name in ["origin", "eq1", "eq2"])
 
@@ -1983,21 +1973,21 @@ class TestEquilibriumAPIMethods:
         """Test remove_equilibrium convenience method"""
         system = SimpleFirstOrderSystem()
         system.add_equilibrium("temp", np.array([1.0]), np.array([0.5]), verify=False)
-        
+
         system.remove_equilibrium("temp")
-        
+
         assert "temp" not in system.list_equilibria()
 
     def test_cannot_remove_origin(self):
         """Test that origin cannot be removed"""
         system = SimpleFirstOrderSystem()
-        
+
         with pytest.raises(ValueError, match="Cannot remove origin"):
             system.remove_equilibrium("origin")
 
 
 # ============================================================================
-# Test Class 24: Linearization with Equilibrium Names  
+# Test Class 24: Linearization with Equilibrium Names
 # ============================================================================
 
 
@@ -2008,9 +1998,9 @@ class TestLinearizationWithEquilibriumNames:
         """Test linearized_dynamics accepts equilibrium name"""
         system = SimpleFirstOrderSystem(a=2.0)
         system.add_equilibrium("custom", np.array([1.0]), np.array([2.0]), verify=True)
-        
+
         A, B = system.linearized_dynamics("custom")
-        
+
         assert A.shape == (1, 1)
         assert B.shape == (1, 1)
 
@@ -2018,9 +2008,9 @@ class TestLinearizationWithEquilibriumNames:
         """Test linearized_dynamics_symbolic accepts equilibrium name"""
         system = SimpleFirstOrderSystem(a=2.0)
         system.add_equilibrium("custom", np.array([1.0]), np.array([2.0]), verify=True)
-        
+
         A_sym, B_sym = system.linearized_dynamics_symbolic("custom")
-        
+
         assert isinstance(A_sym, sp.Matrix)
         assert isinstance(B_sym, sp.Matrix)
 
@@ -2037,18 +2027,18 @@ class TestConfigDictUpdates:
         """Test that config dict includes list of equilibria names"""
         system = SimpleFirstOrderSystem()
         system.add_equilibrium("eq1", np.array([1.0]), np.array([0.5]), verify=False)
-        
+
         config = system.get_config_dict()
-        
+
         assert "equilibria" in config
         assert "eq1" in config["equilibria"]
 
     def test_config_dict_includes_default_equilibrium(self):
         """Test that config dict includes default equilibrium name"""
         system = SimpleFirstOrderSystem()
-        
+
         config = system.get_config_dict()
-        
+
         assert "default_equilibrium" in config
         assert config["default_equilibrium"] == "origin"
 
@@ -2064,19 +2054,20 @@ class TestEquilibriumHandlerDimensionUpdates:
     def test_equilibrium_handler_dimensions_updated(self):
         """Test equilibrium handler gets correct dimensions after init"""
         system = SimpleFirstOrderSystem()
-        
+
         assert system.equilibria.nx == 1
         assert system.equilibria.nu == 1
 
     def test_equilibrium_handler_origin_correct_shape(self):
         """Test that origin has correct shape after dimension update"""
         system = SimpleFirstOrderSystem()
-        
+
         x_eq = system.equilibria.get_x("origin")
         u_eq = system.equilibria.get_u("origin")
-        
+
         assert x_eq.shape == (1,)
         assert u_eq.shape == (1,)
+
 
 # ============================================================================
 # Run Tests

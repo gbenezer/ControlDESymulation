@@ -30,37 +30,37 @@ Mathematical Background
 Parametric Uncertainty:
     Uncertain system: ẋ = A(θ)x + B(θ)u
     Parameter set: θ ∈ Θ ⊂ ℝ^p
-    
+
     Robust stability: stable ∀θ ∈ Θ
     Worst-case performance: sup_{θ∈Θ} J(θ)
 
 Structured Singular Value (μ):
     For M(s) and structured uncertainty Δ:
         μ_Δ(M) = 1/min{σ̄(Δ) : det(I - MΔ) = 0}
-    
+
     Robust stability: μ(M) < 1
     Robust performance: μ(N) < 1
-    
+
     Upper bound (from H∞): μ ≤ σ̄(M)
     Computing μ is NP-hard → upper/lower bounds
 
 Tube MPC:
     Nominal system: x̄[k+1] = Ax̄[k] + Bu[k]
     True system: x[k+1] = Ax[k] + Bu[k] + w[k]
-    
+
     Invariant tube: ||x[k] - x̄[k]|| ≤ α_k
-    
+
     Control: u[k] = v[k] + K(x[k] - x̄[k])
     - v[k]: nominal control (MPC)
     - K: ancillary feedback (pre-stabilizing)
-    
+
     Constraints tightened by tube size
 
 Stochastic MPC:
     Chance constraints: P(g(x,u) ≤ 0) ≥ 1 - ε
-    
+
     Gaussian: g(x,u) + Φ^{-1}(1-ε)σ_g ≤ 0
-    
+
     Cost: E[J] or E[J] + λ·Var[J] (risk-sensitive)
 
 Usage
@@ -70,38 +70,37 @@ Usage
 ...     TubeMPCResult,
 ...     StochasticMPCResult,
 ... )
->>> 
+>>>
 >>> # Robust stability analysis
 >>> result: RobustStabilityResult = analyze_robust_stability(
 ...     system, uncertainty_set
 ... )
 >>> if result['robustly_stable']:
 ...     print(f"Margin: {result['stability_margin']:.3f}")
->>> 
+>>>
 >>> # Tube MPC
 >>> tube_result: TubeMPCResult = tube_mpc.solve(x0, w_bound)
 >>> u_nominal = tube_result['nominal_control'][0]
 >>> K = tube_result['feedback_control']
 """
 
-from typing import Optional, List, Union, Tuple
-from typing_extensions import TypedDict
+from typing import List, Optional, Tuple, Union
+
 import numpy as np
+from typing_extensions import TypedDict
 
 from .core import (
-    StateVector,
-    ControlVector,
-    ParameterVector,
-    GainMatrix,
-    CovarianceMatrix,
     ArrayLike,
+    ControlVector,
+    CovarianceMatrix,
+    GainMatrix,
+    ParameterVector,
+    StateVector,
 )
-
 from .trajectories import (
-    StateTrajectory,
     ControlSequence,
+    StateTrajectory,
 )
-
 
 # ============================================================================
 # Type Aliases for Uncertainty
@@ -136,12 +135,13 @@ Examples
 # Robust Stability Analysis
 # ============================================================================
 
+
 class RobustStabilityResult(TypedDict, total=False):
     """
     Robust stability analysis result.
-    
+
     Analyzes stability over parametric uncertainty set.
-    
+
     Fields
     ------
     robustly_stable : bool
@@ -156,29 +156,30 @@ class RobustStabilityResult(TypedDict, total=False):
         Analysis method ('polytope', 'Lyapunov', 'gridding')
     conservatism : Optional[float]
         Conservatism estimate (0 = exact, 1 = very conservative)
-    
+
     Examples
     --------
     >>> # Define uncertain system
     >>> # A(θ) = A_nom + θ₁*ΔA₁ + θ₂*ΔA₂
     >>> A_nom = np.array([[0, 1], [-2, -1]])
     >>> uncertainty = ([-0.2, -0.1], [0.2, 0.1])
-    >>> 
+    >>>
     >>> result: RobustStabilityResult = analyze_robust_stability(
     ...     A_nom, uncertainty, method='polytope'
     ... )
-    >>> 
+    >>>
     >>> if result['robustly_stable']:
     ...     print(f"System is robustly stable!")
     ...     print(f"Stability margin: {result['stability_margin']:.3f}")
     ... else:
     ...     print(f"Instability at θ = {result['critical_parameter']}")
     ...     print(f"Critical eigenvalue: {result['worst_case_eigenvalue']}")
-    >>> 
+    >>>
     >>> # Check conservatism
     >>> if result.get('conservatism', 0) > 0.5:
     ...     print("Analysis is conservative - true margin may be larger")
     """
+
     robustly_stable: bool
     worst_case_eigenvalue: complex
     stability_margin: float
@@ -191,12 +192,13 @@ class RobustStabilityResult(TypedDict, total=False):
 # Structured Singular Value (μ-analysis)
 # ============================================================================
 
+
 class StructuredSingularValueResult(TypedDict):
     """
     Structured Singular Value (μ-analysis) result.
-    
+
     Analyzes robust stability and performance with structured uncertainty.
-    
+
     Fields
     ------
     mu_value : float
@@ -211,24 +213,24 @@ class StructuredSingularValueResult(TypedDict):
         μ upper bound
     lower_bound : float
         μ lower bound
-    
+
     Examples
     --------
     >>> # μ-analysis for robust stability
     >>> result: StructuredSingularValueResult = mu_analysis(
     ...     M_matrix, delta_structure, frequency_grid
     ... )
-    >>> 
+    >>>
     >>> mu = result['mu_value']
     >>> margin = result['robustness_margin']
-    >>> 
+    >>>
     >>> if mu < 1:
     ...     print(f"Robustly stable!")
     ...     print(f"Can tolerate ||Δ|| < {margin:.3f}")
     ... else:
     ...     print(f"Instability possible with ||Δ|| = {1/mu:.3f}")
     ...     Delta_crit = result['worst_case_uncertainty']
-    >>> 
+    >>>
     >>> # Plot μ vs frequency
     >>> import matplotlib.pyplot as plt
     >>> if 'frequency_grid' in result:
@@ -238,6 +240,7 @@ class StructuredSingularValueResult(TypedDict):
     ...     plt.xlabel('Frequency (rad/s)')
     ...     plt.ylabel('μ')
     """
+
     mu_value: float
     robustness_margin: float
     worst_case_uncertainty: ArrayLike
@@ -250,12 +253,13 @@ class StructuredSingularValueResult(TypedDict):
 # Tube-based MPC
 # ============================================================================
 
+
 class TubeDefinition(TypedDict):
     """
     Tube definition for robust MPC.
-    
+
     Defines robust invariant tube around nominal trajectory.
-    
+
     Fields
     ------
     shape : str
@@ -266,7 +270,7 @@ class TubeDefinition(TypedDict):
         Tube size at each time (N+1,)
     shape_matrices : Optional[List[CovarianceMatrix]]
         Shape matrices for ellipsoidal tubes
-    
+
     Examples
     --------
     >>> # Ellipsoidal tube
@@ -276,7 +280,7 @@ class TubeDefinition(TypedDict):
     ...     'tube_radii': np.linspace(0.1, 0.5, N+1),
     ...     'shape_matrices': [P_k for k in range(N+1)],
     ... }
-    >>> 
+    >>>
     >>> # Box tube (simpler)
     >>> tube: TubeDefinition = {
     ...     'shape': 'box',
@@ -284,6 +288,7 @@ class TubeDefinition(TypedDict):
     ...     'tube_radii': np.ones(N+1) * 0.2,
     ... }
     """
+
     shape: str
     center_trajectory: StateTrajectory
     tube_radii: ArrayLike
@@ -293,9 +298,9 @@ class TubeDefinition(TypedDict):
 class TubeMPCResult(TypedDict, total=False):
     """
     Tube-based MPC result.
-    
+
     Robust MPC using disturbance-invariant tubes.
-    
+
     Fields
     ------
     nominal_control : ControlSequence
@@ -310,7 +315,7 @@ class TubeMPCResult(TypedDict, total=False):
         Robust invariant tube
     tightened_constraints : ArrayLike
         Tightened constraints accounting for tube
-    
+
     Examples
     --------
     >>> # Setup tube MPC
@@ -320,24 +325,24 @@ class TubeMPCResult(TypedDict, total=False):
     ...     disturbance_bound=0.1,
     ...     horizon=20
     ... )
-    >>> 
+    >>>
     >>> # Solve at current state
     >>> x_current = np.array([1.0, 0.5])
     >>> result: TubeMPCResult = tube_mpc.solve(x_current)
-    >>> 
+    >>>
     >>> # Extract control
     >>> v_nom = result['nominal_control'][0]
     >>> K = result['feedback_control']
     >>> x_nom = result['nominal_trajectory'][0]
-    >>> 
+    >>>
     >>> # Actual control with feedback
     >>> u = v_nom + K @ (x_current - x_nom)
-    >>> 
+    >>>
     >>> # Visualize tube
     >>> tube = result['tube_definition']
     >>> center = tube['center_trajectory']
     >>> radii = tube['tube_radii']
-    >>> 
+    >>>
     >>> import matplotlib.pyplot as plt
     >>> plt.plot(center[:, 0], center[:, 1], 'b-', label='Nominal')
     >>> plt.fill_between(
@@ -346,6 +351,7 @@ class TubeMPCResult(TypedDict, total=False):
     ...     alpha=0.3, label='Tube'
     ... )
     """
+
     nominal_control: ControlSequence
     feedback_control: GainMatrix
     actual_control: ControlSequence
@@ -358,12 +364,13 @@ class TubeMPCResult(TypedDict, total=False):
 # Stochastic MPC
 # ============================================================================
 
+
 class StochasticMPCResult(TypedDict, total=False):
     """
     Stochastic MPC result.
-    
+
     MPC with chance constraints and distributional robustness.
-    
+
     Fields
     ------
     control_sequence : ControlSequence
@@ -382,7 +389,7 @@ class StochasticMPCResult(TypedDict, total=False):
         Robustly feasible w.r.t. chance constraints
     chance_constraint_levels : ArrayLike
         Achieved confidence levels (N,)
-    
+
     Examples
     --------
     >>> # Stochastic MPC with chance constraints
@@ -394,24 +401,24 @@ class StochasticMPCResult(TypedDict, total=False):
     ...     chance_constraint_level=0.95,
     ...     horizon=30
     ... )
-    >>> 
+    >>>
     >>> result: StochasticMPCResult = smpc.solve(x0, Sigma0)
-    >>> 
+    >>>
     >>> if result['robust_feasible']:
     ...     u = result['control_sequence'][0]
-    ...     
+    ...
     ...     # Expected performance
     ...     print(f"Expected cost: {result['expected_cost']:.2f}")
     ...     print(f"Cost std: {np.sqrt(result['cost_variance']):.2f}")
-    ...     
+    ...
     ...     # Risk
     ...     risk = result['constraint_violation_probability']
     ...     print(f"Constraint violation risk: {risk*100:.1f}%")
-    ...     
+    ...
     ...     # Uncertainty propagation
     ...     mean_traj = result['predicted_mean']
     ...     cov_traj = result['predicted_covariance']
-    ...     
+    ...
     ...     # Plot with confidence bounds
     ...     import matplotlib.pyplot as plt
     ...     std_traj = np.array([np.sqrt(np.diag(P)) for P in cov_traj])
@@ -423,6 +430,7 @@ class StochasticMPCResult(TypedDict, total=False):
     ...         alpha=0.3, label='95% confidence'
     ...     )
     """
+
     control_sequence: ControlSequence
     predicted_mean: StateTrajectory
     predicted_covariance: List[CovarianceMatrix]
@@ -437,12 +445,13 @@ class StochasticMPCResult(TypedDict, total=False):
 # Risk-Sensitive Control
 # ============================================================================
 
+
 class RiskSensitiveResult(TypedDict):
     """
     Risk-sensitive control result.
-    
+
     Balances expected cost and cost variance.
-    
+
     Fields
     ------
     gain : GainMatrix
@@ -457,7 +466,7 @@ class RiskSensitiveResult(TypedDict):
         Cost variance Var[J]
     certainty_equivalent : float
         Certainty equivalent cost
-    
+
     Examples
     --------
     >>> # Risk-sensitive LQR
@@ -467,18 +476,19 @@ class RiskSensitiveResult(TypedDict):
     ...     process_noise=W,
     ...     risk_parameter=0.1  # θ > 0: risk-averse
     ... )
-    >>> 
+    >>>
     >>> K = result['gain']
     >>> theta = result['risk_parameter']
-    >>> 
+    >>>
     >>> print(f"Risk parameter: {theta}")
     >>> print(f"Expected cost: {result['expected_cost']:.2f}")
     >>> print(f"Cost std: {np.sqrt(result['cost_variance']):.2f}")
-    >>> 
+    >>>
     >>> # Compare with risk-neutral (θ=0)
     >>> lqr_result = design_lqr(A, B, Q, R)
     >>> # Risk-sensitive gain is more conservative
     """
+
     gain: GainMatrix
     cost_to_go_matrix: CovarianceMatrix
     risk_parameter: float
@@ -493,17 +503,14 @@ class RiskSensitiveResult(TypedDict):
 
 __all__ = [
     # Uncertainty sets
-    'UncertaintySet',
-    
+    "UncertaintySet",
     # Robust analysis
-    'RobustStabilityResult',
-    'StructuredSingularValueResult',
-    
+    "RobustStabilityResult",
+    "StructuredSingularValueResult",
     # Tube MPC
-    'TubeDefinition',
-    'TubeMPCResult',
-    
+    "TubeDefinition",
+    "TubeMPCResult",
     # Stochastic control
-    'StochasticMPCResult',
-    'RiskSensitiveResult',
+    "StochasticMPCResult",
+    "RiskSensitiveResult",
 ]

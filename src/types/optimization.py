@@ -32,9 +32,9 @@ Nonlinear Programming (NLP):
     subject to  g(x) ≤ 0  (inequality constraints)
                 h(x) = 0  (equality constraints)
                 lb ≤ x ≤ ub  (bounds)
-    
+
     Algorithms: SLSQP, IPOPT, SQP, interior-point
-    
+
     KKT Conditions (optimality):
         ∇f(x*) + Σλᵢ∇gᵢ(x*) + Σμⱼ∇hⱼ(x*) = 0
         λᵢgᵢ(x*) = 0  (complementarity)
@@ -44,7 +44,7 @@ Trajectory Optimization:
     minimize    Σₖ L(x[k], u[k]) + Φ(x[N])
     subject to  x[k+1] = f(x[k], u[k])
                 g(x[k], u[k]) ≤ 0
-    
+
     Methods: Direct transcription, shooting, collocation
     Solvers: IPOPT, SNOPT, CasADi
 
@@ -52,12 +52,12 @@ Convex Optimization:
     minimize    f(x)  (convex f)
     subject to  Ax ≤ b  (linear inequalities)
                 Cx = d  (linear equalities)
-    
+
     Special cases:
     - QP: f(x) = ½x'Qx + c'x
     - SOCP: Second-order cone constraints
     - SDP: Semidefinite constraints
-    
+
     Advantages: Global optimum guaranteed, polynomial-time
 
 Usage
@@ -67,7 +67,7 @@ Usage
 ...     TrajectoryOptimizationResult,
 ...     ConvexOptimizationResult,
 ... )
->>> 
+>>>
 >>> # Nonlinear optimization
 >>> from scipy.optimize import minimize
 >>> result: OptimizationResult = minimize(
@@ -78,7 +78,7 @@ Usage
 ... )
 >>> x_opt = result['x']
 >>> print(f"Success: {result['success']}, Cost: {result['fun']:.3f}")
->>> 
+>>>
 >>> # Trajectory optimization
 >>> traj_result: TrajectoryOptimizationResult = solve_ocp(
 ...     system, x0, xf, horizon=100
@@ -87,37 +87,37 @@ Usage
 >>> u_traj = traj_result['control_trajectory']
 """
 
-from typing import Optional, Dict, Callable
-from typing_extensions import TypedDict
+from typing import Callable, Dict, Optional
+
 import numpy as np
+from typing_extensions import TypedDict
 
 from .core import (
     ArrayLike,
 )
-
 from .trajectories import (
-    StateTrajectory,
     ControlSequence,
+    StateTrajectory,
 )
-
 
 # ============================================================================
 # General Optimization Results
 # ============================================================================
 
+
 class OptimizationBounds(TypedDict):
     """
     Optimization variable bounds.
-    
+
     Specifies box constraints: lower ≤ x ≤ upper
-    
+
     Fields
     ------
     lower : ArrayLike
         Lower bounds on variables (n,)
     upper : ArrayLike
         Upper bounds on variables (n,)
-    
+
     Examples
     --------
     >>> # Bound state variables
@@ -125,11 +125,12 @@ class OptimizationBounds(TypedDict):
     ...     'lower': np.array([-10.0, -5.0, 0.0]),
     ...     'upper': np.array([10.0, 5.0, 1.0]),
     ... }
-    >>> 
+    >>>
     >>> # Use with scipy.optimize
     >>> from scipy.optimize import Bounds
     >>> scipy_bounds = Bounds(bounds['lower'], bounds['upper'])
     """
+
     lower: ArrayLike
     upper: ArrayLike
 
@@ -137,9 +138,9 @@ class OptimizationBounds(TypedDict):
 class OptimizationResult(TypedDict, total=False):
     """
     General nonlinear optimization result.
-    
+
     Compatible with scipy.optimize return format.
-    
+
     Fields
     ------
     x : ArrayLike
@@ -156,32 +157,32 @@ class OptimizationResult(TypedDict, total=False):
         Number of objective function evaluations
     njev : int
         Number of Jacobian evaluations (if applicable)
-    
+
     Examples
     --------
     >>> # Unconstrained optimization
     >>> def rosenbrock(x):
     ...     return (1 - x[0])**2 + 100*(x[1] - x[0]**2)**2
-    >>> 
+    >>>
     >>> from scipy.optimize import minimize
     >>> result: OptimizationResult = minimize(
     ...     rosenbrock,
     ...     x0=np.array([0.0, 0.0]),
     ...     method='BFGS'
     ... )
-    >>> 
+    >>>
     >>> if result['success']:
     ...     print(f"Optimum: {result['x']}")  # [1, 1]
     ...     print(f"Cost: {result['fun']}")   # ~0
     ...     print(f"Iterations: {result['nit']}")
-    >>> 
+    >>>
     >>> # Constrained optimization
     >>> def objective(x):
     ...     return x[0]**2 + x[1]**2
-    >>> 
+    >>>
     >>> def constraint(x):
     ...     return x[0] + x[1] - 1  # x[0] + x[1] >= 1
-    >>> 
+    >>>
     >>> from scipy.optimize import NonlinearConstraint
     >>> result: OptimizationResult = minimize(
     ...     objective,
@@ -190,6 +191,7 @@ class OptimizationResult(TypedDict, total=False):
     ...     constraints=NonlinearConstraint(constraint, 0, np.inf)
     ... )
     """
+
     x: ArrayLike
     fun: float
     success: bool
@@ -202,9 +204,9 @@ class OptimizationResult(TypedDict, total=False):
 class ConstrainedOptimizationResult(TypedDict, total=False):
     """
     Constrained optimization result with dual variables.
-    
+
     Includes Lagrange multipliers for sensitivity analysis.
-    
+
     Fields
     ------
     x : ArrayLike
@@ -227,7 +229,7 @@ class ConstrainedOptimizationResult(TypedDict, total=False):
         Constraint residuals (should be ≈0)
     kkt_residual : float
         KKT optimality condition residual
-    
+
     Examples
     --------
     >>> # Optimization with inequality constraints
@@ -236,22 +238,23 @@ class ConstrainedOptimizationResult(TypedDict, total=False):
     ...     constraints={'ineq': lambda x: x[0] + x[1] - 1},
     ...     x0=np.array([1.0, 1.0])
     ... )
-    >>> 
+    >>>
     >>> x_opt = result['x']
-    >>> 
+    >>>
     >>> # Check KKT conditions
     >>> if result['kkt_residual'] < 1e-6:
     ...     print("KKT conditions satisfied")
-    >>> 
+    >>>
     >>> # Sensitivity analysis via Lagrange multipliers
     >>> lambda_ineq = result['lagrange_multipliers']['ineq']
     >>> print(f"Shadow price: {lambda_ineq}")
-    >>> 
+    >>>
     >>> # Verify constraints satisfied
     >>> violations = result['constraint_violations']
     >>> if np.max(np.abs(violations)) < 1e-6:
     ...     print("All constraints satisfied")
     """
+
     x: ArrayLike
     fun: float
     success: bool
@@ -268,13 +271,14 @@ class ConstrainedOptimizationResult(TypedDict, total=False):
 # Trajectory Optimization
 # ============================================================================
 
+
 class TrajectoryOptimizationResult(TypedDict, total=False):
     """
     Trajectory optimization result.
-    
+
     Result from optimal control problem (OCP) solved via
     direct transcription, shooting, or collocation.
-    
+
     Fields
     ------
     state_trajectory : StateTrajectory
@@ -293,16 +297,16 @@ class TrajectoryOptimizationResult(TypedDict, total=False):
         Number of optimization iterations
     constraint_violations : Optional[ArrayLike]
         Dynamics and path constraint violations
-    
+
     Examples
     --------
     >>> # Minimum-time problem
     >>> def running_cost(x, u):
     ...     return 1.0  # Time-optimal
-    >>> 
+    >>>
     >>> def terminal_cost(x):
     ...     return 0.0
-    >>> 
+    >>>
     >>> result: TrajectoryOptimizationResult = solve_ocp(
     ...     system=pendulum,
     ...     x0=np.array([np.pi, 0]),     # Hanging down
@@ -312,23 +316,24 @@ class TrajectoryOptimizationResult(TypedDict, total=False):
     ...     horizon=100,
     ...     dt=0.05
     ... )
-    >>> 
+    >>>
     >>> if result['success']:
     ...     x_traj = result['state_trajectory']
     ...     u_traj = result['control_trajectory']
-    ...     
+    ...
     ...     import matplotlib.pyplot as plt
     ...     plt.plot(x_traj[:, 0], label='theta')
     ...     plt.plot(u_traj[:, 0], label='torque')
     ...     plt.legend()
-    ...     
+    ...
     ...     print(f"Minimum time: {result['cost']:.3f} seconds")
-    >>> 
+    >>>
     >>> # Check dynamics constraints
     >>> if 'constraint_violations' in result:
     ...     max_viol = np.max(np.abs(result['constraint_violations']))
     ...     print(f"Max constraint violation: {max_viol:.2e}")
     """
+
     state_trajectory: StateTrajectory
     control_trajectory: ControlSequence
     cost: float
@@ -343,12 +348,13 @@ class TrajectoryOptimizationResult(TypedDict, total=False):
 # Convex Optimization
 # ============================================================================
 
+
 class ConvexOptimizationResult(TypedDict, total=False):
     """
     Convex optimization result (QP, SOCP, SDP).
-    
+
     For problems solved via CVX, CVXPY, MOSEK, etc.
-    
+
     Fields
     ------
     x : ArrayLike
@@ -363,20 +369,20 @@ class ConvexOptimizationResult(TypedDict, total=False):
         Solve time in seconds
     dual_variables : Optional[Dict[str, ArrayLike]]
         Dual variables for constraints
-    
+
     Examples
     --------
     >>> # Quadratic Program (QP)
     >>> import cvxpy as cp
-    >>> 
+    >>>
     >>> x = cp.Variable(2)
     >>> Q = np.eye(2)
     >>> objective = cp.Minimize(cp.quad_form(x, Q))
     >>> constraints = [x[0] + x[1] >= 1]
-    >>> 
+    >>>
     >>> problem = cp.Problem(objective, constraints)
     >>> problem.solve()
-    >>> 
+    >>>
     >>> result: ConvexOptimizationResult = {
     ...     'x': x.value,
     ...     'objective_value': problem.value,
@@ -384,11 +390,11 @@ class ConvexOptimizationResult(TypedDict, total=False):
     ...     'solver': problem.solver_stats.solver_name,
     ...     'solve_time': problem.solver_stats.solve_time,
     ... }
-    >>> 
+    >>>
     >>> if result['success']:
     ...     print(f"Optimal x: {result['x']}")
     ...     print(f"Optimal cost: {result['objective_value']:.3f}")
-    >>> 
+    >>>
     >>> # Semidefinite Program (SDP)
     >>> P = cp.Variable((3, 3), symmetric=True)
     >>> objective = cp.Minimize(cp.trace(P))
@@ -399,6 +405,7 @@ class ConvexOptimizationResult(TypedDict, total=False):
     >>> problem = cp.Problem(objective, constraints)
     >>> problem.solve()
     """
+
     x: ArrayLike
     objective_value: float
     success: bool
@@ -411,12 +418,13 @@ class ConvexOptimizationResult(TypedDict, total=False):
 # Parameter Optimization
 # ============================================================================
 
+
 class ParameterOptimizationResult(TypedDict, total=False):
     """
     Parameter optimization result.
-    
+
     For optimizing model parameters, controller gains, etc.
-    
+
     Fields
     ------
     parameters : ArrayLike
@@ -431,29 +439,29 @@ class ParameterOptimizationResult(TypedDict, total=False):
         Final gradient norm (should be ≈0 at optimum)
     hessian : Optional[ArrayLike]
         Hessian at optimum (for uncertainty quantification)
-    
+
     Examples
     --------
     >>> # Fit system parameters to data
     >>> def prediction_error(theta, u_data, y_data):
     ...     y_pred = simulate_system(theta, u_data)
     ...     return np.mean((y_data - y_pred)**2)
-    >>> 
+    >>>
     >>> result: ParameterOptimizationResult = optimize_parameters(
     ...     objective=lambda theta: prediction_error(theta, u_data, y_data),
     ...     theta0=np.array([1.0, 1.0, 0.5]),
     ...     method='L-BFGS-B'
     ... )
-    >>> 
+    >>>
     >>> if result['success']:
     ...     theta_opt = result['parameters']
     ...     print(f"Optimal parameters: {theta_opt}")
     ...     print(f"Prediction error: {result['cost']:.3e}")
-    ...     
+    ...
     ...     # Check convergence
     ...     if result['gradient_norm'] < 1e-6:
     ...         print("Gradient converged to zero")
-    >>> 
+    >>>
     >>> # Parameter uncertainty from Hessian
     >>> if 'hessian' in result:
     ...     H = result['hessian']
@@ -461,6 +469,7 @@ class ParameterOptimizationResult(TypedDict, total=False):
     ...     param_std = np.sqrt(np.diag(param_covariance))
     ...     print(f"Parameter std: {param_std}")
     """
+
     parameters: ArrayLike
     cost: float
     success: bool
@@ -475,14 +484,12 @@ class ParameterOptimizationResult(TypedDict, total=False):
 
 __all__ = [
     # Basic optimization
-    'OptimizationBounds',
-    'OptimizationResult',
-    'ConstrainedOptimizationResult',
-    
+    "OptimizationBounds",
+    "OptimizationResult",
+    "ConstrainedOptimizationResult",
     # Trajectory optimization
-    'TrajectoryOptimizationResult',
-    
+    "TrajectoryOptimizationResult",
     # Specialized optimization
-    'ConvexOptimizationResult',
-    'ParameterOptimizationResult',
+    "ConvexOptimizationResult",
+    "ParameterOptimizationResult",
 ]

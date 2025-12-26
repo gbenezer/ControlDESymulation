@@ -28,11 +28,11 @@ Mathematical Background
 ----------------------
 Differential Flatness:
     System ẋ = f(x, u) is differentially flat if ∃ flat output y_flat:
-    
+
     1. y_flat = σ(x)  (function of state)
     2. x = φ_x(y_flat, ẏ_flat, ÿ_flat, ..., y_flat^(r))
     3. u = φ_u(y_flat, ẏ_flat, ÿ_flat, ..., y_flat^(r))
-    
+
     State and control are algebraic functions of y_flat and derivatives.
     No integration required!
 
@@ -57,12 +57,12 @@ Trajectory Planning:
 
 Example - Quadrotor:
     Flat output: y_flat = [x, y, z, ψ]
-    
+
     From y_flat, compute:
         - Roll φ, Pitch θ from [ẍ, ÿ, z̈]
         - Thrust T from desired acceleration
         - Angular rates from time derivatives
-    
+
     Plan trajectory in (x, y, z, ψ) space → get full state + control
 
 Usage
@@ -71,14 +71,14 @@ Usage
 ...     DifferentialFlatnessResult,
 ...     TrajectoryPlanningResult,
 ... )
->>> 
+>>>
 >>> # Check flatness
 >>> result: DifferentialFlatnessResult = check_flatness(system)
 >>> if result['is_flat']:
 ...     y_flat_func = result['flat_output']
 ...     phi_x = result['state_from_flat']
 ...     phi_u = result['control_from_flat']
->>> 
+>>>
 >>> # Plan trajectory using flatness
 >>> traj: TrajectoryPlanningResult = plan_flat_trajectory(
 ...     system, x_initial, x_final, time_horizon=5.0
@@ -87,20 +87,19 @@ Usage
 >>> u_ff = traj['control_trajectory']
 """
 
-from typing import Optional, Callable
-from typing_extensions import TypedDict
+from typing import Callable, Optional
+
 import numpy as np
+from typing_extensions import TypedDict
 
 from .core import (
     ArrayLike,
 )
-
 from .trajectories import (
-    StateTrajectory,
     ControlSequence,
+    StateTrajectory,
     TimePoints,
 )
-
 
 # ============================================================================
 # Type Aliases for Flatness
@@ -136,13 +135,14 @@ Examples
 # Differential Flatness Analysis
 # ============================================================================
 
+
 class DifferentialFlatnessResult(TypedDict):
     """
     Differential flatness analysis result.
-    
+
     Determines if system is differentially flat and provides
     flat output mappings.
-    
+
     Fields
     ------
     is_flat : bool
@@ -159,7 +159,7 @@ class DifferentialFlatnessResult(TypedDict):
         Inverse map u = φ_u(y, ẏ, ÿ, ...)
     verification_method : str
         How flatness was verified ('analytic', 'symbolic', 'numerical')
-    
+
     Examples
     --------
     >>> # Check if system is flat
@@ -167,32 +167,33 @@ class DifferentialFlatnessResult(TypedDict):
     ...     system=quadrotor,
     ...     method='analytic'
     ... )
-    >>> 
+    >>>
     >>> if result['is_flat']:
     ...     print(f"System is differentially flat!")
     ...     print(f"Flat output dimension: {result['flat_dimension']}")
     ...     print(f"Max derivative order: {result['differential_order']}")
-    ...     
+    ...
     ...     # Extract mappings
     ...     sigma = result['flat_output']        # y = σ(x)
     ...     phi_x = result['state_from_flat']    # x = φ_x(y, ẏ, ...)
     ...     phi_u = result['control_from_flat']  # u = φ_u(y, ẏ, ...)
-    ...     
+    ...
     ...     # Use for trajectory planning
     ...     # 1. Plan desired y_flat(t)
     ...     t = np.linspace(0, 5, 100)
     ...     y_flat_traj = plan_flat_output(t)
-    ...     
+    ...
     ...     # 2. Compute derivatives
     ...     dy_flat = compute_derivatives(y_flat_traj, dt)
     ...     ddy_flat = compute_derivatives(dy_flat, dt)
-    ...     
+    ...
     ...     # 3. Invert to get x(t) and u(t)
     ...     x_traj = phi_x(y_flat_traj, dy_flat, ddy_flat)
     ...     u_traj = phi_u(y_flat_traj, dy_flat, ddy_flat)
     ... else:
     ...     print("System is not differentially flat")
     """
+
     is_flat: bool
     flat_output: Optional[Callable]
     flat_dimension: int
@@ -206,13 +207,14 @@ class DifferentialFlatnessResult(TypedDict):
 # Trajectory Planning
 # ============================================================================
 
+
 class TrajectoryPlanningResult(TypedDict, total=False):
     """
     Trajectory planning result.
-    
+
     Plans feasible trajectory from initial to final state,
     often using differential flatness.
-    
+
     Fields
     ------
     state_trajectory : StateTrajectory
@@ -231,7 +233,7 @@ class TrajectoryPlanningResult(TypedDict, total=False):
         Planning method used ('flatness', 'optimization', 'RRT', etc.)
     computation_time : float
         Planning time in seconds
-    
+
     Examples
     --------
     >>> # Plan trajectory using flatness
@@ -242,31 +244,31 @@ class TrajectoryPlanningResult(TypedDict, total=False):
     ...     time_horizon=5.0,
     ...     dt=0.01
     ... )
-    >>> 
+    >>>
     >>> if result['feasible']:
     ...     # Extract trajectory
     ...     x_ref = result['state_trajectory']
     ...     u_ff = result['control_trajectory']
     ...     t = result['time_points']
-    ...     
+    ...
     ...     print(f"Planning time: {result['computation_time']:.3f}s")
     ...     print(f"Trajectory cost: {result['cost']:.2f}")
     ...     print(f"Method: {result['method']}")
-    ...     
+    ...
     ...     # Execute with feedforward + feedback
     ...     x = x_initial
     ...     for k in range(len(t)-1):
     ...         # Feedforward from plan
     ...         u_ff_k = u_ff[k]
-    ...         
+    ...
     ...         # Feedback correction
     ...         e = x - x_ref[k]
     ...         u_fb = -K @ e
-    ...         
+    ...
     ...         # Combined control
     ...         u = u_ff_k + u_fb
     ...         x = system.step(x, u, dt)
-    ...     
+    ...
     ...     # Visualize flat trajectory
     ...     if 'flat_trajectory' in result:
     ...         y_flat = result['flat_trajectory']
@@ -277,6 +279,7 @@ class TrajectoryPlanningResult(TypedDict, total=False):
     ... else:
     ...     print("No feasible trajectory found")
     """
+
     state_trajectory: StateTrajectory
     control_trajectory: ControlSequence
     flat_trajectory: Optional[ArrayLike]
@@ -293,9 +296,8 @@ class TrajectoryPlanningResult(TypedDict, total=False):
 
 __all__ = [
     # Type aliases
-    'FlatnessOutput',
-    
+    "FlatnessOutput",
     # Results
-    'DifferentialFlatnessResult',
-    'TrajectoryPlanningResult',
+    "DifferentialFlatnessResult",
+    "TrajectoryPlanningResult",
 ]

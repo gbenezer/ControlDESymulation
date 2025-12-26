@@ -71,7 +71,7 @@ pip install jax diffrax
 # GPU (CUDA 12)
 pip install -U "jax[cuda12]" diffrax
 
-# GPU (CUDA 11)  
+# GPU (CUDA 11)
 pip install -U "jax[cuda11]" diffrax
 ```
 
@@ -84,13 +84,13 @@ Examples
 ...     solver='Euler',
 ...     backend='jax'
 ... )
->>> 
+>>>
 >>> result = integrator.integrate(
 ...     x0=jnp.array([1.0]),
 ...     u_func=lambda t, x: None,
 ...     t_span=(0.0, 10.0)
 ... )
->>> 
+>>>
 >>> # With custom noise (deterministic)
 >>> x_next = integrator.step(
 ...     x=jnp.array([1.0]),
@@ -98,7 +98,7 @@ Examples
 ...     dt=0.01,
 ...     dW=jnp.zeros(1)  # Zero noise = deterministic!
 ... )
->>> 
+>>>
 >>> # High accuracy with specialized solver
 >>> integrator = DiffraxSDEIntegrator(
 ...     sde_system,
@@ -109,29 +109,30 @@ Examples
 ... )
 """
 
-from typing import Optional, Tuple, Callable, Dict, Any, List
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
+import diffrax as dfx
 import jax
 import jax.numpy as jnp
 from jax import Array
-import diffrax as dfx
 
 from src.systems.base.numerical_integration.stochastic.sde_integrator_base import (
-    SDEIntegratorBase,
-    SDEType,
+    ArrayLike,
     ConvergenceType,
     SDEIntegrationResult,
+    SDEIntegratorBase,
+    SDEType,
     StepMode,
-    ArrayLike
 )
 
 
 class DiffraxSDEIntegrator(SDEIntegratorBase):
     """
     JAX-based SDE integrator using the Diffrax library.
-    
+
     Provides high-performance SDE integration with automatic differentiation,
     JIT compilation, GPU support, and custom noise support via JAX.
-    
+
     Parameters
     ----------
     sde_system : StochasticDynamicalSystem
@@ -144,7 +145,7 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
         Must be 'jax' for this integrator
     solver : str
         Diffrax SDE solver name (default: 'Euler')
-        Options: 'Euler', 'EulerHeun', 'Heun', 'ItoMilstein', 
+        Options: 'Euler', 'EulerHeun', 'Heun', 'ItoMilstein',
                 'SEA', 'SHARK', 'SRA1', 'ReversibleHeun'
     sde_type : Optional[SDEType]
         SDE interpretation (None = use system's type)
@@ -161,14 +162,14 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
         - atol : float (default: 1e-6) - Absolute tolerance (adaptive only)
         - max_steps : int (default: 10000) - Maximum steps
         - adjoint : str ('recursive_checkpoint', 'direct', 'implicit')
-    
+
     Raises
     ------
     ValueError
         If backend is not 'jax'
     ImportError
         If JAX or Diffrax not installed
-    
+
     Notes
     -----
     - Backend must be 'jax' (Diffrax is JAX-only)
@@ -176,7 +177,7 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
     - JIT compilation happens on first call (may be slow)
     - For optimization, use adjoint='recursive_checkpoint'
     - Milstein methods require levy_area approximation
-    
+
     Examples
     --------
     >>> # Basic usage
@@ -185,13 +186,13 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
     ...     dt=0.01,
     ...     solver='Euler'
     ... )
-    >>> 
+    >>>
     >>> # Deterministic testing with zero noise
     >>> x_next = integrator.step(x, u, dt=0.01, dW=jnp.zeros(nw))
-    >>> 
+    >>>
     >>> # Custom noise pattern
     >>> x_next = integrator.step(x, u, dt=0.01, dW=jnp.array([0.5]))
-    >>> 
+    >>>
     >>> # Optimized for additive noise
     >>> integrator = DiffraxSDEIntegrator(
     ...     additive_noise_system,
@@ -199,28 +200,26 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
     ...     solver='SEA'  # Specialized for additive noise
     ... )
     """
-    
+
     def __init__(
         self,
         sde_system,
         dt: Optional[float] = None,
         step_mode: StepMode = StepMode.FIXED,
-        backend: str = 'jax',
-        solver: str = 'Euler',
+        backend: str = "jax",
+        solver: str = "Euler",
         sde_type: Optional[SDEType] = None,
         convergence_type: ConvergenceType = ConvergenceType.STRONG,
         seed: Optional[int] = None,
-        levy_area: str = 'none',
-        **options
+        levy_area: str = "none",
+        **options,
     ):
         """Initialize Diffrax SDE integrator."""
-        
+
         # Validate backend
-        if backend != 'jax':
-            raise ValueError(
-                f"DiffraxSDEIntegrator requires backend='jax', got '{backend}'"
-            )
-        
+        if backend != "jax":
+            raise ValueError(f"DiffraxSDEIntegrator requires backend='jax', got '{backend}'")
+
         # Initialize base class
         super().__init__(
             sde_system,
@@ -230,92 +229,91 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
             sde_type=sde_type,
             convergence_type=convergence_type,
             seed=seed,
-            **options
+            **options,
         )
-        
+
         self.solver_name = solver
         self.levy_area = levy_area
         self._integrator_name = f"Diffrax-{solver}"
-        
+
         # Map solver names to Diffrax solver classes
         # Note: Not all solvers may be available in all Diffrax versions
         self._solver_map = {}
-        
+
         # Basic solvers (always available)
-        if hasattr(dfx, 'Euler'):
-            self._solver_map['Euler'] = dfx.Euler
-        if hasattr(dfx, 'EulerHeun'):
-            self._solver_map['EulerHeun'] = dfx.EulerHeun
-        if hasattr(dfx, 'Heun'):
-            self._solver_map['Heun'] = dfx.Heun
-        
+        if hasattr(dfx, "Euler"):
+            self._solver_map["Euler"] = dfx.Euler
+        if hasattr(dfx, "EulerHeun"):
+            self._solver_map["EulerHeun"] = dfx.EulerHeun
+        if hasattr(dfx, "Heun"):
+            self._solver_map["Heun"] = dfx.Heun
+
         # Milstein methods
-        if hasattr(dfx, 'ItoMilstein'):
-            self._solver_map['ItoMilstein'] = dfx.ItoMilstein
-        if hasattr(dfx, 'StratonovichMilstein'):
-            self._solver_map['StratonovichMilstein'] = dfx.StratonovichMilstein
-        
+        if hasattr(dfx, "ItoMilstein"):
+            self._solver_map["ItoMilstein"] = dfx.ItoMilstein
+        if hasattr(dfx, "StratonovichMilstein"):
+            self._solver_map["StratonovichMilstein"] = dfx.StratonovichMilstein
+
         # Specialized for additive noise (may not exist in older versions)
-        if hasattr(dfx, 'SEA'):
-            self._solver_map['SEA'] = dfx.SEA
-        if hasattr(dfx, 'ShARK'):
-            self._solver_map['SHARK'] = dfx.ShARK
-        if hasattr(dfx, 'SRA1'):
-            self._solver_map['SRA1'] = dfx.SRA1
-        
+        if hasattr(dfx, "SEA"):
+            self._solver_map["SEA"] = dfx.SEA
+        if hasattr(dfx, "ShARK"):
+            self._solver_map["SHARK"] = dfx.ShARK
+        if hasattr(dfx, "SRA1"):
+            self._solver_map["SRA1"] = dfx.SRA1
+
         # Reversible
-        if hasattr(dfx, 'ReversibleHeun'):
-            self._solver_map['ReversibleHeun'] = dfx.ReversibleHeun
-        
+        if hasattr(dfx, "ReversibleHeun"):
+            self._solver_map["ReversibleHeun"] = dfx.ReversibleHeun
+
         # Validate solver
         if self.solver_name not in self._solver_map:
             raise ValueError(
-                f"Unknown solver '{solver}'. "
-                f"Available: {list(self._solver_map.keys())}"
+                f"Unknown solver '{solver}'. " f"Available: {list(self._solver_map.keys())}"
             )
-        
+
         # Adjoint method for backpropagation
-        self.adjoint_name = options.get('adjoint', 'recursive_checkpoint')
+        self.adjoint_name = options.get("adjoint", "recursive_checkpoint")
         self._adjoint_map = {
-            'recursive_checkpoint': dfx.RecursiveCheckpointAdjoint,
-            'direct': dfx.DirectAdjoint,
-            'implicit': dfx.ImplicitAdjoint,
+            "recursive_checkpoint": dfx.RecursiveCheckpointAdjoint,
+            "direct": dfx.DirectAdjoint,
+            "implicit": dfx.ImplicitAdjoint,
         }
-        
+
         if self.adjoint_name not in self._adjoint_map:
             raise ValueError(
                 f"Unknown adjoint '{self.adjoint_name}'. "
                 f"Available: {list(self._adjoint_map.keys())}"
             )
-        
+
         # Device management
-        self._device = 'cpu'
-    
+        self._device = "cpu"
+
     @property
     def name(self) -> str:
         """Return integrator name."""
         mode_str = "Fixed" if self.step_mode == StepMode.FIXED else "Adaptive"
         return f"{self._integrator_name} ({mode_str})"
-    
+
     def _get_solver_instance(self):
         """Get Diffrax solver instance."""
         solver_class = self._solver_map[self.solver_name]
-        
+
         # Some solvers require levy area approximation
-        if self.solver_name in ['ItoMilstein', 'StratonovichMilstein']:
+        if self.solver_name in ["ItoMilstein", "StratonovichMilstein"]:
             # Milstein methods need Levy area
-            if self.levy_area == 'none':
+            if self.levy_area == "none":
                 raise ValueError(
                     f"Solver '{self.solver_name}' requires levy_area. "
                     f"Set levy_area='space-time' or 'full'"
                 )
-        
+
         return solver_class()
-    
+
     def _get_brownian_motion(self, key, t0, t1, shape, dW=None):
         """
         Create Brownian motion for the integration interval.
-        
+
         Parameters
         ----------
         key : jax.random.PRNGKey
@@ -329,11 +327,11 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
         dW : Optional[Array]
             Custom Brownian increment. If provided, uses this instead
             of generating random noise. This enables deterministic testing.
-            
+
         Returns
         -------
         Brownian motion object
-        
+
         Notes
         -----
         When dW is provided, it uses CustomBrownianPath for deterministic
@@ -347,56 +345,47 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
         if dW is not None:
             # Import custom brownian path
             from src.systems.base.numerical_integration.stochastic.custom_brownian import (
-                CustomBrownianPath
+                CustomBrownianPath,
             )
+
             return CustomBrownianPath(t0, t1, dW)
-        
+
         # Otherwise generate random noise based on levy_area setting
-        if self.levy_area == 'none':
+        if self.levy_area == "none":
             # Standard Brownian motion (no Levy area)
-            return dfx.VirtualBrownianTree(
-                t0, t1, tol=1e-3, shape=shape, key=key
-            )
-        elif self.levy_area == 'space-time':
+            return dfx.VirtualBrownianTree(t0, t1, tol=1e-3, shape=shape, key=key)
+        elif self.levy_area == "space-time":
             # Space-time Levy area (for Milstein)
             try:
-                return dfx.SpaceTimeLevyArea(
-                    t0, t1, tol=1e-3, shape=shape, key=key
-                )
+                return dfx.SpaceTimeLevyArea(t0, t1, tol=1e-3, shape=shape, key=key)
             except TypeError:
                 # Older API without t0/t1
-                return dfx.SpaceTimeLevyArea(
-                    tol=1e-3, shape=shape, key=key
-                )
-        elif self.levy_area == 'full':
+                return dfx.SpaceTimeLevyArea(tol=1e-3, shape=shape, key=key)
+        elif self.levy_area == "full":
             # Full Levy area approximation
             try:
-                return dfx.SpaceTimeTimeLevyArea(
-                    t0, t1, tol=1e-3, shape=shape, key=key
-                )
+                return dfx.SpaceTimeTimeLevyArea(t0, t1, tol=1e-3, shape=shape, key=key)
             except (TypeError, AttributeError):
                 # May not exist in all versions
-                return dfx.VirtualBrownianTree(
-                    t0, t1, tol=1e-3, shape=shape, key=key
-                )
+                return dfx.VirtualBrownianTree(t0, t1, tol=1e-3, shape=shape, key=key)
         else:
             raise ValueError(
                 f"Invalid levy_area '{self.levy_area}'. "
                 f"Choose from: 'none', 'space-time', 'full'"
             )
-    
+
     def step(
         self,
         x: ArrayLike,
         u: Optional[ArrayLike] = None,
         dt: Optional[float] = None,
-        dW: Optional[ArrayLike] = None
+        dW: Optional[ArrayLike] = None,
     ) -> ArrayLike:
         """
         Take one SDE integration step.
-        
+
         **NEW**: Now supports custom Brownian increments via dW parameter!
-        
+
         Parameters
         ----------
         x : ArrayLike
@@ -409,46 +398,46 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
             Brownian increments (nw,)
             If provided, uses this deterministic noise instead of random.
             Shape must match (nw,) where nw is number of Wiener processes.
-            
+
             **Key feature**: Providing dW enables:
             - Deterministic testing: dW=jnp.zeros(nw)
             - Custom noise patterns: dW=jnp.array([0.5, -0.3])
             - Quasi-Monte Carlo methods
             - Antithetic variates for variance reduction
-            
+
         Returns
         -------
         ArrayLike
             Next state x(t + dt)
-            
+
         Notes
         -----
         - Single-step interface less efficient than full integration
         - Custom noise (dW) is FULLY SUPPORTED by JAX/Diffrax
         - Same dW always gives same result (deterministic)
         - This is the RECOMMENDED backend for custom noise needs
-        
+
         Examples
         --------
         >>> # Random noise (default)
         >>> x_next = integrator.step(x, u, dt=0.01)
-        >>> 
+        >>>
         >>> # Zero noise (deterministic dynamics only)
         >>> x_next = integrator.step(x, u, dt=0.01, dW=jnp.zeros(nw))
-        >>> 
+        >>>
         >>> # Custom noise pattern
         >>> x_next = integrator.step(x, u, dt=0.01, dW=jnp.array([0.5]))
-        >>> 
+        >>>
         >>> # Verify determinism
         >>> x1 = integrator.step(x, u, dt=0.01, dW=jnp.zeros(1))
         >>> x2 = integrator.step(x, u, dt=0.01, dW=jnp.zeros(1))
         >>> assert jnp.allclose(x1, x2)  # Passes!
         """
         step_size = dt if dt is not None else self.dt
-        
+
         if step_size is None:
             raise ValueError("Step size dt must be specified")
-        
+
         # Convert to JAX arrays
         x = jnp.asarray(x)
         if u is not None:
@@ -457,34 +446,30 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
             dW = jnp.asarray(dW)
             # Validate shape
             if dW.shape != (self.sde_system.nw,):
-                raise ValueError(
-                    f"dW shape must be ({self.sde_system.nw},), got {dW.shape}"
-                )
-        
+                raise ValueError(f"dW shape must be ({self.sde_system.nw},), got {dW.shape}")
+
         # Generate random key (only used if dW is None)
         if self.seed is not None:
             key = jax.random.PRNGKey(self.seed)
         else:
             key = jax.random.PRNGKey(0)
-        
+
         # Define drift and diffusion for Diffrax
         def drift(t, y, args):
             return self.sde_system.drift(y, u, backend=self.backend)
-        
+
         def diffusion(t, y, args):
             return self.sde_system.diffusion(y, u, backend=self.backend)
-        
+
         # Create SDE terms with custom or random Brownian motion
         drift_term = dfx.ODETerm(drift)
-        brownian = self._get_brownian_motion(
-            key, 0.0, step_size, (self.sde_system.nw,), dW=dW
-        )
+        brownian = self._get_brownian_motion(key, 0.0, step_size, (self.sde_system.nw,), dW=dW)
         diffusion_term = dfx.ControlTerm(diffusion, brownian)
         terms = dfx.MultiTerm(drift_term, diffusion_term)
-        
+
         # Get solver
         solver = self._get_solver_instance()
-        
+
         # Integrate single step
         solution = dfx.diffeqsolve(
             terms,
@@ -497,24 +482,24 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
             stepsize_controller=dfx.ConstantStepSize(),
             max_steps=10,
         )
-        
+
         # Update statistics
-        self._stats['total_steps'] += 1
-        self._stats['total_fev'] += 1
-        
+        self._stats["total_steps"] += 1
+        self._stats["total_fev"] += 1
+
         return solution.ys[0]
-    
+
     def integrate(
         self,
         x0: ArrayLike,
         u_func: Callable[[float, ArrayLike], Optional[ArrayLike]],
         t_span: Tuple[float, float],
         t_eval: Optional[ArrayLike] = None,
-        dense_output: bool = False
+        dense_output: bool = False,
     ) -> SDEIntegrationResult:
         """
         Integrate SDE over time interval.
-        
+
         Parameters
         ----------
         x0 : ArrayLike
@@ -527,12 +512,12 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
             Specific times at which to save solution
         dense_output : bool
             If True, enable dense output (not supported for SDEs in Diffrax)
-            
+
         Returns
         -------
         SDEIntegrationResult
             Integration result with trajectory
-            
+
         Examples
         --------
         >>> # Autonomous SDE
@@ -541,7 +526,7 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
         ...     u_func=lambda t, x: None,
         ...     t_span=(0.0, 10.0)
         ... )
-        >>> 
+        >>>
         >>> # Controlled SDE
         >>> K = jnp.array([[1.0, 2.0]])
         >>> result = integrator.integrate(
@@ -552,52 +537,49 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
         """
         t0, tf = t_span
         x0 = jnp.asarray(x0)
-        
+
         # Validate time span
         if tf <= t0:
             raise ValueError(
-                f"End time must be greater than start time. "
-                f"Got t_span=({t0}, {tf})"
+                f"End time must be greater than start time. " f"Got t_span=({t0}, {tf})"
             )
-        
+
         # Generate random key
         if self.seed is not None:
             key = jax.random.PRNGKey(self.seed)
         else:
             key = jax.random.PRNGKey(0)
-        
+
         # Define drift and diffusion
         def drift(t, y, args):
             u = u_func(t, y)
             if u is not None and not isinstance(u, jnp.ndarray):
                 u = jnp.asarray(u)
-            
+
             dx = self.sde_system.drift(y, u, backend=self.backend)
-            self._stats['total_fev'] += 1
+            self._stats["total_fev"] += 1
             return dx
-        
+
         def diffusion(t, y, args):
             u = u_func(t, y)
             if u is not None and not isinstance(u, jnp.ndarray):
                 u = jnp.asarray(u)
-            
+
             g = self.sde_system.diffusion(y, u, backend=self.backend)
-            self._stats['diffusion_evals'] += 1
+            self._stats["diffusion_evals"] += 1
             return g
-        
+
         # Create SDE terms
         # Note: integrate() doesn't support custom dW (only step() does)
         drift_term = dfx.ODETerm(drift)
-        brownian = self._get_brownian_motion(
-            key, t0, tf, (self.sde_system.nw,)
-        )
+        brownian = self._get_brownian_motion(key, t0, tf, (self.sde_system.nw,))
         diffusion_term = dfx.ControlTerm(diffusion, brownian)
         terms = dfx.MultiTerm(drift_term, diffusion_term)
-        
+
         # Get solver and adjoint
         solver = self._get_solver_instance()
         adjoint = self._adjoint_map[self.adjoint_name]()
-        
+
         # Setup save points and step controller
         if self.step_mode == StepMode.FIXED:
             if t_eval is not None:
@@ -605,28 +587,28 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
             else:
                 n_steps = max(2, int((tf - t0) / self.dt) + 1)
                 t_points = jnp.linspace(t0, tf, n_steps)
-            
+
             stepsize_controller = dfx.StepTo(ts=t_points)
             saveat = dfx.SaveAt(ts=t_points)
             dt0_value = None
-            
+
         else:
             # Adaptive step mode
             stepsize_controller = dfx.PIDController(
                 rtol=self.rtol,
                 atol=self.atol,
             )
-            
+
             if t_eval is not None:
                 t_points = jnp.asarray(t_eval)
                 saveat = dfx.SaveAt(ts=t_points)
             else:
-                n_dense = max(2, self.options.get('n_dense', 100))
+                n_dense = max(2, self.options.get("n_dense", 100))
                 t_points = jnp.linspace(t0, tf, n_dense)
                 saveat = dfx.SaveAt(ts=t_points)
-            
+
             dt0_value = self.dt if self.dt is not None else (tf - t0) / 100
-        
+
         # Solve SDE
         try:
             solution = dfx.diffeqsolve(
@@ -642,10 +624,10 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
                 adjoint=adjoint,
                 throw=False,
             )
-            
+
             # Check success
             success = jnp.all(jnp.isfinite(solution.ys))
-            
+
             # Check if solution is valid
             if len(solution.ys) == 0:
                 return SDEIntegrationResult(
@@ -661,31 +643,36 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
                     solver=self.solver_name,
                     sde_type=self.sde_type,
                 )
-            
+
             # Update statistics
             nsteps = int(solution.stats.get("num_steps", len(solution.ts) - 1))
             nfev = nsteps  # Estimate
-            self._stats['total_steps'] += nsteps
-            self._stats['total_fev'] += nfev
-            self._stats['diffusion_evals'] += nsteps
-            
+            self._stats["total_steps"] += nsteps
+            self._stats["total_fev"] += nfev
+            self._stats["diffusion_evals"] += nsteps
+
             return SDEIntegrationResult(
                 t=solution.ts,
                 x=solution.ys,
                 success=bool(success),
-                message="Diffrax SDE integration successful" if success else "Integration failed (NaN/Inf detected)",
-                nfev=self._stats['total_fev'],
+                message=(
+                    "Diffrax SDE integration successful"
+                    if success
+                    else "Integration failed (NaN/Inf detected)"
+                ),
+                nfev=self._stats["total_fev"],
                 nsteps=nsteps,
-                diffusion_evals=self._stats['diffusion_evals'],
+                diffusion_evals=self._stats["diffusion_evals"],
                 noise_samples=None,  # Diffrax doesn't expose noise samples
                 n_paths=1,
                 convergence_type=self.convergence_type,
                 solver=self.solver_name,
                 sde_type=self.sde_type,
             )
-            
+
         except Exception as e:
             import traceback
+
             return SDEIntegrationResult(
                 t=jnp.array([t0]),
                 x=x0[jnp.newaxis, :] if x0.ndim == 1 else x0,
@@ -699,11 +686,11 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
                 solver=self.solver_name,
                 sde_type=self.sde_type,
             )
-    
+
     # ========================================================================
     # JAX-Specific Methods
     # ========================================================================
-    
+
     def integrate_with_gradient(
         self,
         x0: ArrayLike,
@@ -714,7 +701,7 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
     ):
         """
         Integrate and compute gradients w.r.t. initial conditions.
-        
+
         Parameters
         ----------
         x0 : ArrayLike
@@ -727,46 +714,47 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
             Loss function taking IntegrationResult
         t_eval : Optional[ArrayLike]
             Evaluation times
-            
+
         Returns
         -------
         tuple
             (loss_value, gradient_wrt_x0)
-            
+
         Examples
         --------
         >>> def loss_fn(result):
         ...     return jnp.sum(result.x[-1]**2)
-        >>> 
+        >>>
         >>> loss, grad = integrator.integrate_with_gradient(
         ...     x0, u_func, t_span, loss_fn
         ... )
         """
+
         def compute_loss(x0_val):
             result = self.integrate(x0_val, u_func, t_span, t_eval)
             return loss_fn(result)
-        
+
         loss, grad = jax.value_and_grad(compute_loss)(x0)
         return loss, grad
-    
+
     def jit_compile(self):
         """
         JIT-compile the integration for faster execution.
-        
+
         First call will be slow (compilation), subsequent calls fast.
-        
+
         Returns
         -------
         Callable
             JIT-compiled integration function
-            
+
         Examples
         --------
         >>> jit_integrate = integrator.jit_compile()
         >>> result = jit_integrate(x0, u_func, t_span)  # Fast!
         """
         return jax.jit(self.integrate)
-    
+
     def vectorized_integrate(
         self,
         x0_batch: ArrayLike,
@@ -776,9 +764,9 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
     ):
         """
         Vectorized integration over batch of initial conditions.
-        
+
         Uses jax.vmap for efficient batching.
-        
+
         Parameters
         ----------
         x0_batch : ArrayLike
@@ -789,12 +777,12 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
             Time span
         t_eval : Optional[ArrayLike]
             Evaluation times
-            
+
         Returns
         -------
         List[SDEIntegrationResult]
             Results for each initial condition
-            
+
         Examples
         --------
         >>> x0_batch = jnp.array([[1.0], [2.0], [3.0]])
@@ -809,16 +797,16 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
             result = self.integrate(x0_batch[i], u_func, t_span, t_eval)
             results.append(result)
         return results
-    
+
     def to_device(self, device: str):
         """
         Move computations to specified device.
-        
+
         Parameters
         ----------
         device : str
             'cpu', 'gpu', 'gpu:0', 'gpu:1', etc.
-            
+
         Examples
         --------
         >>> integrator.to_device('gpu')
@@ -827,21 +815,21 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
         self._device = device
         # JAX will automatically use the specified device
         # when arrays are created
-    
+
     # ========================================================================
     # Algorithm Information
     # ========================================================================
-    
+
     @staticmethod
     def list_solvers() -> Dict[str, List[str]]:
         """
         List available Diffrax SDE solvers by category.
-        
+
         Returns
         -------
         Dict[str, List[str]]
             Solvers organized by category
-            
+
         Examples
         --------
         >>> solvers = DiffraxSDEIntegrator.list_solvers()
@@ -849,40 +837,40 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
         ['SEA', 'SHARK', 'SRA1']
         """
         return {
-            'basic': [
-                'Euler',        # Euler-Maruyama
-                'EulerHeun',    # Euler-Heun (predictor-corrector)
-                'Heun',         # Heun's method
+            "basic": [
+                "Euler",  # Euler-Maruyama
+                "EulerHeun",  # Euler-Heun (predictor-corrector)
+                "Heun",  # Heun's method
             ],
-            'milstein': [
-                'ItoMilstein',            # Ito-Milstein
-                'StratonovichMilstein',   # Stratonovich-Milstein
+            "milstein": [
+                "ItoMilstein",  # Ito-Milstein
+                "StratonovichMilstein",  # Stratonovich-Milstein
             ],
-            'additive_noise': [
-                'SEA',      # SDE Adapted (additive noise)
-                'SHARK',    # Higher-order for additive
-                'SRA1',     # Order 2.0 weak
+            "additive_noise": [
+                "SEA",  # SDE Adapted (additive noise)
+                "SHARK",  # Higher-order for additive
+                "SRA1",  # Order 2.0 weak
             ],
-            'reversible': [
-                'ReversibleHeun',  # Time-reversible
+            "reversible": [
+                "ReversibleHeun",  # Time-reversible
             ],
         }
-    
+
     @staticmethod
     def get_solver_info(solver: str) -> Dict[str, Any]:
         """
         Get information about a specific solver.
-        
+
         Parameters
         ----------
         solver : str
             Solver name
-            
+
         Returns
         -------
         Dict[str, Any]
             Solver properties
-            
+
         Examples
         --------
         >>> info = DiffraxSDEIntegrator.get_solver_info('SEA')
@@ -890,73 +878,71 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
         'Optimized for additive noise, high efficiency'
         """
         solver_info = {
-            'Euler': {
-                'name': 'Euler-Maruyama',
-                'strong_order': 0.5,
-                'weak_order': 1.0,
-                'description': 'Basic explicit method',
-                'best_for': 'General purpose, fast',
-                'levy_area': 'none',
+            "Euler": {
+                "name": "Euler-Maruyama",
+                "strong_order": 0.5,
+                "weak_order": 1.0,
+                "description": "Basic explicit method",
+                "best_for": "General purpose, fast",
+                "levy_area": "none",
             },
-            'EulerHeun': {
-                'name': 'Euler-Heun',
-                'strong_order': 0.5,
-                'weak_order': 1.0,
-                'description': 'Predictor-corrector variant',
-                'best_for': 'Improved stability',
-                'levy_area': 'none',
+            "EulerHeun": {
+                "name": "Euler-Heun",
+                "strong_order": 0.5,
+                "weak_order": 1.0,
+                "description": "Predictor-corrector variant",
+                "best_for": "Improved stability",
+                "levy_area": "none",
             },
-            'ItoMilstein': {
-                'name': 'Ito-Milstein',
-                'strong_order': 1.0,
-                'weak_order': 1.0,
-                'description': 'Higher order with Levy area',
-                'best_for': 'Better accuracy',
-                'levy_area': 'space-time',
+            "ItoMilstein": {
+                "name": "Ito-Milstein",
+                "strong_order": 1.0,
+                "weak_order": 1.0,
+                "description": "Higher order with Levy area",
+                "best_for": "Better accuracy",
+                "levy_area": "space-time",
             },
-            'SEA': {
-                'name': 'SDE Adapted',
-                'strong_order': 1.0,
-                'weak_order': 2.0,
-                'description': 'Optimized for additive noise',
-                'best_for': 'Fast, additive noise only',
-                'levy_area': 'none',
+            "SEA": {
+                "name": "SDE Adapted",
+                "strong_order": 1.0,
+                "weak_order": 2.0,
+                "description": "Optimized for additive noise",
+                "best_for": "Fast, additive noise only",
+                "levy_area": "none",
             },
-            'SHARK': {
-                'name': 'ShARK',
-                'strong_order': 1.5,
-                'weak_order': 2.0,
-                'description': 'Higher-order additive',
-                'best_for': 'High accuracy, additive noise',
-                'levy_area': 'none',
+            "SHARK": {
+                "name": "ShARK",
+                "strong_order": 1.5,
+                "weak_order": 2.0,
+                "description": "Higher-order additive",
+                "best_for": "High accuracy, additive noise",
+                "levy_area": "none",
             },
-            'SRA1': {
-                'name': 'SRA1',
-                'strong_order': 1.0,
-                'weak_order': 2.0,
-                'description': 'Weak order 2 for additive',
-                'best_for': 'Monte Carlo, additive noise',
-                'levy_area': 'none',
+            "SRA1": {
+                "name": "SRA1",
+                "strong_order": 1.0,
+                "weak_order": 2.0,
+                "description": "Weak order 2 for additive",
+                "best_for": "Monte Carlo, additive noise",
+                "levy_area": "none",
             },
         }
-        
+
         return solver_info.get(
             solver,
             {
-                'name': solver,
-                'description': 'Diffrax SDE solver',
-            }
+                "name": solver,
+                "description": "Diffrax SDE solver",
+            },
         )
-    
+
     @staticmethod
     def recommend_solver(
-        noise_type: str,
-        accuracy: str = 'medium',
-        has_derivatives: bool = False
+        noise_type: str, accuracy: str = "medium", has_derivatives: bool = False
     ) -> str:
         """
         Recommend Diffrax solver based on problem characteristics.
-        
+
         Parameters
         ----------
         noise_type : str
@@ -965,12 +951,12 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
             'low', 'medium', or 'high'
         has_derivatives : bool
             Whether diffusion derivatives are available
-            
+
         Returns
         -------
         str
             Recommended solver name
-            
+
         Examples
         --------
         >>> solver = DiffraxSDEIntegrator.recommend_solver(
@@ -980,37 +966,35 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
         >>> print(solver)
         'SHARK'
         """
-        if noise_type == 'additive':
-            if accuracy == 'high':
-                return 'SHARK'
-            elif accuracy == 'medium':
-                return 'SEA'
+        if noise_type == "additive":
+            if accuracy == "high":
+                return "SHARK"
+            elif accuracy == "medium":
+                return "SEA"
             else:
-                return 'Euler'
-        
-        elif has_derivatives and accuracy == 'high':
-            return 'ItoMilstein'
-        
-        elif accuracy == 'high':
-            return 'EulerHeun'
-        
+                return "Euler"
+
+        elif has_derivatives and accuracy == "high":
+            return "ItoMilstein"
+
+        elif accuracy == "high":
+            return "EulerHeun"
+
         else:
-            return 'Euler'
+            return "Euler"
 
 
 # ============================================================================
 # Utility Functions
 # ============================================================================
 
+
 def create_diffrax_sde_integrator(
-    sde_system,
-    solver: str = 'Euler',
-    dt: float = 0.01,
-    **options
+    sde_system, solver: str = "Euler", dt: float = 0.01, **options
 ) -> DiffraxSDEIntegrator:
     """
     Quick factory for Diffrax SDE integrators.
-    
+
     Parameters
     ----------
     sde_system : StochasticDynamicalSystem
@@ -1021,12 +1005,12 @@ def create_diffrax_sde_integrator(
         Time step
     **options
         Additional options
-        
+
     Returns
     -------
     DiffraxSDEIntegrator
         Configured integrator
-        
+
     Examples
     --------
     >>> integrator = create_diffrax_sde_integrator(
@@ -1035,23 +1019,17 @@ def create_diffrax_sde_integrator(
     ...     dt=0.001
     ... )
     """
-    return DiffraxSDEIntegrator(
-        sde_system,
-        dt=dt,
-        solver=solver,
-        backend='jax',
-        **options
-    )
+    return DiffraxSDEIntegrator(sde_system, dt=dt, solver=solver, backend="jax", **options)
 
 
 def list_diffrax_sde_solvers() -> None:
     """
     Print all available Diffrax SDE solvers.
-    
+
     Examples
     --------
     >>> list_diffrax_sde_solvers()
-    
+
     Diffrax SDE Solvers
     ===================
     Basic Methods:
@@ -1059,27 +1037,29 @@ def list_diffrax_sde_solvers() -> None:
     ...
     """
     solvers = DiffraxSDEIntegrator.list_solvers()
-    
+
     print("Diffrax SDE Solvers (JAX-based)")
     print("=" * 60)
-    
+
     category_names = {
-        'basic': 'Basic Methods',
-        'milstein': 'Milstein Methods (require Levy area)',
-        'additive_noise': 'Specialized for Additive Noise',
-        'reversible': 'Time-Reversible Methods',
+        "basic": "Basic Methods",
+        "milstein": "Milstein Methods (require Levy area)",
+        "additive_noise": "Specialized for Additive Noise",
+        "reversible": "Time-Reversible Methods",
     }
-    
+
     for category, solver_list in solvers.items():
         print(f"\n{category_names.get(category, category)}:")
         for solver in solver_list:
             info = DiffraxSDEIntegrator.get_solver_info(solver)
-            if 'strong_order' in info:
-                print(f"  - {solver}: {info['description']} "
-                      f"(strong {info['strong_order']}, weak {info['weak_order']})")
+            if "strong_order" in info:
+                print(
+                    f"  - {solver}: {info['description']} "
+                    f"(strong {info['strong_order']}, weak {info['weak_order']})"
+                )
             else:
                 print(f"  - {solver}: {info['description']}")
-    
+
     print("\n" + "=" * 60)
     print("Use get_solver_info(name) for details")
     print("Use recommend_solver() for automatic selection")

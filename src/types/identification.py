@@ -32,7 +32,7 @@ System Identification Problem:
     Given: Input-output data (u[1:N], y[1:N])
     Find: Model x[k+1] = Ax[k] + Bu[k]
                  y[k] = Cx[k] + Du[k]
-    
+
     Minimize: Prediction error ||y - ŷ||²
 
 Subspace Identification (N4SID):
@@ -68,34 +68,34 @@ Usage
 ...     ERAResult,
 ...     DMDResult,
 ... )
->>> 
+>>>
 >>> # Subspace identification
 >>> result: SubspaceIDResult = n4sid(u_data, y_data, order=5)
 >>> A, B, C, D = result['A'], result['B'], result['C'], result['D']
 >>> print(f"Model fit: {result['fit_quality']:.1f}%")
->>> 
+>>>
 >>> # DMD from trajectory data
 >>> dmd_result: DMDResult = dmd(X_snapshots, Y_snapshots, rank=10)
 >>> eigenvalues = dmd_result['eigenvalues']
 >>> modes = dmd_result['modes']
 """
 
-from typing import Optional, List, Callable
-from typing_extensions import TypedDict
+from typing import Callable, List, Optional
+
 import numpy as np
+from typing_extensions import TypedDict
 
+from src.types.core import InputMatrix  # B matrix (nx, nu)
 from src.types.core import (
-    StateMatrix,
-    InputMatrix,  # B matrix (nx, nu)
-    OutputMatrix,
-    FeedthroughMatrix,
-    DiffusionMatrix,
-    CovarianceMatrix,
-    ControllabilityMatrix,
-    ObservabilityMatrix,
     ArrayLike,
+    ControllabilityMatrix,
+    CovarianceMatrix,
+    DiffusionMatrix,
+    FeedthroughMatrix,
+    ObservabilityMatrix,
+    OutputMatrix,
+    StateMatrix,
 )
-
 
 # ============================================================================
 # Type Aliases for Identification
@@ -163,12 +163,13 @@ Examples
 # General System Identification
 # ============================================================================
 
+
 class SystemIDResult(TypedDict, total=False):
     """
     General system identification result.
-    
+
     Contains identified state-space model (A, B, C, D) and quality metrics.
-    
+
     Fields
     ------
     A : StateMatrix
@@ -197,23 +198,23 @@ class SystemIDResult(TypedDict, total=False):
         Hankel matrix (if applicable)
     singular_values : Optional[ArrayLike]
         SVD singular values for order selection
-    
+
     Examples
     --------
     >>> # Identify system from data
     >>> result: SystemIDResult = identify_system(
     ...     u_data, y_data, order=3, method='n4sid'
     ... )
-    >>> 
+    >>>
     >>> # Extract model
     >>> A, B, C, D = result['A'], result['B'], result['C'], result['D']
     >>> print(f"Order: {result['order']}")
     >>> print(f"Fit: {result['fit_percentage']:.1f}%")
-    >>> 
+    >>>
     >>> # Validate on test data
     >>> y_pred = simulate_identified(A, B, C, D, u_test, x0)
     >>> residuals = y_test - y_pred
-    >>> 
+    >>>
     >>> # Check singular values for order selection
     >>> if 'singular_values' in result:
     ...     import matplotlib.pyplot as plt
@@ -222,6 +223,7 @@ class SystemIDResult(TypedDict, total=False):
     ...     plt.ylabel('Singular Value')
     ...     plt.title('Hankel SVD - Order Selection')
     """
+
     A: StateMatrix
     B: InputMatrix
     C: OutputMatrix
@@ -241,13 +243,14 @@ class SystemIDResult(TypedDict, total=False):
 # Subspace Identification
 # ============================================================================
 
+
 class SubspaceIDResult(TypedDict, total=False):
     """
     Subspace identification result (N4SID, MOESP, CVA).
-    
+
     Subspace methods compute state-space models via geometric projections
     and SVD, avoiding nonlinear optimization.
-    
+
     Fields
     ------
     A : StateMatrix
@@ -272,27 +275,28 @@ class SubspaceIDResult(TypedDict, total=False):
         Selected model order nx
     fit_quality : float
         VAF (Variance Accounted For) percentage
-    
+
     Examples
     --------
     >>> # N4SID identification
     >>> result: SubspaceIDResult = n4sid(
     ...     u_data, y_data, order=5, horizon=20
     ... )
-    >>> 
+    >>>
     >>> A = result['A']
     >>> observability = result['observability_matrix']
-    >>> 
+    >>>
     >>> # Order selection via singular values
     >>> sv = result['singular_values']
     >>> import matplotlib.pyplot as plt
     >>> plt.semilogy(sv, 'o-')
     >>> plt.axhline(sv[5], color='r', linestyle='--', label=f'Order {result["order"]}')
     >>> plt.legend()
-    >>> 
+    >>>
     >>> # Validate fit
     >>> print(f"Variance Accounted For: {result['fit_quality']:.1f}%")
     """
+
     A: StateMatrix
     B: InputMatrix
     C: OutputMatrix
@@ -310,12 +314,13 @@ class SubspaceIDResult(TypedDict, total=False):
 # ERA (Eigensystem Realization Algorithm)
 # ============================================================================
 
+
 class ERAResult(TypedDict):
     """
     Eigensystem Realization Algorithm result.
-    
+
     ERA identifies minimal realization from impulse response (Markov parameters).
-    
+
     Fields
     ------
     A : StateMatrix
@@ -338,27 +343,28 @@ class ERAResult(TypedDict):
         Observability O
     controllability_matrix : ControllabilityMatrix
         Controllability C
-    
+
     Examples
     --------
     >>> # Get impulse response from experiment or simulation
     >>> markov_params = compute_impulse_response(system, n_steps=100)
-    >>> 
+    >>>
     >>> # ERA identification
     >>> result: ERAResult = era(markov_params, order=10)
-    >>> 
+    >>>
     >>> A = result['A']
     >>> modes = result['system_modes']
-    >>> 
+    >>>
     >>> # Check system stability
     >>> if np.all(np.abs(modes) < 1):
     ...     print("Identified system is stable")
-    >>> 
+    >>>
     >>> # Singular value plot for order selection
     >>> sv = result['singular_values']
     >>> plt.semilogy(sv, 'o-')
     >>> plt.title('ERA Singular Values')
     """
+
     A: StateMatrix
     B: InputMatrix
     C: OutputMatrix
@@ -375,13 +381,14 @@ class ERAResult(TypedDict):
 # Dynamic Mode Decomposition (DMD)
 # ============================================================================
 
+
 class DMDResult(TypedDict, total=False):
     """
     Dynamic Mode Decomposition result.
-    
+
     DMD extracts spatio-temporal coherent structures from data.
     Linear approximation: x[k+1] ≈ A_dmd x[k]
-    
+
     Fields
     ------
     dynamics_matrix : StateMatrix
@@ -400,32 +407,33 @@ class DMDResult(TypedDict, total=False):
         Truncation rank
     singular_values : ArrayLike
         SVD singular values
-    
+
     Examples
     --------
     >>> # DMD from snapshot data
     >>> X = states[:, :-1]  # x[0:N-1]
     >>> Y = states[:, 1:]   # x[1:N]
-    >>> 
+    >>>
     >>> result: DMDResult = dmd(X, Y, rank=10, dt=0.01)
-    >>> 
+    >>>
     >>> # Extract modal information
     >>> modes = result['modes']
     >>> eigenvalues = result['eigenvalues']
     >>> frequencies = result['frequencies']
-    >>> 
+    >>>
     >>> # Identify dominant modes
     >>> amplitudes = result['amplitudes']
     >>> dominant_idx = np.argsort(np.abs(amplitudes))[::-1][:5]
-    >>> 
+    >>>
     >>> print("Top 5 modes:")
     >>> for i in dominant_idx:
     ...     print(f"  λ = {eigenvalues[i]:.3f}, f = {frequencies[i]:.2f} rad/s")
-    >>> 
+    >>>
     >>> # Reconstruct dynamics
     >>> A_dmd = result['dynamics_matrix']
     >>> x_pred = A_dmd @ X[:, 0]  # One-step prediction
     """
+
     dynamics_matrix: StateMatrix
     modes: ArrayLike
     eigenvalues: np.ndarray
@@ -440,12 +448,13 @@ class DMDResult(TypedDict, total=False):
 # SINDy (Sparse Identification of Nonlinear Dynamics)
 # ============================================================================
 
+
 class SINDyResult(TypedDict, total=False):
     """
     SINDy (Sparse Identification of Nonlinear Dynamics) result.
-    
+
     Discovers sparse governing equations from data via regression.
-    
+
     Fields
     ------
     coefficients : ArrayLike
@@ -462,7 +471,7 @@ class SINDyResult(TypedDict, total=False):
         Condition number of library matrix Θ
     selected_features : List[int]
         Indices of non-zero features
-    
+
     Examples
     --------
     >>> # Define library functions
@@ -473,25 +482,26 @@ class SINDyResult(TypedDict, total=False):
     ...     lambda x: np.sin(x),
     ...     lambda x: np.cos(x),
     ... ]
-    >>> 
+    >>>
     >>> # SINDy identification
     >>> result: SINDyResult = sindy(
     ...     X_data, dX_data, library, threshold=0.1
     ... )
-    >>> 
+    >>>
     >>> # Print discovered equations
     >>> print("Identified dynamics:")
     >>> for i, terms in enumerate(result['active_terms']):
     ...     print(f"  dx{i}/dt = {terms}")
-    >>> 
+    >>>
     >>> # Check sparsity
     >>> print(f"Sparsity: {result['sparsity_level']*100:.1f}% zeros")
     >>> print(f"Reconstruction error: {result['reconstruction_error']:.2e}")
-    >>> 
+    >>>
     >>> # Validate on test data
     >>> Theta_test = build_library(X_test, result['library_functions'])
     >>> dX_pred = Theta_test @ result['coefficients']
     """
+
     coefficients: ArrayLike
     active_terms: List[str]
     library_functions: List[Callable]
@@ -505,13 +515,14 @@ class SINDyResult(TypedDict, total=False):
 # Koopman Operator
 # ============================================================================
 
+
 class KoopmanResult(TypedDict, total=False):
     """
     Koopman operator approximation result.
-    
+
     Represents nonlinear dynamics as linear in lifted observable space.
     φ[k+1] = K φ[k], where φ = [φ₁(x), φ₂(x), ...]
-    
+
     Fields
     ------
     koopman_operator : StateMatrix
@@ -526,7 +537,7 @@ class KoopmanResult(TypedDict, total=False):
         Koopman eigenfunctions
     reconstruction_error : float
         Approximation error
-    
+
     Examples
     --------
     >>> # Define observables (polynomial basis)
@@ -537,14 +548,14 @@ class KoopmanResult(TypedDict, total=False):
     ...     lambda x: x[0]*x[1],
     ...     lambda x: x[1]**2,
     ... ]
-    >>> 
+    >>>
     >>> result: KoopmanResult = koopman_approximation(
     ...     trajectories, observables
     ... )
-    >>> 
+    >>>
     >>> K = result['koopman_operator']
     >>> eigenvalues = result['eigenvalues']
-    >>> 
+    >>>
     >>> # Prediction in lifted space
     >>> def predict(x0, n_steps):
     ...     phi0 = np.array([obs(x0) for obs in observables])
@@ -552,11 +563,12 @@ class KoopmanResult(TypedDict, total=False):
     ...     for _ in range(n_steps):
     ...         phi_traj.append(K @ phi_traj[-1])
     ...     return np.array(phi_traj)
-    >>> 
+    >>>
     >>> # Extract original states (first two observables)
     >>> phi_pred = predict(x0, n_steps=100)
     >>> x_pred = phi_pred[:, :2]
     """
+
     koopman_operator: StateMatrix
     lifting_functions: List[Callable]
     lifted_dimension: int
@@ -571,16 +583,15 @@ class KoopmanResult(TypedDict, total=False):
 
 __all__ = [
     # Type aliases
-    'HankelMatrix',
-    'ToeplitzMatrix',
-    'TrajectoryMatrix',
-    'MarkovParameters',
-    
+    "HankelMatrix",
+    "ToeplitzMatrix",
+    "TrajectoryMatrix",
+    "MarkovParameters",
     # Identification results
-    'SystemIDResult',
-    'SubspaceIDResult',
-    'ERAResult',
-    'DMDResult',
-    'SINDyResult',
-    'KoopmanResult',
+    "SystemIDResult",
+    "SubspaceIDResult",
+    "ERAResult",
+    "DMDResult",
+    "SINDyResult",
+    "KoopmanResult",
 ]

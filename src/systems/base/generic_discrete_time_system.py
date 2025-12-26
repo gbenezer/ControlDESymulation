@@ -13,17 +13,19 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import warnings
+from enum import Enum
+from typing import Callable, List, Optional, Tuple, Union
+
 import numpy as np
+import plotly.express as px
+import plotly.graph_objects as go
 import scipy
 import torch
 import torch.nn as nn
-from typing import List, Tuple, Union, Optional, Callable
-from enum import Enum
-import control
-import warnings
-import plotly.express as px
-import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+
+import control
 from src.systems.base.symbolic_dynamical_system import SymbolicDynamicalSystem
 
 
@@ -194,9 +196,7 @@ class GenericDiscreteTimeSystem(nn.Module):
             T = horizon
 
             if controller is None:
-                controller_func = lambda x: torch.zeros(
-                    x.shape[0], self.nu, device=x.device
-                )
+                controller_func = lambda x: torch.zeros(x.shape[0], self.nu, device=x.device)
             else:
                 controller_func = controller
 
@@ -211,9 +211,7 @@ class GenericDiscreteTimeSystem(nn.Module):
 
         # Determine if controller is a sequence or a function
         is_control_sequence = isinstance(controller, torch.Tensor)
-        is_controller_function = callable(controller) or isinstance(
-            controller, torch.nn.Module
-        )
+        is_controller_function = callable(controller) or isinstance(controller, torch.nn.Module)
 
         if controller is None:
             # Zero control
@@ -247,9 +245,7 @@ class GenericDiscreteTimeSystem(nn.Module):
         elif is_controller_function:
             # Controller is a function or neural network
             if horizon is None:
-                raise ValueError(
-                    "horizon must be specified when controller is a callable"
-                )
+                raise ValueError("horizon must be specified when controller is a callable")
             T = horizon
             controller_func = controller
         else:
@@ -396,9 +392,7 @@ class GenericDiscreteTimeSystem(nn.Module):
             k4_vel = self.continuous_time_system.forward(x_stage4, u)
 
             # Combine stages
-            qdot_next = qdot + (self.dt / 6.0) * (
-                k1_vel + 2 * k2_vel + 2 * k3_vel + k4_vel
-            )
+            qdot_next = qdot + (self.dt / 6.0) * (k1_vel + 2 * k2_vel + 2 * k3_vel + k4_vel)
 
         else:
             raise NotImplementedError(
@@ -419,9 +413,7 @@ class GenericDiscreteTimeSystem(nn.Module):
                 k3_pos = qdot_stage3
                 k4_pos = qdot_next  # Final velocity
 
-                q_next = q + (self.dt / 6.0) * (
-                    k1_pos + 2 * k2_pos + 2 * k3_pos + k4_pos
-                )
+                q_next = q + (self.dt / 6.0) * (k1_pos + 2 * k2_pos + 2 * k3_pos + k4_pos)
             else:
                 q_next = q + (qdot_next + qdot) / 2 * self.dt
 
@@ -438,9 +430,7 @@ class GenericDiscreteTimeSystem(nn.Module):
 
         return result
 
-    def _integrate_arbitrary_order(
-        self, x: torch.Tensor, u: torch.Tensor
-    ) -> torch.Tensor:
+    def _integrate_arbitrary_order(self, x: torch.Tensor, u: torch.Tensor) -> torch.Tensor:
         """
         Integrate arbitrary order system: x = [q, q', ..., q^(n-1)], q^(n) = f(x, u)
         """
@@ -481,17 +471,13 @@ class GenericDiscreteTimeSystem(nn.Module):
             k1_derivs = derivatives[1:] + [highest_deriv]
 
             # Stage 2
-            x_stage2 = [
-                derivatives[i] + 0.5 * self.dt * k1_derivs[i] for i in range(order)
-            ]
+            x_stage2 = [derivatives[i] + 0.5 * self.dt * k1_derivs[i] for i in range(order)]
             x_mid_2 = torch.cat(x_stage2, dim=1)
             highest_deriv_2 = self.continuous_time_system.forward(x_mid_2, u)
             k2_derivs = x_stage2[1:] + [highest_deriv_2]
 
             # Stage 3
-            x_stage3 = [
-                derivatives[i] + 0.5 * self.dt * k2_derivs[i] for i in range(order)
-            ]
+            x_stage3 = [derivatives[i] + 0.5 * self.dt * k2_derivs[i] for i in range(order)]
             x_mid_3 = torch.cat(x_stage3, dim=1)
             highest_deriv_3 = self.continuous_time_system.forward(x_mid_3, u)
             k3_derivs = x_stage3[1:] + [highest_deriv_3]
@@ -504,9 +490,7 @@ class GenericDiscreteTimeSystem(nn.Module):
 
             # Combine
             for i in range(order):
-                weighted = (
-                    k1_derivs[i] + 2 * k2_derivs[i] + 2 * k3_derivs[i] + k4_derivs[i]
-                ) / 6.0
+                weighted = (k1_derivs[i] + 2 * k2_derivs[i] + 2 * k3_derivs[i] + k4_derivs[i]) / 6.0
                 derivatives_next.append(derivatives[i] + self.dt * weighted)
 
         else:
@@ -1025,9 +1009,7 @@ class GenericDiscreteTimeSystem(nn.Module):
 
         return S
 
-    def print_info(
-        self, include_equations: bool = True, include_linearization: bool = True
-    ):
+    def print_info(self, include_equations: bool = True, include_linearization: bool = True):
         """
         Print comprehensive information about the discrete-time system
 
@@ -1121,9 +1103,7 @@ class GenericDiscreteTimeSystem(nn.Module):
         Returns:
             Summary string with key system info
         """
-        ct_stable = self.continuous_time_system.is_stable_equilibrium(
-            discrete_time=False
-        )
+        ct_stable = self.continuous_time_system.is_stable_equilibrium(discrete_time=False)
 
         # Check discrete stability
         eigs_d = np.linalg.eigvals(
@@ -1282,9 +1262,7 @@ class GenericDiscreteTimeSystem(nn.Module):
 
             return width, height
 
-        fig_width, fig_height = calculate_figure_dimensions(
-            rows, cols, compact, aspect_ratio
-        )
+        fig_width, fig_height = calculate_figure_dimensions(rows, cols, compact, aspect_ratio)
 
         # Adaptive spacing based on layout
         if rows > 3:
@@ -1450,9 +1428,7 @@ class GenericDiscreteTimeSystem(nn.Module):
         # Save if requested
         if save_html:
             fig.write_html(save_html)
-            print(
-                f"Interactive plot saved to {save_html} (size: {fig_width}x{fig_height}px)"
-            )
+            print(f"Interactive plot saved to {save_html} (size: {fig_width}x{fig_height}px)")
 
         # Show if requested
         if show:
@@ -1595,9 +1571,7 @@ class GenericDiscreteTimeSystem(nn.Module):
             else:
                 # Multiple trajectories: use solid colors for clarity
                 line_config = dict(width=line_width, color=color)
-                marker_config = (
-                    dict(size=marker_size, color=color) if show_markers else None
-                )
+                marker_config = dict(size=marker_size, color=color) if show_markers else None
 
             fig.add_trace(
                 go.Scatter3d(
@@ -2011,9 +1985,7 @@ class GenericDiscreteTimeSystem(nn.Module):
             )
 
         if title is None:
-            title = (
-                f"{self.continuous_time_system.__class__.__name__} 3D Phase Portrait"
-            )
+            title = f"{self.continuous_time_system.__class__.__name__} 3D Phase Portrait"
 
         fig.update_layout(
             title=title,

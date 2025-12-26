@@ -29,9 +29,9 @@ Mathematical Background
 Supervised Learning (Dynamics Models):
     Given data: {(x[k], u[k], x[k+1])}
     Learn: f̂ such that x[k+1] ≈ f̂(x[k], u[k])
-    
+
     Loss: L = (1/N) Σ ||x[k+1] - f̂(x[k], u[k])||²
-    
+
     Neural ODE: dx/dt = f_θ(x, u)
     Optimize θ via backpropagation through ODE solver
 
@@ -40,9 +40,9 @@ Reinforcement Learning:
     Policy: π(a|s) or π_θ(s) → a
     Value: V^π(s) = E[Σ γ^t r_t | s_0=s, π]
     Q-function: Q^π(s,a) = E[Σ γ^t r_t | s_0=s, a_0=a, π]
-    
+
     Optimal policy: π* = argmax_π V^π(s)
-    
+
     Algorithms:
     - Q-Learning: Q(s,a) ← Q(s,a) + α[r + γ max_a' Q(s',a') - Q(s,a)]
     - Policy Gradient: ∇_θ J = E[∇_θ log π_θ(a|s) Q^π(s,a)]
@@ -51,10 +51,10 @@ Reinforcement Learning:
 Imitation Learning:
     Given expert demonstrations: {(s_i, a_i^expert)}
     Learn policy: π̂ ≈ π^expert
-    
+
     Behavioral Cloning: Supervised learning
         L = Σ ||π̂(s_i) - a_i^expert||²
-    
+
     Inverse RL: Learn reward function R̂
         Then solve RL with R̂
 
@@ -65,7 +65,7 @@ Usage
 ...     RLTrainingResult,
 ...     NeuralNetworkConfig,
 ... )
->>> 
+>>>
 >>> # Train neural network dynamics model
 >>> config: NeuralNetworkConfig = {
 ...     'hidden_layers': [64, 64, 32],
@@ -74,10 +74,10 @@ Usage
 ...     'batch_size': 32,
 ...     'epochs': 100,
 ... }
->>> 
+>>>
 >>> result: TrainingResult = train_model(model, data, config)
 >>> print(f"Final loss: {result['final_loss']:.3e}")
->>> 
+>>>
 >>> # Reinforcement learning
 >>> rl_result: RLTrainingResult = train_rl_agent(
 ...     env, algorithm='SAC', episodes=1000
@@ -85,22 +85,21 @@ Usage
 >>> policy = rl_result['learned_policy']
 """
 
-from typing import Optional, List, Dict, Callable, Any, Tuple
-from typing_extensions import TypedDict
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
 import numpy as np
+from typing_extensions import TypedDict
 
 from .core import (
-    StateVector,
-    ControlVector,
     ArrayLike,
+    ControlVector,
+    StateVector,
 )
-
 from .trajectories import (
-    StateTrajectory,
     ControlSequence,
     OutputSequence,
+    StateTrajectory,
 )
-
 
 # ============================================================================
 # Type Aliases for Learning
@@ -138,10 +137,11 @@ LossValue = float
 # Neural Network Configuration
 # ============================================================================
 
+
 class NeuralNetworkConfig(TypedDict, total=False):
     """
     Neural network configuration for learning.
-    
+
     Fields
     ------
     hidden_layers : List[int]
@@ -160,7 +160,7 @@ class NeuralNetworkConfig(TypedDict, total=False):
         L2 regularization strength
     dropout : Optional[float]
         Dropout probability (0-1)
-    
+
     Examples
     --------
     >>> config: NeuralNetworkConfig = {
@@ -173,10 +173,11 @@ class NeuralNetworkConfig(TypedDict, total=False):
     ...     'regularization': 1e-4,
     ...     'dropout': 0.1,
     ... }
-    >>> 
+    >>>
     >>> # Build model with config
     >>> model = build_neural_network(config)
     """
+
     hidden_layers: List[int]
     activation: str
     learning_rate: float
@@ -191,10 +192,11 @@ class NeuralNetworkConfig(TypedDict, total=False):
 # Training Results
 # ============================================================================
 
+
 class TrainingResult(TypedDict, total=False):
     """
     Neural network training result.
-    
+
     Fields
     ------
     final_loss : float
@@ -213,29 +215,30 @@ class TrainingResult(TypedDict, total=False):
         Whether early stopping was triggered
     model_state : Optional[Dict]
         Saved model parameters/weights
-    
+
     Examples
     --------
     >>> # Train neural ODE dynamics model
     >>> result: TrainingResult = train_neural_ode(
     ...     model, data, epochs=100, learning_rate=1e-3
     ... )
-    >>> 
+    >>>
     >>> print(f"Training complete:")
     >>> print(f"  Final loss: {result['final_loss']:.3e}")
     >>> print(f"  Best loss: {result['best_loss']:.3e}")
     >>> print(f"  Time: {result['training_time']:.1f}s")
-    >>> 
+    >>>
     >>> # Plot learning curve
     >>> import matplotlib.pyplot as plt
     >>> plt.plot(result['loss_history'])
     >>> plt.xlabel('Epoch')
     >>> plt.ylabel('Loss')
     >>> plt.yscale('log')
-    >>> 
+    >>>
     >>> if result['early_stopped']:
     ...     print("Training stopped early (convergence reached)")
     """
+
     final_loss: float
     best_loss: float
     loss_history: List[float]
@@ -249,7 +252,7 @@ class TrainingResult(TypedDict, total=False):
 class NeuralDynamicsResult(TypedDict, total=False):
     """
     Learned neural network dynamics model result.
-    
+
     Fields
     ------
     dynamics_model : Callable
@@ -260,24 +263,25 @@ class NeuralDynamicsResult(TypedDict, total=False):
         Training history and metrics
     architecture : List[int]
         Network architecture (layer sizes)
-    
+
     Examples
     --------
     >>> # Learn dynamics from data
     >>> result: NeuralDynamicsResult = learn_dynamics(
     ...     states, controls, hidden_layers=[64, 64]
     ... )
-    >>> 
+    >>>
     >>> f_learned = result['dynamics_model']
-    >>> 
+    >>>
     >>> # Predict next state
     >>> x = np.array([1.0, 0.5])
     >>> u = np.array([0.1])
     >>> x_next_pred = f_learned(x, u)
-    >>> 
+    >>>
     >>> print(f"Prediction error: {result['prediction_error']:.3e}")
     >>> print(f"Architecture: {result['architecture']}")
     """
+
     dynamics_model: Callable
     prediction_error: float
     training_result: TrainingResult
@@ -288,10 +292,11 @@ class NeuralDynamicsResult(TypedDict, total=False):
 # Reinforcement Learning
 # ============================================================================
 
+
 class RLTrainingResult(TypedDict, total=False):
     """
     Reinforcement learning training result.
-    
+
     Fields
     ------
     learned_policy : Callable
@@ -312,7 +317,7 @@ class RLTrainingResult(TypedDict, total=False):
         Whether training converged
     algorithm : str
         RL algorithm used ('DQN', 'PPO', 'SAC', 'TD3', etc.)
-    
+
     Examples
     --------
     >>> # Train RL agent
@@ -322,26 +327,27 @@ class RLTrainingResult(TypedDict, total=False):
     ...     episodes=1000,
     ...     learning_rate=3e-4
     ... )
-    >>> 
+    >>>
     >>> # Extract policy
     >>> policy = result['learned_policy']
-    >>> 
+    >>>
     >>> # Evaluate
     >>> print(f"Algorithm: {result['algorithm']}")
     >>> print(f"Average return: {result['average_return']:.2f}")
     >>> print(f"Best return: {result['best_return']:.2f}")
-    >>> 
+    >>>
     >>> # Plot learning curve
     >>> import matplotlib.pyplot as plt
     >>> plt.plot(result['episode_returns'])
     >>> plt.xlabel('Episode')
     >>> plt.ylabel('Return')
     >>> plt.title('RL Training Progress')
-    >>> 
+    >>>
     >>> # Deploy policy
     >>> state = env.reset()
     >>> action = policy(state)
     """
+
     learned_policy: Callable
     episode_returns: List[float]
     episode_lengths: List[int]
@@ -356,7 +362,7 @@ class RLTrainingResult(TypedDict, total=False):
 class PolicyEvaluationResult(TypedDict):
     """
     Policy evaluation result.
-    
+
     Fields
     ------
     mean_return : float
@@ -369,19 +375,20 @@ class PolicyEvaluationResult(TypedDict):
         Fraction of successful episodes (0-1)
     num_episodes : int
         Number of evaluation episodes
-    
+
     Examples
     --------
     >>> # Evaluate trained policy
     >>> result: PolicyEvaluationResult = evaluate_policy(
     ...     policy, env, n_episodes=100
     ... )
-    >>> 
+    >>>
     >>> print(f"Performance:")
     >>> print(f"  Mean return: {result['mean_return']:.2f} ± {result['std_return']:.2f}")
     >>> print(f"  Success rate: {result['success_rate']*100:.1f}%")
     >>> print(f"  Avg episode length: {result['mean_episode_length']:.1f}")
     """
+
     mean_return: float
     std_return: float
     mean_episode_length: float
@@ -393,12 +400,13 @@ class PolicyEvaluationResult(TypedDict):
 # Imitation Learning
 # ============================================================================
 
+
 class ImitationLearningResult(TypedDict, total=False):
     """
     Imitation learning result.
-    
+
     Learn from expert demonstrations.
-    
+
     Fields
     ------
     learned_policy : Callable
@@ -411,28 +419,29 @@ class ImitationLearningResult(TypedDict, total=False):
         Number of expert demonstrations used
     method : str
         Method used ('behavioral_cloning', 'GAIL', 'DAgger')
-    
+
     Examples
     --------
     >>> # Learn from expert demonstrations
     >>> expert_states = np.random.randn(500, 4)
     >>> expert_actions = np.random.randn(500, 2)
-    >>> 
+    >>>
     >>> result: ImitationLearningResult = imitation_learning(
     ...     expert_states, expert_actions,
     ...     method='behavioral_cloning',
     ...     epochs=100
     ... )
-    >>> 
+    >>>
     >>> policy = result['learned_policy']
     >>> print(f"Imitation error: {result['imitation_error']:.3e}")
     >>> print(f"Method: {result['method']}")
     >>> print(f"Demonstrations: {result['num_demonstrations']}")
-    >>> 
+    >>>
     >>> # Test learned policy
     >>> state = np.array([1.0, 0.5, 0.0, 0.0])
     >>> action = policy(state)
     """
+
     learned_policy: Callable
     imitation_error: float
     training_result: TrainingResult
@@ -444,12 +453,13 @@ class ImitationLearningResult(TypedDict, total=False):
 # Online Adaptation
 # ============================================================================
 
+
 class OnlineAdaptationResult(TypedDict, total=False):
     """
     Online learning/adaptation result.
-    
+
     For adaptive control with online parameter updates.
-    
+
     Fields
     ------
     adapted_parameters : ArrayLike
@@ -464,7 +474,7 @@ class OnlineAdaptationResult(TypedDict, total=False):
         Whether parameters converged
     adaptation_method : str
         Method used ('gradient', 'RLS', 'MRAC')
-    
+
     Examples
     --------
     >>> # Online parameter adaptation
@@ -473,11 +483,11 @@ class OnlineAdaptationResult(TypedDict, total=False):
     ...     initial_params=theta0,
     ...     adaptation_rate=0.1
     ... )
-    >>> 
+    >>>
     >>> theta_final = result['adapted_parameters']
     >>> print(f"Final parameters: {theta_final}")
     >>> print(f"Tracking error: {result['tracking_error']:.3e}")
-    >>> 
+    >>>
     >>> # Plot parameter convergence
     >>> import matplotlib.pyplot as plt
     >>> param_history = np.array(result['parameter_history'])
@@ -486,6 +496,7 @@ class OnlineAdaptationResult(TypedDict, total=False):
     >>> plt.ylabel('Parameter value')
     >>> plt.legend([f'θ_{i}' for i in range(len(theta_final))])
     """
+
     adapted_parameters: ArrayLike
     parameter_history: List[ArrayLike]
     adaptation_gains: ArrayLike
@@ -500,25 +511,20 @@ class OnlineAdaptationResult(TypedDict, total=False):
 
 __all__ = [
     # Type aliases
-    'Dataset',
-    'TrainingBatch',
-    'LearningRate',
-    'LossValue',
-    
+    "Dataset",
+    "TrainingBatch",
+    "LearningRate",
+    "LossValue",
     # Configuration
-    'NeuralNetworkConfig',
-    
+    "NeuralNetworkConfig",
     # Training results
-    'TrainingResult',
-    'NeuralDynamicsResult',
-    
+    "TrainingResult",
+    "NeuralDynamicsResult",
     # Reinforcement learning
-    'RLTrainingResult',
-    'PolicyEvaluationResult',
-    
+    "RLTrainingResult",
+    "PolicyEvaluationResult",
     # Imitation learning
-    'ImitationLearningResult',
-    
+    "ImitationLearningResult",
     # Online adaptation
-    'OnlineAdaptationResult',
+    "OnlineAdaptationResult",
 ]

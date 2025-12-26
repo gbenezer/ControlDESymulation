@@ -30,7 +30,7 @@ Mathematical Background
 Conformal Prediction:
     Goal: Predict set C(x) such that:
         P(y ∈ C(x)) ≥ 1 - α
-    
+
     For ANY data distribution (distribution-free!)
 
 Split Conformal:
@@ -39,7 +39,7 @@ Split Conformal:
     3. Compute calibration scores: sᵢ = score(xᵢ, yᵢ, ŷᵢ)
     4. Quantile: q = Quantile(s₁,...,sₙ₂; (1-α)(1 + 1/n₂))
     5. Prediction set: C(x_new) = {y : score(x_new, y, ŷ_new) ≤ q}
-    
+
     Guarantee: P(y_new ∈ C(x_new)) ≥ 1 - α
 
 Nonconformity Scores:
@@ -47,7 +47,7 @@ Nonconformity Scores:
         - Absolute residual: s = |y - ŷ|
         - Normalized: s = |y - ŷ| / σ̂(x)
         - Quantile: s = max(ŷ_lo - y, y - ŷ_hi)
-    
+
     Classification:
         - Margin: s = 1 - p_y (probability of true class)
         - APS: s = Σ_{i: p_i ≥ p_y} p_i
@@ -55,9 +55,9 @@ Nonconformity Scores:
 Adaptive Conformal Inference (ACI):
     For online/time-series with distribution shift:
         q_t = q_{t-1} + γ(α - err_t)
-    
+
     Where err_t = 1{y_t ∉ C_t(x_t)} (coverage error)
-    
+
     Asymptotic guarantee: lim_{t→∞} coverage_t = 1 - α
 
 Usage
@@ -66,29 +66,29 @@ Usage
 ...     ConformalPredictionResult,
 ...     AdaptiveConformalResult,
 ... )
->>> 
+>>>
 >>> # Calibrate conformal predictor
 >>> cp = ConformalPredictor(model, calibration_data)
->>> 
+>>>
 >>> # Predict with coverage guarantee
 >>> result: ConformalPredictionResult = cp.predict(
 ...     x_test, alpha=0.1  # 90% coverage
 ... )
->>> 
+>>>
 >>> prediction_set = result['prediction_set']
 >>> coverage = result['coverage_guarantee']
 >>> print(f"Guaranteed coverage: {coverage*100:.1f}%")
 """
 
-from typing import Union, Tuple
-from typing_extensions import TypedDict
+from typing import Tuple, Union
+
 import numpy as np
+from typing_extensions import TypedDict
 
 from .core import (
-    StateVector,
     ArrayLike,
+    StateVector,
 )
-
 
 # ============================================================================
 # Type Aliases for Conformal Prediction
@@ -148,12 +148,13 @@ Examples
 # Conformal Calibration
 # ============================================================================
 
+
 class ConformalCalibrationResult(TypedDict):
     """
     Conformal prediction calibration result.
-    
+
     Result from calibrating conformal predictor on calibration set.
-    
+
     Fields
     ------
     quantile : float
@@ -168,29 +169,30 @@ class ConformalCalibrationResult(TypedDict):
         Size of calibration set
     prediction_set_type : str
         Type of prediction set ('interval', 'ball', 'polytope')
-    
+
     Examples
     --------
     >>> # Calibrate on residuals
     >>> residuals = np.abs(y_cal - y_pred_cal)
-    >>> 
+    >>>
     >>> result: ConformalCalibrationResult = calibrate_conformal(
     ...     scores=residuals,
     ...     alpha=0.1  # Target 90% coverage
     ... )
-    >>> 
+    >>>
     >>> q = result['quantile']
     >>> coverage = result['empirical_coverage']
-    >>> 
+    >>>
     >>> print(f"Calibrated quantile: {q:.3f}")
     >>> print(f"Empirical coverage: {coverage*100:.1f}%")
     >>> print(f"Calibration set size: {result['n_calibration']}")
-    >>> 
+    >>>
     >>> # Use quantile for prediction
     >>> # Prediction set: {y : |y - ŷ| ≤ q}
     >>> y_lower = y_pred_new - q
     >>> y_upper = y_pred_new + q
     """
+
     quantile: float
     alpha: float
     empirical_coverage: float
@@ -203,12 +205,13 @@ class ConformalCalibrationResult(TypedDict):
 # Conformal Prediction
 # ============================================================================
 
+
 class ConformalPredictionResult(TypedDict, total=False):
     """
     Conformal prediction result for test points.
-    
+
     Provides prediction sets with finite-sample coverage guarantees.
-    
+
     Fields
     ------
     prediction_set : ConformalPredictionSet
@@ -225,7 +228,7 @@ class ConformalPredictionResult(TypedDict, total=False):
         Threshold q for set construction
     adaptive : bool
         Whether adaptive to input x
-    
+
     Examples
     --------
     >>> # Create conformal predictor
@@ -233,30 +236,31 @@ class ConformalPredictionResult(TypedDict, total=False):
     ...     model=my_model,
     ...     calibration_data=(x_cal, y_cal)
     ... )
-    >>> 
+    >>>
     >>> # Predict with 90% coverage guarantee
     >>> result: ConformalPredictionResult = cp.predict(
     ...     x_test=np.array([1.5, 2.0]),
     ...     alpha=0.1
     ... )
-    >>> 
+    >>>
     >>> # Extract prediction set
     >>> if isinstance(result['prediction_set'], tuple):
     ...     lower, upper = result['prediction_set']
     ...     print(f"Prediction interval: [{lower}, {upper}]")
-    ... 
+    ...
     >>> print(f"Coverage guarantee: {result['coverage_guarantee']*100:.1f}%")
     >>> print(f"Average set size: {result['average_set_size']:.3f}")
-    >>> 
+    >>>
     >>> # For multiple test points
     >>> result_batch: ConformalPredictionResult = cp.predict(
     ...     x_test=np.random.randn(100, 2),
     ...     alpha=0.05  # 95% coverage
     ... )
-    >>> 
+    >>>
     >>> avg_size = result_batch['average_set_size']
     >>> print(f"Average prediction set size: {avg_size:.3f}")
     """
+
     prediction_set: ConformalPredictionSet
     point_prediction: StateVector
     coverage_guarantee: float
@@ -270,13 +274,14 @@ class ConformalPredictionResult(TypedDict, total=False):
 # Adaptive Conformal Inference
 # ============================================================================
 
+
 class AdaptiveConformalResult(TypedDict):
     """
     Adaptive Conformal Inference (ACI) result.
-    
+
     For online/sequential prediction with distribution shift.
     Adapts threshold to maintain target coverage over time.
-    
+
     Fields
     ------
     threshold : float
@@ -291,7 +296,7 @@ class AdaptiveConformalResult(TypedDict):
         Learning rate γ for threshold updates
     effective_sample_size : int
         Effective size of calibration window
-    
+
     Examples
     --------
     >>> # Initialize adaptive conformal predictor
@@ -300,22 +305,22 @@ class AdaptiveConformalResult(TypedDict):
     ...     target_alpha=0.1,     # Target 90% coverage
     ...     adaptation_rate=0.01  # Learning rate γ
     ... )
-    >>> 
+    >>>
     >>> # Online updates
     >>> results = []
     >>> for t in range(1000):
     ...     # Get new data point
     ...     x_t, y_t = data_stream[t]
-    ...     
+    ...
     ...     # Predict with current threshold
     ...     result: AdaptiveConformalResult = aci.update(x_t, y_t)
     ...     results.append(result)
-    ...     
+    ...
     ...     # Check current performance
     ...     if t % 100 == 0:
     ...         coverage = 1 - result['miscoverage_rate']
     ...         print(f"Step {t}: Coverage = {coverage*100:.1f}%")
-    >>> 
+    >>>
     >>> # Plot coverage over time
     >>> import matplotlib.pyplot as plt
     >>> coverage_hist = np.array([r['coverage_history'] for r in results])
@@ -324,12 +329,13 @@ class AdaptiveConformalResult(TypedDict):
     >>> plt.xlabel('Time step')
     >>> plt.ylabel('Coverage')
     >>> plt.legend()
-    >>> 
+    >>>
     >>> # Final statistics
     >>> final_result = results[-1]
     >>> print(f"Final threshold: {final_result['threshold']:.3f}")
     >>> print(f"Final miscoverage: {final_result['miscoverage_rate']*100:.1f}%")
     """
+
     threshold: float
     coverage_history: ArrayLike
     miscoverage_rate: float
@@ -344,11 +350,10 @@ class AdaptiveConformalResult(TypedDict):
 
 __all__ = [
     # Type aliases
-    'ConformalPredictionSet',
-    'NonconformityScore',
-    
+    "ConformalPredictionSet",
+    "NonconformityScore",
     # Results
-    'ConformalCalibrationResult',
-    'ConformalPredictionResult',
-    'AdaptiveConformalResult',
+    "ConformalCalibrationResult",
+    "ConformalPredictionResult",
+    "AdaptiveConformalResult",
 ]

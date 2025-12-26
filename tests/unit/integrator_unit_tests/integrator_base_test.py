@@ -35,25 +35,27 @@ Tests the abstract base class for ODE integrators, including:
 15. Step size handling
 """
 
-import pytest
-import numpy as np
 import warnings
 
+import numpy as np
+import pytest
+
 from src.systems.base.numerical_integration.integrator_base import (
+    IntegrationResult,
     IntegratorBase,
     StepMode,
-    IntegrationResult
 )
-
 
 # ============================================================================
 # Helper Functions
 # ============================================================================
 
+
 def _torch_available():
     """Check if PyTorch is available."""
     try:
         import torch
+
         return True
     except ImportError:
         return False
@@ -63,6 +65,7 @@ def _jax_available():
     """Check if JAX is available."""
     try:
         import jax.numpy as jnp
+
         return True
     except ImportError:
         return False
@@ -72,6 +75,7 @@ def _jax_available():
 # Mock Systems
 # ============================================================================
 
+
 class MockSystem:
     """Basic mock system for testing."""
 
@@ -79,9 +83,9 @@ class MockSystem:
         self.nx = nx
         self.nu = nu
         self._initialized = True
-        self._default_backend = 'numpy'
+        self._default_backend = "numpy"
 
-    def __call__(self, x, u, backend='numpy'):
+    def __call__(self, x, u, backend="numpy"):
         """Simple linear dynamics: dx = -x + u"""
         return -x + u
 
@@ -93,12 +97,12 @@ class MockAutonomousSystem:
         self.nx = nx
         self.nu = 0
         self._initialized = True
-        self._default_backend = 'numpy'
+        self._default_backend = "numpy"
 
         self.equilibria = MockEquilibriumHandler(nx=nx, nu=0)
         self.equilibria.add_equilibrium("zero", np.zeros(nx), np.array([]))
 
-    def __call__(self, x, u=None, backend='numpy'):
+    def __call__(self, x, u=None, backend="numpy"):
         """Autonomous dynamics: dx = -x"""
         return -x
 
@@ -115,13 +119,13 @@ class MockSystemWithEquilibria:
         self.nx = nx
         self.nu = nu
         self._initialized = True
-        self._default_backend = 'numpy'
+        self._default_backend = "numpy"
 
         self.equilibria = MockEquilibriumHandler(nx=nx, nu=nu)
         self.equilibria.add_equilibrium("zero", np.zeros(nx), np.zeros(nu))
         self.equilibria.add_equilibrium("custom", np.array([1.0, 0.5]), np.array([0.2]))
 
-    def __call__(self, x, u, backend='numpy'):
+    def __call__(self, x, u, backend="numpy"):
         """Simple linear dynamics: dx = -x + u"""
         return -x + u
 
@@ -148,30 +152,26 @@ class MockEquilibriumHandler:
         self._equilibria["origin"] = {
             "x": np.zeros(nx),
             "u": np.zeros(nu) if nu > 0 else np.array([]),
-            "metadata": {}
+            "metadata": {},
         }
 
     def add_equilibrium(self, name, x_eq, u_eq):
         """Add equilibrium."""
-        self._equilibria[name] = {
-            "x": np.asarray(x_eq),
-            "u": np.asarray(u_eq),
-            "metadata": {}
-        }
+        self._equilibria[name] = {"x": np.asarray(x_eq), "u": np.asarray(u_eq), "metadata": {}}
 
-    def get_x(self, name=None, backend='numpy'):
+    def get_x(self, name=None, backend="numpy"):
         """Get equilibrium state."""
         name = name or self._default
         x = self._equilibria[name]["x"]
         return self._convert_to_backend(x, backend)
 
-    def get_u(self, name=None, backend='numpy'):
+    def get_u(self, name=None, backend="numpy"):
         """Get equilibrium control."""
         name = name or self._default
         u = self._equilibria[name]["u"]
         return self._convert_to_backend(u, backend)
 
-    def get_both(self, name=None, backend='numpy'):
+    def get_both(self, name=None, backend="numpy"):
         """Get both state and control."""
         return self.get_x(name, backend), self.get_u(name, backend)
 
@@ -181,13 +181,15 @@ class MockEquilibriumHandler:
 
     def _convert_to_backend(self, arr, backend):
         """Convert to backend."""
-        if backend == 'numpy':
+        if backend == "numpy":
             return arr
-        elif backend == 'torch' and _torch_available():
+        elif backend == "torch" and _torch_available():
             import torch
+
             return torch.tensor(arr, dtype=torch.float64)
-        elif backend == 'jax' and _jax_available():
+        elif backend == "jax" and _jax_available():
             import jax.numpy as jnp
+
             return jnp.array(arr)
         return arr
 
@@ -195,6 +197,7 @@ class MockEquilibriumHandler:
 # ============================================================================
 # Concrete Test Integrator
 # ============================================================================
+
 
 class ConcreteTestIntegrator(IntegratorBase):
     """
@@ -208,7 +211,7 @@ class ConcreteTestIntegrator(IntegratorBase):
         """Simple Euler step."""
         dt = dt or self.dt
         f = self.system(x, u, backend=self.backend)
-        self._stats['total_steps'] += 1
+        self._stats["total_steps"] += 1
         return x + dt * f
 
     def integrate(self, x0, u_func=None, t_span=(0, 1), t_eval=None, dense_output=False):
@@ -237,10 +240,7 @@ class ConcreteTestIntegrator(IntegratorBase):
             # Note: total_steps is incremented in step()
 
         return IntegrationResult(
-            t=np.array(t_history),
-            x=np.array(x_history),
-            success=True,
-            nsteps=steps
+            t=np.array(t_history), x=np.array(x_history), success=True, nsteps=steps
         )
 
     @property
@@ -251,6 +251,7 @@ class ConcreteTestIntegrator(IntegratorBase):
 # ============================================================================
 # Test Fixtures
 # ============================================================================
+
 
 @pytest.fixture
 def mock_system():
@@ -273,24 +274,25 @@ def mock_system_with_equilibria():
 @pytest.fixture
 def integrator(mock_system):
     """Create integrator with basic mock system."""
-    return ConcreteTestIntegrator(mock_system, dt=0.01, backend='numpy')
+    return ConcreteTestIntegrator(mock_system, dt=0.01, backend="numpy")
 
 
 @pytest.fixture
 def integrator_with_equilibria(mock_system_with_equilibria):
     """Create integrator with equilibria system."""
-    return ConcreteTestIntegrator(mock_system_with_equilibria, dt=0.01, backend='numpy')
+    return ConcreteTestIntegrator(mock_system_with_equilibria, dt=0.01, backend="numpy")
 
 
 @pytest.fixture
 def integrator_autonomous(mock_autonomous_system):
     """Create integrator with autonomous system."""
-    return ConcreteTestIntegrator(mock_autonomous_system, dt=0.01, backend='numpy')
+    return ConcreteTestIntegrator(mock_autonomous_system, dt=0.01, backend="numpy")
 
 
 # ============================================================================
 # Test Class: StepMode Enum
 # ============================================================================
+
 
 class TestStepMode:
     """Test StepMode enumeration."""
@@ -302,8 +304,8 @@ class TestStepMode:
 
     def test_step_mode_members(self):
         """Test that all expected members exist."""
-        assert hasattr(StepMode, 'FIXED')
-        assert hasattr(StepMode, 'ADAPTIVE')
+        assert hasattr(StepMode, "FIXED")
+        assert hasattr(StepMode, "ADAPTIVE")
 
     def test_step_mode_comparison(self):
         """Test StepMode comparison."""
@@ -314,6 +316,7 @@ class TestStepMode:
 # ============================================================================
 # Test Class: IntegrationResult Container
 # ============================================================================
+
 
 class TestIntegrationResult:
     """Test IntegrationResult container class."""
@@ -342,14 +345,14 @@ class TestIntegrationResult:
             message="Completed",
             nfev=100,
             nsteps=50,
-            solver_info="Additional data"
+            solver_info="Additional data",
         )
 
         assert result.success is True
         assert result.message == "Completed"
         assert result.nfev == 100
         assert result.nsteps == 50
-        assert result.metadata['solver_info'] == "Additional data"
+        assert result.metadata["solver_info"] == "Additional data"
 
     def test_failed_integration_result(self):
         """Test IntegrationResult for failed integration."""
@@ -357,7 +360,7 @@ class TestIntegrationResult:
             t=np.array([0.0]),
             x=np.array([[1.0]]),
             success=False,
-            message="Integration failed: step size too small"
+            message="Integration failed: step size too small",
         )
 
         assert result.success is False
@@ -366,23 +369,21 @@ class TestIntegrationResult:
     def test_repr(self):
         """Test __repr__ output."""
         result = IntegrationResult(
-            t=np.array([0.0, 1.0]),
-            x=np.array([[1.0], [0.5]]),
-            nfev=50,
-            nsteps=25
+            t=np.array([0.0, 1.0]), x=np.array([[1.0], [0.5]]), nfev=50, nsteps=25
         )
 
         repr_str = repr(result)
 
-        assert 'IntegrationResult' in repr_str
-        assert 'success=True' in repr_str
-        assert 'nsteps=25' in repr_str
-        assert 'nfev=50' in repr_str
+        assert "IntegrationResult" in repr_str
+        assert "success=True" in repr_str
+        assert "nsteps=25" in repr_str
+        assert "nfev=50" in repr_str
 
 
 # ============================================================================
 # Test Class: Abstract Interface
 # ============================================================================
+
 
 class TestAbstractInterface:
     """Test IntegratorBase abstract class behavior."""
@@ -438,6 +439,7 @@ class TestAbstractInterface:
 # Test Class: Initialization and Validation
 # ============================================================================
 
+
 class TestInitialization:
     """Test initialization and parameter validation."""
 
@@ -448,41 +450,36 @@ class TestInitialization:
 
     def test_adaptive_mode_default_dt(self, mock_system):
         """Test that ADAPTIVE mode provides default dt if None."""
-        integrator = ConcreteTestIntegrator(
-            mock_system, dt=None, step_mode=StepMode.ADAPTIVE
-        )
+        integrator = ConcreteTestIntegrator(mock_system, dt=None, step_mode=StepMode.ADAPTIVE)
         assert integrator.dt == 0.01
 
     def test_invalid_backend_raises_error(self, mock_system):
         """Test that invalid backend raises ValueError."""
         with pytest.raises(ValueError, match="Invalid backend"):
-            ConcreteTestIntegrator(mock_system, dt=0.01, backend='tensorflow')
+            ConcreteTestIntegrator(mock_system, dt=0.01, backend="tensorflow")
 
     def test_options_stored(self, mock_system):
         """Test that options are stored correctly."""
         integrator = ConcreteTestIntegrator(
-            mock_system, dt=0.01,
-            rtol=1e-8,
-            atol=1e-10,
-            max_steps=5000,
-            custom_option='test'
+            mock_system, dt=0.01, rtol=1e-8, atol=1e-10, max_steps=5000, custom_option="test"
         )
 
         assert integrator.rtol == 1e-8
         assert integrator.atol == 1e-10
         assert integrator.max_steps == 5000
-        assert integrator.options['custom_option'] == 'test'
+        assert integrator.options["custom_option"] == "test"
 
     def test_default_properties(self, integrator):
         """Test default property values."""
         assert integrator.dt == 0.01
-        assert integrator.backend == 'numpy'
+        assert integrator.backend == "numpy"
         assert integrator.step_mode == StepMode.FIXED
 
 
 # ============================================================================
 # Test Class: Statistics Tracking
 # ============================================================================
+
 
 class TestStatisticsTracking:
     """Test statistics tracking in IntegratorBase."""
@@ -491,29 +488,30 @@ class TestStatisticsTracking:
         """Test that stats start at zero."""
         stats = integrator.get_stats()
 
-        assert stats['total_steps'] == 0
-        assert stats['total_fev'] == 0
-        assert stats['total_time'] == 0.0
-        assert stats['avg_fev_per_step'] == 0.0
+        assert stats["total_steps"] == 0
+        assert stats["total_fev"] == 0
+        assert stats["total_time"] == 0.0
+        assert stats["avg_fev_per_step"] == 0.0
 
     def test_reset_stats(self, mock_system):
         """Test resetting statistics."""
         integrator = ConcreteTestIntegrator(mock_system, dt=0.01)
 
         integrator.step(np.array([1.0]), np.array([0.0]))
-        assert integrator.get_stats()['total_steps'] == 1
+        assert integrator.get_stats()["total_steps"] == 1
 
         integrator.reset_stats()
         stats = integrator.get_stats()
 
-        assert stats['total_steps'] == 0
-        assert stats['total_fev'] == 0
-        assert stats['total_time'] == 0.0
+        assert stats["total_steps"] == 0
+        assert stats["total_fev"] == 0
+        assert stats["total_time"] == 0.0
 
 
 # ============================================================================
 # Test Class: String Representations
 # ============================================================================
+
 
 class TestStringRepresentations:
     """Test __repr__ and __str__ methods."""
@@ -522,51 +520,50 @@ class TestStringRepresentations:
         """Test __repr__ output."""
         repr_str = repr(integrator)
 
-        assert 'ConcreteTestIntegrator' in repr_str
-        assert 'dt=0.01' in repr_str
-        assert 'fixed' in repr_str
-        assert 'numpy' in repr_str
+        assert "ConcreteTestIntegrator" in repr_str
+        assert "dt=0.01" in repr_str
+        assert "fixed" in repr_str
+        assert "numpy" in repr_str
 
     def test_str(self, mock_system):
         """Test __str__ output."""
-        integrator = ConcreteTestIntegrator(mock_system, dt=0.05, backend='numpy')
+        integrator = ConcreteTestIntegrator(mock_system, dt=0.05, backend="numpy")
 
         str_repr = str(integrator)
 
-        assert 'ConcreteTestIntegrator' in str_repr
-        assert '0.05' in str_repr
-        assert 'numpy' in str_repr
+        assert "ConcreteTestIntegrator" in str_repr
+        assert "0.05" in str_repr
+        assert "numpy" in str_repr
 
 
 # ============================================================================
 # Test Class: Equilibrium-Based Integration
 # ============================================================================
 
+
 class TestEquilibriumIntegration:
     """Test integrator initialization with equilibria."""
 
-    def test_integrate_from_named_equilibrium(self, integrator_with_equilibria, mock_system_with_equilibria):
+    def test_integrate_from_named_equilibrium(
+        self, integrator_with_equilibria, mock_system_with_equilibria
+    ):
         """Test integration starting from a named equilibrium."""
         x_eq, u_eq = mock_system_with_equilibria.get_equilibrium("zero")
 
-        result = integrator_with_equilibria.integrate(
-            x0=x_eq,
-            u_func=lambda t: u_eq,
-            t_span=(0, 1)
-        )
+        result = integrator_with_equilibria.integrate(x0=x_eq, u_func=lambda t: u_eq, t_span=(0, 1))
 
         assert result.success
         assert result.x.shape[0] > 0
         np.testing.assert_allclose(result.x[-1], x_eq, atol=0.1)
 
-    def test_integrate_from_custom_equilibrium(self, integrator_with_equilibria, mock_system_with_equilibria):
+    def test_integrate_from_custom_equilibrium(
+        self, integrator_with_equilibria, mock_system_with_equilibria
+    ):
         """Test integration from non-origin equilibrium."""
         x_eq, u_eq = mock_system_with_equilibria.get_equilibrium("custom")
 
         result = integrator_with_equilibria.integrate(
-            x0=x_eq,
-            u_func=lambda t: u_eq,
-            t_span=(0, 0.5)
+            x0=x_eq, u_func=lambda t: u_eq, t_span=(0, 0.5)
         )
 
         assert result.success
@@ -580,7 +577,9 @@ class TestEquilibriumIntegration:
         assert "custom" in equilibria
         assert "origin" in equilibria
 
-    def test_integrate_from_origin_equilibrium(self, integrator_with_equilibria, mock_system_with_equilibria):
+    def test_integrate_from_origin_equilibrium(
+        self, integrator_with_equilibria, mock_system_with_equilibria
+    ):
         """Test integration from origin (default equilibrium)."""
         x_eq, u_eq = mock_system_with_equilibria.get_equilibrium("origin")
 
@@ -588,14 +587,14 @@ class TestEquilibriumIntegration:
         assert np.allclose(u_eq, np.zeros(1))
 
         result = integrator_with_equilibria.integrate(
-            x0=x_eq,
-            u_func=lambda t: u_eq,
-            t_span=(0, 0.1)
+            x0=x_eq, u_func=lambda t: u_eq, t_span=(0, 0.1)
         )
 
         assert result.success
 
-    def test_integrate_from_each_equilibrium(self, integrator_with_equilibria, mock_system_with_equilibria):
+    def test_integrate_from_each_equilibrium(
+        self, integrator_with_equilibria, mock_system_with_equilibria
+    ):
         """Test integration starting from each defined equilibrium."""
         equilibria = mock_system_with_equilibria.list_equilibria()
 
@@ -603,9 +602,7 @@ class TestEquilibriumIntegration:
             x_eq, u_eq = mock_system_with_equilibria.get_equilibrium(eq_name)
 
             result = integrator_with_equilibria.integrate(
-                x0=x_eq,
-                u_func=lambda t: u_eq,
-                t_span=(0, 0.5)
+                x0=x_eq, u_func=lambda t: u_eq, t_span=(0, 0.5)
             )
 
             assert result.success, f"Integration from {eq_name} failed"
@@ -615,21 +612,20 @@ class TestEquilibriumIntegration:
 # Test Class: Autonomous System Integration
 # ============================================================================
 
+
 class TestAutonomousIntegration:
     """Test integrator with autonomous systems (nu=0)."""
 
-    def test_integrate_autonomous_from_equilibrium(self, integrator_autonomous, mock_autonomous_system):
+    def test_integrate_autonomous_from_equilibrium(
+        self, integrator_autonomous, mock_autonomous_system
+    ):
         """Test autonomous integration from equilibrium."""
         x_eq, u_eq = mock_autonomous_system.get_equilibrium("zero")
 
         assert x_eq.shape == (2,)
         assert u_eq.shape == (0,)
 
-        result = integrator_autonomous.integrate(
-            x0=x_eq,
-            u_func=None,
-            t_span=(0, 1)
-        )
+        result = integrator_autonomous.integrate(x0=x_eq, u_func=None, t_span=(0, 1))
 
         assert result.success
         assert result.x.shape[0] > 0
@@ -645,11 +641,7 @@ class TestAutonomousIntegration:
         """Test autonomous integration from non-equilibrium point."""
         x0 = np.array([1.0, 0.5])
 
-        result = integrator_autonomous.integrate(
-            x0=x0,
-            u_func=None,
-            t_span=(0, 1)
-        )
+        result = integrator_autonomous.integrate(x0=x0, u_func=None, t_span=(0, 1))
 
         assert result.success
         assert np.linalg.norm(result.x[-1]) < np.linalg.norm(x0)
@@ -659,12 +651,13 @@ class TestAutonomousIntegration:
 # Test Class: Backend Consistency
 # ============================================================================
 
+
 class TestBackendConsistency:
     """Test backend consistency when using equilibria."""
 
     def test_equilibrium_numpy_backend(self, mock_system_with_equilibria):
         """Test equilibrium retrieval in NumPy backend."""
-        x_eq, u_eq = mock_system_with_equilibria.get_equilibrium("zero", backend='numpy')
+        x_eq, u_eq = mock_system_with_equilibria.get_equilibrium("zero", backend="numpy")
 
         assert isinstance(x_eq, np.ndarray)
         assert isinstance(u_eq, np.ndarray)
@@ -674,7 +667,7 @@ class TestBackendConsistency:
         """Test equilibrium retrieval in PyTorch backend."""
         import torch
 
-        x_eq, u_eq = mock_system_with_equilibria.get_equilibrium("zero", backend='torch')
+        x_eq, u_eq = mock_system_with_equilibria.get_equilibrium("zero", backend="torch")
 
         assert isinstance(x_eq, torch.Tensor)
         assert isinstance(u_eq, torch.Tensor)
@@ -684,7 +677,7 @@ class TestBackendConsistency:
         """Test equilibrium retrieval in JAX backend."""
         import jax.numpy as jnp
 
-        x_eq, u_eq = mock_system_with_equilibria.get_equilibrium("zero", backend='jax')
+        x_eq, u_eq = mock_system_with_equilibria.get_equilibrium("zero", backend="jax")
 
         assert isinstance(x_eq, jnp.ndarray)
         assert isinstance(u_eq, jnp.ndarray)
@@ -700,6 +693,7 @@ class TestBackendConsistency:
 # Test Class: Control Function Handling
 # ============================================================================
 
+
 class TestControlFunctionHandling:
     """Test various control function patterns."""
 
@@ -708,22 +702,19 @@ class TestControlFunctionHandling:
         u_const = np.array([0.5])
 
         result = integrator_with_equilibria.integrate(
-            x0=np.array([0.0, 0.0]),
-            u_func=lambda t: u_const,
-            t_span=(0, 0.5)
+            x0=np.array([0.0, 0.0]), u_func=lambda t: u_const, t_span=(0, 0.5)
         )
 
         assert result.success
 
     def test_time_varying_control_function(self, integrator_with_equilibria):
         """Test integration with time-varying control."""
+
         def u_func(t):
             return np.array([np.sin(t)])
 
         result = integrator_with_equilibria.integrate(
-            x0=np.array([0.0, 0.0]),
-            u_func=u_func,
-            t_span=(0, 1)
+            x0=np.array([0.0, 0.0]), u_func=u_func, t_span=(0, 1)
         )
 
         assert result.success
@@ -731,9 +722,7 @@ class TestControlFunctionHandling:
     def test_none_control_autonomous(self, integrator_autonomous):
         """Test that None control works for autonomous systems."""
         result = integrator_autonomous.integrate(
-            x0=np.array([1.0, 0.5]),
-            u_func=None,
-            t_span=(0, 1)
+            x0=np.array([1.0, 0.5]), u_func=None, t_span=(0, 1)
         )
 
         assert result.success
@@ -747,9 +736,7 @@ class TestControlFunctionHandling:
             return np.array([0.0])
 
         result = integrator_with_equilibria.integrate(
-            x0=np.array([0.0, 0.0]),
-            u_func=u_func,
-            t_span=(0, 1)
+            x0=np.array([0.0, 0.0]), u_func=u_func, t_span=(0, 1)
         )
 
         assert result.success
@@ -760,6 +747,7 @@ class TestControlFunctionHandling:
 # Test Class: Time Span Validation
 # ============================================================================
 
+
 class TestTimeSpanValidation:
     """Test validation of time span parameters."""
 
@@ -768,9 +756,7 @@ class TestTimeSpanValidation:
         x0 = np.array([1.0, 0.5])
 
         result = integrator_with_equilibria.integrate(
-            x0=x0,
-            u_func=lambda t: np.array([0.0]),
-            t_span=(1, 0)
+            x0=x0, u_func=lambda t: np.array([0.0]), t_span=(1, 0)
         )
 
         assert result is not None
@@ -780,9 +766,7 @@ class TestTimeSpanValidation:
         x0 = np.array([1.0, 0.5])
 
         result = integrator_with_equilibria.integrate(
-            x0=x0,
-            u_func=lambda t: np.array([0.0]),
-            t_span=(0, 0)
+            x0=x0, u_func=lambda t: np.array([0.0]), t_span=(0, 0)
         )
 
         assert result.success
@@ -794,9 +778,7 @@ class TestTimeSpanValidation:
         x0 = np.array([1.0, 0.5])
 
         result = integrator_with_equilibria.integrate(
-            x0=x0,
-            u_func=lambda t: np.array([0.0]),
-            t_span=(0, 0.001)
+            x0=x0, u_func=lambda t: np.array([0.0]), t_span=(0, 0.001)
         )
 
         assert result.success
@@ -807,6 +789,7 @@ class TestTimeSpanValidation:
 # Test Class: Integration Termination
 # ============================================================================
 
+
 class TestIntegrationTermination:
     """Test integration termination conditions."""
 
@@ -816,11 +799,7 @@ class TestIntegrationTermination:
 
         x0 = np.array([1.0, 0.5])
 
-        result = integrator.integrate(
-            x0=x0,
-            u_func=lambda t: np.array([0.0]),
-            t_span=(0, 100)
-        )
+        result = integrator.integrate(x0=x0, u_func=lambda t: np.array([0.0]), t_span=(0, 100))
 
         assert result.nsteps <= 11
 
@@ -829,9 +808,7 @@ class TestIntegrationTermination:
         x0 = np.array([1.0, 0.5])
 
         result = integrator_with_equilibria.integrate(
-            x0=x0,
-            u_func=lambda t: np.array([0.0]),
-            t_span=(0, 1)
+            x0=x0, u_func=lambda t: np.array([0.0]), t_span=(0, 1)
         )
 
         assert result.success
@@ -842,6 +819,7 @@ class TestIntegrationTermination:
 # Test Class: Dense Output
 # ============================================================================
 
+
 class TestDenseOutput:
     """Test dense output functionality."""
 
@@ -850,10 +828,7 @@ class TestDenseOutput:
         x0 = np.array([1.0, 0.5])
 
         result = integrator_with_equilibria.integrate(
-            x0=x0,
-            u_func=lambda t: np.array([0.0]),
-            t_span=(0, 1),
-            dense_output=True
+            x0=x0, u_func=lambda t: np.array([0.0]), t_span=(0, 1), dense_output=True
         )
 
         assert result.success
@@ -864,10 +839,7 @@ class TestDenseOutput:
         t_eval = np.array([0, 0.5, 1.0])
 
         result = integrator_with_equilibria.integrate(
-            x0=x0,
-            u_func=lambda t: np.array([0.0]),
-            t_span=(0, 1),
-            t_eval=t_eval
+            x0=x0, u_func=lambda t: np.array([0.0]), t_span=(0, 1), t_eval=t_eval
         )
 
         assert result.success
@@ -876,6 +848,7 @@ class TestDenseOutput:
 # ============================================================================
 # Test Class: Step Size Handling
 # ============================================================================
+
 
 class TestStepSizeHandling:
     """Test step size parameter handling."""
@@ -886,11 +859,7 @@ class TestStepSizeHandling:
 
         x0 = np.array([1.0, 0.5])
 
-        result = integrator.integrate(
-            x0=x0,
-            u_func=lambda t: np.array([0.0]),
-            t_span=(0, 0.1)
-        )
+        result = integrator.integrate(x0=x0, u_func=lambda t: np.array([0.0]), t_span=(0, 0.1))
 
         assert result.success
         assert result.nsteps > 100
@@ -901,11 +870,7 @@ class TestStepSizeHandling:
 
         x0 = np.array([1.0, 0.5])
 
-        result = integrator.integrate(
-            x0=x0,
-            u_func=lambda t: np.array([0.0]),
-            t_span=(0, 1)
-        )
+        result = integrator.integrate(x0=x0, u_func=lambda t: np.array([0.0]), t_span=(0, 1))
 
         assert result.success
         assert result.nsteps < 10
@@ -917,11 +882,7 @@ class TestStepSizeHandling:
 
         x0 = np.array([1.0, 0.5])
 
-        result = integrator.integrate(
-            x0=x0,
-            u_func=lambda t: np.array([0.0]),
-            t_span=(0, 1)
-        )
+        result = integrator.integrate(x0=x0, u_func=lambda t: np.array([0.0]), t_span=(0, 1))
 
         assert result.success
 
@@ -933,6 +894,7 @@ class TestStepSizeHandling:
 # ============================================================================
 # Test Class: Error Handling
 # ============================================================================
+
 
 class TestErrorHandling:
     """Test error handling and edge cases."""
@@ -946,9 +908,7 @@ class TestErrorHandling:
 
             try:
                 result = integrator_with_equilibria.integrate(
-                    x0=x0_nan,
-                    u_func=lambda t: np.array([0.0]),
-                    t_span=(0, 0.1)
+                    x0=x0_nan, u_func=lambda t: np.array([0.0]), t_span=(0, 0.1)
                 )
                 assert np.any(np.isnan(result.x))
             except (ValueError, RuntimeError):
@@ -963,9 +923,7 @@ class TestErrorHandling:
 
             try:
                 result = integrator_with_equilibria.integrate(
-                    x0=x0_inf,
-                    u_func=lambda t: np.array([0.0]),
-                    t_span=(0, 0.1)
+                    x0=x0_inf, u_func=lambda t: np.array([0.0]), t_span=(0, 0.1)
                 )
                 assert np.any(np.isinf(result.x))
             except (ValueError, RuntimeError):
@@ -975,9 +933,7 @@ class TestErrorHandling:
         """Test handling of None initial condition."""
         with pytest.raises((ValueError, TypeError, AttributeError)):
             integrator_with_equilibria.integrate(
-                x0=None,
-                u_func=lambda t: np.array([0.0]),
-                t_span=(0, 0.1)
+                x0=None, u_func=lambda t: np.array([0.0]), t_span=(0, 0.1)
             )
 
 
@@ -985,5 +941,5 @@ class TestErrorHandling:
 # Run Tests
 # ============================================================================
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v', '--tb=short'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v", "--tb=short"])

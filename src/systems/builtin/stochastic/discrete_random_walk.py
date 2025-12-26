@@ -16,27 +16,29 @@
 # TODO: make module docstring
 
 import sympy as sp
+
 from src.systems.base.discrete_stochastic_system import DiscreteStochasticSystem
+
 
 class DiscreteRandomWalk(DiscreteStochasticSystem):
     """
     Random walk: x[k+1] = x[k] + σ*w[k]
-    
+
     Classic discrete stochastic process.
     """
-    
+
     def define_system(self, sigma=1.0):
-        x = sp.symbols('x', real=True)
-        sigma_sym = sp.symbols('sigma', positive=True)
-        
+        x = sp.symbols("x", real=True)
+        sigma_sym = sp.symbols("sigma", positive=True)
+
         self.state_vars = [x]
         self.control_vars = []
-        
+
         # Persistence: x[k+1] = x[k] + noise
         self._f_sym = sp.Matrix([x])
-        
+
         # Additive noise
         self.diffusion_expr = sp.Matrix([[sigma_sym]])
         self.parameters = {sigma_sym: sigma}
         self.order = 1
-        self.sde_type = 'ito'
+        self.sde_type = "ito"

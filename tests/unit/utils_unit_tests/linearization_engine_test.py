@@ -27,8 +27,8 @@ Tests cover:
 8. Autonomous system edge cases
 """
 
-import pytest
 import numpy as np
+import pytest
 import sympy as sp
 
 # Conditional imports
@@ -45,10 +45,9 @@ try:
 except ImportError:
     jax_available = False
 
-from src.systems.base.utils.linearization_engine import LinearizationEngine
-from src.systems.base.utils.code_generator import CodeGenerator
 from src.systems.base.utils.backend_manager import BackendManager
-
+from src.systems.base.utils.code_generator import CodeGenerator
+from src.systems.base.utils.linearization_engine import LinearizationEngine
 
 # ============================================================================
 # Mock Systems
@@ -57,12 +56,12 @@ from src.systems.base.utils.backend_manager import BackendManager
 
 class MockLinearSystem:
     """Simple linear system: dx/dt = -a*x + u"""
-    
+
     def __init__(self, a=2.0):
-        x = sp.symbols('x', real=True)
-        u = sp.symbols('u', real=True)
-        a_sym = sp.symbols('a', real=True, positive=True)
-        
+        x = sp.symbols("x", real=True)
+        u = sp.symbols("u", real=True)
+        a_sym = sp.symbols("a", real=True, positive=True)
+
         self.state_vars = [x]
         self.control_vars = [u]
         self._f_sym = sp.Matrix([-a_sym * x + u])
@@ -73,19 +72,19 @@ class MockLinearSystem:
         self.ny = 1
         self.nq = 1
         self.order = 1
-    
+
     def substitute_parameters(self, expr):
         return expr.subs(self.parameters)
 
 
 class MockSecondOrderSystem:
     """Harmonic oscillator: q̈ = -k*q - c*q̇ + u"""
-    
+
     def __init__(self, k=10.0, c=0.5):
-        q, q_dot = sp.symbols('q q_dot', real=True)
-        u = sp.symbols('u', real=True)
-        k_sym, c_sym = sp.symbols('k c', real=True, positive=True)
-        
+        q, q_dot = sp.symbols("q q_dot", real=True)
+        u = sp.symbols("u", real=True)
+        k_sym, c_sym = sp.symbols("k c", real=True, positive=True)
+
         self.state_vars = [q, q_dot]
         self.control_vars = [u]
         self._f_sym = sp.Matrix([-k_sym * q - c_sym * q_dot + u])
@@ -96,18 +95,18 @@ class MockSecondOrderSystem:
         self.ny = 2
         self.nq = 1
         self.order = 2
-    
+
     def substitute_parameters(self, expr):
         return expr.subs(self.parameters)
 
 
 class MockAutonomousSystem:
     """Autonomous system: dx/dt = -a*x (no control)"""
-    
+
     def __init__(self, a=2.0):
-        x = sp.symbols('x', real=True)
-        a_sym = sp.symbols('a', real=True, positive=True)
-        
+        x = sp.symbols("x", real=True)
+        a_sym = sp.symbols("a", real=True, positive=True)
+
         self.state_vars = [x]
         self.control_vars = []  # AUTONOMOUS
         self._f_sym = sp.Matrix([-a_sym * x])
@@ -118,18 +117,18 @@ class MockAutonomousSystem:
         self.ny = 1
         self.nq = 1
         self.order = 1
-    
+
     def substitute_parameters(self, expr):
         return expr.subs(self.parameters)
 
 
 class MockAutonomous2D:
     """2D autonomous system: Free oscillator"""
-    
+
     def __init__(self, k=10.0):
-        x1, x2 = sp.symbols('x1 x2', real=True)
-        k_sym = sp.symbols('k', real=True, positive=True)
-        
+        x1, x2 = sp.symbols("x1 x2", real=True)
+        k_sym = sp.symbols("k", real=True, positive=True)
+
         self.state_vars = [x1, x2]
         self.control_vars = []  # AUTONOMOUS
         self._f_sym = sp.Matrix([x2, -k_sym * x1])
@@ -140,7 +139,7 @@ class MockAutonomous2D:
         self.ny = 2
         self.nq = 2
         self.order = 1
-    
+
     def substitute_parameters(self, expr):
         return expr.subs(self.parameters)
 
@@ -152,65 +151,65 @@ class MockAutonomous2D:
 
 class TestNumpyLinearizationControlled:
     """Test NumPy backend linearization for controlled systems"""
-    
+
     def test_compute_dynamics_numpy(self):
         """Test linearization with NumPy"""
         system = MockLinearSystem(a=2.0)
         code_gen = CodeGenerator(system)
         backend_mgr = BackendManager()
         engine = LinearizationEngine(system, code_gen, backend_mgr)
-        
+
         x = np.array([1.0])
         u = np.array([0.0])
-        
-        A, B = engine.compute_dynamics(x, u, backend='numpy')
-        
+
+        A, B = engine.compute_dynamics(x, u, backend="numpy")
+
         assert isinstance(A, np.ndarray)
         assert isinstance(B, np.ndarray)
         assert A.shape == (1, 1)
         assert B.shape == (1, 1)
-        
+
         # ∂f/∂x = -a = -2
         assert np.allclose(A, np.array([[-2.0]]))
         # ∂f/∂u = 1
         assert np.allclose(B, np.array([[1.0]]))
-    
+
     def test_compute_dynamics_numpy_batched(self):
         """Test batched linearization"""
         system = MockLinearSystem(a=2.0)
         code_gen = CodeGenerator(system)
         backend_mgr = BackendManager()
         engine = LinearizationEngine(system, code_gen, backend_mgr)
-        
+
         x = np.array([[1.0], [2.0], [3.0]])
         u = np.array([[0.0], [0.0], [0.0]])
-        
-        A, B = engine.compute_dynamics(x, u, backend='numpy')
-        
+
+        A, B = engine.compute_dynamics(x, u, backend="numpy")
+
         assert A.shape == (3, 1, 1)
         assert B.shape == (3, 1, 1)
-        
+
         # All should be same (linear system)
         for i in range(3):
             assert np.allclose(A[i], np.array([[-2.0]]))
             assert np.allclose(B[i], np.array([[1.0]]))
-    
+
     def test_compute_dynamics_second_order(self):
         """Test second-order system linearization"""
         system = MockSecondOrderSystem(k=10.0, c=0.5)
         code_gen = CodeGenerator(system)
         backend_mgr = BackendManager()
         engine = LinearizationEngine(system, code_gen, backend_mgr)
-        
+
         x = np.array([0.0, 0.0])
         u = np.array([0.0])
-        
-        A, B = engine.compute_dynamics(x, u, backend='numpy')
-        
+
+        A, B = engine.compute_dynamics(x, u, backend="numpy")
+
         # State-space form: dx/dt = [0 1; -k -c][q; q̇] + [0; 1]u
         expected_A = np.array([[0, 1], [-10, -0.5]])
         expected_B = np.array([[0], [1]])
-        
+
         assert A.shape == (2, 2)
         assert B.shape == (2, 1)
         assert np.allclose(A, expected_A)
@@ -224,67 +223,67 @@ class TestNumpyLinearizationControlled:
 
 class TestNumpyLinearizationAutonomous:
     """Test NumPy backend linearization for autonomous systems"""
-    
+
     def test_compute_dynamics_autonomous_u_none(self):
         """Test linearization with u=None for autonomous system"""
         system = MockAutonomousSystem(a=2.0)
         code_gen = CodeGenerator(system)
         backend_mgr = BackendManager()
         engine = LinearizationEngine(system, code_gen, backend_mgr)
-        
+
         x = np.array([1.0])
-        
+
         # u=None for autonomous
-        A, B = engine.compute_dynamics(x, u=None, backend='numpy')
-        
+        A, B = engine.compute_dynamics(x, u=None, backend="numpy")
+
         assert isinstance(A, np.ndarray)
         assert isinstance(B, np.ndarray)
         assert A.shape == (1, 1)
         assert B.shape == (1, 0)  # Empty B matrix
-        
+
         # ∂f/∂x = -a = -2
         assert np.allclose(A, np.array([[-2.0]]))
-    
+
     def test_compute_dynamics_autonomous_2d(self):
         """Test 2D autonomous system"""
         system = MockAutonomous2D(k=10.0)
         code_gen = CodeGenerator(system)
         backend_mgr = BackendManager()
         engine = LinearizationEngine(system, code_gen, backend_mgr)
-        
+
         x = np.array([0.1, 0.0])
-        
-        A, B = engine.compute_dynamics(x, backend='numpy')
-        
+
+        A, B = engine.compute_dynamics(x, backend="numpy")
+
         assert A.shape == (2, 2)
         assert B.shape == (2, 0)  # Empty B matrix
-        
+
         expected_A = np.array([[0, 1], [-10, 0]])
         np.testing.assert_allclose(A, expected_A)
-    
+
     def test_autonomous_requires_u_none(self):
         """Test that controlled system requires u"""
         system = MockLinearSystem(a=2.0)
         code_gen = CodeGenerator(system)
         backend_mgr = BackendManager()
         engine = LinearizationEngine(system, code_gen, backend_mgr)
-        
+
         x = np.array([1.0])
-        
+
         with pytest.raises(ValueError, match="requires control input"):
             engine.compute_dynamics(x, u=None)
-    
+
     def test_autonomous_batched(self):
         """Test batched linearization for autonomous system"""
         system = MockAutonomousSystem(a=2.0)
         code_gen = CodeGenerator(system)
         backend_mgr = BackendManager()
         engine = LinearizationEngine(system, code_gen, backend_mgr)
-        
+
         x = np.array([[1.0], [2.0]])
-        
-        A, B = engine.compute_dynamics(x, backend='numpy')
-        
+
+        A, B = engine.compute_dynamics(x, backend="numpy")
+
         assert A.shape == (2, 1, 1)
         assert B.shape == (2, 1, 0)  # Empty B for all batches
 
@@ -296,7 +295,7 @@ class TestNumpyLinearizationAutonomous:
 
 class TestTorchLinearizationControlled:
     """Test PyTorch backend linearization for controlled systems"""
-    
+
     @pytest.mark.skipif(not torch_available, reason="PyTorch not installed")
     def test_compute_dynamics_torch(self):
         """Test linearization with PyTorch"""
@@ -304,19 +303,19 @@ class TestTorchLinearizationControlled:
         code_gen = CodeGenerator(system)
         backend_mgr = BackendManager()
         engine = LinearizationEngine(system, code_gen, backend_mgr)
-        
+
         x = torch.tensor([1.0])
         u = torch.tensor([0.0])
-        
-        A, B = engine.compute_dynamics(x, u, backend='torch')
-        
+
+        A, B = engine.compute_dynamics(x, u, backend="torch")
+
         assert isinstance(A, torch.Tensor)
         assert isinstance(B, torch.Tensor)
         assert A.shape == (1, 1)
         assert B.shape == (1, 1)
         assert torch.allclose(A, torch.tensor([[-2.0]]))
         assert torch.allclose(B, torch.tensor([[1.0]]))
-    
+
     @pytest.mark.skipif(not torch_available, reason="PyTorch not installed")
     def test_compute_dynamics_torch_auto_detect(self):
         """Test auto-detection of PyTorch backend"""
@@ -324,13 +323,13 @@ class TestTorchLinearizationControlled:
         code_gen = CodeGenerator(system)
         backend_mgr = BackendManager()
         engine = LinearizationEngine(system, code_gen, backend_mgr)
-        
+
         x = torch.tensor([1.0])
         u = torch.tensor([0.0])
-        
+
         # Should auto-detect torch
         A, B = engine.compute_dynamics(x, u)
-        
+
         assert isinstance(A, torch.Tensor)
         assert isinstance(B, torch.Tensor)
 
@@ -342,7 +341,7 @@ class TestTorchLinearizationControlled:
 
 class TestTorchLinearizationAutonomous:
     """Test PyTorch backend linearization for autonomous systems"""
-    
+
     @pytest.mark.skipif(not torch_available, reason="PyTorch not installed")
     def test_compute_dynamics_autonomous_torch(self):
         """Test autonomous system with PyTorch"""
@@ -350,17 +349,17 @@ class TestTorchLinearizationAutonomous:
         code_gen = CodeGenerator(system)
         backend_mgr = BackendManager()
         engine = LinearizationEngine(system, code_gen, backend_mgr)
-        
+
         x = torch.tensor([1.0])
-        
-        A, B = engine.compute_dynamics(x, u=None, backend='torch')
-        
+
+        A, B = engine.compute_dynamics(x, u=None, backend="torch")
+
         assert isinstance(A, torch.Tensor)
         assert isinstance(B, torch.Tensor)
         assert A.shape == (1, 1)
         assert B.shape == (1, 0)  # Empty B
         torch.testing.assert_close(A, torch.tensor([[-2.0]]))
-    
+
     @pytest.mark.skipif(not torch_available, reason="PyTorch not installed")
     def test_autonomous_2d_torch(self):
         """Test 2D autonomous system with PyTorch"""
@@ -368,11 +367,11 @@ class TestTorchLinearizationAutonomous:
         code_gen = CodeGenerator(system)
         backend_mgr = BackendManager()
         engine = LinearizationEngine(system, code_gen, backend_mgr)
-        
+
         x = torch.tensor([0.1, 0.0])
-        
-        A, B = engine.compute_dynamics(x, backend='torch')
-        
+
+        A, B = engine.compute_dynamics(x, backend="torch")
+
         assert A.shape == (2, 2)
         assert B.shape == (2, 0)
 
@@ -384,7 +383,7 @@ class TestTorchLinearizationAutonomous:
 
 class TestJaxLinearizationControlled:
     """Test JAX backend linearization for controlled systems"""
-    
+
     @pytest.mark.skipif(not jax_available, reason="JAX not installed")
     def test_compute_dynamics_jax(self):
         """Test linearization with JAX (uses autodiff)"""
@@ -392,12 +391,12 @@ class TestJaxLinearizationControlled:
         code_gen = CodeGenerator(system)
         backend_mgr = BackendManager()
         engine = LinearizationEngine(system, code_gen, backend_mgr)
-        
+
         x = jnp.array([1.0])
         u = jnp.array([0.0])
-        
-        A, B = engine.compute_dynamics(x, u, backend='jax')
-        
+
+        A, B = engine.compute_dynamics(x, u, backend="jax")
+
         assert isinstance(A, jnp.ndarray)
         assert isinstance(B, jnp.ndarray)
         assert jnp.allclose(A, jnp.array([[-2.0]]))
@@ -411,7 +410,7 @@ class TestJaxLinearizationControlled:
 
 class TestJaxLinearizationAutonomous:
     """Test JAX backend linearization for autonomous systems"""
-    
+
     @pytest.mark.skipif(not jax_available, reason="JAX not installed")
     def test_compute_dynamics_autonomous_jax(self):
         """Test autonomous system with JAX"""
@@ -419,17 +418,17 @@ class TestJaxLinearizationAutonomous:
         code_gen = CodeGenerator(system)
         backend_mgr = BackendManager()
         engine = LinearizationEngine(system, code_gen, backend_mgr)
-        
+
         x = jnp.array([1.0])
-        
-        A, B = engine.compute_dynamics(x, u=None, backend='jax')
-        
+
+        A, B = engine.compute_dynamics(x, u=None, backend="jax")
+
         assert isinstance(A, jnp.ndarray)
         assert isinstance(B, jnp.ndarray)
         assert A.shape == (1, 1)
         assert B.shape == (1, 0)  # Empty B
         np.testing.assert_allclose(np.array(A), np.array([[-2.0]]))
-    
+
     @pytest.mark.skipif(not jax_available, reason="JAX not installed")
     def test_autonomous_2d_jax(self):
         """Test 2D autonomous system with JAX"""
@@ -437,11 +436,11 @@ class TestJaxLinearizationAutonomous:
         code_gen = CodeGenerator(system)
         backend_mgr = BackendManager()
         engine = LinearizationEngine(system, code_gen, backend_mgr)
-        
+
         x = jnp.array([0.1, 0.0])
-        
-        A, B = engine.compute_dynamics(x, backend='jax')
-        
+
+        A, B = engine.compute_dynamics(x, backend="jax")
+
         assert A.shape == (2, 2)
         assert B.shape == (2, 0)
 
@@ -453,50 +452,50 @@ class TestJaxLinearizationAutonomous:
 
 class TestSymbolicLinearizationControlled:
     """Test symbolic linearization for controlled systems"""
-    
+
     def test_compute_symbolic_first_order(self):
         """Test symbolic linearization for first-order system"""
         system = MockLinearSystem(a=2.0)
         code_gen = CodeGenerator(system)
         backend_mgr = BackendManager()
         engine = LinearizationEngine(system, code_gen, backend_mgr)
-        
+
         x_eq = sp.Matrix([0])
         u_eq = sp.Matrix([0])
-        
+
         A_sym, B_sym = engine.compute_symbolic(x_eq, u_eq)
-        
+
         assert isinstance(A_sym, sp.Matrix)
         assert isinstance(B_sym, sp.Matrix)
         assert A_sym.shape == (1, 1)
         assert B_sym.shape == (1, 1)
-        
+
         # Convert to numpy
         A_np = np.array(A_sym, dtype=float)
         B_np = np.array(B_sym, dtype=float)
-        
+
         assert np.allclose(A_np, np.array([[-2.0]]))
         assert np.allclose(B_np, np.array([[1.0]]))
-    
+
     def test_compute_symbolic_second_order(self):
         """Test symbolic linearization for second-order system"""
         system = MockSecondOrderSystem(k=10.0, c=0.5)
         code_gen = CodeGenerator(system)
         backend_mgr = BackendManager()
         engine = LinearizationEngine(system, code_gen, backend_mgr)
-        
+
         x_eq = sp.Matrix([0, 0])
         u_eq = sp.Matrix([0])
-        
+
         A_sym, B_sym = engine.compute_symbolic(x_eq, u_eq)
-        
+
         # Should construct state-space form
         A_np = np.array(A_sym, dtype=float)
         B_np = np.array(B_sym, dtype=float)
-        
+
         expected_A = np.array([[0, 1], [-10, -0.5]])
         expected_B = np.array([[0], [1]])
-        
+
         assert A_sym.shape == (2, 2)
         assert B_sym.shape == (2, 1)
         assert np.allclose(A_np, expected_A)
@@ -510,41 +509,41 @@ class TestSymbolicLinearizationControlled:
 
 class TestSymbolicLinearizationAutonomous:
     """Test symbolic linearization for autonomous systems"""
-    
+
     def test_compute_symbolic_autonomous(self):
         """Test symbolic linearization for autonomous system"""
         system = MockAutonomousSystem(a=2.0)
         code_gen = CodeGenerator(system)
         backend_mgr = BackendManager()
         engine = LinearizationEngine(system, code_gen, backend_mgr)
-        
+
         x_eq = sp.Matrix([0])
-        
+
         # u_eq=None for autonomous
         A_sym, B_sym = engine.compute_symbolic(x_eq, u_eq=None)
-        
+
         assert isinstance(A_sym, sp.Matrix)
         assert isinstance(B_sym, sp.Matrix)
         assert A_sym.shape == (1, 1)
         assert B_sym.shape == (1, 0)  # Empty B
-        
+
         A_np = np.array(A_sym, dtype=float)
         assert np.allclose(A_np, np.array([[-2.0]]))
-    
+
     def test_compute_symbolic_autonomous_2d(self):
         """Test symbolic linearization for 2D autonomous system"""
         system = MockAutonomous2D(k=10.0)
         code_gen = CodeGenerator(system)
         backend_mgr = BackendManager()
         engine = LinearizationEngine(system, code_gen, backend_mgr)
-        
+
         x_eq = sp.Matrix([0, 0])
-        
+
         A_sym, B_sym = engine.compute_symbolic(x_eq)
-        
+
         assert A_sym.shape == (2, 2)
         assert B_sym.shape == (2, 0)  # Empty B
-        
+
         A_np = np.array(A_sym, dtype=float)
         expected_A = np.array([[0, 1], [-10, 0]])
         np.testing.assert_allclose(A_np, expected_A)
@@ -557,7 +556,7 @@ class TestSymbolicLinearizationAutonomous:
 
 class TestJacobianVerificationControlled:
     """Test Jacobian verification against autodiff for controlled systems"""
-    
+
     @pytest.mark.skipif(not torch_available, reason="PyTorch not installed")
     def test_verify_jacobians_torch(self):
         """Test verification with PyTorch autodiff"""
@@ -565,17 +564,17 @@ class TestJacobianVerificationControlled:
         code_gen = CodeGenerator(system)
         backend_mgr = BackendManager()
         engine = LinearizationEngine(system, code_gen, backend_mgr)
-        
+
         x = torch.tensor([1.0])
         u = torch.tensor([0.0])
-        
-        results = engine.verify_jacobians(x, u, backend='torch', tol=1e-4)
-        
-        assert results['A_match'] is True
-        assert results['B_match'] is True
-        assert results['A_error'] < 1e-4
-        assert results['B_error'] < 1e-4
-    
+
+        results = engine.verify_jacobians(x, u, backend="torch", tol=1e-4)
+
+        assert results["A_match"] is True
+        assert results["B_match"] is True
+        assert results["A_error"] < 1e-4
+        assert results["B_error"] < 1e-4
+
     @pytest.mark.skipif(not jax_available, reason="JAX not installed")
     def test_verify_jacobians_jax(self):
         """Test verification with JAX autodiff"""
@@ -583,28 +582,28 @@ class TestJacobianVerificationControlled:
         code_gen = CodeGenerator(system)
         backend_mgr = BackendManager()
         engine = LinearizationEngine(system, code_gen, backend_mgr)
-        
+
         x = jnp.array([1.0])
         u = jnp.array([0.0])
-        
-        results = engine.verify_jacobians(x, u, backend='jax', tol=1e-4)
-        
-        assert results['A_match'] is True
-        assert results['B_match'] is True
-    
+
+        results = engine.verify_jacobians(x, u, backend="jax", tol=1e-4)
+
+        assert results["A_match"] is True
+        assert results["B_match"] is True
+
     def test_verify_jacobians_numpy_fails(self):
         """Test that NumPy backend is rejected"""
         system = MockLinearSystem()
         code_gen = CodeGenerator(system)
         backend_mgr = BackendManager()
         engine = LinearizationEngine(system, code_gen, backend_mgr)
-        
+
         x = np.array([1.0])
         u = np.array([0.0])
-        
+
         with pytest.raises(ValueError, match="requires autodiff"):
-            engine.verify_jacobians(x, u, backend='numpy')
-    
+            engine.verify_jacobians(x, u, backend="numpy")
+
     @pytest.mark.skipif(not torch_available, reason="PyTorch not installed")
     def test_verify_second_order_jacobians(self):
         """Test verification for second-order system"""
@@ -612,14 +611,14 @@ class TestJacobianVerificationControlled:
         code_gen = CodeGenerator(system)
         backend_mgr = BackendManager()
         engine = LinearizationEngine(system, code_gen, backend_mgr)
-        
+
         x = torch.tensor([0.1, 0.0])
         u = torch.tensor([0.0])
-        
-        results = engine.verify_jacobians(x, u, backend='torch', tol=1e-3)
-        
-        assert results['A_match'] is True
-        assert results['B_match'] is True
+
+        results = engine.verify_jacobians(x, u, backend="torch", tol=1e-3)
+
+        assert results["A_match"] is True
+        assert results["B_match"] is True
 
 
 # ============================================================================
@@ -629,7 +628,7 @@ class TestJacobianVerificationControlled:
 
 class TestJacobianVerificationAutonomous:
     """Test Jacobian verification for autonomous systems"""
-    
+
     @pytest.mark.skipif(not torch_available, reason="PyTorch not installed")
     def test_verify_jacobians_autonomous_torch(self):
         """Test verification for autonomous system with PyTorch"""
@@ -637,16 +636,16 @@ class TestJacobianVerificationAutonomous:
         code_gen = CodeGenerator(system)
         backend_mgr = BackendManager()
         engine = LinearizationEngine(system, code_gen, backend_mgr)
-        
+
         x = torch.tensor([1.0])
-        
-        results = engine.verify_jacobians(x, u=None, backend='torch', tol=1e-4)
-        
-        assert results['A_match'] is True
-        assert results['B_match'] is True  # Trivially true for empty B
-        assert results['A_error'] < 1e-4
-        assert results['B_error'] == 0.0  # Zero for empty matrix
-    
+
+        results = engine.verify_jacobians(x, u=None, backend="torch", tol=1e-4)
+
+        assert results["A_match"] is True
+        assert results["B_match"] is True  # Trivially true for empty B
+        assert results["A_error"] < 1e-4
+        assert results["B_error"] == 0.0  # Zero for empty matrix
+
     @pytest.mark.skipif(not jax_available, reason="JAX not installed")
     def test_verify_jacobians_autonomous_jax(self):
         """Test verification for autonomous system with JAX"""
@@ -654,14 +653,14 @@ class TestJacobianVerificationAutonomous:
         code_gen = CodeGenerator(system)
         backend_mgr = BackendManager()
         engine = LinearizationEngine(system, code_gen, backend_mgr)
-        
+
         x = jnp.array([1.0])
-        
-        results = engine.verify_jacobians(x, backend='jax', tol=1e-4)
-        
-        assert results['A_match'] is True
-        assert results['B_match'] is True
-        assert results['B_error'] == 0.0
+
+        results = engine.verify_jacobians(x, backend="jax", tol=1e-4)
+
+        assert results["A_match"] is True
+        assert results["B_match"] is True
+        assert results["B_error"] == 0.0
 
 
 # ============================================================================
@@ -671,53 +670,53 @@ class TestJacobianVerificationAutonomous:
 
 class TestPerformanceTracking:
     """Test performance statistics"""
-    
+
     def test_initial_stats(self):
         """Test initial stats are zero"""
         system = MockLinearSystem()
         code_gen = CodeGenerator(system)
         backend_mgr = BackendManager()
         engine = LinearizationEngine(system, code_gen, backend_mgr)
-        
+
         stats = engine.get_stats()
-        
-        assert stats['calls'] == 0
-        assert stats['total_time'] == 0.0
-        assert stats['avg_time'] == 0.0
-    
+
+        assert stats["calls"] == 0
+        assert stats["total_time"] == 0.0
+        assert stats["avg_time"] == 0.0
+
     def test_stats_increment(self):
         """Test that stats increment"""
         system = MockLinearSystem()
         code_gen = CodeGenerator(system)
         backend_mgr = BackendManager()
         engine = LinearizationEngine(system, code_gen, backend_mgr)
-        
+
         x = np.array([1.0])
         u = np.array([0.0])
-        
+
         engine.compute_dynamics(x, u)
         engine.compute_dynamics(x, u)
-        
+
         stats = engine.get_stats()
-        
-        assert stats['calls'] == 2
-        assert stats['total_time'] > 0
-    
+
+        assert stats["calls"] == 2
+        assert stats["total_time"] > 0
+
     def test_reset_stats(self):
         """Test resetting stats"""
         system = MockLinearSystem()
         code_gen = CodeGenerator(system)
         backend_mgr = BackendManager()
         engine = LinearizationEngine(system, code_gen, backend_mgr)
-        
+
         x = np.array([1.0])
         u = np.array([0.0])
-        
+
         engine.compute_dynamics(x, u)
         engine.reset_stats()
-        
+
         stats = engine.get_stats()
-        assert stats['calls'] == 0
+        assert stats["calls"] == 0
 
 
 # ============================================================================
@@ -727,43 +726,43 @@ class TestPerformanceTracking:
 
 class TestStringRepresentations:
     """Test __repr__ and __str__"""
-    
+
     def test_repr_controlled(self):
         """Test __repr__ output for controlled system"""
         system = MockLinearSystem()
         code_gen = CodeGenerator(system)
         backend_mgr = BackendManager()
         engine = LinearizationEngine(system, code_gen, backend_mgr)
-        
+
         repr_str = repr(engine)
-        
-        assert 'LinearizationEngine' in repr_str
-        assert 'nx=1' in repr_str
-        assert 'nu=1' in repr_str
-    
+
+        assert "LinearizationEngine" in repr_str
+        assert "nx=1" in repr_str
+        assert "nu=1" in repr_str
+
     def test_repr_autonomous(self):
         """Test __repr__ output for autonomous system"""
         system = MockAutonomousSystem()
         code_gen = CodeGenerator(system)
         backend_mgr = BackendManager()
         engine = LinearizationEngine(system, code_gen, backend_mgr)
-        
+
         repr_str = repr(engine)
-        
-        assert 'LinearizationEngine' in repr_str
-        assert 'nu=0' in repr_str
-        assert '(autonomous)' in repr_str
-    
+
+        assert "LinearizationEngine" in repr_str
+        assert "nu=0" in repr_str
+        assert "(autonomous)" in repr_str
+
     def test_str(self):
         """Test __str__ output"""
         system = MockLinearSystem()
         code_gen = CodeGenerator(system)
         backend_mgr = BackendManager()
         engine = LinearizationEngine(system, code_gen, backend_mgr)
-        
+
         str_repr = str(engine)
-        
-        assert 'LinearizationEngine' in str_repr
+
+        assert "LinearizationEngine" in str_repr
 
 
 # ============================================================================
@@ -773,98 +772,98 @@ class TestStringRepresentations:
 
 class TestIntegration:
     """Integration tests"""
-    
+
     def test_full_workflow_controlled(self):
         """Test complete workflow for controlled system"""
         system = MockLinearSystem(a=2.0)
         code_gen = CodeGenerator(system)
         backend_mgr = BackendManager()
         engine = LinearizationEngine(system, code_gen, backend_mgr)
-        
+
         x = np.array([1.0])
         u = np.array([0.0])
-        
+
         # Numerical linearization
         A_num, B_num = engine.compute_dynamics(x, u)
-        
+
         # Symbolic linearization
         A_sym, B_sym = engine.compute_symbolic(sp.Matrix([1.0]), sp.Matrix([0.0]))
         A_sym_np = np.array(A_sym, dtype=float)
         B_sym_np = np.array(B_sym, dtype=float)
-        
+
         # Should match
         assert np.allclose(A_num, A_sym_np)
         assert np.allclose(B_num, B_sym_np)
-    
+
     def test_full_workflow_autonomous(self):
         """Test complete workflow for autonomous system"""
         system = MockAutonomousSystem(a=2.0)
         code_gen = CodeGenerator(system)
         backend_mgr = BackendManager()
         engine = LinearizationEngine(system, code_gen, backend_mgr)
-        
+
         x = np.array([1.0])
-        
+
         # Numerical linearization
         A_num, B_num = engine.compute_dynamics(x)
-        
+
         # Symbolic linearization
         A_sym, B_sym = engine.compute_symbolic(sp.Matrix([1.0]))
         A_sym_np = np.array(A_sym, dtype=float)
-        
+
         # Should match
         assert np.allclose(A_num, A_sym_np)
         assert B_num.shape == (1, 0)
         assert B_sym.shape == (1, 0)
-    
+
     def test_multi_backend_consistency(self):
         """Test that all backends give same result"""
         system = MockLinearSystem(a=2.0)
         code_gen = CodeGenerator(system)
         backend_mgr = BackendManager()
         engine = LinearizationEngine(system, code_gen, backend_mgr)
-        
+
         x_np = np.array([1.0])
         u_np = np.array([0.0])
-        
-        A_np, B_np = engine.compute_dynamics(x_np, u_np, backend='numpy')
-        
-        backends_to_test = ['numpy']
+
+        A_np, B_np = engine.compute_dynamics(x_np, u_np, backend="numpy")
+
+        backends_to_test = ["numpy"]
         if torch_available:
-            backends_to_test.append('torch')
+            backends_to_test.append("torch")
         if jax_available:
-            backends_to_test.append('jax')
-        
+            backends_to_test.append("jax")
+
         for backend in backends_to_test:
             A, B = engine.compute_dynamics(x_np, u_np, backend=backend)
             A_val = np.array(A) if not isinstance(A, np.ndarray) else A
             B_val = np.array(B) if not isinstance(B, np.ndarray) else B
-            
+
             assert np.allclose(A_val, A_np), f"{backend} A doesn't match NumPy"
             assert np.allclose(B_val, B_np), f"{backend} B doesn't match NumPy"
-    
+
     def test_multi_backend_consistency_autonomous(self):
         """Test that all backends give same result for autonomous system"""
         system = MockAutonomous2D(k=10.0)
         code_gen = CodeGenerator(system)
         backend_mgr = BackendManager()
         engine = LinearizationEngine(system, code_gen, backend_mgr)
-        
+
         x_np = np.array([0.1, 0.0])
-        
-        A_np, B_np = engine.compute_dynamics(x_np, backend='numpy')
-        
-        backends_to_test = ['numpy']
+
+        A_np, B_np = engine.compute_dynamics(x_np, backend="numpy")
+
+        backends_to_test = ["numpy"]
         if torch_available:
-            backends_to_test.append('torch')
+            backends_to_test.append("torch")
         if jax_available:
-            backends_to_test.append('jax')
-        
+            backends_to_test.append("jax")
+
         for backend in backends_to_test:
             A, B = engine.compute_dynamics(x_np, backend=backend)
             A_val = np.array(A) if not isinstance(A, np.ndarray) else A
             B_val = np.array(B) if not isinstance(B, np.ndarray) else B
-            
+
             assert np.allclose(A_val, A_np), f"{backend} A doesn't match NumPy"
             assert B_val.shape == B_np.shape, f"{backend} B shape mismatch"
             assert B_val.shape == (2, 0), f"{backend} B should be (2, 0)"
@@ -875,5 +874,5 @@ class TestIntegration:
 # ============================================================================
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v', '--tb=short'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v", "--tb=short"])

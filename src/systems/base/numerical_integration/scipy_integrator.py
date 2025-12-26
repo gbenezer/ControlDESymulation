@@ -31,14 +31,15 @@ Supported Methods:
 """
 
 import time
+from typing import TYPE_CHECKING, Callable, Optional, Tuple
+
 import numpy as np
-from typing import Optional, Tuple, Callable, TYPE_CHECKING
 
 from src.systems.base.numerical_integration.integrator_base import (
+    ArrayLike,
+    IntegrationResult,
     IntegratorBase,
     StepMode,
-    IntegrationResult,
-    ArrayLike
 )
 
 if TYPE_CHECKING:
@@ -48,10 +49,10 @@ if TYPE_CHECKING:
 class ScipyIntegrator(IntegratorBase):
     """
     Adaptive integrator using scipy.integrate.solve_ivp.
-    
+
     Provides access to scipy's suite of professional ODE solvers with
     automatic step size control and error estimation.
-    
+
     Key Features:
     - Automatic step size adaptation
     - Error control (rtol, atol)
@@ -59,7 +60,7 @@ class ScipyIntegrator(IntegratorBase):
     - Event detection
     - Stiff system support
     - Supports both controlled and autonomous systems
-    
+
     Available Methods:
     ------------------
     **Explicit (Non-Stiff):**
@@ -67,32 +68,32 @@ class ScipyIntegrator(IntegratorBase):
       * General-purpose, robust
       * Order 5 with 4th-order error estimate
       * Good for most problems
-    
+
     - 'RK23': Bogacki-Shampine 3(2)
       * Lower accuracy, faster
       * Good for coarse simulations
-    
+
     - 'DOP853': Dormand-Prince 8(5,3)
       * Very high accuracy
       * Good for precise orbit calculations
-    
+
     **Implicit (Stiff):**
     - 'Radau': Implicit Runge-Kutta
       * Stiff-stable
       * Good for moderately stiff problems
       * 5th order accuracy
-    
+
     - 'BDF': Backward Differentiation Formula
       * Very stiff systems
       * Used in circuit simulation, chemistry
       * Variable order (1-5)
-    
+
     **Automatic:**
     - 'LSODA': Automatic stiffness detection
       * Switches between Adams (non-stiff) and BDF (stiff)
       * Best "set and forget" option
       * Used in MATLAB's ode15s
-    
+
     Examples
     --------
     >>> # Controlled system - general-purpose adaptive integration
@@ -103,14 +104,14 @@ class ScipyIntegrator(IntegratorBase):
     ...     rtol=1e-6,
     ...     atol=1e-8
     ... )
-    >>> 
+    >>>
     >>> result = integrator.integrate(
     ...     x0=np.array([1.0, 0.0]),
     ...     u_func=lambda t, x: -K @ x,
     ...     t_span=(0.0, 10.0)
     ... )
     >>> print(f"Adaptive steps: {result.nsteps}")
-    >>> 
+    >>>
     >>> # Autonomous system
     >>> integrator = ScipyIntegrator(autonomous_system, method='RK45')
     >>> result = integrator.integrate(
@@ -118,7 +119,7 @@ class ScipyIntegrator(IntegratorBase):
     ...     u_func=lambda t, x: None,  # No control
     ...     t_span=(0.0, 10.0)
     ... )
-    >>> 
+    >>>
     >>> # Stiff system (automatic detection)
     >>> stiff_integrator = ScipyIntegrator(
     ...     stiff_system,
@@ -126,7 +127,7 @@ class ScipyIntegrator(IntegratorBase):
     ...     rtol=1e-8,
     ...     atol=1e-10
     ... )
-    >>> 
+    >>>
     >>> # Very stiff system (explicit method)
     >>> very_stiff_integrator = ScipyIntegrator(
     ...     chem_system,
@@ -134,18 +135,18 @@ class ScipyIntegrator(IntegratorBase):
     ...     rtol=1e-10
     ... )
     """
-    
+
     def __init__(
         self,
-        system: 'SymbolicDynamicalSystem',
+        system: "SymbolicDynamicalSystem",
         dt: Optional[float] = 0.01,
-        method: str = 'RK45',
-        backend: str = 'numpy',
-        **options
+        method: str = "RK45",
+        backend: str = "numpy",
+        **options,
     ):
         """
         Initialize scipy adaptive integrator.
-        
+
         Parameters
         ----------
         system : SymbolicDynamicalSystem
@@ -163,7 +164,7 @@ class ScipyIntegrator(IntegratorBase):
             - max_step: Maximum step size (default: inf)
             - first_step: Initial step size (default: auto)
             - events: Event functions for detection
-            
+
         Raises
         ------
         ValueError
@@ -171,46 +172,41 @@ class ScipyIntegrator(IntegratorBase):
         ImportError
             If scipy is not installed
         """
-        if backend != 'numpy':
+        if backend != "numpy":
             raise ValueError(
                 "ScipyIntegrator only supports NumPy backend. "
                 "For PyTorch, use TorchDiffEqIntegrator. "
                 "For JAX, use DiffraxIntegrator."
             )
-        
+
         super().__init__(system, dt, StepMode.ADAPTIVE, backend, **options)
-        
+
         # Validate method
-        valid_methods = ['RK45', 'RK23', 'DOP853', 'Radau', 'BDF', 'LSODA']
+        valid_methods = ["RK45", "RK23", "DOP853", "Radau", "BDF", "LSODA"]
         if method not in valid_methods:
-            raise ValueError(
-                f"Invalid method '{method}'. Choose from: {valid_methods}"
-            )
-        
+            raise ValueError(f"Invalid method '{method}'. Choose from: {valid_methods}")
+
         self.method = method
-        
+
         # Try to import scipy
         try:
             import scipy.integrate
+
             self._solve_ivp = scipy.integrate.solve_ivp
         except ImportError:
             raise ImportError(
-                "scipy is required for ScipyIntegrator. "
-                "Install with: pip install scipy"
+                "scipy is required for ScipyIntegrator. " "Install with: pip install scipy"
             )
-    
+
     def step(
-        self,
-        x: ArrayLike,
-        u: Optional[ArrayLike] = None,
-        dt: Optional[float] = None
+        self, x: ArrayLike, u: Optional[ArrayLike] = None, dt: Optional[float] = None
     ) -> ArrayLike:
         """
         Take one integration step (uses integrate() internally).
-        
+
         For adaptive integrators, this integrates from t=0 to t=dt
         using adaptive stepping internally, then returns the final state.
-        
+
         Parameters
         ----------
         x : ArrayLike
@@ -219,12 +215,12 @@ class ScipyIntegrator(IntegratorBase):
             Control input (None for autonomous systems, assumed constant over step)
         dt : Optional[float]
             Step size (uses self.dt if None)
-            
+
         Returns
         -------
         ArrayLike
             Next state
-            
+
         Notes
         -----
         This is less efficient than integrate() for multiple steps
@@ -232,21 +228,17 @@ class ScipyIntegrator(IntegratorBase):
         for trajectory generation.
         """
         dt = dt if dt is not None else self.dt
-        
+
         # Use integrate for a single step
         u_func = lambda t, x_cur: u  # May be None for autonomous
-        
+
         result = self.integrate(
-            x0=x,
-            u_func=u_func,
-            t_span=(0.0, dt),
-            t_eval=np.array([0.0, dt]),
-            dense_output=False
+            x0=x, u_func=u_func, t_span=(0.0, dt), t_eval=np.array([0.0, dt]), dense_output=False
         )
-        
+
         # Return final state
         return result.x[-1]
-    
+
     def integrate(
         self,
         x0: ArrayLike,
@@ -254,11 +246,11 @@ class ScipyIntegrator(IntegratorBase):
         t_span: Tuple[float, float],
         t_eval: Optional[ArrayLike] = None,
         dense_output: bool = False,
-        events: Optional[Callable] = None
+        events: Optional[Callable] = None,
     ) -> IntegrationResult:
         """
         Integrate using scipy.solve_ivp with adaptive stepping.
-        
+
         Parameters
         ----------
         x0 : ArrayLike
@@ -274,12 +266,12 @@ class ScipyIntegrator(IntegratorBase):
             If True, compute continuous solution (allows interpolation)
         events : Optional[Callable]
             Event function for detection (e.g., impact, switching)
-            
+
         Returns
         -------
         IntegrationResult
             Integration result with adaptive time points
-            
+
         Examples
         --------
         >>> # Controlled system - let solver choose time points
@@ -289,14 +281,14 @@ class ScipyIntegrator(IntegratorBase):
         ...     t_span=(0.0, 10.0)
         ... )
         >>> # result.t has variable spacing (adaptive!)
-        >>> 
+        >>>
         >>> # Autonomous system
         >>> result = integrator.integrate(
         ...     x0=np.array([1.0, 0.0]),
         ...     u_func=lambda t, x: None,
         ...     t_span=(0.0, 10.0)
         ... )
-        >>> 
+        >>>
         >>> # Evaluate at specific times
         >>> t_eval = np.linspace(0, 10, 1001)
         >>> result = integrator.integrate(
@@ -304,7 +296,7 @@ class ScipyIntegrator(IntegratorBase):
         ...     t_eval=t_eval
         ... )
         >>> # result.t matches t_eval
-        >>> 
+        >>>
         >>> # Dense output for interpolation
         >>> result = integrator.integrate(
         ...     x0, u_func, (0, 10),
@@ -313,30 +305,30 @@ class ScipyIntegrator(IntegratorBase):
         >>> x_at_5_5 = result.sol(5.5)  # Interpolate at t=5.5
         """
         start_time = time.time()
-        
+
         # Define ODE function for scipy
         def ode_func(t: float, x: np.ndarray) -> np.ndarray:
             """Dynamics function in scipy's signature: f(t, x) → dx/dt"""
             u = u_func(t, x)
-            
+
             # Ensure state is NumPy array
             x_np = np.asarray(x) if not isinstance(x, np.ndarray) else x
-            
+
             # Handle autonomous systems - keep None as None
             # Do NOT convert None to array, as np.asarray(None) creates array(None, dtype=object)
             if u is not None:
                 u_np = np.asarray(u) if not isinstance(u, np.ndarray) else u
             else:
                 u_np = None  # Keep as None for autonomous systems
-            
+
             # Evaluate dynamics (DynamicsEvaluator handles u=None correctly)
-            dx = self.system(x_np, u_np, backend='numpy')
-            
+            dx = self.system(x_np, u_np, backend="numpy")
+
             # Count function evaluation
-            self._stats['total_fev'] += 1
-            
+            self._stats["total_fev"] += 1
+
             return dx
-        
+
         # Call scipy.solve_ivp
         sol = self._solve_ivp(
             fun=ode_func,
@@ -348,14 +340,14 @@ class ScipyIntegrator(IntegratorBase):
             events=events,
             rtol=self.rtol,
             atol=self.atol,
-            max_step=self.options.get('max_step', np.inf),
-            first_step=self.options.get('first_step', None),
+            max_step=self.options.get("max_step", np.inf),
+            first_step=self.options.get("first_step", None),
         )
-        
+
         elapsed = time.time() - start_time
-        self._stats['total_time'] += elapsed
-        self._stats['total_steps'] += sol.nfev  # Approximate
-        
+        self._stats["total_time"] += elapsed
+        self._stats["total_steps"] += sol.nfev  # Approximate
+
         # Create result
         result = IntegrationResult(
             t=sol.t,
@@ -365,17 +357,17 @@ class ScipyIntegrator(IntegratorBase):
             nfev=sol.nfev,
             nsteps=sol.nfev,  # scipy doesn't track steps separately
             integration_time=elapsed,
-            sol=sol if dense_output else None  # Store for interpolation
+            sol=sol if dense_output else None,  # Store for interpolation
         )
-        
+
         return result
-    
+
     @property
     def name(self) -> str:
-        stiff_indicator = " (Stiff)" if self.method in ['Radau', 'BDF'] else ""
-        auto_indicator = " (Auto-Stiffness)" if self.method == 'LSODA' else ""
+        stiff_indicator = " (Stiff)" if self.method in ["Radau", "BDF"] else ""
+        auto_indicator = " (Auto-Stiffness)" if self.method == "LSODA" else ""
         return f"scipy.{self.method}{stiff_indicator}{auto_indicator}"
-    
+
     def __repr__(self) -> str:
         return (
             f"ScipyIntegrator(method='{self.method}', "

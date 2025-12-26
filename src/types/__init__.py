@@ -66,7 +66,7 @@
 #     JaxArray,
 #     ScalarLike,
 #     IntegerLike,
-    
+
 #     # Vectors
 #     StateVector,
 #     ControlVector,
@@ -74,7 +74,7 @@
 #     NoiseVector,
 #     ParameterVector,
 #     ResidualVector,
-    
+
 #     # Matrices
 #     StateMatrix,
 #     InputMatrix,
@@ -86,11 +86,11 @@
 #     ControllabilityMatrix,
 #     ObservabilityMatrix,
 #     CostMatrix,
-    
+
 #     # Dimensions
 #     SystemDimensions,
 #     DimensionTuple,
-    
+
 #     # Equilibria
 #     EquilibriumState,
 #     EquilibriumControl,
@@ -240,7 +240,7 @@
 #     SafeSet,
 #     ValueFunction,
 #     LevelSet,
-    
+
 #     # Reachability results
 #     ReachabilityResult,
 #     HJIReachabilityResult,
@@ -249,13 +249,13 @@
 #     ViabilityKernelResult,
 #     DifferentialGameResult,
 #     ROAResult,
-    
+
 #     # Safety
 #     VerificationResult,
 #     BarrierCertificateResult,
 #     CBFResult,
 #     CLFResult,
-    
+
 #     # Contraction
 #     ContractionMetric,
 #     ContractionRate,
@@ -263,7 +263,7 @@
 #     CCMResult,
 #     FunnelingResult,
 #     IncrementalStabilityResult,
-    
+
 #     # Flatness
 #     FlatnessOutput,
 #     DifferentialFlatnessResult,
@@ -298,18 +298,18 @@
 #     is_torch,
 #     is_jax,
 #     get_backend,
-    
+
 #     # Converters
 #     ensure_numpy,
 #     ensure_backend,
 #     ArrayConverter,
-    
+
 #     # Validators
 #     check_state_shape,
 #     check_control_shape,
 #     get_array_shape,
 #     extract_dimensions,
-    
+
 #     # Protocols
 #     LinearizableProtocol,
 #     SimulatableProtocol,
@@ -423,7 +423,7 @@
 #     # ========================================================================
 #     # Core Types
 #     # ========================================================================
-    
+
 #     # Basic arrays
 #     'ArrayLike',
 #     'NumpyArray',
@@ -431,7 +431,7 @@
 #     'JaxArray',
 #     'ScalarLike',
 #     'IntegerLike',
-    
+
 #     # Vectors
 #     'StateVector',
 #     'ControlVector',
@@ -439,7 +439,7 @@
 #     'NoiseVector',
 #     'ParameterVector',
 #     'ResidualVector',
-    
+
 #     # Matrices
 #     'StateMatrix',
 #     'InputMatrix',
@@ -451,31 +451,31 @@
 #     'ControllabilityMatrix',
 #     'ObservabilityMatrix',
 #     'CostMatrix',
-    
+
 #     # Dimensions
 #     'SystemDimensions',
 #     'DimensionTuple',
-    
+
 #     # Equilibria
 #     'EquilibriumState',
 #     'EquilibriumControl',
 #     'EquilibriumPoint',
 #     'EquilibriumName',
 #     'EquilibriumIdentifier',
-    
+
 #     # ========================================================================
 #     # Linearization
 #     # ========================================================================
-    
+
 #     'DeterministicLinearization',
 #     'StochasticLinearization',
 #     'LinearizationResult',
 #     'ObservationLinearization',
-    
+
 #     # ========================================================================
 #     # Trajectories and Sequences
 #     # ========================================================================
-    
+
 #     'StateTrajectory',
 #     'ControlSequence',
 #     'OutputSequence',
@@ -484,11 +484,11 @@
 #     'TimeSpan',
 #     'IntegrationResult',
 #     'SimulationResult',
-    
+
 #     # ========================================================================
 #     # Symbolic
 #     # ========================================================================
-    
+
 #     'SymbolicExpression',
 #     'SymbolicMatrix',
 #     'SymbolicSymbol',
@@ -496,11 +496,11 @@
 #     'SymbolicStateEquations',
 #     'SymbolicOutputEquations',
 #     'SymbolicDiffusionMatrix',
-    
+
 #     # ========================================================================
 #     # Backend and Methods
 #     # ========================================================================
-    
+
 #     'Backend',
 #     'Device',
 #     'BackendConfig',
@@ -511,22 +511,22 @@
 #     'NoiseType',
 #     'SDEType',
 #     'ConvergenceType',
-    
+
 #     # ========================================================================
 #     # Classical Control and Estimation
 #     # ========================================================================
-    
+
 #     'LQRResult',
 #     'LQGResult',
 #     'KalmanFilterResult',
 #     'StabilityInfo',
 #     'ControllabilityInfo',
 #     'ObservabilityInfo',
-    
+
 #     # ========================================================================
 #     # Advanced Control
 #     # ========================================================================
-    
+
 #     'MPCResult',
 #     'MHEResult',
 #     'H2ControlResult',
@@ -538,29 +538,29 @@
 #     'RiskSensitiveResult',
 #     'OptimizationBounds',
 #     'OptimizationResult',
-    
+
 #     # ========================================================================
 #     # State Estimation
 #     # ========================================================================
-    
+
 #     'EKFResult',
 #     'UKFResult',
 #     'ParticleFilterResult',
-    
+
 #     # ========================================================================
 #     # Conformal Prediction
 #     # ========================================================================
-    
+
 #     'ConformalPredictionSet',
 #     'NonconformityScore',
 #     'ConformalCalibrationResult',
 #     'ConformalPredictionResult',
 #     'AdaptiveConformalResult',
-    
+
 #     # ========================================================================
 #     # System Identification
 #     # ========================================================================
-    
+
 #     'HankelMatrix',
 #     'ToeplitzMatrix',
 #     'TrajectoryMatrix',
@@ -580,11 +580,11 @@
 #     'TrainingResult',
 #     'NeuralNetworkDynamicsResult',
 #     'GPDynamicsResult',
-    
+
 #     # ========================================================================
 #     # Reachability and Safety
 #     # ========================================================================
-    
+
 #     'ReachableSet',
 #     'SafeSet',
 #     'ValueFunction',
@@ -600,30 +600,30 @@
 #     'BarrierCertificateResult',
 #     'CBFResult',
 #     'CLFResult',
-    
+
 #     # ========================================================================
 #     # Contraction Analysis
 #     # ========================================================================
-    
+
 #     'ContractionMetric',
 #     'ContractionRate',
 #     'ContractionAnalysisResult',
 #     'CCMResult',
 #     'FunnelingResult',
 #     'IncrementalStabilityResult',
-    
+
 #     # ========================================================================
 #     # Differential Flatness
 #     # ========================================================================
-    
+
 #     'FlatnessOutput',
 #     'DifferentialFlatnessResult',
 #     'TrajectoryPlanningResult',
-    
+
 #     # ========================================================================
 #     # Robustness and Uncertainty
 #     # ========================================================================
-    
+
 #     'UncertaintySet',
 #     'RobustStabilityResult',
 #     'StructuredSingularValueResult',
@@ -631,11 +631,11 @@
 #     'TubeMPCResult',
 #     'BalancedRealizationResult',
 #     'ReducedOrderModelResult',
-    
+
 #     # ========================================================================
 #     # Function Types
 #     # ========================================================================
-    
+
 #     'DynamicsFunction',
 #     'OutputFunction',
 #     'DiffusionFunction',
@@ -643,27 +643,27 @@
 #     'StateEstimator',
 #     'CostFunction',
 #     'Constraint',
-    
+
 #     # ========================================================================
 #     # Callbacks
 #     # ========================================================================
-    
+
 #     'IntegrationCallback',
 #     'SimulationCallback',
 #     'OptimizationCallback',
-    
+
 #     # ========================================================================
 #     # Protocols
 #     # ========================================================================
-    
+
 #     'LinearizableProtocol',
 #     'SimulatableProtocol',
 #     'StochasticProtocol',
-    
+
 #     # ========================================================================
 #     # Utilities
 #     # ========================================================================
-    
+
 #     'is_batched',
 #     'get_batch_size',
 #     'is_numpy',
@@ -677,38 +677,38 @@
 #     'get_array_shape',
 #     'extract_dimensions',
 #     'ArrayConverter',
-    
+
 #     # ========================================================================
 #     # Cache and Metadata
 #     # ========================================================================
-    
+
 #     'CacheKey',
 #     'CacheStatistics',
 #     'Metadata',
 #     'ValidationResult',
 #     'PerformanceMetrics',
-    
+
 #     # ========================================================================
 #     # Configuration
 #     # ========================================================================
-    
+
 #     'SystemConfig',
 #     'IntegratorConfig',
 #     'DiscretizerConfig',
-    
+
 #     # ========================================================================
 #     # Type Variables
 #     # ========================================================================
-    
+
 #     'T',
 #     'S',
 #     'C',
 #     'MatrixT',
-    
+
 #     # ========================================================================
 #     # Constants
 #     # ========================================================================
-    
+
 #     'VALID_BACKENDS',
 #     'VALID_DEVICES',
 #     'DEFAULT_BACKEND',
@@ -741,12 +741,12 @@
 # def list_all_types() -> List[str]:
 #     """
 #     List all available type names.
-    
+
 #     Returns
 #     -------
 #     List[str]
 #         All exported type names
-    
+
 #     Examples
 #     --------
 #     >>> from src.systems.base.types import list_all_types
@@ -760,12 +760,12 @@
 # def list_types_by_category() -> Dict[str, List[str]]:
 #     """
 #     List types organized by category.
-    
+
 #     Returns
 #     -------
 #     Dict[str, List[str]]
 #         Types grouped by domain
-    
+
 #     Examples
 #     --------
 #     >>> from src.systems.base.types import list_types_by_category
@@ -820,17 +820,17 @@
 # def get_type_info(type_name: str) -> Optional[str]:
 #     """
 #     Get documentation for a specific type.
-    
+
 #     Parameters
 #     ----------
 #     type_name : str
 #         Name of the type
-    
+
 #     Returns
 #     -------
 #     Optional[str]
 #         Docstring of the type, or None if not found
-    
+
 #     Examples
 #     --------
 #     >>> from src.systems.base.types import get_type_info
@@ -913,12 +913,12 @@
 # def get_module_info() -> Dict[str, Any]:
 #     """
 #     Get information about types module.
-    
+
 #     Returns
 #     -------
 #     Dict[str, Any]
 #         Module metadata and statistics
-    
+
 #     Examples
 #     --------
 #     >>> from src.systems.base.types import get_module_info

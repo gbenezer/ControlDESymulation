@@ -13,9 +13,10 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import sympy as sp
 import numpy as np
+import sympy as sp
 import torch
+
 from src.systems.base.symbolic_dynamical_system import SymbolicDynamicalSystem
 
 
@@ -589,9 +590,7 @@ class DuffingOscillator(SymbolicDynamicalSystem):
     def define_system(self, alpha_val, beta_val, delta_val, gamma_val, omega_val):
         x, v = sp.symbols("x v", real=True)
         u = sp.symbols("u", real=True)
-        alpha, beta, delta, gamma, omega = sp.symbols(
-            "alpha beta delta gamma omega", real=True
-        )
+        alpha, beta, delta, gamma, omega = sp.symbols("alpha beta delta gamma omega", real=True)
 
         self.parameters = {
             alpha: alpha_val,

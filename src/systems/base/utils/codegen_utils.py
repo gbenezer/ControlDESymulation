@@ -32,8 +32,9 @@ intrinsic capabilities (gradients, JIT, etc.), not implementation gaps.
 """
 
 from typing import Callable, Literal, Union
-import sympy as sp
+
 import numpy as np
+import sympy as sp
 import torch
 
 Backend = Literal["numpy", "torch", "jax"]

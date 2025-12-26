@@ -31,47 +31,47 @@ Contraction Theory:
     Virtual displacement: δx = x₁ - x₂
     Riemannian metric: M(x) ≻ 0
     Metric norm: ||δx||²_M = δx' M(x) δx
-    
+
     Contraction condition:
         d/dt ||δx||_M ≤ -β ||δx||_M
-    
+
     Implies: ||δx(t)||_M ≤ e^(-βt) ||δx(0)||_M
-    
+
     Consequence: All trajectories converge exponentially
 
 Infinitesimal Contraction:
     For ẋ = f(x, t), define:
         F(x, t) = ∂f/∂x (Jacobian)
-    
+
     Contraction if ∃M(x) ≻ 0:
         Ṁ + MF + F'M ≺ -2βM
-    
+
     Or in steady-state coordinates:
         F + F' ≺ -2βI (Θ = M^(-1/2))
 
 Control Contraction Metrics (CCM):
     For ẋ = f(x, u), find M(x) and u(x):
         Ṁ + M(∂f/∂x) + (∂f/∂x)'M ≺ -2βM
-    
+
     Controller: u = k(x) such that closed-loop contracts
-    
+
     Solved via convex optimization (LMI/SDP)
 
 Funnel Control:
     Track reference x_d(t) within funnel:
         ||x(t) - x_d(t)||_M ≤ ρ(t)
-    
+
     Funnel ρ(t): time-varying bound
     Prescribes transient performance
-    
+
     Example: ρ(t) = (ρ₀ - ρ_∞)e^(-λt) + ρ_∞
 
 Incremental Stability:
     System is δ-GAS if:
         ||x₁(t) - x₂(t)|| → 0  as  t → ∞
-    
+
     For any initial conditions x₁(0), x₂(0)
-    
+
     Stronger than GAS: all trajectories converge to each other
 
 Usage
@@ -81,18 +81,18 @@ Usage
 ...     CCMResult,
 ...     FunnelingResult,
 ... )
->>> 
+>>>
 >>> # Contraction analysis
 >>> result: ContractionAnalysisResult = analyze_contraction(system)
 >>> if result['is_contracting']:
 ...     print(f"Rate β = {result['contraction_rate']}")
->>> 
+>>>
 >>> # CCM controller design
 >>> ccm: CCMResult = design_ccm_controller(
 ...     system, contraction_rate=0.5
 ... )
 >>> K = ccm['feedback_gain']
->>> 
+>>>
 >>> # Funnel control
 >>> funnel: FunnelingResult = design_funnel_controller(
 ...     system, reference, funnel_shape='exponential'
@@ -100,20 +100,19 @@ Usage
 >>> u = funnel['controller'](x, t)
 """
 
-from typing import Optional, Callable
-from typing_extensions import TypedDict
+from typing import Callable, Optional
+
 import numpy as np
+from typing_extensions import TypedDict
 
 from .core import (
-    StateVector,
-    GainMatrix,
     ArrayLike,
+    GainMatrix,
+    StateVector,
 )
-
 from .trajectories import (
     StateTrajectory,
 )
-
 
 # ============================================================================
 # Type Aliases for Contraction
@@ -167,12 +166,13 @@ Examples
 # Contraction Analysis
 # ============================================================================
 
+
 class ContractionAnalysisResult(TypedDict, total=False):
     """
     Contraction analysis result.
-    
+
     Determines if system is contracting and computes contraction rate.
-    
+
     Fields
     ------
     is_contracting : bool
@@ -193,7 +193,7 @@ class ContractionAnalysisResult(TypedDict, total=False):
         True if incrementally asymptotically stable
     condition_number : Optional[float]
         Condition number κ(M) if constant metric
-    
+
     Examples
     --------
     >>> # Analyze system contraction
@@ -201,21 +201,21 @@ class ContractionAnalysisResult(TypedDict, total=False):
     ...     dynamics=lambda x: -A @ x,
     ...     method='LMI'
     ... )
-    >>> 
+    >>>
     >>> if result['is_contracting']:
     ...     beta = result['contraction_rate']
     ...     M = result['metric']
-    ...     
+    ...
     ...     print(f"System is contracting!")
     ...     print(f"Rate β = {beta:.3f}")
     ...     print(f"Method: {result['verification_method']}")
-    ...     
+    ...
     ...     # Convergence bound
     ...     if 'convergence_bound' in result:
     ...         bound = result['convergence_bound']
     ...         t = np.linspace(0, 10, 100)
     ...         delta_bound = [bound(ti, 1.0) for ti in t]
-    ...         
+    ...
     ...         import matplotlib.pyplot as plt
     ...         plt.plot(t, delta_bound)
     ...         plt.xlabel('Time')
@@ -223,6 +223,7 @@ class ContractionAnalysisResult(TypedDict, total=False):
     ... else:
     ...     print("System is not contracting")
     """
+
     is_contracting: bool
     contraction_rate: ContractionRate
     metric: ContractionMetric
@@ -238,12 +239,13 @@ class ContractionAnalysisResult(TypedDict, total=False):
 # Control Contraction Metrics (CCM)
 # ============================================================================
 
+
 class CCMResult(TypedDict, total=False):
     """
     Control Contraction Metrics (CCM) result.
-    
+
     Controller synthesis ensuring contraction of closed-loop system.
-    
+
     Fields
     ------
     feedback_gain : GainMatrix
@@ -260,7 +262,7 @@ class CCMResult(TypedDict, total=False):
         Margin in contraction condition
     geodesic_distance : Optional[Callable]
         Distance in M-metric: d_M(x₁, x₂)
-    
+
     Examples
     --------
     >>> # Design CCM controller
@@ -269,23 +271,23 @@ class CCMResult(TypedDict, total=False):
     ...     contraction_rate=0.5,
     ...     method='SDP'
     ... )
-    >>> 
+    >>>
     >>> if result['contraction_verified']:
     ...     K = result['feedback_gain']
     ...     M = result['metric']
     ...     beta = result['contraction_rate']
-    ...     
+    ...
     ...     print(f"CCM controller designed!")
     ...     print(f"Contraction rate: {beta:.3f}")
     ...     print(f"Robustness margin: {result['robustness_margin']:.3f}")
-    ...     
+    ...
     ...     # Apply controller
     ...     def controller(x):
     ...         if callable(K):
     ...             return K(x)  # State-dependent
     ...         else:
     ...             return K @ x  # Constant
-    ...     
+    ...
     ...     # Geodesic distance (if available)
     ...     if 'geodesic_distance' in result:
     ...         d_M = result['geodesic_distance']
@@ -294,6 +296,7 @@ class CCMResult(TypedDict, total=False):
     ...         dist = d_M(x1, x2)
     ...         print(f"Distance in M-metric: {dist:.3f}")
     """
+
     feedback_gain: GainMatrix
     metric: ContractionMetric
     contraction_rate: ContractionRate
@@ -307,12 +310,13 @@ class CCMResult(TypedDict, total=False):
 # Funnel Control
 # ============================================================================
 
+
 class FunnelingResult(TypedDict):
     """
     Funnel control result.
-    
+
     Tracking controller with prescribed performance bounds.
-    
+
     Fields
     ------
     controller : Callable
@@ -329,7 +333,7 @@ class FunnelingResult(TypedDict):
         Initial error amplification factor
     contraction_rate : ContractionRate
         Asymptotic contraction rate
-    
+
     Examples
     --------
     >>> # Design funnel controller
@@ -341,38 +345,39 @@ class FunnelingResult(TypedDict):
     ...     final_funnel_width=0.1,
     ...     convergence_rate=0.5
     ... )
-    >>> 
+    >>>
     >>> controller = result['controller']
     >>> funnel = result['tracking_funnel']
-    >>> 
+    >>>
     >>> # Simulate closed-loop
     >>> t_sim = np.linspace(0, 10, 1000)
     >>> x = x0
     >>> x_traj = [x]
-    >>> 
+    >>>
     >>> for t in t_sim[1:]:
     ...     u = controller(x, t)
     ...     x = system.step(x, u, dt)
     ...     x_traj.append(x)
-    >>> 
+    >>>
     >>> x_traj = np.array(x_traj)
     >>> x_d = result['reference_trajectory']
-    >>> 
+    >>>
     >>> # Verify funnel constraint
     >>> import matplotlib.pyplot as plt
     >>> error = np.linalg.norm(x_traj - x_d, axis=1)
     >>> bound = np.array([funnel(t) for t in t_sim])
-    >>> 
+    >>>
     >>> plt.plot(t_sim, error, label='Actual error')
     >>> plt.plot(t_sim, bound, 'r--', label='Funnel bound')
     >>> plt.fill_between(t_sim, 0, bound, alpha=0.3)
     >>> plt.xlabel('Time')
     >>> plt.ylabel('Tracking error')
     >>> plt.legend()
-    >>> 
+    >>>
     >>> # Check: error should stay within funnel
     >>> assert np.all(error <= bound + 1e-6)
     """
+
     controller: Callable
     tracking_funnel: Callable
     funnel_shape: str
@@ -386,12 +391,13 @@ class FunnelingResult(TypedDict):
 # Incremental Stability
 # ============================================================================
 
+
 class IncrementalStabilityResult(TypedDict):
     """
     Incremental stability analysis result.
-    
+
     Analyzes convergence of trajectories to each other.
-    
+
     Fields
     ------
     incrementally_stable : bool
@@ -404,7 +410,7 @@ class IncrementalStabilityResult(TypedDict):
         KL stability bound β(||δx(0)||, t)
     convergence_type : str
         Type of convergence ('exponential', 'asymptotic', 'finite_time')
-    
+
     Examples
     --------
     >>> # Check incremental stability
@@ -412,18 +418,18 @@ class IncrementalStabilityResult(TypedDict):
     ...     system=nonlinear_system,
     ...     method='contraction'
     ... )
-    >>> 
+    >>>
     >>> if result['incrementally_stable']:
     ...     print("All trajectories converge to each other!")
-    ...     
+    ...
     ...     conv_type = result['convergence_type']
     ...     print(f"Convergence type: {conv_type}")
-    ...     
+    ...
     ...     if conv_type == 'exponential':
     ...         beta = result['contraction_rate']
     ...         print(f"Exponential rate: {beta:.3f}")
     ...         print(f"Bound: ||x₁(t) - x₂(t)|| ≤ e^(-{beta}t) ||x₁(0) - x₂(0)||")
-    ...     
+    ...
     ...     # KL bound (if available)
     ...     if 'kl_bound' in result:
     ...         kl = result['kl_bound']
@@ -431,6 +437,7 @@ class IncrementalStabilityResult(TypedDict):
     ... else:
     ...     print("System is not incrementally stable")
     """
+
     incrementally_stable: bool
     contraction_rate: Optional[ContractionRate]
     metric: Optional[ContractionMetric]
@@ -444,12 +451,11 @@ class IncrementalStabilityResult(TypedDict):
 
 __all__ = [
     # Type aliases
-    'ContractionMetric',
-    'ContractionRate',
-    
+    "ContractionMetric",
+    "ContractionRate",
     # Analysis results
-    'ContractionAnalysisResult',
-    'CCMResult',
-    'FunnelingResult',
-    'IncrementalStabilityResult',
+    "ContractionAnalysisResult",
+    "CCMResult",
+    "FunnelingResult",
+    "IncrementalStabilityResult",
 ]

@@ -47,21 +47,22 @@ Usage
 ...     TimePoints,
 ...     IntegrationResult,
 ... )
->>> 
+>>>
 >>> # Simulate system
 >>> trajectory: StateTrajectory = system.simulate(x0, u_seq, steps=100)
 >>> print(trajectory.shape)  # (101, nx) - includes t=0
->>> 
+>>>
 >>> # Analyze trajectory
 >>> time: TimePoints = np.linspace(0, 10, 101)
 >>> for t, x in zip(time, trajectory):
 ...     print(f"t={t:.2f}, x={x}")
 """
 
-from typing import Tuple, Optional, Dict, Any
-from typing_extensions import TypedDict
-from .core import ArrayLike
+from typing import Any, Dict, Optional, Tuple
 
+from typing_extensions import TypedDict
+
+from .core import ArrayLike
 
 # ============================================================================
 # Trajectory and Sequence Types
@@ -329,12 +330,13 @@ Examples
 # Integration and Simulation Result Types
 # ============================================================================
 
+
 class IntegrationResult(TypedDict, total=False):
     """
     Result from continuous-time integration (ODE/SDE solver).
-    
+
     Contains trajectory, time points, and solver diagnostics.
-    
+
     Attributes
     ----------
     t : TimePoints
@@ -353,7 +355,7 @@ class IntegrationResult(TypedDict, total=False):
         Number of LU decompositions (implicit methods)
     status : int
         Termination status code
-    
+
     Examples
     --------
     >>> # Integrate continuous system
@@ -363,7 +365,7 @@ class IntegrationResult(TypedDict, total=False):
     ...     t_span=(0.0, 10.0),
     ...     method='RK45'
     ... )
-    >>> 
+    >>>
     >>> if result['success']:
     ...     t = result['t']
     ...     trajectory = result['y']
@@ -371,7 +373,7 @@ class IntegrationResult(TypedDict, total=False):
     ...     print(f"Function evaluations: {result['nfev']}")
     ... else:
     ...     print(f"Integration failed: {result['message']}")
-    >>> 
+    >>>
     >>> # Plot results
     >>> import matplotlib.pyplot as plt
     >>> plt.plot(result['t'], result['y'][:, 0], label='x1')
@@ -379,11 +381,12 @@ class IntegrationResult(TypedDict, total=False):
     >>> plt.xlabel('Time')
     >>> plt.ylabel('State')
     >>> plt.legend()
-    >>> 
+    >>>
     >>> # Check computational cost
     >>> if result['nfev'] > 10000:
     ...     print("Warning: Many function evaluations - consider stiff solver")
     """
+
     t: ArrayLike
     y: ArrayLike
     success: bool
@@ -397,9 +400,9 @@ class IntegrationResult(TypedDict, total=False):
 class SimulationResult(TypedDict, total=False):
     """
     Result from discrete-time simulation.
-    
+
     Contains trajectories, control sequences, and metadata.
-    
+
     Attributes
     ----------
     states : StateTrajectory
@@ -414,7 +417,7 @@ class SimulationResult(TypedDict, total=False):
         Time points (n_steps+1,) if applicable
     info : Dict[str, Any]
         Additional information (cost, constraints, etc.)
-    
+
     Examples
     --------
     >>> # Basic discrete simulation
@@ -424,10 +427,10 @@ class SimulationResult(TypedDict, total=False):
     ...     steps=100,
     ...     return_all=True
     ... )
-    >>> 
+    >>>
     >>> states = result['states']      # (101, 3)
     >>> controls = result['controls']  # (100, 2)
-    >>> 
+    >>>
     >>> # Stochastic simulation
     >>> result: SimulationResult = sde_system.simulate(
     ...     x0=np.zeros(2),
@@ -435,24 +438,25 @@ class SimulationResult(TypedDict, total=False):
     ...     w_seq=np.random.randn(100, 2),
     ...     steps=100
     ... )
-    >>> 
+    >>>
     >>> if 'noise' in result:
     ...     print("Stochastic simulation")
     ...     noise_used = result['noise']
-    >>> 
+    >>>
     >>> # With time information
     >>> dt = 0.01
     >>> result: SimulationResult = system.simulate(
     ...     x0=x0, u_seq=u_seq, steps=100, dt=dt
     ... )
     >>> time = result['time']  # [0, dt, 2*dt, ..., 100*dt]
-    >>> 
+    >>>
     >>> # Access metadata
     >>> if 'info' in result:
     ...     info = result['info']
     ...     if 'cost' in info:
     ...         print(f"Trajectory cost: {info['cost']:.2f}")
     """
+
     states: ArrayLike
     controls: ArrayLike
     outputs: Optional[ArrayLike]
@@ -465,12 +469,13 @@ class SimulationResult(TypedDict, total=False):
 # Trajectory Analysis Types
 # ============================================================================
 
+
 class TrajectoryStatistics(TypedDict, total=False):
     """
     Statistical summary of trajectory.
-    
+
     Computed statistics over time series data.
-    
+
     Attributes
     ----------
     mean : ArrayLike
@@ -489,7 +494,7 @@ class TrajectoryStatistics(TypedDict, total=False):
         Number of time steps
     duration : float
         Time duration (t_end - t_start)
-    
+
     Examples
     --------
     >>> def compute_trajectory_stats(trajectory: StateTrajectory) -> TrajectoryStatistics:
@@ -503,12 +508,13 @@ class TrajectoryStatistics(TypedDict, total=False):
     ...         final=trajectory[-1],
     ...         length=len(trajectory),
     ...     )
-    >>> 
+    >>>
     >>> stats: TrajectoryStatistics = compute_trajectory_stats(trajectory)
     >>> print(f"Mean state: {stats['mean']}")
     >>> print(f"Final state: {stats['final']}")
     >>> print(f"Max deviation: {np.max(stats['std'])}")
     """
+
     mean: ArrayLike
     std: ArrayLike
     min: ArrayLike
@@ -522,9 +528,9 @@ class TrajectoryStatistics(TypedDict, total=False):
 class TrajectorySegment(TypedDict):
     """
     Segment of trajectory between two time points.
-    
+
     Extracted portion of full trajectory for analysis.
-    
+
     Attributes
     ----------
     states : StateTrajectory
@@ -537,7 +543,7 @@ class TrajectorySegment(TypedDict):
         Index in original trajectory where segment starts
     end_index : int
         Index in original trajectory where segment ends
-    
+
     Examples
     --------
     >>> def extract_segment(
@@ -549,7 +555,7 @@ class TrajectorySegment(TypedDict):
     ...     time = result['time']
     ...     mask = (time >= t_start) & (time <= t_end)
     ...     indices = np.where(mask)[0]
-    ...     
+    ...
     ...     return TrajectorySegment(
     ...         states=result['states'][mask],
     ...         controls=result['controls'][mask[:-1]] if 'controls' in result else None,
@@ -557,11 +563,12 @@ class TrajectorySegment(TypedDict):
     ...         start_index=indices[0],
     ...         end_index=indices[-1],
     ...     )
-    >>> 
+    >>>
     >>> # Extract transient response (first 2 seconds)
     >>> segment: TrajectorySegment = extract_segment(result, 0.0, 2.0)
     >>> transient_states = segment['states']
     """
+
     states: ArrayLike
     controls: Optional[ArrayLike]
     time: ArrayLike
@@ -575,20 +582,17 @@ class TrajectorySegment(TypedDict):
 
 __all__ = [
     # Trajectory and sequence types
-    'StateTrajectory',
-    'ControlSequence',
-    'OutputSequence',
-    'NoiseSequence',
-    
+    "StateTrajectory",
+    "ControlSequence",
+    "OutputSequence",
+    "NoiseSequence",
     # Time types
-    'TimePoints',
-    'TimeSpan',
-    
+    "TimePoints",
+    "TimeSpan",
     # Result types
-    'IntegrationResult',
-    'SimulationResult',
-    
+    "IntegrationResult",
+    "SimulationResult",
     # Analysis types
-    'TrajectoryStatistics',
-    'TrajectorySegment',
+    "TrajectoryStatistics",
+    "TrajectorySegment",
 ]

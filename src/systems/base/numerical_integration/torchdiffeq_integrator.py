@@ -22,26 +22,27 @@ differentiation support through PyTorch's autograd.
 Supports both controlled and autonomous systems (nu=0).
 """
 
-from typing import Optional, Callable, Tuple, Dict, Any
+from typing import Any, Callable, Dict, Optional, Tuple
+
 import torch
-from torch import Tensor
 import torchdiffeq
+from torch import Tensor
 
 from src.systems.base.numerical_integration.integrator_base import (
-    IntegratorBase,
+    ArrayLike,
     IntegrationResult,
+    IntegratorBase,
     StepMode,
-    ArrayLike
 )
 
 
 class TorchDiffEqIntegrator(IntegratorBase):
     """
     PyTorch-based ODE integrator using the torchdiffeq library.
-    
+
     Supports adaptive and fixed-step integration with various solvers
     and automatic differentiation through PyTorch's autograd.
-    
+
     Parameters
     ----------
     system : SymbolicDynamicalSystem
@@ -63,12 +64,12 @@ class TorchDiffEqIntegrator(IntegratorBase):
         is a neural network. For regular dynamical systems, use adjoint=False.
     **options
         Additional options including rtol, atol, max_steps
-    
+
     Examples
     --------
     >>> import torch
     >>> from torchdiffeq_integrator import TorchDiffEqIntegrator
-    >>> 
+    >>>
     >>> # Regular controlled dynamical system (adjoint=False)
     >>> integrator = TorchDiffEqIntegrator(
     ...     system,
@@ -77,14 +78,14 @@ class TorchDiffEqIntegrator(IntegratorBase):
     ...     method='dopri5',
     ...     adjoint=False  # Default for regular systems
     ... )
-    >>> 
+    >>>
     >>> x0 = torch.tensor([1.0, 0.0])
     >>> result = integrator.integrate(
     ...     x0,
     ...     lambda t, x: torch.zeros(1),
     ...     (0.0, 10.0)
     ... )
-    >>> 
+    >>>
     >>> # Autonomous system
     >>> integrator = TorchDiffEqIntegrator(autonomous_system, backend='torch')
     >>> result = integrator.integrate(
@@ -92,7 +93,7 @@ class TorchDiffEqIntegrator(IntegratorBase):
     ...     u_func=lambda t, x: None,
     ...     t_span=(0.0, 10.0)
     ... )
-    >>> 
+    >>>
     >>> # Neural ODE (adjoint=True for memory efficiency)
     >>> class NeuralODE(torch.nn.Module):
     ...     def __init__(self):
@@ -104,7 +105,7 @@ class TorchDiffEqIntegrator(IntegratorBase):
     ...         )
     ...     def forward(self, t, x):
     ...         return self.net(x)
-    >>> 
+    >>>
     >>> neural_ode = NeuralODE()
     >>> integrator_neural = TorchDiffEqIntegrator(
     ...     neural_ode,
@@ -119,36 +120,41 @@ class TorchDiffEqIntegrator(IntegratorBase):
         system,
         dt: Optional[float] = None,
         step_mode: StepMode = StepMode.ADAPTIVE,
-        backend: str = 'torch',
-        method: str = 'dopri5',
+        backend: str = "torch",
+        method: str = "dopri5",
         adjoint: bool = False,  # Changed default to False
-        **options
+        **options,
     ):
         # Validate backend
-        if backend != 'torch':
-            raise ValueError(
-                f"TorchDiffEqIntegrator requires backend='torch', got '{backend}'"
-            )
-        
+        if backend != "torch":
+            raise ValueError(f"TorchDiffEqIntegrator requires backend='torch', got '{backend}'")
+
         # Initialize base class
         super().__init__(system, dt, step_mode, backend, **options)
-        
+
         self.method = method.lower()
         self.use_adjoint = adjoint
         self._integrator_name = f"torchdiffeq-{method}"
-        
+
         # Available methods in torchdiffeq
         self.available_methods = [
-            'dopri5', 'dopri8', 'bosh3', 'fehlberg2', 'adaptive_heun',
-            'euler', 'midpoint', 'rk4', 'explicit_adams', 'implicit_adams',
-            'fixed_adams', 'scipy_solver'
+            "dopri5",
+            "dopri8",
+            "bosh3",
+            "fehlberg2",
+            "adaptive_heun",
+            "euler",
+            "midpoint",
+            "rk4",
+            "explicit_adams",
+            "implicit_adams",
+            "fixed_adams",
+            "scipy_solver",
         ]
-        
+
         if self.method not in self.available_methods:
-            raise ValueError(
-                f"Unknown method '{method}'. Available: {self.available_methods}"
-            )
-        
+            raise ValueError(f"Unknown method '{method}'. Available: {self.available_methods}")
+
         # Select appropriate integration function
         # Note: adjoint requires nn.Module ODE functions
         if self.use_adjoint:
@@ -164,14 +170,11 @@ class TorchDiffEqIntegrator(IntegratorBase):
         return f"{self._integrator_name} ({mode_str}){adjoint_str}"
 
     def step(
-        self,
-        x: ArrayLike,
-        u: Optional[ArrayLike] = None,
-        dt: Optional[float] = None
+        self, x: ArrayLike, u: Optional[ArrayLike] = None, dt: Optional[float] = None
     ) -> ArrayLike:
         """
         Take one integration step: x(t) → x(t + dt).
-        
+
         Parameters
         ----------
         x : ArrayLike
@@ -180,46 +183,46 @@ class TorchDiffEqIntegrator(IntegratorBase):
             Control input (nu,) or (batch, nu), or None for autonomous systems
         dt : Optional[float]
             Step size (uses self.dt if None)
-            
+
         Returns
         -------
         ArrayLike
             Next state x(t + dt)
         """
         step_size = dt if dt is not None else self.dt
-        
+
         if step_size is None:
             raise ValueError("Step size dt must be specified")
-        
+
         # Convert to PyTorch tensors
         if not isinstance(x, torch.Tensor):
             x = torch.tensor(x, dtype=torch.float32)
-        
+
         # Handle autonomous systems - keep None as None
         # Do NOT convert None to tensor
         if u is not None and not isinstance(u, torch.Tensor):
             u = torch.tensor(u, dtype=torch.float32, device=x.device)
-        
+
         # Define ODE function (pure function for autograd)
         def ode_func(t, state):
             return self.system(state, u, backend=self.backend)
-        
+
         # Time points
         t = torch.tensor([0.0, step_size], dtype=x.dtype, device=x.device)
-        
+
         # Integrate
         solution = self._odeint(
             ode_func,
             x,
             t,
             method=self.method,
-            options={'step_size': step_size} if self.step_mode == StepMode.FIXED else {}
+            options={"step_size": step_size} if self.step_mode == StepMode.FIXED else {},
         )
-        
+
         # Update stats
-        self._stats['total_steps'] += 1
-        self._stats['total_fev'] += 1  # Approximate
-        
+        self._stats["total_steps"] += 1
+        self._stats["total_fev"] += 1  # Approximate
+
         return solution[-1]
 
     def integrate(
@@ -228,11 +231,11 @@ class TorchDiffEqIntegrator(IntegratorBase):
         u_func: Callable[[float, ArrayLike], Optional[ArrayLike]],
         t_span: Tuple[float, float],
         t_eval: Optional[ArrayLike] = None,
-        dense_output: bool = False
+        dense_output: bool = False,
     ) -> IntegrationResult:
         """
         Integrate over time interval with control policy.
-        
+
         Parameters
         ----------
         x0 : ArrayLike
@@ -245,12 +248,12 @@ class TorchDiffEqIntegrator(IntegratorBase):
             Specific times at which to store solution
         dense_output : bool
             If True, return dense interpolated solution (not supported)
-            
+
         Returns
         -------
         IntegrationResult
             Object containing t, x, success, and metadata
-            
+
         Examples
         --------
         >>> # Controlled system
@@ -259,7 +262,7 @@ class TorchDiffEqIntegrator(IntegratorBase):
         ...     u_func=lambda t, x: torch.tensor([0.5]),
         ...     t_span=(0.0, 10.0)
         ... )
-        >>> 
+        >>>
         >>> # Autonomous system
         >>> result = integrator.integrate(
         ...     x0=torch.tensor([1.0, 0.0]),
@@ -268,11 +271,11 @@ class TorchDiffEqIntegrator(IntegratorBase):
         ... )
         """
         t0, tf = t_span
-        
+
         # Convert to PyTorch tensor
         if not isinstance(x0, torch.Tensor):
             x0 = torch.tensor(x0, dtype=torch.float32)
-        
+
         # Handle edge cases
         if t0 == tf:
             return IntegrationResult(
@@ -283,10 +286,17 @@ class TorchDiffEqIntegrator(IntegratorBase):
                 nfev=0,
                 nsteps=0,
             )
-        
+
         # Prepare time points
-        fixed_step_methods = ['euler', 'midpoint', 'rk4', 'explicit_adams', 'implicit_adams', 'fixed_adams']
-        
+        fixed_step_methods = [
+            "euler",
+            "midpoint",
+            "rk4",
+            "explicit_adams",
+            "implicit_adams",
+            "fixed_adams",
+        ]
+
         if t_eval is not None:
             if not isinstance(t_eval, torch.Tensor):
                 t_eval = torch.tensor(t_eval, dtype=x0.dtype, device=x0.device)
@@ -300,71 +310,75 @@ class TorchDiffEqIntegrator(IntegratorBase):
             else:
                 # For adaptive methods, can use just endpoints
                 t_points = torch.tensor([t0, tf], dtype=x0.dtype, device=x0.device)
-        
+
         # Define ODE function (pure function for autograd)
         def ode_func(t, state):
             t_val = float(t.item()) if isinstance(t, torch.Tensor) else float(t)
             u = u_func(t_val, state)
-            
+
             # Handle autonomous systems - keep None as None
             # Do NOT convert None to tensor
             if u is not None and not isinstance(u, torch.Tensor):
                 u = torch.tensor(u, dtype=state.dtype, device=state.device)
-            
+
             return self.system(state, u, backend=self.backend)
-        
+
         # Set up solver options
         solve_options = {
-            'method': self.method,
+            "method": self.method,
         }
-        
+
         # Fixed-step methods require 'options' dict with step_size
-        fixed_step_methods = ['euler', 'midpoint', 'rk4', 'explicit_adams', 'implicit_adams', 'fixed_adams']
-        
+        fixed_step_methods = [
+            "euler",
+            "midpoint",
+            "rk4",
+            "explicit_adams",
+            "implicit_adams",
+            "fixed_adams",
+        ]
+
         if self.method in fixed_step_methods:
             # These methods REQUIRE fixed step size
             if self.step_mode == StepMode.ADAPTIVE:
                 # Force fixed stepping for these methods
-                solve_options['options'] = {'step_size': self.dt}
+                solve_options["options"] = {"step_size": self.dt}
             else:
-                solve_options['options'] = {'step_size': self.dt}
+                solve_options["options"] = {"step_size": self.dt}
         elif self.step_mode == StepMode.ADAPTIVE:
             # Adaptive methods use tolerances
-            solve_options['rtol'] = self.rtol
-            solve_options['atol'] = self.atol
+            solve_options["rtol"] = self.rtol
+            solve_options["atol"] = self.atol
         else:
             # Fixed step mode with adaptive method
-            solve_options['options'] = {'step_size': self.dt}
-        
+            solve_options["options"] = {"step_size": self.dt}
+
         # Integrate
         try:
-            y = self._odeint(
-                ode_func,
-                x0,
-                t_points,
-                **solve_options
-            )
-            
+            y = self._odeint(ode_func, x0, t_points, **solve_options)
+
             # Check success (no NaN/Inf)
             success = torch.all(torch.isfinite(y)).item()
-            
+
             # Update statistics (torchdiffeq doesn't expose detailed stats)
             nsteps = len(t_points) - 1
             nfev = nsteps * 4  # Approximate for RK4-like methods
-            self._stats['total_steps'] += nsteps
-            self._stats['total_fev'] += nfev
-            
+            self._stats["total_steps"] += nsteps
+            self._stats["total_fev"] += nfev
+
             return IntegrationResult(
                 t=t_points,
                 x=y,
                 success=success,
-                message="Integration successful" if success else "Integration failed (NaN/Inf detected)",
+                message=(
+                    "Integration successful" if success else "Integration failed (NaN/Inf detected)"
+                ),
                 nfev=nfev,
                 nsteps=nsteps,
                 method=self.method,
                 adjoint=self.use_adjoint,
             )
-            
+
         except RuntimeError as e:
             # Integration failed
             return IntegrationResult(
@@ -390,7 +404,7 @@ class TorchDiffEqIntegrator(IntegratorBase):
     ):
         """
         Integrate and compute gradients w.r.t. initial conditions.
-        
+
         Parameters
         ----------
         x0 : ArrayLike
@@ -403,7 +417,7 @@ class TorchDiffEqIntegrator(IntegratorBase):
             Loss function taking IntegrationResult
         t_eval : Optional[ArrayLike]
             Evaluation times
-            
+
         Returns
         -------
         tuple
@@ -412,19 +426,19 @@ class TorchDiffEqIntegrator(IntegratorBase):
         # Ensure x0 requires grad
         if not isinstance(x0, torch.Tensor):
             x0 = torch.tensor(x0, dtype=torch.float32)
-        
+
         if not x0.requires_grad:
             x0 = x0.clone().detach().requires_grad_(True)
-        
+
         # Integrate
         result = self.integrate(x0, u_func, t_span, t_eval)
-        
+
         # Compute loss
         loss = loss_fn(result)
-        
+
         # Compute gradient
         loss.backward()
-        
+
         return loss.item(), x0.grad.clone()
 
     def enable_adjoint(self):
@@ -440,12 +454,12 @@ class TorchDiffEqIntegrator(IntegratorBase):
     def to_device(self, device: str):
         """
         Move integrator computations to specified device.
-        
+
         Parameters
         ----------
         device : str
             Device ('cpu', 'cuda', 'cuda:0', etc.)
-            
+
         Examples
         --------
         >>> integrator.to_device('cuda')
@@ -457,16 +471,13 @@ class TorchDiffEqIntegrator(IntegratorBase):
         # This just stores the device preference
 
     def vectorized_step(
-        self,
-        x_batch: ArrayLike,
-        u_batch: Optional[ArrayLike] = None,
-        dt: Optional[float] = None
+        self, x_batch: ArrayLike, u_batch: Optional[ArrayLike] = None, dt: Optional[float] = None
     ):
         """
         Vectorized step over batch of states and controls.
-        
+
         PyTorch naturally handles batched operations.
-        
+
         Parameters
         ----------
         x_batch : ArrayLike
@@ -475,7 +486,7 @@ class TorchDiffEqIntegrator(IntegratorBase):
             Batch of controls (batch, nu), or None for autonomous systems
         dt : Optional[float]
             Step size
-            
+
         Returns
         -------
         ArrayLike
@@ -485,48 +496,52 @@ class TorchDiffEqIntegrator(IntegratorBase):
         # Just need to ensure proper shapes
         if not isinstance(x_batch, torch.Tensor):
             x_batch = torch.tensor(x_batch, dtype=torch.float32)
-        
+
         # Handle autonomous systems
         if u_batch is not None and not isinstance(u_batch, torch.Tensor):
             u_batch = torch.tensor(u_batch, dtype=torch.float32)
-        
+
         step_size = dt if dt is not None else self.dt
-        
+
         # Vectorized ODE function
         def ode_func(t, state_batch):
             # Process each state with corresponding control
             if u_batch is not None:
-                return torch.stack([
-                    self.system(state_batch[i], u_batch[i], backend=self.backend)
-                    for i in range(state_batch.shape[0])
-                ])
+                return torch.stack(
+                    [
+                        self.system(state_batch[i], u_batch[i], backend=self.backend)
+                        for i in range(state_batch.shape[0])
+                    ]
+                )
             else:
                 # Autonomous - no control
-                return torch.stack([
-                    self.system(state_batch[i], None, backend=self.backend)
-                    for i in range(state_batch.shape[0])
-                ])
-        
+                return torch.stack(
+                    [
+                        self.system(state_batch[i], None, backend=self.backend)
+                        for i in range(state_batch.shape[0])
+                    ]
+                )
+
         t = torch.tensor([0.0, step_size], dtype=x_batch.dtype, device=x_batch.device)
-        
+
         solution = self._odeint(
             ode_func,
             x_batch,
             t,
             method=self.method,
         )
-        
+
         return solution[-1]
 
     def set_options(self, **options):
         """Update solver options."""
         self.options.update(options)
-        if 'rtol' in options:
-            self.rtol = options['rtol']
-        if 'atol' in options:
-            self.atol = options['atol']
-        if 'adjoint' in options:
-            self.use_adjoint = options['adjoint']
+        if "rtol" in options:
+            self.rtol = options["rtol"]
+        if "atol" in options:
+            self.atol = options["atol"]
+        if "adjoint" in options:
+            self.use_adjoint = options["adjoint"]
             if self.use_adjoint:
                 self._odeint = torchdiffeq.odeint_adjoint
             else:
@@ -535,13 +550,13 @@ class TorchDiffEqIntegrator(IntegratorBase):
     def get_options(self) -> Dict[str, Any]:
         """Get current solver options."""
         return {
-            'method': self.method,
-            'step_mode': self.step_mode.value,
-            'rtol': self.rtol,
-            'atol': self.atol,
-            'adjoint': self.use_adjoint,
-            'dt': self.dt,
-            **self.options
+            "method": self.method,
+            "step_mode": self.step_mode.value,
+            "rtol": self.rtol,
+            "atol": self.atol,
+            "adjoint": self.use_adjoint,
+            "dt": self.dt,
+            **self.options,
         }
 
 
@@ -549,17 +564,18 @@ class TorchDiffEqIntegrator(IntegratorBase):
 # Utility Functions
 # ============================================================================
 
+
 def create_torchdiffeq_integrator(
     system,
-    method: str = 'dopri5',
+    method: str = "dopri5",
     dt: Optional[float] = 0.01,
     step_mode: StepMode = StepMode.ADAPTIVE,
     adjoint: bool = False,
-    **options
+    **options,
 ) -> TorchDiffEqIntegrator:
     """
     Quick factory for TorchDiffEq integrators.
-    
+
     Parameters
     ----------
     system : SymbolicDynamicalSystem
@@ -574,12 +590,12 @@ def create_torchdiffeq_integrator(
         Use adjoint method for backprop (default: False for regular systems)
     **options
         Additional solver options
-        
+
     Returns
     -------
     TorchDiffEqIntegrator
         Configured integrator
-        
+
     Examples
     --------
     >>> # Regular dynamical system
@@ -589,7 +605,7 @@ def create_torchdiffeq_integrator(
     ...     adjoint=False,
     ...     rtol=1e-7
     ... )
-    >>> 
+    >>>
     >>> # Autonomous system
     >>> integrator = create_torchdiffeq_integrator(autonomous_system)
     """
@@ -597,8 +613,8 @@ def create_torchdiffeq_integrator(
         system=system,
         dt=dt,
         step_mode=step_mode,
-        backend='torch',
+        backend="torch",
         method=method,
         adjoint=adjoint,
-        **options
+        **options,
     )

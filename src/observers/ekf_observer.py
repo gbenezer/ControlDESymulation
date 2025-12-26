@@ -13,9 +13,11 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+from typing import Optional
+
 import numpy as np
 import torch
-from typing import Optional
+
 
 class ExtendedKalmanFilter:
     """
@@ -147,9 +149,7 @@ class ExtendedKalmanFilter:
                 self.x_hat = self.system(self.x_hat, u)
 
             # Propagate covariance: P[k+1|k] = A P[k|k] A^T + Q
-            A, _ = self.system.linearized_dynamics(
-                self.x_hat.unsqueeze(0), u.unsqueeze(0)
-            )
+            A, _ = self.system.linearized_dynamics(self.x_hat.unsqueeze(0), u.unsqueeze(0))
             A = A.squeeze()
         else:
             # Continuous system: integrate forward
@@ -160,9 +160,7 @@ class ExtendedKalmanFilter:
                 dx = self.system.forward(self.x_hat, u)
                 self.x_hat = self.x_hat + dx * dt
 
-            A, _ = self.system.linearized_dynamics(
-                self.x_hat.unsqueeze(0), u.unsqueeze(0)
-            )
+            A, _ = self.system.linearized_dynamics(self.x_hat.unsqueeze(0), u.unsqueeze(0))
             A = A.squeeze()
             A = torch.eye(self.system.nx) + A * dt  # Euler discretization
 
@@ -198,9 +196,7 @@ class ExtendedKalmanFilter:
         # Predicted measurement
         with torch.no_grad():
             if self.is_discrete:
-                y_pred = self.system.continuous_time_system.h(
-                    self.x_hat.unsqueeze(0)
-                ).squeeze()
+                y_pred = self.system.continuous_time_system.h(self.x_hat.unsqueeze(0)).squeeze()
             else:
                 y_pred = self.system.h(self.x_hat.unsqueeze(0)).squeeze()
 
@@ -243,17 +239,11 @@ class ExtendedKalmanFilter:
         self.x_hat = self.x_hat + correction
 
         # Update covariance: P = (I - K C) P
-        nx = (
-            self.system.nx
-            if not self.is_discrete
-            else self.system.continuous_time_system.nx
-        )
+        nx = self.system.nx if not self.is_discrete else self.system.continuous_time_system.nx
         I = torch.eye(nx, device=self.P.device, dtype=self.P.dtype)
         self.P = (I - Kt @ C) @ self.P
 
-    def reset(
-        self, x0: Optional[torch.Tensor] = None, P0: Optional[torch.Tensor] = None
-    ):
+    def reset(self, x0: Optional[torch.Tensor] = None, P0: Optional[torch.Tensor] = None):
         """
         Reset filter to initial state and covariance.
 
@@ -291,9 +281,5 @@ class ExtendedKalmanFilter:
         if P0 is not None:
             self.P = P0.clone()
         else:
-            nx = (
-                self.system.nx
-                if not self.is_discrete
-                else self.system.continuous_time_system.nx
-            )
+            nx = self.system.nx if not self.is_discrete else self.system.continuous_time_system.nx
             self.P = torch.eye(nx) * 0.1

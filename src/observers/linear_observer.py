@@ -13,9 +13,11 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+from typing import Optional
+
 import numpy as np
 import torch
-from typing import Optional
+
 
 class LinearObserver:
     """
@@ -161,14 +163,10 @@ class LinearObserver:
             if hasattr(self.system, "continuous_time_system"):
                 # Discrete system
                 x_pred = self.system(self.x_hat.unsqueeze(0), u.unsqueeze(0)).squeeze(0)
-                y_pred = self.system.continuous_time_system.h(
-                    x_pred.unsqueeze(0)
-                ).squeeze(0)
+                y_pred = self.system.continuous_time_system.h(x_pred.unsqueeze(0)).squeeze(0)
             else:
                 # Continuous system
-                dx = self.system.forward(
-                    self.x_hat.unsqueeze(0), u.unsqueeze(0)
-                ).squeeze(0)
+                dx = self.system.forward(self.x_hat.unsqueeze(0), u.unsqueeze(0)).squeeze(0)
                 x_pred = self.x_hat + dx * dt
                 y_pred = self.system.h(x_pred.unsqueeze(0)).squeeze(0)
 

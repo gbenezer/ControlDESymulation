@@ -27,17 +27,17 @@ Tests cover:
 8. Backend support
 """
 
-import pytest
 import numpy as np
+import pytest
 import sympy as sp
 
-from src.systems.base.numerical_integration.integrator_base import StepMode, IntegrationResult
 from src.systems.base.numerical_integration.fixed_step_integrators import (
     ExplicitEulerIntegrator,
     MidpointIntegrator,
     RK4Integrator,
     create_fixed_step_integrator,
 )
+from src.systems.base.numerical_integration.integrator_base import IntegrationResult, StepMode
 
 # Conditional imports
 torch_available = True

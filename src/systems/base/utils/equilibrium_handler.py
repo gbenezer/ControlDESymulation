@@ -13,9 +13,10 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-from typing import Dict, List, Optional, Tuple
-import numpy as np
 import warnings
+from typing import Dict, List, Optional, Tuple
+
+import numpy as np
 
 
 class EquilibriumHandler:
@@ -63,11 +64,11 @@ class EquilibriumHandler:
                         f"Cannot change nx from {self._nx} to {value}: "
                         f"equilibrium '{name}' has wrong dimension"
                     )
-        
+
         # Update dimension
         old_nx = self._nx
         self._nx = value
-        
+
         # Recreate origin if dimensions changed from initialization
         if old_nx == 0 and value > 0:
             self._equilibria["origin"]["x"] = np.zeros(value)
@@ -77,7 +78,7 @@ class EquilibriumHandler:
         """Number of controls"""
         return self._nu
 
-    @nu.setter  
+    @nu.setter
     def nu(self, value: int):
         """Update control dimension and validate existing equilibria"""
         if self._nu != 0 and value != self._nu:
@@ -87,11 +88,11 @@ class EquilibriumHandler:
                         f"Cannot change nu from {self._nu} to {value}: "
                         f"equilibrium '{name}' has wrong dimension"
                     )
-        
+
         # Update dimension
         old_nu = self._nu
         self._nu = value
-        
+
         # Recreate origin if dimensions changed from initialization
         if old_nu == 0 and value > 0:
             self._equilibria["origin"]["u"] = np.zeros(value)
@@ -132,8 +133,7 @@ class EquilibriumHandler:
             # CHECK FOR NaN/Inf BEFORE COMPARISON
             if not np.isfinite(max_deriv):
                 warnings.warn(
-                    f"Equilibrium '{name}' is invalid: "
-                    f"max|f(x,u)| = {max_deriv} (not finite)"
+                    f"Equilibrium '{name}' is invalid: " f"max|f(x,u)| = {max_deriv} (not finite)"
                 )
                 metadata["verified"] = False
                 metadata["max_residual"] = float(max_deriv)
@@ -198,11 +198,13 @@ class EquilibriumHandler:
             return arr
         elif backend == "torch":
             import torch
+
             # Preserve dtype: float64 -> float64, float32 -> float32
             dtype = torch.float64 if arr.dtype == np.float64 else torch.float32
             return torch.tensor(arr, dtype=dtype)
         elif backend == "jax":
             import jax.numpy as jnp
+
             return jnp.array(arr)  # JAX preserves dtype by default
         else:
             raise ValueError(f"Unknown backend: {backend}")

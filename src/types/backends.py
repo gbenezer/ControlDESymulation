@@ -32,7 +32,7 @@ across the entire framework.
 Usage
 -----
 >>> from src.types.backends import Backend, Device, IntegrationMethod
->>> 
+>>>
 >>> def integrate(
 ...     system,
 ...     backend: Backend = 'numpy',
@@ -42,12 +42,12 @@ Usage
 ...     pass
 """
 
-from typing import Literal, Optional, Dict, Any
-from typing_extensions import TypedDict
-import numpy as np
-
 # Conditional imports
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, Literal, Optional
+
+import numpy as np
+from typing_extensions import TypedDict
+
 if TYPE_CHECKING:
     import sympy as sp
 
@@ -56,7 +56,7 @@ if TYPE_CHECKING:
 # Backend Types
 # ============================================================================
 
-Backend = Literal['numpy', 'torch', 'jax']
+Backend = Literal["numpy", "torch", "jax"]
 """
 Backend identifier for numerical computation.
 
@@ -109,12 +109,13 @@ Examples
 >>> device = jax.devices('gpu')[0]
 """
 
+
 class BackendConfig(TypedDict, total=False):
     """
     Backend configuration dictionary.
-    
+
     Specifies backend, device, and precision settings.
-    
+
     Attributes
     ----------
     backend : Backend
@@ -123,7 +124,7 @@ class BackendConfig(TypedDict, total=False):
         Hardware device
     dtype : Optional[str]
         Data type ('float32', 'float64', etc.)
-    
+
     Examples
     --------
     >>> config: BackendConfig = {
@@ -131,10 +132,11 @@ class BackendConfig(TypedDict, total=False):
     ...     'device': 'cuda:0',
     ...     'dtype': 'float32'
     ... }
-    >>> 
+    >>>
     >>> # Minimal config
     >>> config_minimal: BackendConfig = {'backend': 'numpy'}
     """
+
     backend: Backend
     device: Optional[Device]
     dtype: Optional[str]
@@ -285,7 +287,7 @@ Examples
 # Noise and Stochastic Types
 # ============================================================================
 
-NoiseType = Literal['additive', 'multiplicative', 'diagonal', 'scalar', 'general']
+NoiseType = Literal["additive", "multiplicative", "diagonal", "scalar", "general"]
 """
 Noise structure classification for stochastic systems.
 
@@ -321,7 +323,7 @@ Examples
 ...     G = system.diffusion(x, u)
 """
 
-SDEType = Literal['ito', 'stratonovich']
+SDEType = Literal["ito", "stratonovich"]
 """
 SDE interpretation type.
 
@@ -350,7 +352,7 @@ Examples
 >>> self.sde_type = 'ito'
 """
 
-ConvergenceType = Literal['strong', 'weak']
+ConvergenceType = Literal["strong", "weak"]
 """
 SDE convergence type for numerical integration.
 
@@ -389,12 +391,13 @@ Examples
 # System Configuration Types
 # ============================================================================
 
+
 class SystemConfig(TypedDict, total=False):
     """
     Complete system configuration dictionary.
-    
+
     Contains all system metadata and settings.
-    
+
     Attributes
     ----------
     name : str
@@ -421,14 +424,14 @@ class SystemConfig(TypedDict, total=False):
         Preferred hardware device
     parameters : Dict
         Symbolic parameter values
-    
+
     Examples
     --------
     >>> config: SystemConfig = system.get_config_dict()
     >>> print(f"System: {config['class_name']}")
     >>> print(f"States: {config['nx']}, Controls: {config['nu']}")
     >>> print(f"Backend: {config['backend']}, Device: {config['device']}")
-    >>> 
+    >>>
     >>> # Create from scratch
     >>> config: SystemConfig = {
     ...     'name': 'Pendulum',
@@ -441,6 +444,7 @@ class SystemConfig(TypedDict, total=False):
     ...     'backend': 'numpy',
     ... }
     """
+
     name: str
     class_name: str
     nx: int
@@ -458,9 +462,9 @@ class SystemConfig(TypedDict, total=False):
 class IntegratorConfig(TypedDict, total=False):
     """
     Configuration for continuous-time integrators.
-    
+
     Specifies integration method and tolerances.
-    
+
     Attributes
     ----------
     method : IntegrationMethod
@@ -477,7 +481,7 @@ class IntegratorConfig(TypedDict, total=False):
         Whether dynamics function is vectorized
     dense_output : bool
         Compute dense output (for interpolation)
-    
+
     Examples
     --------
     >>> # Standard configuration
@@ -487,7 +491,7 @@ class IntegratorConfig(TypedDict, total=False):
     ...     'atol': 1e-9,
     ...     'max_step': 0.1
     ... }
-    >>> 
+    >>>
     >>> # High accuracy configuration
     >>> config_accurate: IntegratorConfig = {
     ...     'method': 'DOP853',
@@ -495,7 +499,7 @@ class IntegratorConfig(TypedDict, total=False):
     ...     'atol': 1e-12,
     ...     'dense_output': True
     ... }
-    >>> 
+    >>>
     >>> # Stiff system configuration
     >>> config_stiff: IntegratorConfig = {
     ...     'method': 'Radau',
@@ -503,6 +507,7 @@ class IntegratorConfig(TypedDict, total=False):
     ...     'atol': 1e-8,
     ... }
     """
+
     method: IntegrationMethod
     rtol: float
     atol: float
@@ -515,9 +520,9 @@ class IntegratorConfig(TypedDict, total=False):
 class DiscretizerConfig(TypedDict, total=False):
     """
     Configuration for system discretization.
-    
+
     Specifies how continuous system is converted to discrete.
-    
+
     Attributes
     ----------
     dt : float
@@ -530,7 +535,7 @@ class DiscretizerConfig(TypedDict, total=False):
         Approximation order (for taylor-based methods)
     preserve_stability : bool
         Whether to preserve continuous-time stability
-    
+
     Examples
     --------
     >>> # Standard configuration
@@ -539,14 +544,14 @@ class DiscretizerConfig(TypedDict, total=False):
     ...     'method': 'exact',
     ...     'backend': 'numpy'
     ... }
-    >>> 
+    >>>
     >>> # Digital control design
     >>> config_control: DiscretizerConfig = {
     ...     'dt': 0.01,
     ...     'method': 'zoh',
     ...     'preserve_stability': True
     ... }
-    >>> 
+    >>>
     >>> # Fast simulation
     >>> config_fast: DiscretizerConfig = {
     ...     'dt': 0.001,
@@ -554,6 +559,7 @@ class DiscretizerConfig(TypedDict, total=False):
     ...     'backend': 'torch'
     ... }
     """
+
     dt: float
     method: DiscretizationMethod
     backend: Backend
@@ -564,9 +570,9 @@ class DiscretizerConfig(TypedDict, total=False):
 class SDEIntegratorConfig(TypedDict, total=False):
     """
     Configuration for SDE integrators.
-    
+
     Extends integrator config with stochastic-specific settings.
-    
+
     Attributes
     ----------
     method : SDEIntegrationMethod
@@ -581,7 +587,7 @@ class SDEIntegratorConfig(TypedDict, total=False):
         Random seed for reproducibility
     adaptive : bool
         Use adaptive stepping (if available)
-    
+
     Examples
     --------
     >>> # Basic configuration
@@ -591,7 +597,7 @@ class SDEIntegratorConfig(TypedDict, total=False):
     ...     'convergence_type': 'strong',
     ...     'backend': 'numpy'
     ... }
-    >>> 
+    >>>
     >>> # High-accuracy additive noise
     >>> config_accurate: SDEIntegratorConfig = {
     ...     'method': 'SRIW1',
@@ -600,7 +606,7 @@ class SDEIntegratorConfig(TypedDict, total=False):
     ...     'backend': 'numpy',
     ...     'seed': 42
     ... }
-    >>> 
+    >>>
     >>> # Monte Carlo simulation
     >>> config_mc: SDEIntegratorConfig = {
     ...     'method': 'SEA',
@@ -609,6 +615,7 @@ class SDEIntegratorConfig(TypedDict, total=False):
     ...     'backend': 'jax',
     ... }
     """
+
     method: SDEIntegrationMethod
     dt: float
     convergence_type: ConvergenceType
@@ -621,7 +628,7 @@ class SDEIntegratorConfig(TypedDict, total=False):
 # Constants - Valid Values
 # ============================================================================
 
-VALID_BACKENDS = ('numpy', 'torch', 'jax')
+VALID_BACKENDS = ("numpy", "torch", "jax")
 """
 Tuple of valid backend names.
 
@@ -630,7 +637,7 @@ Use for validation:
 ...     raise ValueError(f"Invalid backend: {backend}")
 """
 
-VALID_DEVICES = ('cpu', 'cuda', 'mps', 'tpu')
+VALID_DEVICES = ("cpu", "cuda", "mps", "tpu")
 """
 Common device identifiers.
 
@@ -649,7 +656,7 @@ Examples
 ...     device = 'cpu'
 """
 
-DEFAULT_BACKEND: Backend = 'numpy'
+DEFAULT_BACKEND: Backend = "numpy"
 """
 Default backend if not specified.
 
@@ -664,7 +671,7 @@ Examples
 >>> backend = DEFAULT_BACKEND  # 'numpy'
 """
 
-DEFAULT_DEVICE: Device = 'cpu'
+DEFAULT_DEVICE: Device = "cpu"
 """
 Default device if not specified.
 
@@ -701,19 +708,19 @@ Examples
 """
 
 # Common method groupings
-ADAPTIVE_ODE_METHODS = ('RK45', 'RK23', 'DOP853', 'Radau', 'BDF', 'LSODA')
+ADAPTIVE_ODE_METHODS = ("RK45", "RK23", "DOP853", "Radau", "BDF", "LSODA")
 """Adaptive step-size ODE methods."""
 
-FIXED_STEP_ODE_METHODS = ('euler', 'rk2', 'rk4', 'midpoint')
+FIXED_STEP_ODE_METHODS = ("euler", "rk2", "rk4", "midpoint")
 """Fixed step-size ODE methods."""
 
-STIFF_ODE_METHODS = ('Radau', 'BDF', 'LSODA')
+STIFF_ODE_METHODS = ("Radau", "BDF", "LSODA")
 """Methods suitable for stiff ODEs."""
 
-ADDITIVE_NOISE_SDE_METHODS = ('SEA', 'SHARK', 'SRA1', 'SRA3', 'SOSRA')
+ADDITIVE_NOISE_SDE_METHODS = ("SEA", "SHARK", "SRA1", "SRA3", "SOSRA")
 """SDE methods optimized for additive noise."""
 
-GENERAL_SDE_METHODS = ('euler', 'EM', 'milstein', 'ItoMilstein', 'srk')
+GENERAL_SDE_METHODS = ("euler", "EM", "milstein", "ItoMilstein", "srk")
 """SDE methods for general (multiplicative) noise."""
 
 
@@ -721,20 +728,21 @@ GENERAL_SDE_METHODS = ('euler', 'EM', 'milstein', 'ItoMilstein', 'srk')
 # Method Selection Utilities
 # ============================================================================
 
+
 def is_adaptive_method(method: IntegrationMethod) -> bool:
     """
     Check if integration method is adaptive.
-    
+
     Parameters
     ----------
     method : IntegrationMethod
         Method to check
-    
+
     Returns
     -------
     bool
         True if adaptive step-size method
-    
+
     Examples
     --------
     >>> is_adaptive_method('RK45')
@@ -748,17 +756,17 @@ def is_adaptive_method(method: IntegrationMethod) -> bool:
 def is_stiff_method(method: IntegrationMethod) -> bool:
     """
     Check if method is suitable for stiff systems.
-    
+
     Parameters
     ----------
     method : IntegrationMethod
         Method to check
-    
+
     Returns
     -------
     bool
         True if suitable for stiff ODEs
-    
+
     Examples
     --------
     >>> is_stiff_method('Radau')
@@ -772,19 +780,19 @@ def is_stiff_method(method: IntegrationMethod) -> bool:
 def requires_additive_noise(method: SDEIntegrationMethod) -> bool:
     """
     Check if SDE method requires additive noise.
-    
+
     Some specialized SDE solvers only work with additive noise.
-    
+
     Parameters
     ----------
     method : SDEIntegrationMethod
         SDE method to check
-    
+
     Returns
     -------
     bool
         True if method requires additive noise
-    
+
     Examples
     --------
     >>> requires_additive_noise('SEA')
@@ -798,19 +806,19 @@ def requires_additive_noise(method: SDEIntegrationMethod) -> bool:
 def get_backend_default_method(backend: Backend, is_stochastic: bool = False) -> str:
     """
     Get default integration method for backend.
-    
+
     Parameters
     ----------
     backend : Backend
         Computational backend
     is_stochastic : bool
         Whether system is stochastic
-    
+
     Returns
     -------
     str
         Default method name for this backend
-    
+
     Examples
     --------
     >>> get_backend_default_method('numpy', is_stochastic=False)
@@ -823,40 +831,40 @@ def get_backend_default_method(backend: Backend, is_stochastic: bool = False) ->
     if is_stochastic:
         # SDE defaults by backend
         defaults = {
-            'numpy': 'EM',      # Julia Euler-Maruyama
-            'torch': 'euler',   # TorchSDE euler
-            'jax': 'Euler',     # Diffrax Euler
+            "numpy": "EM",  # Julia Euler-Maruyama
+            "torch": "euler",  # TorchSDE euler
+            "jax": "Euler",  # Diffrax Euler
         }
     else:
         # ODE defaults by backend
         defaults = {
-            'numpy': 'RK45',    # SciPy adaptive RK
-            'torch': 'rk4',     # Fixed-step RK4
-            'jax': 'rk4',       # Fixed-step RK4
+            "numpy": "RK45",  # SciPy adaptive RK
+            "torch": "rk4",  # Fixed-step RK4
+            "jax": "rk4",  # Fixed-step RK4
         }
-    
-    return defaults.get(backend, 'euler')
+
+    return defaults.get(backend, "euler")
 
 
 def validate_backend(backend: str) -> Backend:
     """
     Validate and normalize backend string.
-    
+
     Parameters
     ----------
     backend : str
         Backend name to validate
-    
+
     Returns
     -------
     Backend
         Validated backend (typed)
-    
+
     Raises
     ------
     ValueError
         If backend is not valid
-    
+
     Examples
     --------
     >>> validate_backend('numpy')
@@ -864,34 +872,31 @@ def validate_backend(backend: str) -> Backend:
     >>> validate_backend('pytorch')  # ValueError
     """
     if backend not in VALID_BACKENDS:
-        raise ValueError(
-            f"Invalid backend '{backend}'. "
-            f"Choose from: {VALID_BACKENDS}"
-        )
+        raise ValueError(f"Invalid backend '{backend}'. " f"Choose from: {VALID_BACKENDS}")
     return backend
 
 
 def validate_device(device: str, backend: Backend) -> Device:
     """
     Validate device for given backend.
-    
+
     Parameters
     ----------
     device : str
         Device identifier
     backend : Backend
         Backend being used
-    
+
     Returns
     -------
     Device
         Validated device
-    
+
     Raises
     ------
     ValueError
         If device incompatible with backend
-    
+
     Examples
     --------
     >>> validate_device('cuda', 'torch')
@@ -899,24 +904,18 @@ def validate_device(device: str, backend: Backend) -> Device:
     >>> validate_device('cuda', 'numpy')  # ValueError - NumPy is CPU-only
     """
     # NumPy is CPU-only
-    if backend == 'numpy' and device not in ('cpu', 'default'):
-        raise ValueError(
-            f"NumPy backend only supports CPU, got device='{device}'"
-        )
-    
+    if backend == "numpy" and device not in ("cpu", "default"):
+        raise ValueError(f"NumPy backend only supports CPU, got device='{device}'")
+
     # Basic validation (actual availability checked at runtime)
-    if device.startswith('cuda'):
-        if backend not in ('torch', 'jax'):
-            raise ValueError(
-                f"CUDA device requires torch or jax backend, got '{backend}'"
-            )
-    
-    if device == 'mps':
-        if backend != 'torch':
-            raise ValueError(
-                f"MPS device requires torch backend, got '{backend}'"
-            )
-    
+    if device.startswith("cuda"):
+        if backend not in ("torch", "jax"):
+            raise ValueError(f"CUDA device requires torch or jax backend, got '{backend}'")
+
+    if device == "mps":
+        if backend != "torch":
+            raise ValueError(f"MPS device requires torch backend, got '{backend}'")
+
     return device
 
 
@@ -926,44 +925,39 @@ def validate_device(device: str, backend: Backend) -> Device:
 
 __all__ = [
     # Backend types
-    'Backend',
-    'Device',
-    'BackendConfig',
-    
+    "Backend",
+    "Device",
+    "BackendConfig",
     # Method types
-    'IntegrationMethod',
-    'DiscretizationMethod',
-    'SDEIntegrationMethod',
-    'OptimizationMethod',
-    
+    "IntegrationMethod",
+    "DiscretizationMethod",
+    "SDEIntegrationMethod",
+    "OptimizationMethod",
     # Noise and stochastic
-    'NoiseType',
-    'SDEType',
-    'ConvergenceType',
-    
+    "NoiseType",
+    "SDEType",
+    "ConvergenceType",
     # Configuration
-    'SystemConfig',
-    'IntegratorConfig',
-    'DiscretizerConfig',
-    'SDEIntegratorConfig',
-    
+    "SystemConfig",
+    "IntegratorConfig",
+    "DiscretizerConfig",
+    "SDEIntegratorConfig",
     # Constants
-    'VALID_BACKENDS',
-    'VALID_DEVICES',
-    'DEFAULT_BACKEND',
-    'DEFAULT_DEVICE',
-    'DEFAULT_DTYPE',
-    'ADAPTIVE_ODE_METHODS',
-    'FIXED_STEP_ODE_METHODS',
-    'STIFF_ODE_METHODS',
-    'ADDITIVE_NOISE_SDE_METHODS',
-    'GENERAL_SDE_METHODS',
-    
+    "VALID_BACKENDS",
+    "VALID_DEVICES",
+    "DEFAULT_BACKEND",
+    "DEFAULT_DEVICE",
+    "DEFAULT_DTYPE",
+    "ADAPTIVE_ODE_METHODS",
+    "FIXED_STEP_ODE_METHODS",
+    "STIFF_ODE_METHODS",
+    "ADDITIVE_NOISE_SDE_METHODS",
+    "GENERAL_SDE_METHODS",
     # Utilities
-    'is_adaptive_method',
-    'is_stiff_method',
-    'requires_additive_noise',
-    'get_backend_default_method',
-    'validate_backend',
-    'validate_device',
+    "is_adaptive_method",
+    "is_stiff_method",
+    "requires_additive_noise",
+    "get_backend_default_method",
+    "validate_backend",
+    "validate_device",
 ]

@@ -13,9 +13,10 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import sympy as sp
 import numpy as np
+import sympy as sp
 import torch
+
 from src.systems.base.symbolic_dynamical_system import SymbolicDynamicalSystem
 
 
@@ -87,10 +88,9 @@ class SymbolicPendulum(SymbolicDynamicalSystem):
         self.order = 1
 
         ml2 = m * l * l
-        self._f_sym = sp.Matrix([
-            theta_dot,
-            (-beta / ml2) * theta_dot + (g / l) * sp.sin(theta) + u / ml2
-        ])
+        self._f_sym = sp.Matrix(
+            [theta_dot, (-beta / ml2) * theta_dot + (g / l) * sp.sin(theta) + u / ml2]
+        )
         self._h_sym = sp.Matrix([theta])  # Output is theta (no duplicate needed)
 
 

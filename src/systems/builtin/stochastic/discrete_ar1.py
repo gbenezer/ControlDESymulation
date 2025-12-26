@@ -16,28 +16,30 @@
 # TODO: make module docstring
 
 import sympy as sp
+
 from src.systems.base.discrete_stochastic_system import DiscreteStochasticSystem
+
 
 class DiscreteAR1(DiscreteStochasticSystem):
     """
     AR(1) process: x[k+1] = φ*x[k] + u[k] + σ*w[k]
-    
+
     Autoregressive process with optional control input.
     """
-    
+
     def define_system(self, phi=0.9, sigma=0.1):
-        x = sp.symbols('x', real=True)
-        u = sp.symbols('u', real=True)
-        phi_sym, sigma_sym = sp.symbols('phi sigma', real=True)
-        
+        x = sp.symbols("x", real=True)
+        u = sp.symbols("u", real=True)
+        phi_sym, sigma_sym = sp.symbols("phi sigma", real=True)
+
         self.state_vars = [x]
         self.control_vars = [u]
-        
+
         # AR(1) dynamics
         self._f_sym = sp.Matrix([phi_sym * x + u])
-        
+
         # Additive noise
         self.diffusion_expr = sp.Matrix([[sigma_sym]])
         self.parameters = {phi_sym: phi, sigma_sym: sigma}
         self.order = 1
-        self.sde_type = 'ito'
+        self.sde_type = "ito"

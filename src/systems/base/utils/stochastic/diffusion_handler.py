@@ -34,15 +34,16 @@ Reuses:
     - NoiseCharacterizer - composition for automatic analysis
 """
 
-from typing import Callable, Dict, List, Optional
 import time
-import sympy as sp
+from typing import Callable, Dict, List, Optional
+
 import numpy as np
+import sympy as sp
 
 from src.systems.base.utils.codegen_utils import generate_function
 from src.systems.base.utils.stochastic.noise_analysis import (
-    NoiseCharacterizer,
     NoiseCharacteristics,
+    NoiseCharacterizer,
     NoiseType,
 )
 
@@ -227,70 +228,71 @@ class DiffusionHandler:
     def _wrap_to_ensure_2d(self, func: Callable, backend: str) -> Callable:
         """
         Wrap function to ensure output has correct shape.
-        
+
         Handles both single and batched evaluation:
         - Single input (x is 1D): Returns (nx, nw)
         - Batched input (x is 2D): Returns (batch, nx, nw) for multiplicative
                                         or (nx, nw) for additive
-        
+
         The underlying generate_function() may return various shapes depending
         on input, so we intelligently reshape based on input characteristics.
-        
+
         Parameters
         ----------
         func : Callable
             Base lambdified function from codegen_utils
         backend : str
             Backend name ('numpy', 'torch', 'jax')
-        
+
         Returns
         -------
         Callable
             Wrapped function with proper output shape
-        
+
         Notes
         -----
         For multiplicative noise with batched input:
             Input: x is (batch_size,) per state variable
             Output: Should be (batch_size, nx, nw)
-        
+
         For additive noise with batched input:
-            Input: x is (batch_size,) per state variable  
+            Input: x is (batch_size,) per state variable
             Output: (nx, nw) - constant, not batched
         """
         if backend == "numpy":
+
             def wrapped(*args):
                 result = func(*args)
                 result = np.atleast_2d(result)
-                
+
                 # Detect if batched input (first arg is array with len > 1)
                 is_batched = False
                 batch_size = 1
-                
+
                 if len(args) > 0:
                     first_arg = args[0]
-                    if hasattr(first_arg, 'shape') and len(first_arg.shape) > 0:
+                    if hasattr(first_arg, "shape") and len(first_arg.shape) > 0:
                         arg_size = len(first_arg)
                         if arg_size > 1:
                             is_batched = True
                             batch_size = arg_size
-                
+
                 # For additive noise, result is constant regardless of batch
                 if self.characteristics.is_additive:
                     # Force to (nx, nw) even if batched input
                     if result.shape != (self.nx, self.nw):
                         result = result.reshape(self.nx, self.nw)
                     return result
-                
+
                 # For multiplicative noise with batched input
                 if is_batched:
                     # Result from lambdify might be:
                     # - (batch_size,) for scalar output
                     # - (batch_size, nx*nw) flattened
                     # - Already correct shape
-                    
+
                     target_shape = (batch_size, self.nx, self.nw)
-                    
+
                     if result.shape == target_shape:
                         # Already correct
                         return result
@@ -308,25 +310,27 @@ class DiffusionHandler:
                     if result.shape != (self.nx, self.nw):
                         result = result.reshape(self.nx, self.nw)
                     return result
-            
+
             return wrapped
-        
+
         elif backend == "torch":
+
             def wrapped(*args):
                 import torch
+
                 result = func(*args)
-                
+
                 # Detect if batched
                 is_batched = False
                 batch_size = 1
-                
+
                 if len(args) > 0:
                     first_arg = args[0]
-                    if hasattr(first_arg, 'shape') and len(first_arg.shape) > 0:
+                    if hasattr(first_arg, "shape") and len(first_arg.shape) > 0:
                         if first_arg.shape[0] > 1:
                             is_batched = True
                             batch_size = first_arg.shape[0]
-                
+
                 # For additive noise, return (nx, nw) regardless
                 if self.characteristics.is_additive:
                     if result.dim() == 1:
@@ -336,11 +340,11 @@ class DiffusionHandler:
                     elif result.shape != torch.Size([self.nx, self.nw]):
                         result = result.reshape(self.nx, self.nw)
                     return result
-                
+
                 # For multiplicative noise with batched input
                 if is_batched:
                     target_shape = (batch_size, self.nx, self.nw)
-                    
+
                     if result.shape == target_shape:
                         return result
                     elif result.numel() == batch_size * self.nx * self.nw:
@@ -356,25 +360,27 @@ class DiffusionHandler:
                     elif result.dim() == 0:
                         result = result.reshape(1, 1)
                     return result
-            
+
             return wrapped
-        
+
         elif backend == "jax":
+
             def wrapped(*args):
                 import jax.numpy as jnp
+
                 result = func(*args)
-                
+
                 # Detect if batched
                 is_batched = False
                 batch_size = 1
-                
+
                 if len(args) > 0:
                     first_arg = args[0]
-                    if hasattr(first_arg, 'shape') and len(first_arg.shape) > 0:
+                    if hasattr(first_arg, "shape") and len(first_arg.shape) > 0:
                         if first_arg.shape[0] > 1:
                             is_batched = True
                             batch_size = first_arg.shape[0]
-                
+
                 # For additive noise, return (nx, nw) regardless
                 if self.characteristics.is_additive:
                     if result.ndim == 1:
@@ -384,11 +390,11 @@ class DiffusionHandler:
                     elif result.shape != (self.nx, self.nw):
                         result = result.reshape(self.nx, self.nw)
                     return result
-                
+
                 # For multiplicative noise with batched input
                 if is_batched:
                     target_shape = (batch_size, self.nx, self.nw)
-                    
+
                     if result.shape == target_shape:
                         return result
                     elif result.size == batch_size * self.nx * self.nw:
@@ -404,9 +410,9 @@ class DiffusionHandler:
                     elif result.ndim == 0:
                         result = result.reshape(1, 1)
                     return result
-            
+
             return wrapped
-        
+
         else:
             raise ValueError(f"Unknown backend: {backend}")
 
@@ -495,10 +501,12 @@ class DiffusionHandler:
             u_dummy = [0.0] * len(self.control_vars)
         elif backend == "torch":
             import torch
+
             x_dummy = [torch.tensor(0.0)] * self.nx
             u_dummy = [torch.tensor(0.0)] * len(self.control_vars)
         elif backend == "jax":
             import jax.numpy as jnp
+
             x_dummy = [jnp.array(0.0)] * self.nx
             u_dummy = [jnp.array(0.0)] * len(self.control_vars)
         else:
@@ -527,14 +535,14 @@ class DiffusionHandler:
     def _convert_to_backend(self, arr: np.ndarray, backend: str):
         """
         Convert NumPy array to target backend.
-        
+
         Parameters
         ----------
         arr : np.ndarray
             NumPy array to convert
         backend : str
             Target backend ('numpy', 'torch', 'jax')
-        
+
         Returns
         -------
         ArrayLike
@@ -544,10 +552,12 @@ class DiffusionHandler:
             return arr
         elif backend == "torch":
             import torch
+
             dtype = torch.float64 if arr.dtype == np.float64 else torch.float32
             return torch.tensor(arr, dtype=dtype)
         elif backend == "jax":
             import jax.numpy as jnp
+
             return jnp.array(arr)
         else:
             raise ValueError(f"Unknown backend: {backend}")

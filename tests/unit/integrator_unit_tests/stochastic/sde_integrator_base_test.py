@@ -32,27 +32,28 @@ Tests the abstract base class for SDE integrators, including:
 12. Equilibrium-based integration
 """
 
-import pytest
 import numpy as np
+import pytest
 
 from src.systems.base.numerical_integration.stochastic.sde_integrator_base import (
-    SDEIntegratorBase,
-    SDEType,
     ConvergenceType,
     SDEIntegrationResult,
-    StepMode
+    SDEIntegratorBase,
+    SDEType,
+    StepMode,
 )
 from src.systems.base.stochastic_dynamical_system import StochasticDynamicalSystem
-
 
 # ============================================================================
 # Helper Functions
 # ============================================================================
 
+
 def _torch_available():
     """Check if PyTorch is available."""
     try:
         import torch
+
         return True
     except ImportError:
         return False
@@ -62,6 +63,7 @@ def _jax_available():
     """Check if JAX is available."""
     try:
         import jax.numpy as jnp
+
         return True
     except ImportError:
         return False
@@ -70,6 +72,7 @@ def _jax_available():
 # ============================================================================
 # Mock SDE Systems
 # ============================================================================
+
 
 class MockSDESystem(StochasticDynamicalSystem):
     """
@@ -85,9 +88,9 @@ class MockSDESystem(StochasticDynamicalSystem):
     def define_system(self, alpha=1.0, sigma=0.5):
         import sympy as sp
 
-        x = sp.symbols('x', real=True)
-        alpha_sym = sp.symbols('alpha', positive=True)
-        sigma_sym = sp.symbols('sigma', positive=True)
+        x = sp.symbols("x", real=True)
+        alpha_sym = sp.symbols("alpha", positive=True)
+        sigma_sym = sp.symbols("sigma", positive=True)
 
         self.state_vars = [x]
         self.control_vars = []
@@ -96,7 +99,7 @@ class MockSDESystem(StochasticDynamicalSystem):
         self.order = 1
 
         self.diffusion_expr = sp.Matrix([[sigma_sym]])
-        self.sde_type = 'ito'
+        self.sde_type = "ito"
 
 
 class MockSDESystemMultiplicative(StochasticDynamicalSystem):
@@ -109,9 +112,9 @@ class MockSDESystemMultiplicative(StochasticDynamicalSystem):
     def define_system(self, mu=0.1, sigma=0.2):
         import sympy as sp
 
-        x = sp.symbols('x', positive=True)
-        mu_sym = sp.symbols('mu', real=True)
-        sigma_sym = sp.symbols('sigma', positive=True)
+        x = sp.symbols("x", positive=True)
+        mu_sym = sp.symbols("mu", real=True)
+        sigma_sym = sp.symbols("sigma", positive=True)
 
         self.state_vars = [x]
         self.control_vars = []
@@ -120,7 +123,7 @@ class MockSDESystemMultiplicative(StochasticDynamicalSystem):
         self.order = 1
 
         self.diffusion_expr = sp.Matrix([[sigma_sym * x]])
-        self.sde_type = 'ito'
+        self.sde_type = "ito"
 
 
 class MockSDESystemControlled(StochasticDynamicalSystem):
@@ -133,10 +136,10 @@ class MockSDESystemControlled(StochasticDynamicalSystem):
     def define_system(self, alpha=1.0, sigma=0.5):
         import sympy as sp
 
-        x = sp.symbols('x', real=True)
-        u = sp.symbols('u', real=True)
-        alpha_sym = sp.symbols('alpha', positive=True)
-        sigma_sym = sp.symbols('sigma', positive=True)
+        x = sp.symbols("x", real=True)
+        u = sp.symbols("u", real=True)
+        alpha_sym = sp.symbols("alpha", positive=True)
+        sigma_sym = sp.symbols("sigma", positive=True)
 
         self.state_vars = [x]
         self.control_vars = [u]
@@ -145,7 +148,7 @@ class MockSDESystemControlled(StochasticDynamicalSystem):
         self.order = 1
 
         self.diffusion_expr = sp.Matrix([[sigma_sym]])
-        self.sde_type = 'ito'
+        self.sde_type = "ito"
 
 
 class MockSDESystemPureDiffusion(StochasticDynamicalSystem):
@@ -158,8 +161,8 @@ class MockSDESystemPureDiffusion(StochasticDynamicalSystem):
     def define_system(self, sigma=1.0):
         import sympy as sp
 
-        x = sp.symbols('x', real=True)
-        sigma_sym = sp.symbols('sigma', positive=True)
+        x = sp.symbols("x", real=True)
+        sigma_sym = sp.symbols("sigma", positive=True)
 
         self.state_vars = [x]
         self.control_vars = []
@@ -168,7 +171,7 @@ class MockSDESystemPureDiffusion(StochasticDynamicalSystem):
         self.order = 1
 
         self.diffusion_expr = sp.Matrix([[sigma_sym]])
-        self.sde_type = 'ito'
+        self.sde_type = "ito"
 
 
 class MockSDESystem2D(StochasticDynamicalSystem):
@@ -182,34 +185,25 @@ class MockSDESystem2D(StochasticDynamicalSystem):
     def define_system(self, alpha=1.0, sigma1=0.5, sigma2=0.3):
         import sympy as sp
 
-        x1, x2 = sp.symbols('x1 x2', real=True)
-        alpha_sym = sp.symbols('alpha', positive=True)
-        sigma1_sym = sp.symbols('sigma1', positive=True)
-        sigma2_sym = sp.symbols('sigma2', positive=True)
+        x1, x2 = sp.symbols("x1 x2", real=True)
+        alpha_sym = sp.symbols("alpha", positive=True)
+        sigma1_sym = sp.symbols("sigma1", positive=True)
+        sigma2_sym = sp.symbols("sigma2", positive=True)
 
         self.state_vars = [x1, x2]
         self.control_vars = []
-        self._f_sym = sp.Matrix([
-            [-alpha_sym * x1],
-            [-alpha_sym * x2]
-        ])
-        self.parameters = {
-            alpha_sym: alpha,
-            sigma1_sym: sigma1,
-            sigma2_sym: sigma2
-        }
+        self._f_sym = sp.Matrix([[-alpha_sym * x1], [-alpha_sym * x2]])
+        self.parameters = {alpha_sym: alpha, sigma1_sym: sigma1, sigma2_sym: sigma2}
         self.order = 1
 
-        self.diffusion_expr = sp.Matrix([
-            [sigma1_sym, 0],
-            [0, sigma2_sym]
-        ])
-        self.sde_type = 'ito'
+        self.diffusion_expr = sp.Matrix([[sigma1_sym, 0], [0, sigma2_sym]])
+        self.sde_type = "ito"
 
 
 # ============================================================================
 # Concrete Test Integrator
 # ============================================================================
+
 
 class ConcreteSDEIntegrator(SDEIntegratorBase):
     """Minimal Euler-Maruyama implementation for testing."""
@@ -228,13 +222,15 @@ class ConcreteSDEIntegrator(SDEIntegratorBase):
         f = self._evaluate_drift(x, u)
         g = self._evaluate_diffusion(x, u)
 
-        if self.backend == 'numpy':
+        if self.backend == "numpy":
             x_next = x + f * dt + g @ dW
-        elif self.backend == 'torch':
+        elif self.backend == "torch":
             import torch
+
             x_next = x + f * dt + torch.matmul(g, dW)
-        elif self.backend == 'jax':
+        elif self.backend == "jax":
             import jax.numpy as jnp
+
             x_next = x + f * dt + jnp.dot(g, dW)
 
         return x_next
@@ -245,13 +241,15 @@ class ConcreteSDEIntegrator(SDEIntegratorBase):
 
         if t_eval is None:
             n_steps = int((tf - t0) / self.dt)
-            if self.backend == 'numpy':
+            if self.backend == "numpy":
                 t_eval = np.linspace(t0, tf, n_steps + 1)
-            elif self.backend == 'torch':
+            elif self.backend == "torch":
                 import torch
+
                 t_eval = torch.linspace(t0, tf, n_steps + 1)
-            elif self.backend == 'jax':
+            elif self.backend == "jax":
                 import jax.numpy as jnp
+
                 t_eval = jnp.linspace(t0, tf, n_steps + 1)
 
         trajectory = [x0]
@@ -260,7 +258,7 @@ class ConcreteSDEIntegrator(SDEIntegratorBase):
 
         for i in range(len(t_eval) - 1):
             t = float(t_eval[i])
-            dt_step = float(t_eval[i+1] - t_eval[i])
+            dt_step = float(t_eval[i + 1] - t_eval[i])
 
             u = u_func(t, x)
             dW = self._generate_noise((self.nw,), dt_step)
@@ -269,17 +267,19 @@ class ConcreteSDEIntegrator(SDEIntegratorBase):
             trajectory.append(x)
             noise_samples.append(dW)
 
-            self._stats['total_steps'] += 1
+            self._stats["total_steps"] += 1
 
-        if self.backend == 'numpy':
+        if self.backend == "numpy":
             x_traj = np.stack(trajectory)
             noise_traj = np.stack(noise_samples)
-        elif self.backend == 'torch':
+        elif self.backend == "torch":
             import torch
+
             x_traj = torch.stack(trajectory)
             noise_traj = torch.stack(noise_samples)
-        elif self.backend == 'jax':
+        elif self.backend == "jax":
             import jax.numpy as jnp
+
             x_traj = jnp.stack(trajectory)
             noise_traj = jnp.stack(noise_samples)
 
@@ -287,20 +287,21 @@ class ConcreteSDEIntegrator(SDEIntegratorBase):
             t=t_eval,
             x=x_traj,
             success=True,
-            nfev=self._stats['total_fev'],
-            nsteps=self._stats['total_steps'],
-            diffusion_evals=self._stats['diffusion_evals'],
+            nfev=self._stats["total_fev"],
+            nsteps=self._stats["total_steps"],
+            diffusion_evals=self._stats["diffusion_evals"],
             noise_samples=noise_traj,
             n_paths=1,
             convergence_type=self.convergence_type,
             solver=self.name,
-            sde_type=self.sde_type
+            sde_type=self.sde_type,
         )
 
 
 # ============================================================================
 # Test Fixtures
 # ============================================================================
+
 
 @pytest.fixture
 def mock_sde_system():
@@ -335,59 +336,48 @@ def mock_sde_2d():
 @pytest.fixture
 def integrator_numpy(mock_sde_system):
     """Create integrator with NumPy backend."""
-    return ConcreteSDEIntegrator(
-        mock_sde_system, dt=0.01, backend='numpy', seed=42
-    )
+    return ConcreteSDEIntegrator(mock_sde_system, dt=0.01, backend="numpy", seed=42)
 
 
 @pytest.fixture
 def integrator_additive(mock_sde_system):
     """Create integrator with additive noise system."""
-    return ConcreteSDEIntegrator(
-        mock_sde_system, dt=0.01, backend='numpy', seed=42
-    )
+    return ConcreteSDEIntegrator(mock_sde_system, dt=0.01, backend="numpy", seed=42)
 
 
 @pytest.fixture
 def integrator_multiplicative(mock_sde_multiplicative):
     """Create integrator with multiplicative noise system."""
-    return ConcreteSDEIntegrator(
-        mock_sde_multiplicative, dt=0.01, backend='numpy', seed=42
-    )
+    return ConcreteSDEIntegrator(mock_sde_multiplicative, dt=0.01, backend="numpy", seed=42)
 
 
 @pytest.fixture
 def integrator_pure_diffusion(mock_sde_pure_diffusion):
     """Create integrator with pure diffusion system."""
-    return ConcreteSDEIntegrator(
-        mock_sde_pure_diffusion, dt=0.01, backend='numpy', seed=42
-    )
+    return ConcreteSDEIntegrator(mock_sde_pure_diffusion, dt=0.01, backend="numpy", seed=42)
 
 
 @pytest.fixture
 def integrator_2d(mock_sde_2d):
     """Create integrator with 2D autonomous system."""
-    return ConcreteSDEIntegrator(
-        mock_sde_2d, dt=0.01, backend='numpy', seed=42
-    )
+    return ConcreteSDEIntegrator(mock_sde_2d, dt=0.01, backend="numpy", seed=42)
 
 
 # ============================================================================
 # Test Class: Initialization and Validation
 # ============================================================================
 
+
 class TestSDEIntegratorInitialization:
     """Test initialization and validation of SDEIntegratorBase."""
 
     def test_initialization_basic(self, mock_sde_system):
         """Test basic initialization with valid SDE system."""
-        integrator = ConcreteSDEIntegrator(
-            mock_sde_system, dt=0.01, backend='numpy'
-        )
+        integrator = ConcreteSDEIntegrator(mock_sde_system, dt=0.01, backend="numpy")
 
         assert integrator.sde_system is mock_sde_system
         assert integrator.dt == 0.01
-        assert integrator.backend == 'numpy'
+        assert integrator.backend == "numpy"
         assert integrator.nw == 1
         assert integrator.step_mode == StepMode.FIXED
 
@@ -398,7 +388,8 @@ class TestSDEIntegratorInitialization:
         class MockODESystem(SymbolicDynamicalSystem):
             def define_system(self):
                 import sympy as sp
-                x = sp.symbols('x')
+
+                x = sp.symbols("x")
                 self.state_vars = [x]
                 self.control_vars = []
                 self._f_sym = sp.Matrix([[-x]])
@@ -408,20 +399,18 @@ class TestSDEIntegratorInitialization:
         ode_system = MockODESystem()
 
         with pytest.raises(TypeError, match="StochasticDynamicalSystem"):
-            ConcreteSDEIntegrator(ode_system, dt=0.01, backend='numpy')
+            ConcreteSDEIntegrator(ode_system, dt=0.01, backend="numpy")
 
     def test_initialization_fixed_mode_requires_dt(self, mock_sde_system):
         """Test that FIXED mode requires dt to be specified."""
         with pytest.raises(ValueError, match="Time step dt is required"):
             ConcreteSDEIntegrator(
-                mock_sde_system, dt=None, step_mode=StepMode.FIXED, backend='numpy'
+                mock_sde_system, dt=None, step_mode=StepMode.FIXED, backend="numpy"
             )
 
     def test_sde_type_inheritance(self, mock_sde_system):
         """Test that integrator inherits SDE type from system."""
-        integrator = ConcreteSDEIntegrator(
-            mock_sde_system, dt=0.01, backend='numpy'
-        )
+        integrator = ConcreteSDEIntegrator(mock_sde_system, dt=0.01, backend="numpy")
 
         assert integrator.sde_type == SDEType.ITO
         assert integrator.sde_type.value == mock_sde_system.sde_type.value
@@ -429,23 +418,21 @@ class TestSDEIntegratorInitialization:
     def test_sde_type_override(self, mock_sde_system):
         """Test that SDE type can be overridden."""
         integrator = ConcreteSDEIntegrator(
-            mock_sde_system, dt=0.01, backend='numpy', sde_type=SDEType.STRATONOVICH
+            mock_sde_system, dt=0.01, backend="numpy", sde_type=SDEType.STRATONOVICH
         )
 
         assert integrator.sde_type == SDEType.STRATONOVICH
 
     def test_convergence_type_default(self, mock_sde_system):
         """Test default convergence type is STRONG."""
-        integrator = ConcreteSDEIntegrator(
-            mock_sde_system, dt=0.01, backend='numpy'
-        )
+        integrator = ConcreteSDEIntegrator(mock_sde_system, dt=0.01, backend="numpy")
 
         assert integrator.convergence_type == ConvergenceType.STRONG
 
     def test_convergence_type_custom(self, mock_sde_system):
         """Test custom convergence type."""
         integrator = ConcreteSDEIntegrator(
-            mock_sde_system, dt=0.01, backend='numpy', convergence_type=ConvergenceType.WEAK
+            mock_sde_system, dt=0.01, backend="numpy", convergence_type=ConvergenceType.WEAK
         )
 
         assert integrator.convergence_type == ConvergenceType.WEAK
@@ -462,27 +449,24 @@ class TestSDEIntegratorInitialization:
         """Test that SDE-specific statistics are initialized."""
         stats = integrator_numpy._stats
 
-        assert 'diffusion_evals' in stats
-        assert 'noise_samples' in stats
-        assert stats['diffusion_evals'] == 0
-        assert stats['noise_samples'] == 0
+        assert "diffusion_evals" in stats
+        assert "noise_samples" in stats
+        assert stats["diffusion_evals"] == 0
+        assert stats["noise_samples"] == 0
 
 
 # ============================================================================
 # Test Class: Random Number Generation
 # ============================================================================
 
+
 class TestRandomNumberGeneration:
     """Test random number generation across backends."""
 
     def test_seed_reproducibility_numpy(self, mock_sde_system):
         """Test that same seed produces same results (NumPy)."""
-        integrator1 = ConcreteSDEIntegrator(
-            mock_sde_system, dt=0.01, backend='numpy', seed=42
-        )
-        integrator2 = ConcreteSDEIntegrator(
-            mock_sde_system, dt=0.01, backend='numpy', seed=42
-        )
+        integrator1 = ConcreteSDEIntegrator(mock_sde_system, dt=0.01, backend="numpy", seed=42)
+        integrator2 = ConcreteSDEIntegrator(mock_sde_system, dt=0.01, backend="numpy", seed=42)
 
         noise1 = integrator1._generate_noise((5,), 0.01)
         noise2 = integrator2._generate_noise((5,), 0.01)
@@ -491,12 +475,8 @@ class TestRandomNumberGeneration:
 
     def test_seed_different_results(self, mock_sde_system):
         """Test that different seeds produce different results."""
-        integrator1 = ConcreteSDEIntegrator(
-            mock_sde_system, dt=0.01, backend='numpy', seed=42
-        )
-        integrator2 = ConcreteSDEIntegrator(
-            mock_sde_system, dt=0.01, backend='numpy', seed=123
-        )
+        integrator1 = ConcreteSDEIntegrator(mock_sde_system, dt=0.01, backend="numpy", seed=42)
+        integrator2 = ConcreteSDEIntegrator(mock_sde_system, dt=0.01, backend="numpy", seed=123)
 
         noise1 = integrator1._generate_noise((100,), 0.01)
         noise2 = integrator2._generate_noise((100,), 0.01)
@@ -509,12 +489,14 @@ class TestRandomNumberGeneration:
         dt2 = 0.04
 
         n_samples = 10000
-        noise1 = np.array([integrator_numpy._generate_noise((1,), dt1)[0]
-                          for _ in range(n_samples)])
+        noise1 = np.array(
+            [integrator_numpy._generate_noise((1,), dt1)[0] for _ in range(n_samples)]
+        )
 
         integrator_numpy.set_seed(42)
-        noise2 = np.array([integrator_numpy._generate_noise((1,), dt2)[0]
-                          for _ in range(n_samples)])
+        noise2 = np.array(
+            [integrator_numpy._generate_noise((1,), dt2)[0] for _ in range(n_samples)]
+        )
 
         var1 = np.var(noise1)
         var2 = np.var(noise2)
@@ -544,9 +526,7 @@ class TestRandomNumberGeneration:
         """Test noise generation with PyTorch backend."""
         import torch
 
-        integrator = ConcreteSDEIntegrator(
-            mock_sde_system, dt=0.01, backend='torch', seed=42
-        )
+        integrator = ConcreteSDEIntegrator(mock_sde_system, dt=0.01, backend="torch", seed=42)
 
         noise = integrator._generate_noise((5,), 0.01)
 
@@ -557,6 +537,7 @@ class TestRandomNumberGeneration:
 # ============================================================================
 # Test Class: Drift and Diffusion Evaluation
 # ============================================================================
+
 
 class TestDriftDiffusionEvaluation:
     """Test drift and diffusion evaluation methods."""
@@ -572,9 +553,7 @@ class TestDriftDiffusionEvaluation:
 
     def test_evaluate_drift_controlled(self, mock_sde_controlled):
         """Test drift evaluation for controlled system."""
-        integrator = ConcreteSDEIntegrator(
-            mock_sde_controlled, dt=0.01, backend='numpy'
-        )
+        integrator = ConcreteSDEIntegrator(mock_sde_controlled, dt=0.01, backend="numpy")
 
         x = np.array([1.0])
         u = np.array([0.5])
@@ -587,10 +566,10 @@ class TestDriftDiffusionEvaluation:
         """Test that drift evaluations are counted."""
         x = np.array([1.0])
 
-        initial_count = integrator_numpy._stats['total_fev']
+        initial_count = integrator_numpy._stats["total_fev"]
         integrator_numpy._evaluate_drift(x, None)
 
-        assert integrator_numpy._stats['total_fev'] == initial_count + 1
+        assert integrator_numpy._stats["total_fev"] == initial_count + 1
 
     def test_evaluate_diffusion_additive(self, integrator_additive):
         """Test diffusion evaluation for additive noise."""
@@ -615,12 +594,12 @@ class TestDriftDiffusionEvaluation:
         assert integrator_additive._cached_diffusion is not None
 
         x = np.array([1.0])
-        initial_evals = integrator_additive._stats['diffusion_evals']
+        initial_evals = integrator_additive._stats["diffusion_evals"]
 
         diff1 = integrator_additive._evaluate_diffusion(x, None)
         diff2 = integrator_additive._evaluate_diffusion(x, None)
 
-        assert integrator_additive._stats['diffusion_evals'] == initial_evals
+        assert integrator_additive._stats["diffusion_evals"] == initial_evals
         np.testing.assert_array_equal(diff1, diff2)
 
     def test_diffusion_no_caching_multiplicative(self, integrator_multiplicative):
@@ -628,15 +607,16 @@ class TestDriftDiffusionEvaluation:
         assert integrator_multiplicative._cached_diffusion is None
 
         x = np.array([1.0])
-        initial_evals = integrator_multiplicative._stats['diffusion_evals']
+        initial_evals = integrator_multiplicative._stats["diffusion_evals"]
         integrator_multiplicative._evaluate_diffusion(x, None)
 
-        assert integrator_multiplicative._stats['diffusion_evals'] == initial_evals + 1
+        assert integrator_multiplicative._stats["diffusion_evals"] == initial_evals + 1
 
 
 # ============================================================================
 # Test Class: Integration
 # ============================================================================
+
 
 class TestIntegration:
     """Test integration methods."""
@@ -676,9 +656,7 @@ class TestIntegration:
 
     def test_integrate_with_control(self, mock_sde_controlled):
         """Test integration with control input."""
-        integrator = ConcreteSDEIntegrator(
-            mock_sde_controlled, dt=0.01, backend='numpy', seed=42
-        )
+        integrator = ConcreteSDEIntegrator(mock_sde_controlled, dt=0.01, backend="numpy", seed=42)
 
         x0 = np.array([1.0])
         u_func = lambda t, x: np.array([0.5])
@@ -717,6 +695,7 @@ class TestIntegration:
 # Test Class: Monte Carlo Simulation
 # ============================================================================
 
+
 class TestMonteCarloSimulation:
     """Test Monte Carlo trajectory simulation."""
 
@@ -746,10 +725,10 @@ class TestMonteCarloSimulation:
 
         stats = result.get_statistics()
 
-        assert 'mean' in stats
-        assert 'std' in stats
-        assert stats['mean'].shape[0] > 1
-        assert stats['n_paths'] == n_paths
+        assert "mean" in stats
+        assert "std" in stats
+        assert stats["mean"].shape[0] > 1
+        assert stats["n_paths"] == n_paths
 
     def test_monte_carlo_variance_increases(self, integrator_numpy):
         """Test that variance increases over time (as expected for diffusion)."""
@@ -762,8 +741,8 @@ class TestMonteCarloSimulation:
 
         stats = result.get_statistics()
 
-        var_start = stats['std'][1] ** 2
-        var_end = stats['std'][-1] ** 2
+        var_start = stats["std"][1] ** 2
+        var_end = stats["std"][-1] ** 2
 
         assert var_end > var_start
 
@@ -772,6 +751,7 @@ class TestMonteCarloSimulation:
 # Test Class: Noise Information and Statistics
 # ============================================================================
 
+
 class TestNoiseInformation:
     """Test noise structure queries and statistics."""
 
@@ -779,12 +759,12 @@ class TestNoiseInformation:
         """Test get_noise_info() method."""
         info = integrator_additive.get_noise_info()
 
-        assert 'nw' in info
-        assert 'is_additive' in info
-        assert 'is_diagonal' in info
-        assert 'noise_type' in info
-        assert info['nw'] == 1
-        assert info['is_additive'] is True
+        assert "nw" in info
+        assert "is_additive" in info
+        assert "is_diagonal" in info
+        assert "noise_type" in info
+        assert info["nw"] == 1
+        assert info["is_additive"] is True
 
     def test_get_sde_stats(self, integrator_numpy):
         """Test get_sde_stats() method."""
@@ -794,25 +774,26 @@ class TestNoiseInformation:
 
         stats = integrator_numpy.get_sde_stats()
 
-        assert 'diffusion_evals' in stats
-        assert 'noise_samples' in stats
-        assert 'avg_diffusion_per_step' in stats
-        assert stats['diffusion_evals'] >= 0
+        assert "diffusion_evals" in stats
+        assert "noise_samples" in stats
+        assert "avg_diffusion_per_step" in stats
+        assert stats["diffusion_evals"] >= 0
 
     def test_reset_stats_includes_sde(self, integrator_numpy):
         """Test that reset_stats() clears SDE-specific counters."""
-        integrator_numpy._stats['diffusion_evals'] = 10
-        integrator_numpy._stats['noise_samples'] = 20
+        integrator_numpy._stats["diffusion_evals"] = 10
+        integrator_numpy._stats["noise_samples"] = 20
 
         integrator_numpy.reset_stats()
 
-        assert integrator_numpy._stats['diffusion_evals'] == 0
-        assert integrator_numpy._stats['noise_samples'] == 0
+        assert integrator_numpy._stats["diffusion_evals"] == 0
+        assert integrator_numpy._stats["noise_samples"] == 0
 
 
 # ============================================================================
 # Test Class: SDEIntegrationResult
 # ============================================================================
+
 
 class TestSDEIntegrationResult:
     """Test SDEIntegrationResult container."""
@@ -836,9 +817,9 @@ class TestSDEIntegrationResult:
         result = SDEIntegrationResult(t=t, x=x, n_paths=1)
         stats = result.get_statistics()
 
-        assert stats['n_paths'] == 1
-        assert 'note' in stats
-        np.testing.assert_array_equal(stats['mean'], x)
+        assert stats["n_paths"] == 1
+        assert "note" in stats
+        np.testing.assert_array_equal(stats["mean"], x)
 
     def test_result_statistics_multiple_paths(self):
         """Test statistics for multiple trajectories."""
@@ -848,17 +829,18 @@ class TestSDEIntegrationResult:
         result = SDEIntegrationResult(t=t, x=x, n_paths=100)
         stats = result.get_statistics()
 
-        assert stats['n_paths'] == 100
-        assert stats['mean'].shape == (11, 2)
-        assert stats['std'].shape == (11, 2)
-        assert 'median' in stats
-        assert 'q25' in stats
-        assert 'q75' in stats
+        assert stats["n_paths"] == 100
+        assert stats["mean"].shape == (11, 2)
+        assert stats["std"].shape == (11, 2)
+        assert "median" in stats
+        assert "q25" in stats
+        assert "q75" in stats
 
 
 # ============================================================================
 # Test Class: String Representations
 # ============================================================================
+
 
 class TestStringRepresentations:
     """Test __repr__ and __str__ methods."""
@@ -867,18 +849,18 @@ class TestStringRepresentations:
         """Test integrator __repr__."""
         repr_str = repr(integrator_numpy)
 
-        assert 'ConcreteSDEIntegrator' in repr_str
-        assert 'dt=0.01' in repr_str
-        assert 'numpy' in repr_str
-        assert 'ito' in repr_str
+        assert "ConcreteSDEIntegrator" in repr_str
+        assert "dt=0.01" in repr_str
+        assert "numpy" in repr_str
+        assert "ito" in repr_str
 
     def test_integrator_str(self, integrator_numpy):
         """Test integrator __str__."""
         str_str = str(integrator_numpy)
 
-        assert 'Test Euler-Maruyama' in str_str
-        assert '0.0100' in str_str or '0.01' in str_str
-        assert 'numpy' in str_str
+        assert "Test Euler-Maruyama" in str_str
+        assert "0.0100" in str_str or "0.01" in str_str
+        assert "numpy" in str_str
 
     def test_result_repr(self):
         """Test SDEIntegrationResult __repr__."""
@@ -888,19 +870,20 @@ class TestStringRepresentations:
             nsteps=1,
             nfev=5,
             diffusion_evals=3,
-            n_paths=10
+            n_paths=10,
         )
 
         repr_str = repr(result)
 
-        assert 'SDEIntegrationResult' in repr_str
-        assert 'nsteps=1' in repr_str
-        assert 'n_paths=10' in repr_str
+        assert "SDEIntegrationResult" in repr_str
+        assert "nsteps=1" in repr_str
+        assert "n_paths=10" in repr_str
 
 
 # ============================================================================
 # Test Class: Error Handling
 # ============================================================================
+
 
 class TestErrorHandling:
     """Test error handling and validation."""
@@ -908,7 +891,7 @@ class TestErrorHandling:
     def test_stratonovich_correction_not_implemented(self, mock_sde_system):
         """Test that Stratonovich correction raises NotImplementedError."""
         integrator = ConcreteSDEIntegrator(
-            mock_sde_system, dt=0.01, backend='numpy', sde_type=SDEType.STRATONOVICH
+            mock_sde_system, dt=0.01, backend="numpy", sde_type=SDEType.STRATONOVICH
         )
 
         x = np.array([1.0])
@@ -920,14 +903,13 @@ class TestErrorHandling:
     def test_invalid_backend_raises(self, mock_sde_system):
         """Test that invalid backend raises ValueError."""
         with pytest.raises(ValueError, match="Invalid backend"):
-            ConcreteSDEIntegrator(
-                mock_sde_system, dt=0.01, backend='invalid_backend'
-            )
+            ConcreteSDEIntegrator(mock_sde_system, dt=0.01, backend="invalid_backend")
 
 
 # ============================================================================
 # Test Class: Autonomous System Integration
 # ============================================================================
+
 
 class TestAutonomousSystems:
     """Test autonomous stochastic systems (nu=0)."""
@@ -1023,6 +1005,7 @@ class TestAutonomousSystems:
 # Test Class: Pure Diffusion Systems
 # ============================================================================
 
+
 class TestPureDiffusionSystems:
     """Test pure diffusion systems (zero drift)."""
 
@@ -1077,12 +1060,10 @@ class TestPureDiffusionSystems:
         t_span = (0.0, 1.0)
         n_paths = 1000
 
-        result = integrator_pure_diffusion.integrate_monte_carlo(
-            x0, u_func, t_span, n_paths
-        )
+        result = integrator_pure_diffusion.integrate_monte_carlo(x0, u_func, t_span, n_paths)
 
         stats = result.get_statistics()
-        final_mean = stats['mean'][-1, 0]
+        final_mean = stats["mean"][-1, 0]
 
         assert abs(final_mean) < 0.1
 
@@ -1093,14 +1074,12 @@ class TestPureDiffusionSystems:
         t_span = (0.0, 2.0)
         n_paths = 1000
 
-        result = integrator_pure_diffusion.integrate_monte_carlo(
-            x0, u_func, t_span, n_paths
-        )
+        result = integrator_pure_diffusion.integrate_monte_carlo(x0, u_func, t_span, n_paths)
 
         stats = result.get_statistics()
 
         t_array = result.t
-        var_array = stats['std'][:, 0] ** 2
+        var_array = stats["std"][:, 0] ** 2
 
         idx_half = len(t_array) // 4
         idx_three_half = 3 * len(t_array) // 4
@@ -1121,6 +1100,7 @@ class TestPureDiffusionSystems:
 # Test Class: Equilibrium-Based Integration
 # ============================================================================
 
+
 class TestSDEEquilibriumIntegration:
     """Test SDE integration starting from named equilibria."""
 
@@ -1131,9 +1111,7 @@ class TestSDEEquilibriumIntegration:
         assert np.allclose(x_eq, np.zeros(1))
         assert np.allclose(u_eq, np.zeros(1))
 
-        integrator = ConcreteSDEIntegrator(
-            mock_sde_controlled, dt=0.01, backend='numpy', seed=42
-        )
+        integrator = ConcreteSDEIntegrator(mock_sde_controlled, dt=0.01, backend="numpy", seed=42)
 
         u_func = lambda t, x: u_eq
         result = integrator.integrate(x_eq, u_func, t_span=(0, 1))
@@ -1144,18 +1122,12 @@ class TestSDEEquilibriumIntegration:
     def test_integrate_from_custom_equilibrium(self, mock_sde_controlled):
         """Test integration from non-origin equilibrium."""
         mock_sde_controlled.add_equilibrium(
-            "custom",
-            x_eq=np.array([1.0]),
-            u_eq=np.array([1.0]),
-            verify=True,
-            tol=1e-10
+            "custom", x_eq=np.array([1.0]), u_eq=np.array([1.0]), verify=True, tol=1e-10
         )
 
         x_eq, u_eq = mock_sde_controlled.get_equilibrium("custom")
 
-        integrator = ConcreteSDEIntegrator(
-            mock_sde_controlled, dt=0.01, backend='numpy', seed=42
-        )
+        integrator = ConcreteSDEIntegrator(mock_sde_controlled, dt=0.01, backend="numpy", seed=42)
 
         u_func = lambda t, x: u_eq
         result = integrator.integrate(x_eq, u_func, t_span=(0, 1))
@@ -1166,6 +1138,7 @@ class TestSDEEquilibriumIntegration:
 # ============================================================================
 # Test Class: Integration End-to-End
 # ============================================================================
+
 
 class TestIntegrationEndToEnd:
     """End-to-end integration tests."""
@@ -1184,8 +1157,8 @@ class TestIntegrationEndToEnd:
         assert result.x.shape[0] > 10
 
         stats = integrator_numpy.get_sde_stats()
-        assert stats['total_steps'] > 0
-        assert stats['total_fev'] > 0
+        assert stats["total_steps"] > 0
+        assert stats["total_fev"] > 0
 
     def test_reproducibility_with_seed(self, mock_sde_system):
         """Test that same seed gives reproducible results."""
@@ -1193,14 +1166,10 @@ class TestIntegrationEndToEnd:
         u_func = lambda t, x: None
         t_span = (0.0, 0.5)
 
-        integrator1 = ConcreteSDEIntegrator(
-            mock_sde_system, dt=0.01, backend='numpy', seed=42
-        )
+        integrator1 = ConcreteSDEIntegrator(mock_sde_system, dt=0.01, backend="numpy", seed=42)
         result1 = integrator1.integrate(x0, u_func, t_span)
 
-        integrator2 = ConcreteSDEIntegrator(
-            mock_sde_system, dt=0.01, backend='numpy', seed=42
-        )
+        integrator2 = ConcreteSDEIntegrator(mock_sde_system, dt=0.01, backend="numpy", seed=42)
         result2 = integrator2.integrate(x0, u_func, t_span)
 
         np.testing.assert_array_almost_equal(result1.x, result2.x)
@@ -1211,19 +1180,15 @@ class TestIntegrationEndToEnd:
         u_func = lambda t, x: None
         t_span = (0.0, 1.0)
 
-        result_small = integrator_numpy.integrate_monte_carlo(
-            x0, u_func, t_span, n_paths=50
-        )
+        result_small = integrator_numpy.integrate_monte_carlo(x0, u_func, t_span, n_paths=50)
         stats_small = result_small.get_statistics()
 
         integrator_numpy.set_seed(42)
-        result_large = integrator_numpy.integrate_monte_carlo(
-            x0, u_func, t_span, n_paths=500
-        )
+        result_large = integrator_numpy.integrate_monte_carlo(x0, u_func, t_span, n_paths=500)
         stats_large = result_large.get_statistics()
 
-        se_small = stats_small['std'][-1] / np.sqrt(50)
-        se_large = stats_large['std'][-1] / np.sqrt(500)
+        se_small = stats_small["std"][-1] / np.sqrt(50)
+        se_large = stats_large["std"][-1] / np.sqrt(500)
 
         assert se_large < se_small
 
@@ -1232,5 +1197,5 @@ class TestIntegrationEndToEnd:
 # Run Tests
 # ============================================================================
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v', '--tb=short'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v", "--tb=short"])

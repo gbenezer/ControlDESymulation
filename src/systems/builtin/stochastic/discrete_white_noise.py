@@ -16,27 +16,29 @@
 # TODO: make module docstring
 
 import sympy as sp
+
 from src.systems.base.discrete_stochastic_system import DiscreteStochasticSystem
+
 
 class DiscreteWhiteNoise(DiscreteStochasticSystem):
     """
     Pure white noise process: x[k+1] = w[k]
-    
+
     Useful for testing and noise modeling.
     """
-    
+
     def define_system(self, sigma=1.0):
-        x = sp.symbols('x', real=True)
-        sigma_sym = sp.symbols('sigma', positive=True)
-        
+        x = sp.symbols("x", real=True)
+        sigma_sym = sp.symbols("sigma", positive=True)
+
         self.state_vars = [x]
         self.control_vars = []
-        
+
         # No deterministic evolution
         self._f_sym = sp.Matrix([0])
-        
+
         # Pure noise
         self.diffusion_expr = sp.Matrix([[sigma_sym]])
         self.parameters = {sigma_sym: sigma}
         self.order = 1
-        self.sde_type = 'ito'
+        self.sde_type = "ito"

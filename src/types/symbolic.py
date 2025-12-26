@@ -33,10 +33,10 @@ Symbolic systems are defined using SymPy:
 
 State equations:
     dx/dt = f_sym(x, u, params)
-    
+
 Output equations:
     y = h_sym(x, u)
-    
+
 Diffusion (stochastic):
     dW scaled by g_sym(x, u)
 
@@ -53,19 +53,19 @@ Usage
 ...     SymbolicMatrix,
 ...     ParameterDict,
 ... )
->>> 
+>>>
 >>> import sympy as sp
->>> 
+>>>
 >>> # Define symbols
 >>> x, u = sp.symbols('x u', real=True)
 >>> m, k = sp.symbols('m k', positive=True)
->>> 
+>>>
 >>> # Define equation
 >>> f: SymbolicExpression = -k/m * x + u/m
->>> 
+>>>
 >>> # Create parameter dict
 >>> params: ParameterDict = {m: 1.0, k: 10.0}
->>> 
+>>>
 >>> # Evaluate
 >>> result = f.subs(params).subs({x: 1.0, u: 0.0})
 >>> print(result)  # -10.0
@@ -80,7 +80,8 @@ They provide:
 - Foundation for type-safe symbolic system specification
 """
 
-from typing import Union, Dict, List
+from typing import Dict, List, Union
+
 import sympy as sp
 
 # Note: No imports from other type modules needed
@@ -595,22 +596,19 @@ Examples
 
 __all__ = [
     # Basic types
-    'SymbolicExpression',
-    'SymbolicMatrix',
-    'SymbolicSymbol',
-    'SymbolDict',
-    
+    "SymbolicExpression",
+    "SymbolicMatrix",
+    "SymbolicSymbol",
+    "SymbolDict",
     # System equations
-    'SymbolicStateEquations',
-    'SymbolicOutputEquations',
-    'SymbolicDiffusionMatrix',
-    
+    "SymbolicStateEquations",
+    "SymbolicOutputEquations",
+    "SymbolicDiffusionMatrix",
     # Parameters
-    'ParameterDict',
-    'SubstitutionDict',
-    
+    "ParameterDict",
+    "SubstitutionDict",
     # Derivatives
-    'SymbolicJacobian',
-    'SymbolicGradient',
-    'SymbolicHessian',
+    "SymbolicJacobian",
+    "SymbolicGradient",
+    "SymbolicHessian",
 ]

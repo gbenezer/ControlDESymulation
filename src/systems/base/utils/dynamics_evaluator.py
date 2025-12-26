@@ -31,52 +31,55 @@ This class manages the evaluation of the system dynamics using
 generated functions from CodeGenerator.
 """
 
-from typing import Optional, TYPE_CHECKING
 import time
+from typing import TYPE_CHECKING, Optional
+
 import numpy as np
 
 if TYPE_CHECKING:
-    import torch
     import jax.numpy as jnp
+    import torch
+
     from src.systems.base.symbolic_dynamical_system import SymbolicDynamicalSystem
-    from src.systems.base.utils.code_generator import CodeGenerator
     from src.systems.base.utils.backend_manager import BackendManager
+    from src.systems.base.utils.code_generator import CodeGenerator
 
 # Type alias
 from typing import Union
+
 ArrayLike = Union[np.ndarray, "torch.Tensor", "jnp.ndarray"]
 
 
 class DynamicsEvaluator:
     """
     Evaluates forward dynamics across backends.
-    
+
     Handles the evaluation of dx/dt = f(x, u) for controlled systems or
     dx/dt = f(x) for autonomous systems. Supports NumPy, PyTorch, and JAX
     backends with proper shape handling, batching, and performance tracking.
-    
+
     Example:
         >>> # Controlled system
         >>> evaluator = DynamicsEvaluator(system, code_gen, backend_mgr)
         >>> dx = evaluator.evaluate(x, u, backend='numpy')
-        >>> 
+        >>>
         >>> # Autonomous system (u=None)
         >>> dx = evaluator.evaluate(x, backend='numpy')
-        >>> 
+        >>>
         >>> # Get performance stats
         >>> stats = evaluator.get_stats()
         >>> print(f"Average time: {stats['avg_time']:.6f}s")
     """
-    
+
     def __init__(
         self,
-        system: 'SymbolicDynamicalSystem',
-        code_gen: 'CodeGenerator',
-        backend_mgr: 'BackendManager'
+        system: "SymbolicDynamicalSystem",
+        code_gen: "CodeGenerator",
+        backend_mgr: "BackendManager",
     ):
         """
         Initialize dynamics evaluator.
-        
+
         Args:
             system: The dynamical system
             code_gen: Code generator for accessing compiled functions
@@ -85,26 +88,23 @@ class DynamicsEvaluator:
         self.system = system
         self.code_gen = code_gen
         self.backend_mgr = backend_mgr
-        
+
         # Performance tracking
         self._stats = {
-            'calls': 0,
-            'time': 0.0,
+            "calls": 0,
+            "time": 0.0,
         }
-    
+
     # ========================================================================
     # Main Evaluation API
     # ========================================================================
-    
+
     def evaluate(
-        self, 
-        x: ArrayLike, 
-        u: Optional[ArrayLike] = None, 
-        backend: Optional[str] = None
+        self, x: ArrayLike, u: Optional[ArrayLike] = None, backend: Optional[str] = None
     ) -> ArrayLike:
         """
         Evaluate forward dynamics: dx/dt = f(x, u) or dx/dt = f(x).
-        
+
         Args:
             x: State (array/tensor)
             u: Control (array/tensor), None for autonomous systems
@@ -112,20 +112,20 @@ class DynamicsEvaluator:
                 - None: Auto-detect from input type (default)
                 - 'numpy', 'torch', 'jax': Force specific backend
                 - 'default': Use system's default backend
-                
+
         Returns:
             State derivative (type matches backend)
-            
+
         Raises:
             ValueError: If u is None for non-autonomous system or provided for autonomous
-            
+
         Example:
             >>> # Controlled system - auto-detect backend
             >>> dx = evaluator.evaluate(x_numpy, u_numpy)  # Returns NumPy
-            >>> 
+            >>>
             >>> # Autonomous system
             >>> dx = evaluator.evaluate(x_numpy)  # u=None
-            >>> 
+            >>>
             >>> # Force specific backend (converts input)
             >>> dx = evaluator.evaluate(x_numpy, u_numpy, backend='torch')  # Returns PyTorch
         """
@@ -137,73 +137,73 @@ class DynamicsEvaluator:
                     f"System has {self.system.nu} control input(s)."
                 )
             # Create empty control array in appropriate backend
-            if backend == 'default':
+            if backend == "default":
                 target_backend = self.backend_mgr.default_backend
             elif backend is None:
                 target_backend = self.backend_mgr.detect(x)
             else:
                 target_backend = backend
-            
+
             # Create empty array in appropriate backend
-            if target_backend == 'numpy':
+            if target_backend == "numpy":
                 u = np.array([])
-            elif target_backend == 'torch':
+            elif target_backend == "torch":
                 import torch
+
                 u = torch.tensor([], dtype=torch.float32)
-            elif target_backend == 'jax':
+            elif target_backend == "jax":
                 import jax.numpy as jnp
+
                 u = jnp.array([])
-        
+
         # Determine target backend
-        if backend == 'default':
+        if backend == "default":
             target_backend = self.backend_mgr.default_backend
         elif backend is None:
             target_backend = self.backend_mgr.detect(x)
         else:
             target_backend = backend
-        
+
         # Convert inputs if needed
         input_backend = self.backend_mgr.detect(x)
         if input_backend != target_backend:
             x = self.backend_mgr.convert(x, target_backend)
             if self.system.nu > 0:  # Only convert u if not autonomous
                 u = self.backend_mgr.convert(u, target_backend)
-        
+
         # Dispatch to backend-specific implementation
-        if target_backend == 'numpy':
+        if target_backend == "numpy":
             return self._evaluate_numpy(x, u)
-        elif target_backend == 'torch':
+        elif target_backend == "torch":
             return self._evaluate_torch(x, u)
-        elif target_backend == 'jax':
+        elif target_backend == "jax":
             return self._evaluate_jax(x, u)
         else:
             raise ValueError(f"Unknown backend: {target_backend}")
-    
+
     # ========================================================================
     # Backend-Specific Implementations
     # ========================================================================
-    
+
     def _evaluate_numpy(self, x: np.ndarray, u: np.ndarray) -> np.ndarray:
         """
         NumPy backend implementation.
-        
+
         Handles both single and batched evaluation.
         Supports both controlled (nu > 0) and autonomous (nu = 0) systems.
-        
+
         Raises:
             ValueError: If batch is empty (batch_size=0)
         """
         start_time = time.time()
-        
+
         # Input validation
         if x.ndim == 0:
             raise ValueError("State array must be at least 1D")
-        
+
         if x.ndim >= 1 and x.shape[-1] != self.system.nx:
-            raise ValueError(
-                f"Expected state dimension {self.system.nx}, got {x.shape[-1]}"
-            )
-        
+            raise ValueError(f"Expected state dimension {self.system.nx}, got {x.shape[-1]}")
+
         # Check for empty batch BEFORE processing
         if x.ndim > 1:
             batch_size = x.shape[0]
@@ -216,7 +216,7 @@ class DynamicsEvaluator:
                     f"This usually indicates a bug in data preparation or loop logic. "
                     f"Check your data loading, filtering, or iteration code."
                 )
-        
+
         # For autonomous systems, u should be empty
         if self.system.nu == 0:
             if u.size != 0:
@@ -226,10 +226,8 @@ class DynamicsEvaluator:
             if u.ndim == 0:
                 raise ValueError("Control array must be at least 1D")
             if u.ndim >= 1 and u.shape[-1] != self.system.nu:
-                raise ValueError(
-                    f"Expected control dimension {self.system.nu}, got {u.shape[-1]}"
-                )
-            
+                raise ValueError(f"Expected control dimension {self.system.nu}, got {u.shape[-1]}")
+
             # Check for mismatched batch sizes
             if x.ndim > 1 and u.ndim > 1:
                 if x.shape[0] != u.shape[0]:
@@ -237,79 +235,77 @@ class DynamicsEvaluator:
                         f"Batch size mismatch: x has {x.shape[0]} samples, "
                         f"u has {u.shape[0]} samples"
                     )
-        
+
         # Generate function (uses cache if available)
-        f_numpy = self.code_gen.generate_dynamics('numpy')
-        
+        f_numpy = self.code_gen.generate_dynamics("numpy")
+
         # Handle batched vs single evaluation
         if x.ndim == 1:
             # Single evaluation
             x_list = [x[i] for i in range(self.system.nx)]
-            
+
             if self.system.nu > 0:
                 u_list = [u[i] for i in range(self.system.nu)]
                 result = f_numpy(*(x_list + u_list))
             else:
                 # Autonomous: no control inputs
                 result = f_numpy(*x_list)
-            
+
             result = np.array(result).flatten()
         else:
             # Batched evaluation
             results = []
             for i in range(x.shape[0]):
                 x_list = [x[i, j] for j in range(self.system.nx)]
-                
+
                 if self.system.nu > 0:
                     u_list = [u[i, j] for j in range(self.system.nu)]
                     result = f_numpy(*(x_list + u_list))
                 else:
                     # Autonomous: no control inputs
                     result = f_numpy(*x_list)
-                
+
                 results.append(np.array(result).flatten())
-            
+
             # Defensive check (should never happen after batch_size check above)
             if len(results) == 0:
                 raise RuntimeError(
                     "Internal error: No results generated despite non-empty input validation. "
                     "This is a bug in the dynamics evaluator - please report this."
                 )
-            
+
             result = np.stack(results)
-        
+
         # Update performance stats
-        self._stats['calls'] += 1
-        self._stats['time'] += time.time() - start_time
+        self._stats["calls"] += 1
+        self._stats["time"] += time.time() - start_time
 
         # Ensure correct backend type
-        result = self.backend_mgr.ensure_type(result, 'numpy')
-        
+        result = self.backend_mgr.ensure_type(result, "numpy")
+
         return result
-    
+
     def _evaluate_torch(self, x: "torch.Tensor", u: "torch.Tensor") -> "torch.Tensor":
         """
         PyTorch backend implementation.
-        
+
         Handles both single and batched evaluation with GPU support.
         Supports both controlled (nu > 0) and autonomous (nu = 0) systems.
-        
+
         Raises:
             ValueError: If batch is empty (batch_size=0)
         """
         import torch
-        
+
         start_time = time.time()
-        
+
         # Input validation
         if len(x.shape) == 0:
             raise ValueError("State tensor must be at least 1D")
-        
+
         if len(x.shape) >= 1 and x.shape[-1] != self.system.nx:
-            raise ValueError(
-                f"Expected state dimension {self.system.nx}, got {x.shape[-1]}"
-            )
-        
+            raise ValueError(f"Expected state dimension {self.system.nx}, got {x.shape[-1]}")
+
         # Check for empty batch BEFORE processing
         if len(x.shape) > 1:
             batch_size = x.shape[0]
@@ -322,7 +318,7 @@ class DynamicsEvaluator:
                     f"This usually indicates a bug in data preparation or loop logic. "
                     f"Check your DataLoader, filtering, or iteration code."
                 )
-        
+
         # For autonomous systems, u should be empty
         if self.system.nu == 0:
             if u.numel() != 0:
@@ -332,10 +328,8 @@ class DynamicsEvaluator:
             if len(u.shape) == 0:
                 raise ValueError("Control tensor must be at least 1D")
             if len(u.shape) >= 1 and u.shape[-1] != self.system.nu:
-                raise ValueError(
-                    f"Expected control dimension {self.system.nu}, got {u.shape[-1]}"
-                )
-            
+                raise ValueError(f"Expected control dimension {self.system.nu}, got {u.shape[-1]}")
+
             # Check for mismatched batch sizes
             if len(x.shape) > 1 and len(u.shape) > 1:
                 if x.shape[0] != u.shape[0]:
@@ -343,10 +337,10 @@ class DynamicsEvaluator:
                         f"Batch size mismatch: x has {x.shape[0]} samples, "
                         f"u has {u.shape[0]} samples"
                     )
-        
+
         # Generate function (uses cache if available)
-        f_torch = self.code_gen.generate_dynamics('torch')
-        
+        f_torch = self.code_gen.generate_dynamics("torch")
+
         # Handle batched vs single evaluation
         if len(x.shape) == 1:
             x = x.unsqueeze(0)
@@ -355,25 +349,25 @@ class DynamicsEvaluator:
             squeeze_output = True
         else:
             squeeze_output = False
-        
+
         # Prepare arguments
         x_list = [x[:, i] for i in range(self.system.nx)]
-        
+
         if self.system.nu > 0:
             u_list = [u[:, i] for i in range(self.system.nu)]
             all_args = x_list + u_list
         else:
             # Autonomous: only state arguments
             all_args = x_list
-        
+
         # Call generated function
         result = f_torch(*all_args)
-        
+
         # Handle output shape
         if squeeze_output:
             # Single input case - squeeze batch dimension
             result = result.squeeze(0)
-            
+
             # Ensure at least 1D
             if result.ndim == 0:
                 result = result.unsqueeze(0)
@@ -387,40 +381,38 @@ class DynamicsEvaluator:
                     # For first-order systems with nx=1, also need (batch, 1)
                     if self.system.nx == 1:
                         result = result.unsqueeze(1)
-        
+
         # Update performance stats
-        self._stats['calls'] += 1
-        self._stats['time'] += time.time() - start_time
+        self._stats["calls"] += 1
+        self._stats["time"] += time.time() - start_time
 
         # Ensure correct backend type
-        result = self.backend_mgr.ensure_type(result, 'torch')
-        
+        result = self.backend_mgr.ensure_type(result, "torch")
+
         return result
-    
+
     def _evaluate_jax(self, x: "jnp.ndarray", u: "jnp.ndarray") -> "jnp.ndarray":
         """
         JAX backend implementation.
-        
+
         Handles both single and batched evaluation with vmap for efficiency.
         Supports both controlled (nu > 0) and autonomous (nu = 0) systems.
-        
+
         Raises:
             ValueError: If batch is empty (batch_size=0)
         """
         import jax
         import jax.numpy as jnp
-        
+
         start_time = time.time()
-        
+
         # Input validation
         if x.ndim == 0:
             raise ValueError("State array must be at least 1D")
-        
+
         if x.ndim >= 1 and x.shape[-1] != self.system.nx:
-            raise ValueError(
-                f"Expected state dimension {self.system.nx}, got {x.shape[-1]}"
-            )
-        
+            raise ValueError(f"Expected state dimension {self.system.nx}, got {x.shape[-1]}")
+
         # Check for empty batch BEFORE processing
         if x.ndim > 1:
             batch_size = x.shape[0]
@@ -433,7 +425,7 @@ class DynamicsEvaluator:
                     f"This usually indicates a bug in data preparation or loop logic. "
                     f"Check your data loading, filtering, or vmap usage."
                 )
-        
+
         # For autonomous systems, u should be empty
         if self.system.nu == 0:
             if u.size != 0:
@@ -443,10 +435,8 @@ class DynamicsEvaluator:
             if u.ndim == 0:
                 raise ValueError("Control array must be at least 1D")
             if u.ndim >= 1 and u.shape[-1] != self.system.nu:
-                raise ValueError(
-                    f"Expected control dimension {self.system.nu}, got {u.shape[-1]}"
-                )
-            
+                raise ValueError(f"Expected control dimension {self.system.nu}, got {u.shape[-1]}")
+
             # Check for mismatched batch sizes
             if x.ndim > 1 and u.ndim > 1:
                 if x.shape[0] != u.shape[0]:
@@ -454,10 +444,10 @@ class DynamicsEvaluator:
                         f"Batch size mismatch: x has {x.shape[0]} samples, "
                         f"u has {u.shape[0]} samples"
                     )
-        
+
         # Generate function (uses cache if available)
-        f_jax = self.code_gen.generate_dynamics('jax', jit=True)
-        
+        f_jax = self.code_gen.generate_dynamics("jax", jit=True)
+
         # Handle batched vs single evaluation
         if x.ndim == 1:
             x = jnp.expand_dims(x, 0)
@@ -466,16 +456,17 @@ class DynamicsEvaluator:
             squeeze_output = True
         else:
             squeeze_output = False
-        
+
         # For batched computation, use vmap
         if x.shape[0] > 1:
             if self.system.nu > 0:
+
                 @jax.vmap
                 def batched_dynamics(x_i, u_i):
                     x_list = [x_i[j] for j in range(self.system.nx)]
                     u_list = [u_i[j] for j in range(self.system.nu)]
                     return f_jax(*(x_list + u_list))
-                
+
                 result = batched_dynamics(x, u)
             else:
                 # Autonomous: no control inputs
@@ -483,25 +474,25 @@ class DynamicsEvaluator:
                 def batched_dynamics(x_i):
                     x_list = [x_i[j] for j in range(self.system.nx)]
                     return f_jax(*x_list)
-                
+
                 result = batched_dynamics(x)
         else:
             # Single evaluation
             x_list = [x[0, i] for i in range(self.system.nx)]
-            
+
             if self.system.nu > 0:
                 u_list = [u[0, i] for i in range(self.system.nu)]
                 result = f_jax(*(x_list + u_list))
             else:
                 # Autonomous: no control inputs
                 result = f_jax(*x_list)
-            
+
             result = jnp.expand_dims(result, 0)
-        
+
         # Handle output shape
         if squeeze_output:
             result = result.squeeze(0)
-            
+
             # Ensure at least 1D
             if result.ndim == 0:
                 result = jnp.expand_dims(result, 0)
@@ -510,53 +501,53 @@ class DynamicsEvaluator:
             if result.ndim == 1:
                 if self.system.order > 1 or self.system.nx == 1:
                     result = jnp.expand_dims(result, 1)
-        
+
         # Update performance stats
-        self._stats['calls'] += 1
-        self._stats['time'] += time.time() - start_time
+        self._stats["calls"] += 1
+        self._stats["time"] += time.time() - start_time
 
         # Ensure correct backend type
-        result = self.backend_mgr.ensure_type(result, 'jax')
-        
+        result = self.backend_mgr.ensure_type(result, "jax")
+
         return result
-    
+
     # ========================================================================
     # Performance Tracking
     # ========================================================================
-    
+
     def get_stats(self) -> dict:
         """
         Get performance statistics.
-        
+
         Returns:
             Dict with call count, total time, and average time
-            
+
         Example:
             >>> stats = evaluator.get_stats()
             >>> print(f"Calls: {stats['calls']}")
             >>> print(f"Avg time: {stats['avg_time']:.6f}s")
         """
         return {
-            'calls': self._stats['calls'],
-            'total_time': self._stats['time'],
-            'avg_time': self._stats['time'] / max(1, self._stats['calls']),
+            "calls": self._stats["calls"],
+            "total_time": self._stats["time"],
+            "avg_time": self._stats["time"] / max(1, self._stats["calls"]),
         }
-    
+
     def reset_stats(self):
         """
         Reset performance counters.
-        
+
         Example:
             >>> evaluator.reset_stats()
             >>> # Stats are now zero
         """
-        self._stats['calls'] = 0
-        self._stats['time'] = 0.0
-    
+        self._stats["calls"] = 0
+        self._stats["time"] = 0.0
+
     # ========================================================================
     # String Representations
     # ========================================================================
-    
+
     def __repr__(self) -> str:
         """String representation for debugging"""
         autonomous_str = " (autonomous)" if self.system.nu == 0 else ""
@@ -565,7 +556,7 @@ class DynamicsEvaluator:
             f"nx={self.system.nx}, nu={self.system.nu}{autonomous_str}, "
             f"calls={self._stats['calls']})"
         )
-    
+
     def __str__(self) -> str:
         """Human-readable string"""
         return f"DynamicsEvaluator(calls={self._stats['calls']})"
