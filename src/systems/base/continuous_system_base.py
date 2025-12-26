@@ -17,108 +17,18 @@
 Continuous System Base Class (Layer 1)
 ======================================
 
-This module provides the abstract base class for all continuous-time dynamical systems.
+Abstract base class for all continuous-time dynamical systems.
 
-Overview
---------
-The ContinuousSystemBase class defines the core interface that all continuous-time
-systems must implement, regardless of whether they are deterministic or stochastic,
-symbolic or data-driven.
-
-All continuous-time systems share these fundamental operations:
-- Forward dynamics evaluation: dx/dt = f(x, u, t)
-- Numerical integration over time intervals
-- Linearization around equilibrium points
-
-This base class enforces these contracts through abstract methods, ensuring
-consistent APIs across the entire continuous systems hierarchy.
-
-Architecture Position
---------------------
-Layer 1 (Abstract Interfaces):
-    ContinuousSystemBase ← YOU ARE HERE
-    DiscreteSystemBase
-
-Layer 2 (Symbolic Implementations):
-    ContinuousSymbolicSystem(ContinuousSystemBase)
-    ContinuousStochasticSystem(ContinuousSymbolicSystem)
-
-Layer 3 (Discrete Implementations):
-    DiscreteSymbolicSystem(DiscreteSystemBase)
-    DiscreteStochasticSystem(DiscreteSymbolicSystem, DiscreteSystemBase)
-
-Layer 4 (Bridges):
-    DiscreteTimeWrapper
-    Discretizer
-
-Key Design Principles
---------------------
-1. **Time Domain**: Continuous-time only (dx/dt formulation)
-2. **Backend Agnostic**: Works with NumPy, PyTorch, JAX
-3. **Minimal Interface**: Only essential methods are abstract
-4. **Composable**: Designed for inheritance and extension
-5. **Type Safe**: Full type hints using src/types
-
-Abstract Methods
----------------
-Subclasses MUST implement:
-- __call__(x, u, t): Evaluate dynamics at a point
-- integrate(x0, u, t_span): Integrate over time
-- linearize(x_eq, u_eq): Compute linearization
-
-Concrete Methods
----------------
-Provided by default:
-- simulate(): High-level simulation interface
-- __repr__(): String representation
-
-Mathematical Notation
---------------------
-- x(t) ∈ ℝⁿˣ: State vector (continuous-time)
-- u(t) ∈ ℝⁿᵘ: Control input (continuous-time)
-- t ∈ ℝ: Time (continuous)
-- dx/dt = f(x, u, t): Continuous-time dynamics
-
-Examples
---------
->>> from abc import ABC
->>> class MyODESystem(ContinuousSystemBase):
-...     def __call__(self, x, u=None, t=0.0):
-...         # Implement dx/dt = f(x, u, t)
-...         return -x + (u if u is not None else 0.0)
-...
-...     def integrate(self, x0, u, t_span):
-...         # Implement numerical integration
-...         from scipy.integrate import solve_ivp
-...         ...
-...
-...     def linearize(self, x_eq, u_eq):
-...         # Implement linearization
-...         A = -np.eye(self.nx)
-...         B = np.eye(self.nx)
-...         return ContinuousLinearization(A=A, B=B, x_eq=x_eq, u_eq=u_eq)
-
-See Also
---------
-- ContinuousSymbolicSystem: Symbolic implementation with multi-backend code generation
-- ContinuousStochasticSystem: Stochastic differential equations (SDEs)
-- DiscreteSystemBase: Discrete-time counterpart
-
-Authors
--------
-Gil Benezer
-
-License
--------
-GNU Affero General Public License v3.0
+This module should be placed at:
+    src/systems/base/continuous_system_base.py
 """
 
 from abc import ABC, abstractmethod
 from typing import Callable, Optional, Union
 
-from src.types.core import ControlVector, StateVector
+from src.types.core import ArrayLike, ControlVector, StateVector
 from src.types.linearization import LinearizationResult
-from src.types.trajectories import SimulationResult
+from src.types.trajectories import IntegrationResult, SimulationResult
 
 
 class ContinuousSystemBase(ABC):
@@ -126,68 +36,38 @@ class ContinuousSystemBase(ABC):
     Abstract base class for all continuous-time dynamical systems.
 
     This class defines the fundamental interface that all continuous-time systems
-    must implement. It serves as Layer 1 in the architecture, providing the
-    contract for dynamics evaluation, integration, and linearization.
-
-    All continuous-time systems satisfy:
+    must implement. All continuous-time systems satisfy:
         dx/dt = f(x, u, t)
 
-    where x is the state, u is the control input, and t is time.
+    Subclasses must implement:
+    1. __call__(x, u, t): Evaluate dynamics at a point
+    2. integrate(x0, u, t_span): Low-level numerical integration with solver diagnostics
+    3. linearize(x_eq, u_eq): Compute linearization
 
-    Subclasses must implement three core methods:
-    1. __call__: Evaluate dynamics at a single point
-    2. integrate: Numerically integrate over a time interval
-    3. linearize: Compute linearized dynamics around an equilibrium
-
-    Attributes
-    ----------
-    nx : int
-        State dimension (number of state variables)
-    nu : int
-        Control dimension (number of control inputs)
-    ny : int
-        Output dimension (number of outputs), optional
-
-    Notes
-    -----
-    This is an abstract base class and cannot be instantiated directly.
-    Use concrete implementations like ContinuousSymbolicSystem or create
-    your own subclass.
-
-    The class enforces a consistent API across all continuous-time systems,
-    enabling polymorphic use in controllers, observers, and analysis tools.
+    Additional concrete methods provided:
+    - simulate(): High-level simulation with regular time grid (wraps integrate())
 
     Examples
     --------
-    Create a simple linear system:
-
-    >>> class LinearSystem(ContinuousSystemBase):
-    ...     def __init__(self, A, B):
-    ...         self.A = A
-    ...         self.B = B
-    ...         self.nx = A.shape[0]
-    ...         self.nu = B.shape[1]
-    ...
+    >>> class MyODESystem(ContinuousSystemBase):
     ...     def __call__(self, x, u=None, t=0.0):
-    ...         u = u if u is not None else np.zeros(self.nu)
-    ...         return self.A @ x + self.B @ u
-    ...
-    ...     def integrate(self, x0, u, t_span):
-    ...         # Use scipy or other integrator
-    ...         ...
-    ...
+    ...         return -x + (u if u is not None else 0.0)
+    ...     
+    ...     def integrate(self, x0, u, t_span, method="RK45", **kwargs):
+    ...         # Use scipy.integrate.solve_ivp or similar
+    ...         result = solve_ivp(...)
+    ...         return {
+    ...             "t": result.t,
+    ...             "y": result.y,
+    ...             "success": result.success,
+    ...             "nfev": result.nfev,
+    ...             ...
+    ...         }
+    ...     
     ...     def linearize(self, x_eq, u_eq):
-    ...         return ContinuousLinearization(
-    ...             A=self.A, B=self.B, x_eq=x_eq, u_eq=u_eq
-    ...         )
-
-    Polymorphic usage:
-
-    >>> def analyze_stability(system: ContinuousSystemBase, x_eq, u_eq):
-    ...     \"\"\"Works with ANY continuous system.\"\"\"
-    ...     lin = system.linearize(x_eq, u_eq)
-    ...     eigenvalues = np.linalg.eigvals(lin.A)
-    ...     return np.all(eigenvalues.real < 0)  # Stable if all Re(λ) < 0
+    ...         A = -np.eye(self.nx)
+    ...         B = np.eye(self.nx, self.nu)
+    ...         return (A, B)
     """
 
     # =========================================================================
@@ -225,12 +105,10 @@ class ContinuousSystemBase(ABC):
 
         Notes
         -----
-        For autonomous systems, t is ignored.
-        For time-invariant systems, t is typically ignored.
-        For batch evaluation, x and u should have shape (n_dim, n_batch).
-
-        The returned derivative should be in the same backend as the input
-        (NumPy array → NumPy array, PyTorch tensor → PyTorch tensor, etc.).
+        - For autonomous systems, t is ignored
+        - For time-invariant systems, t is typically ignored
+        - For batch evaluation, x and u should have shape (n_dim, n_batch)
+        - The returned derivative should be in the same backend as the input
 
         Examples
         --------
@@ -245,10 +123,6 @@ class ContinuousSystemBase(ABC):
         >>> x_batch = np.random.randn(2, 100)  # 100 states
         >>> u_batch = np.random.randn(1, 100)  # 100 controls
         >>> dxdt_batch = system(x_batch, u_batch)  # Returns (2, 100)
-
-        Time-varying system:
-
-        >>> dxdt = system(x, u, t=5.0)  # Evaluate at t=5
         """
         pass
 
@@ -258,16 +132,19 @@ class ContinuousSystemBase(ABC):
         x0: StateVector,
         u: Union[ControlVector, Callable[[float], ControlVector], None] = None,
         t_span: tuple[float, float] = (0.0, 10.0),
-        dt: Optional[float] = None,
         method: str = "RK45",
         **integrator_kwargs
-    ) -> SimulationResult:
+    ) -> IntegrationResult:
         """
-        Integrate system dynamics over a time interval.
+        Low-level numerical integration with ODE solver diagnostics.
 
         Numerically solve the initial value problem:
             dx/dt = f(x, u, t)
             x(t0) = x0
+
+        This method exposes the raw solver output including adaptive time points,
+        convergence information, and performance metrics. For typical use cases,
+        consider using simulate() instead, which provides a cleaner interface.
 
         Parameters
         ----------
@@ -280,40 +157,48 @@ class ContinuousSystemBase(ABC):
             - Callable: Time-varying control u(t) = u_func(t)
         t_span : tuple[float, float]
             Time interval (t_start, t_end)
-        dt : Optional[float]
-            Output time step (if None, integrator chooses)
         method : str
-            Integration method (e.g., 'RK45', 'RK23', 'LSODA', 'Euler')
+            Integration method (e.g., 'RK45', 'RK23', 'LSODA', 'Radau', 'BDF')
         **integrator_kwargs
-            Additional arguments passed to the integrator
+            Additional arguments passed to the ODE solver
+            Common: rtol, atol, max_step, first_step, dense_output
 
         Returns
         -------
-        SimulationResult
-            Structured result containing:
-            - time: Time points (n_steps,)
-            - states: State trajectory (nx, n_steps)
-            - controls: Control trajectory (nu, n_steps) if applicable
-            - metadata: Integration info (method, success, etc.)
+        IntegrationResult
+            TypedDict (returns as dict) containing:
+            - t: Time points (n_points,) - adaptive, chosen by solver
+            - y: State trajectory (nx, n_points)
+            - success: bool - whether integration succeeded
+            - message: str - solver status message
+            - nfev: int - number of function evaluations
+            - njev: int - number of Jacobian evaluations (if applicable)
+            - nlu: int - number of LU decompositions (implicit methods)
+            - status: int - termination status code
 
         Notes
         -----
-        The integrator choice affects accuracy and speed:
-        - 'RK45': Adaptive Runge-Kutta (good default)
-        - 'RK23': Faster but less accurate
-        - 'LSODA': Good for stiff systems
-        - 'Euler': Simple explicit method
+        The time points in the result are chosen adaptively by the solver
+        based on error control, not on a regular grid. For a regular time
+        grid, use simulate() instead.
 
-        For stochastic systems, specialized SDE integrators are used instead.
+        Solver selection guidelines:
+        - 'RK45': Explicit Runge-Kutta (good default for non-stiff)
+        - 'RK23': Faster but less accurate than RK45
+        - 'DOP853': High-accuracy explicit method
+        - 'Radau': Implicit method for stiff systems
+        - 'BDF': Implicit multistep for very stiff systems
+        - 'LSODA': Automatically switches between stiff/non-stiff
 
         Examples
         --------
-        Constant control:
+        Basic integration with default solver:
 
         >>> x0 = np.array([1.0, 0.0])
-        >>> u = np.array([0.5])
-        >>> result = system.integrate(x0, u, t_span=(0, 10), dt=0.01)
-        >>> plt.plot(result.time, result.states[0, :])
+        >>> result = system.integrate(x0, u=None, t_span=(0, 10))
+        >>> print(f"Success: {result['success']}")
+        >>> print(f"Function evaluations: {result['nfev']}")
+        >>> plt.plot(result['t'], result['y'][0, :])
 
         Time-varying control:
 
@@ -321,9 +206,19 @@ class ContinuousSystemBase(ABC):
         ...     return np.array([np.sin(t)])
         >>> result = system.integrate(x0, u_func, t_span=(0, 10))
 
-        Autonomous system:
+        Stiff system with tight tolerances:
 
-        >>> result = system.integrate(x0, u=None, t_span=(0, 10))
+        >>> result = system.integrate(
+        ...     x0, u=None, t_span=(0, 10),
+        ...     method='Radau',
+        ...     rtol=1e-8,
+        ...     atol=1e-10
+        ... )
+
+        Check solver performance:
+
+        >>> if result['nfev'] > 10000:
+        ...     print("Warning: Many function evaluations - try stiff solver")
         """
         pass
 
@@ -354,12 +249,9 @@ class ContinuousSystemBase(ABC):
         Returns
         -------
         LinearizationResult
-            Structured result containing:
-            - A: State Jacobian matrix (nx, nx)
-            - B: Control Jacobian matrix (nx, nu)
-            - x_eq: Equilibrium state
-            - u_eq: Equilibrium control
-            - Additional fields for stochastic systems (G matrix, etc.)
+            Tuple containing Jacobian matrices:
+            - Deterministic systems: (A, B)
+            - Stochastic systems: (A, B, G) where G is diffusion matrix
 
         Notes
         -----
@@ -379,18 +271,21 @@ class ContinuousSystemBase(ABC):
 
         >>> x_eq = np.zeros(2)
         >>> u_eq = np.zeros(1)
-        >>> lin = system.linearize(x_eq, u_eq)
-        >>> print(f"A matrix:\\n{lin.A}")
-        >>> print(f"B matrix:\\n{lin.B}")
+        >>> A, B = system.linearize(x_eq, u_eq)
+        >>> print(f"A matrix:\\n{A}")
+        >>> print(f"B matrix:\\n{B}")
 
-        Check stability:
+        Check stability (continuous-time):
 
-        >>> eigenvalues = np.linalg.eigvals(lin.A)
-        >>> is_stable = np.all(eigenvalues.real < 0)
+        >>> eigenvalues = np.linalg.eigvals(A)
+        >>> is_stable = np.all(np.real(eigenvalues) < 0)
+        >>> print(f"System stable: {is_stable}")
 
         Design LQR controller:
 
-        >>> K = system.control.lqr(Q, R, x_eq=x_eq, u_eq=u_eq)
+        >>> from scipy.linalg import solve_continuous_are
+        >>> P = solve_continuous_are(A, B, Q, R)
+        >>> K = np.linalg.inv(R) @ B.T @ P
         """
         pass
 
@@ -403,14 +298,16 @@ class ContinuousSystemBase(ABC):
         x0: StateVector,
         controller: Optional[Callable[[StateVector, float], ControlVector]] = None,
         t_span: tuple[float, float] = (0.0, 10.0),
-        dt: Optional[float] = None,
+        dt: float = 0.01,
+        method: str = "RK45",
         **kwargs
     ) -> SimulationResult:
         """
-        High-level simulation interface with optional feedback controller.
+        High-level simulation interface with regular time grid.
 
-        This is a convenience method that wraps integrate() with support for
-        closed-loop simulation via a feedback controller.
+        This method wraps integrate() and post-processes the result to provide
+        a regular time grid and cleaner output. This is the recommended method
+        for most use cases.
 
         Parameters
         ----------
@@ -421,21 +318,41 @@ class ContinuousSystemBase(ABC):
             If None, uses zero control (open-loop)
         t_span : tuple[float, float]
             Simulation time interval (t_start, t_end)
-        dt : Optional[float]
-            Output time step
+        dt : float
+            Output time step for regular grid (default: 0.01)
+        method : str
+            Integration method passed to integrate()
         **kwargs
             Additional arguments passed to integrate()
 
         Returns
         -------
         SimulationResult
-            Trajectory with time, states, controls, and metadata
+            TypedDict (returns as dict) containing:
+            - time: Regular time points (n_steps,) with spacing dt
+            - states: State trajectory (nx, n_steps)
+            - controls: Control trajectory (nu, n_steps) if controller provided
+            - metadata: Additional information (method, dt, success, etc.)
+
+        Notes
+        -----
+        Unlike integrate(), this method:
+        - Returns states on a regular time grid (not adaptive)
+        - Supports state-feedback controllers
+        - Hides solver diagnostics (cleaner output)
+        - Is easier to use for plotting and analysis
+
+        For closed-loop simulation with state feedback, this method internally
+        wraps the controller to work with the ODE solver.
 
         Examples
         --------
         Open-loop simulation:
 
-        >>> result = system.simulate(x0, t_span=(0, 5))
+        >>> result = system.simulate(x0, t_span=(0, 5), dt=0.01)
+        >>> plt.plot(result["time"], result["states"][0, :])
+        >>> plt.xlabel("Time (s)")
+        >>> plt.ylabel("State")
 
         Closed-loop with state feedback:
 
@@ -450,39 +367,52 @@ class ContinuousSystemBase(ABC):
         ...     x_ref = np.array([np.sin(t), np.cos(t)])
         ...     return K @ (x_ref - x)
         >>> result = system.simulate(x0, controller, t_span=(0, 10))
+
+        Access simulation data:
+
+        >>> time = result["time"]
+        >>> states = result["states"]
+        >>> if "controls" in result and result["controls"] is not None:
+        ...     controls = result["controls"]
+        ...     plt.plot(time, controls[0, :])
         """
-        # Convert controller to control input function
+        # For now, this is a placeholder that calls integrate()
+        # Concrete implementations should override this for proper closed-loop support
+        
+        # Convert controller to control function
         if controller is None:
             u_func = None
         else:
-            u_func = lambda t: controller(
-                # This is a simplified implementation
-                # Actual implementation needs access to current state
-                # from integrator, which requires wrapping the dynamics
-                x0, t  # Placeholder - real implementation more complex
+            # This is simplified - actual implementation needs state tracking
+            u_func = lambda t: controller(x0, t)  # Placeholder
+        
+        # Call low-level integrate
+        int_result = self.integrate(x0, u_func, t_span, method=method, **kwargs)
+        
+        # Post-process to regular grid
+        import numpy as np
+        t_regular = np.arange(t_span[0], t_span[1] + dt, dt)
+        
+        # Interpolate to regular grid (simple linear interpolation)
+        states_regular = np.zeros((int_result["y"].shape[0], len(t_regular)))
+        for i in range(int_result["y"].shape[0]):
+            states_regular[i, :] = np.interp(
+                t_regular, 
+                int_result["t"], 
+                int_result["y"][i, :]
             )
-
-        return self.integrate(x0, u_func, t_span, dt, **kwargs)
-
-    def __repr__(self) -> str:
-        """
-        String representation of the system.
-
-        Returns
-        -------
-        str
-            Human-readable description
-
-        Examples
-        --------
-        >>> print(system)
-        ContinuousSymbolicSystem(nx=2, nu=1, ny=2)
-        """
-        class_name = self.__class__.__name__
-        nx = getattr(self, 'nx', '?')
-        nu = getattr(self, 'nu', '?')
-        ny = getattr(self, 'ny', '?')
-        return f"{class_name}(nx={nx}, nu={nu}, ny={ny})"
+        
+        return {
+            "time": t_regular,
+            "states": states_regular,
+            "controls": None,  # Would need to reconstruct from controller
+            "metadata": {
+                "method": method,
+                "dt": dt,
+                "success": int_result.get("success", True),
+                "nfev": int_result.get("nfev", None)
+            }
+        }
 
     # =========================================================================
     # Properties (Optional, can be overridden by subclasses)
@@ -517,3 +447,23 @@ class ContinuousSystemBase(ABC):
         Override in time-varying subclasses.
         """
         return False
+
+    def __repr__(self) -> str:
+        """
+        String representation of the system.
+
+        Returns
+        -------
+        str
+            Human-readable description
+
+        Examples
+        --------
+        >>> print(system)
+        ContinuousSymbolicSystem(nx=2, nu=1, ny=2)
+        """
+        class_name = self.__class__.__name__
+        nx = getattr(self, 'nx', '?')
+        nu = getattr(self, 'nu', '?')
+        ny = getattr(self, 'ny', '?')
+        return f"{class_name}(nx={nx}, nu={nu}, ny={ny})"

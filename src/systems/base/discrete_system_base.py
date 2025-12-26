@@ -17,114 +17,10 @@
 Discrete System Base Class (Layer 1)
 ====================================
 
-This module provides the abstract base class for all discrete-time dynamical systems.
+Abstract base class for all discrete-time dynamical systems.
 
-Overview
---------
-The DiscreteSystemBase class defines the core interface that all discrete-time
-systems must implement, regardless of whether they are deterministic or stochastic,
-symbolic or data-driven.
-
-All discrete-time systems share these fundamental operations:
-- State update: x[k+1] = f(x[k], u[k], k)
-- Multi-step simulation over discrete time steps
-- Linearization around equilibrium points
-
-This base class enforces these contracts through abstract methods, ensuring
-consistent APIs across the entire discrete systems hierarchy.
-
-Architecture Position
---------------------
-Layer 1 (Abstract Interfaces):
-    ContinuousSystemBase
-    DiscreteSystemBase ← YOU ARE HERE
-
-Layer 2 (Symbolic Implementations):
-    ContinuousSymbolicSystem(ContinuousSystemBase)
-    DiscreteSymbolicSystem(DiscreteSystemBase)
-
-Layer 3 (Combined Implementations):
-    DiscreteStochasticSystem(DiscreteSymbolicSystem, DiscreteSystemBase)
-
-Layer 4 (Bridges):
-    DiscreteTimeWrapper
-    Discretizer (converts continuous → discrete)
-
-Key Design Principles
---------------------
-1. **Time Domain**: Discrete-time only (difference equations)
-2. **Backend Agnostic**: Works with NumPy, PyTorch, JAX
-3. **Minimal Interface**: Only essential methods are abstract
-4. **Composable**: Designed for inheritance and extension
-5. **Type Safe**: Full type hints using src/types
-
-Abstract Methods
----------------
-Subclasses MUST implement:
-- step(x, u, k): Single time step update
-- simulate(x0, u_sequence, n_steps): Multi-step simulation
-- linearize(x_eq, u_eq): Compute linearization
-
-Abstract Properties
-------------------
-Subclasses MUST provide:
-- dt: Time step (sampling period)
-
-Concrete Methods
----------------
-Provided by default:
-- rollout(): Alias for simulate with clearer name
-- __repr__(): String representation
-
-Mathematical Notation
---------------------
-- x[k] ∈ ℝⁿˣ: State at discrete time k
-- u[k] ∈ ℝⁿᵘ: Control input at time k
-- k ∈ ℤ₊: Discrete time index
-- x[k+1] = f(x[k], u[k], k): Discrete-time dynamics
-- Δt: Sampling period (dt property)
-
-Examples
---------
->>> class MyDiscreteSystem(DiscreteSystemBase):
-...     def __init__(self, dt=0.1):
-...         self._dt = dt
-...         self.nx = 2
-...         self.nu = 1
-...
-...     @property
-...     def dt(self):
-...         return self._dt
-...
-...     def step(self, x, u=None, k=0):
-...         # Implement x[k+1] = f(x[k], u[k])
-...         u = u if u is not None else np.zeros(self.nu)
-...         return x + self.dt * (-x + u)
-...
-...     def simulate(self, x0, u_sequence, n_steps):
-...         # Implement multi-step simulation
-...         ...
-...
-...     def linearize(self, x_eq, u_eq):
-...         # Implement linearization
-...         Ad = np.eye(self.nx) - self.dt * np.eye(self.nx)
-...         Bd = self.dt * np.eye(self.nx, self.nu)
-...         return DiscreteLinearization(Ad=Ad, Bd=Bd, x_eq=x_eq, u_eq=u_eq)
-
-See Also
---------
-- DiscreteSymbolicSystem: Symbolic implementation from discretized continuous systems
-- DiscreteStochasticSystem: Stochastic difference equations
-- ContinuousSystemBase: Continuous-time counterpart
-- Discretizer: Convert continuous systems to discrete
-
-Authors
--------
-Gil Benezer
-
-License
--------
-GNU Affero General Public License v3.0
+This module should be placed at:
+    src/systems/base/discrete_system_base.py
 """
 
 from abc import ABC, abstractmethod
@@ -137,96 +33,46 @@ from src.types.linearization import DiscreteLinearization
 from src.types.trajectories import DiscreteSimulationResult
 
 
-
 class DiscreteSystemBase(ABC):
     """
     Abstract base class for all discrete-time dynamical systems.
 
-    This class defines the fundamental interface that all discrete-time systems
-    must implement. It serves as Layer 1 in the architecture, providing the
-    contract for state updates, simulation, and linearization.
-
     All discrete-time systems satisfy:
         x[k+1] = f(x[k], u[k], k)
 
-    where x[k] is the state at time step k, u[k] is the control input, and k
-    is the discrete time index.
+    Subclasses must implement:
+    1. dt (property): Sampling period
+    2. step(x, u, k): Single time step update
+    3. simulate(x0, u_sequence, n_steps): Multi-step simulation
+    4. linearize(x_eq, u_eq): Compute linearization
 
-    Subclasses must implement three core methods and one property:
-    1. step: Update state by one time step
-    2. simulate: Run multi-step simulation
-    3. linearize: Compute linearized dynamics around an equilibrium
-    4. dt (property): Sampling period / time step
-
-    Attributes
-    ----------
-    nx : int
-        State dimension (number of state variables)
-    nu : int
-        Control dimension (number of control inputs)
-    ny : int
-        Output dimension (number of outputs), optional
-    dt : float
-        Sampling period / time step (abstract property)
-
-    Notes
-    -----
-    This is an abstract base class and cannot be instantiated directly.
-    Use concrete implementations like DiscreteSymbolicSystem or create
-    your own subclass.
-
-    The class enforces a consistent API across all discrete-time systems,
-    enabling polymorphic use in controllers, observers, and analysis tools.
-
-    Discrete systems are often created by discretizing continuous systems
-    using methods like Euler, Runge-Kutta, or exact discretization.
+    Additional concrete methods provided:
+    - rollout(): Closed-loop simulation with state-feedback policy
 
     Examples
     --------
-    Create a simple discrete linear system:
-
-    >>> class DiscreteLinearSystem(DiscreteSystemBase):
-    ...     def __init__(self, Ad, Bd, dt):
-    ...         self.Ad = Ad
-    ...         self.Bd = Bd
+    >>> class MyDiscreteSystem(DiscreteSystemBase):
+    ...     def __init__(self, dt=0.1):
     ...         self._dt = dt
-    ...         self.nx = Ad.shape[0]
-    ...         self.nu = Bd.shape[1]
-    ...
+    ...         self.nx = 2
+    ...         self.nu = 1
+    ...     
     ...     @property
     ...     def dt(self):
     ...         return self._dt
-    ...
+    ...     
     ...     def step(self, x, u=None, k=0):
     ...         u = u if u is not None else np.zeros(self.nu)
-    ...         return self.Ad @ x + self.Bd @ u
-    ...
+    ...         return 0.9 * x + 0.1 * u
+    ...     
     ...     def simulate(self, x0, u_sequence, n_steps):
-    ...         states = [x0]
-    ...         x = x0
-    ...         for k in range(n_steps):
-    ...             u = u_sequence[k] if u_sequence is not None else None
-    ...             x = self.step(x, u, k)
-    ...             states.append(x)
-    ...         return DiscreteSimulationResult(
-    ...             states=np.array(states).T,
-    ...             controls=u_sequence,
-    ...             time_steps=np.arange(n_steps + 1),
-    ...             dt=self.dt
-    ...         )
-    ...
+    ...         # Implement multi-step simulation
+    ...         ...
+    ...     
     ...     def linearize(self, x_eq, u_eq):
-    ...         return DiscreteLinearization(
-    ...             Ad=self.Ad, Bd=self.Bd, x_eq=x_eq, u_eq=u_eq, dt=self.dt
-    ...         )
-
-    Polymorphic usage:
-
-    >>> def check_discrete_stability(system: DiscreteSystemBase, x_eq, u_eq):
-    ...     \"\"\"Works with ANY discrete system.\"\"\"
-    ...     lin = system.linearize(x_eq, u_eq)
-    ...     eigenvalues = np.linalg.eigvals(lin.Ad)
-    ...     return np.all(np.abs(eigenvalues) < 1)  # Stable if all |λ| < 1
+    ...         Ad = 0.9 * np.eye(self.nx)
+    ...         Bd = 0.1 * np.eye(self.nx, self.nu)
+    ...         return (Ad, Bd)
     """
 
     # =========================================================================
@@ -304,12 +150,10 @@ class DiscreteSystemBase(ABC):
 
         Notes
         -----
-        For autonomous systems, k is ignored.
-        For time-invariant systems, k is typically ignored.
-        For batch evaluation, x and u should have shape (n_dim, n_batch).
-
-        The returned state should be in the same backend as the input
-        (NumPy array → NumPy array, PyTorch tensor → PyTorch tensor, etc.).
+        - For autonomous systems, k is ignored
+        - For time-invariant systems, k is typically ignored
+        - For batch evaluation, x and u should have shape (n_dim, n_batch)
+        - The returned state should be in the same backend as the input
 
         Examples
         --------
@@ -369,20 +213,20 @@ class DiscreteSystemBase(ABC):
         Returns
         -------
         DiscreteSimulationResult
-            Structured result containing:
-            - states: State trajectory (nx, n_steps+1)
+            TypedDict (returns as dict) containing:
+            - states: State trajectory (nx, n_steps+1) - includes x[0]
             - controls: Control sequence (nu, n_steps) if applicable
             - time_steps: Time step indices [0, 1, ..., n_steps]
             - dt: Sampling period
-            - metadata: Additional info
+            - metadata: Additional info (method, success, etc.)
 
         Notes
         -----
         The state trajectory includes n_steps+1 points (including x0).
         The control sequence has n_steps points (one for each transition).
 
-        For closed-loop simulation, use a callable u_sequence that
-        depends on the current state (see examples).
+        For closed-loop simulation with state-dependent control, you can use
+        rollout() instead, which provides a cleaner interface for state feedback.
 
         Examples
         --------
@@ -391,27 +235,22 @@ class DiscreteSystemBase(ABC):
         >>> x0 = np.array([1.0, 0.0])
         >>> u = np.array([0.5])
         >>> result = system.simulate(x0, u, n_steps=100)
-        >>> plt.plot(result.time_steps, result.states[0, :])
+        >>> plt.step(result["time_steps"], result["states"][0, :])
 
         Pre-computed control sequence:
 
         >>> u_seq = [np.array([0.5 * np.sin(k * 0.1)]) for k in range(100)]
         >>> result = system.simulate(x0, u_seq, n_steps=100)
 
-        State feedback control:
+        Time-indexed control function:
 
-        >>> def controller(k):
-        ...     # Access current state through closure or use step() manually
-        ...     return -K @ x_current  # LQR control
-        >>> result = system.simulate(x0, controller, n_steps=100)
+        >>> def u_func(k):
+        ...     return np.array([0.5 * np.sin(k * system.dt)])
+        >>> result = system.simulate(x0, u_func, n_steps=100)
 
-        Time-varying reference tracking:
+        Autonomous system (no control):
 
-        >>> def controller(k):
-        ...     x_ref = np.array([np.sin(k * system.dt), 
-        ...                       np.cos(k * system.dt)])
-        ...     return K @ (x_ref - x_current)
-        >>> result = system.simulate(x0, controller, n_steps=100)
+        >>> result = system.simulate(x0, u_sequence=None, n_steps=100)
         """
         pass
 
@@ -442,13 +281,9 @@ class DiscreteSystemBase(ABC):
         Returns
         -------
         DiscreteLinearization
-            Structured result containing:
-            - Ad: Discrete state Jacobian matrix (nx, nx)
-            - Bd: Discrete control Jacobian matrix (nx, nu)
-            - x_eq: Equilibrium state
-            - u_eq: Equilibrium control
-            - dt: Sampling period
-            - Additional fields for stochastic systems
+            Tuple containing Jacobian matrices:
+            - Deterministic systems: (Ad, Bd)
+            - Stochastic systems: (Ad, Bd, Gd) where Gd is diffusion matrix
 
         Notes
         -----
@@ -461,7 +296,7 @@ class DiscreteSystemBase(ABC):
 
         The equilibrium point should satisfy f(x_eq, u_eq) = x_eq (fixed point).
 
-        Stability analysis:
+        Stability analysis for discrete systems:
         - Stable if all |eigenvalues(Ad)| < 1
         - Unstable if any |eigenvalue(Ad)| > 1
         - Marginal if |eigenvalue(Ad)| = 1
@@ -472,27 +307,27 @@ class DiscreteSystemBase(ABC):
 
         >>> x_eq = np.zeros(2)
         >>> u_eq = np.zeros(1)
-        >>> lin = system.linearize(x_eq, u_eq)
-        >>> print(f"Ad matrix:\\n{lin.Ad}")
-        >>> print(f"Bd matrix:\\n{lin.Bd}")
+        >>> Ad, Bd = system.linearize(x_eq, u_eq)
+        >>> print(f"Ad matrix:\\n{Ad}")
+        >>> print(f"Bd matrix:\\n{Bd}")
 
         Check discrete stability:
 
-        >>> eigenvalues = np.linalg.eigvals(lin.Ad)
+        >>> eigenvalues = np.linalg.eigvals(Ad)
         >>> is_stable = np.all(np.abs(eigenvalues) < 1)
         >>> print(f"System stable: {is_stable}")
 
         Design discrete LQR controller:
 
         >>> from scipy.linalg import solve_discrete_are
-        >>> P = solve_discrete_are(lin.Ad, lin.Bd, Q, R)
-        >>> K = np.linalg.inv(R + lin.Bd.T @ P @ lin.Bd) @ (lin.Bd.T @ P @ lin.Ad)
+        >>> P = solve_discrete_are(Ad, Bd, Q, R)
+        >>> K = np.linalg.inv(R + Bd.T @ P @ Bd) @ (Bd.T @ P @ Ad)
 
         Relationship to continuous linearization:
 
         >>> # For Euler discretization: Ad ≈ I + dt * A
         >>> dt = system.dt
-        >>> A_approx = (lin.Ad - np.eye(system.nx)) / dt
+        >>> A_approx = (Ad - np.eye(system.nx)) / dt
         """
         pass
 
@@ -510,8 +345,8 @@ class DiscreteSystemBase(ABC):
         """
         Rollout system trajectory with optional state-feedback policy.
 
-        This is an alias for simulate() but with a clearer API for closed-loop
-        simulation with state-dependent control policies.
+        This is a higher-level alternative to simulate() that provides a cleaner
+        interface for closed-loop simulation with state-dependent policies.
 
         Parameters
         ----------
@@ -523,12 +358,12 @@ class DiscreteSystemBase(ABC):
         n_steps : int
             Number of simulation steps
         **kwargs
-            Additional arguments passed to simulate()
+            Additional arguments (stored in metadata)
 
         Returns
         -------
         DiscreteSimulationResult
-            Trajectory with states, controls, and metadata
+            TypedDict (returns as dict) containing trajectory and metadata
 
         Examples
         --------
@@ -536,7 +371,7 @@ class DiscreteSystemBase(ABC):
 
         >>> result = system.rollout(x0, n_steps=100)
 
-        State feedback policy:
+        State feedback policy (LQR):
 
         >>> K = np.array([[-1.0, -2.0]])  # LQR gain
         >>> def policy(x, k):
@@ -558,12 +393,13 @@ class DiscreteSystemBase(ABC):
         ...     return mpc_controller.compute_control(x, k)
         >>> result = system.rollout(x0, policy, n_steps=100)
         """
-        # Implementation: manually iterate with state feedback
+        # Manual rollout with state feedback
         if policy is None:
             return self.simulate(x0, u_sequence=None, n_steps=n_steps, **kwargs)
 
-        # Manual rollout with state-dependent control
-        states = [x0]
+        # Implement closed-loop rollout
+        states = np.zeros((getattr(self, 'nx', x0.shape[0]), n_steps + 1))
+        states[:, 0] = x0
         controls = []
         x = x0
 
@@ -571,38 +407,17 @@ class DiscreteSystemBase(ABC):
             u = policy(x, k)
             controls.append(u)
             x = self.step(x, u, k)
-            states.append(x)
+            states[:, k + 1] = x
 
-        states_array = np.array(states).T  # Shape: (nx, n_steps+1)
-        controls_array = np.array(controls).T if controls else None  # (nu, n_steps)
+        controls_array = np.array(controls).T if controls else None
 
-        return DiscreteSimulationResult(
-            states=states_array,
-            controls=controls_array,
-            time_steps=np.arange(n_steps + 1),
-            dt=self.dt,
-            metadata={'method': 'rollout', 'closed_loop': True}
-        )
-
-    def __repr__(self) -> str:
-        """
-        String representation of the discrete system.
-
-        Returns
-        -------
-        str
-            Human-readable description
-
-        Examples
-        --------
-        >>> print(system)
-        DiscreteSymbolicSystem(nx=2, nu=1, dt=0.01)
-        """
-        class_name = self.__class__.__name__
-        nx = getattr(self, 'nx', '?')
-        nu = getattr(self, 'nu', '?')
-        dt = getattr(self, 'dt', '?')
-        return f"{class_name}(nx={nx}, nu={nu}, dt={dt})"
+        return {
+            "states": states,
+            "controls": controls_array,
+            "time_steps": np.arange(n_steps + 1),
+            "dt": self.dt,
+            "metadata": {**kwargs, "closed_loop": True, "method": "rollout"}
+        }
 
     # =========================================================================
     # Properties (Optional, can be overridden by subclasses)
@@ -654,3 +469,23 @@ class DiscreteSystemBase(ABC):
         Sampling rate: 100.0 Hz
         """
         return 1.0 / self.dt
+
+    def __repr__(self) -> str:
+        """
+        String representation of the discrete system.
+
+        Returns
+        -------
+        str
+            Human-readable description
+
+        Examples
+        --------
+        >>> print(system)
+        DiscreteSymbolicSystem(nx=2, nu=1, dt=0.01)
+        """
+        class_name = self.__class__.__name__
+        nx = getattr(self, 'nx', '?')
+        nu = getattr(self, 'nu', '?')
+        dt = getattr(self, 'dt', '?')
+        return f"{class_name}(nx={nx}, nu={nu}, dt={dt})"

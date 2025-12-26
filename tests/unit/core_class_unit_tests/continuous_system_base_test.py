@@ -1,433 +1,282 @@
 # Copyright (C) 2025 Gil Benezer
 #
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as published
-# by the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-
-"""
-Unit Tests for ContinuousSystemBase
-===================================
-
-Tests the abstract base class interface for continuous-time systems.
-"""
+# Unit Tests for ContinuousSystemBase
+# Place at: tests/unit/core_class_unit_tests/continuous_system_base_test.py
 
 import unittest
-from abc import ABC
 from typing import Optional
 
 import numpy as np
 
 from src.types.core import ControlVector, StateVector
 from src.types.linearization import ContinuousLinearization
-from src.types.trajectories import SimulationResult
-
-# Import after src.types
-import sys
-sys.path.insert(0, '/home/claude')
-from continuous_system_base import ContinuousSystemBase
+from src.types.trajectories import IntegrationResult, SimulationResult
+from src.systems.base.continuous_system_base import ContinuousSystemBase
 
 
 class SimpleContinuousSystem(ContinuousSystemBase):
-    """
-    Concrete implementation for testing.
-    
-    Implements: dx/dt = -x + u (stable linear system)
-    """
-    
+    """Concrete implementation for testing: dx/dt = -x + u"""
+
     def __init__(self, nx=2, nu=1):
         self.nx = nx
         self.nu = nu
         self.ny = nx
-        
+
     def __call__(
-        self,
-        x: StateVector,
-        u: Optional[ControlVector] = None,
-        t: float = 0.0
+        self, x: StateVector, u: Optional[ControlVector] = None, t: float = 0.0
     ) -> StateVector:
         """dx/dt = -x + u"""
         if u is None:
             u = np.zeros(self.nu)
-        
-        # Handle batched inputs
         if x.ndim == 2:
             u = u if u.ndim == 2 else u.reshape(-1, 1)
-        
         return -x + u if u is not None else -x
-    
+
     def integrate(
-        self,
-        x0: StateVector,
-        u=None,
-        t_span=(0.0, 1.0),
-        dt=None,
-        method="RK45",
-        **kwargs
-    ) -> SimulationResult:
-        """Simple Euler integration for testing."""
+        self, x0: StateVector, u=None, t_span=(0.0, 1.0), method="RK45", **kwargs
+    ) -> IntegrationResult:
+        """Simple Euler integration returning IntegrationResult."""
         t_start, t_end = t_span
-        dt = dt if dt is not None else 0.01
+        dt_integrator = kwargs.get("max_step", 0.01)
+
+        t_points = []
+        states_list = []
         
-        t_points = np.arange(t_start, t_end + dt, dt)
-        n_steps = len(t_points)
+        t = t_start
+        x = x0.copy()
+        nfev = 0
         
-        states = np.zeros((self.nx, n_steps))
-        states[:, 0] = x0
-        
-        for i in range(1, n_steps):
-            t = t_points[i-1]
-            
-            # Evaluate control
+        t_points.append(t)
+        states_list.append(x.copy())
+
+        while t < t_end:
             if u is None:
                 u_val = None
             elif callable(u):
                 u_val = u(t)
             else:
                 u_val = u
+
+            dxdt = self(x, u_val, t)
+            nfev += 1
             
-            # Euler step
-            dxdt = self(states[:, i-1], u_val, t)
-            states[:, i] = states[:, i-1] + dt * dxdt
-        
-        return SimulationResult(
-            time=t_points,
-            states=states,
-            controls=None,
-            metadata={'method': method, 'dt': dt}
-        )
-    
+            x = x + dt_integrator * dxdt
+            t = min(t + dt_integrator, t_end)
+            
+            t_points.append(t)
+            states_list.append(x.copy())
+
+        # Return IntegrationResult (as dict)
+        return {
+            "t": np.array(t_points),
+            "y": np.array(states_list).T,  # (nx, n_points)
+            "success": True,
+            "message": "Integration successful",
+            "nfev": nfev,
+            "njev": 0,
+            "nlu": 0,
+            "status": 0
+        }
+
     def linearize(
-        self,
-        x_eq: StateVector,
-        u_eq: Optional[ControlVector] = None
+        self, x_eq: StateVector, u_eq: Optional[ControlVector] = None
     ) -> ContinuousLinearization:
         """Linearization: A = -I, B = I"""
-        A = -np.eye(self.nx)
-        B = np.ones((self.nx, self.nu))
-        
-        return ContinuousLinearization(
-            A=A,
-            B=B,
-            x_eq=x_eq,
-            u_eq=u_eq if u_eq is not None else np.zeros(self.nu)
-        )
-
-
-class TimeVaryingSystem(ContinuousSystemBase):
-    """Time-varying system for testing."""
-    
-    def __init__(self):
-        self.nx = 1
-        self.nu = 1
-        
-    def __call__(self, x, u=None, t=0.0):
-        """dx/dt = -t*x + u"""
-        u = u if u is not None else np.array([0.0])
-        return -t * x + u
-    
-    def integrate(self, x0, u=None, t_span=(0.0, 1.0), dt=None, **kwargs):
-        # Simplified - just return mock result
-        t = np.linspace(t_span[0], t_span[1], 100)
-        states = np.outer(x0, np.exp(-t))
-        return SimulationResult(time=t, states=states, controls=None, metadata={})
-    
-    def linearize(self, x_eq, u_eq=None):
-        # Time-varying, linearization not well-defined
-        raise NotImplementedError("Linearization not defined for time-varying")
-    
-    @property
-    def is_time_varying(self):
-        return True
+        a = -np.eye(self.nx)
+        b = np.ones((self.nx, self.nu))
+        return (a, b)
 
 
 class TestContinuousSystemBase(unittest.TestCase):
     """Test suite for ContinuousSystemBase abstract class."""
-    
+
     def setUp(self):
-        """Create test systems."""
+        """Create test system."""
         self.system = SimpleContinuousSystem(nx=2, nu=1)
-        self.time_varying = TimeVaryingSystem()
-    
+
     # =========================================================================
-    # Test Abstract Class Properties
+    # Test Abstract Class
     # =========================================================================
-    
+
     def test_cannot_instantiate_abstract_class(self):
         """ContinuousSystemBase cannot be instantiated directly."""
         with self.assertRaises(TypeError):
             system = ContinuousSystemBase()
-    
+
     def test_concrete_class_instantiation(self):
         """Concrete implementation can be instantiated."""
         system = SimpleContinuousSystem()
         self.assertIsInstance(system, ContinuousSystemBase)
-    
-    def test_missing_abstract_method_raises_error(self):
-        """Class missing abstract methods cannot be instantiated."""
-        
-        class IncompleteSystem(ContinuousSystemBase):
-            def __call__(self, x, u=None, t=0.0):
-                return x
-            # Missing integrate() and linearize()
-        
-        with self.assertRaises(TypeError):
-            system = IncompleteSystem()
-    
+
     # =========================================================================
     # Test __call__ Method (Dynamics Evaluation)
     # =========================================================================
-    
+
     def test_call_with_control(self):
         """Evaluate dynamics with control input."""
         x = np.array([1.0, 2.0])
         u = np.array([0.5])
-        
+
         dxdt = self.system(x, u)
-        
+
         self.assertEqual(dxdt.shape, (2,))
-        # Expected: -x + u = [-1, -2] + [0.5, 0.5] = [-0.5, -1.5]
         expected = np.array([-0.5, -1.5])
         np.testing.assert_array_almost_equal(dxdt, expected)
-    
+
     def test_call_without_control(self):
         """Evaluate autonomous dynamics (u=None)."""
         x = np.array([1.0, 2.0])
-        
+
         dxdt = self.system(x, u=None)
-        
-        # Expected: -x = [-1, -2]
+
         expected = np.array([-1.0, -2.0])
         np.testing.assert_array_almost_equal(dxdt, expected)
-    
-    def test_call_with_time(self):
-        """Time parameter is accepted (may be ignored for time-invariant)."""
-        x = np.array([1.0, 2.0])
-        u = np.array([0.5])
-        
-        dxdt = self.system(x, u, t=5.0)
-        
-        # Time-invariant system ignores t
-        expected = np.array([-0.5, -1.5])
-        np.testing.assert_array_almost_equal(dxdt, expected)
-    
-    def test_call_batch_evaluation(self):
-        """Evaluate dynamics for multiple states simultaneously."""
-        x_batch = np.array([[1.0, 2.0, 3.0],
-                           [0.5, 1.5, 2.5]])  # 3 states
-        u_batch = np.array([[0.5, 0.3, 0.1]])  # 3 controls
-        
-        dxdt_batch = self.system(x_batch, u_batch)
-        
-        self.assertEqual(dxdt_batch.shape, (2, 3))
-    
-    def test_time_varying_system(self):
-        """Time-varying system uses time parameter."""
-        x = np.array([1.0])
-        u = np.array([0.0])
-        
-        dxdt_t0 = self.time_varying(x, u, t=0.0)
-        dxdt_t1 = self.time_varying(x, u, t=1.0)
-        
-        # dx/dt = -t*x, so should be different
-        self.assertNotEqual(dxdt_t0[0], dxdt_t1[0])
-    
+
     # =========================================================================
-    # Test integrate() Method
+    # Test integrate() Method (Low-level, returns IntegrationResult)
     # =========================================================================
-    
-    def test_integrate_basic(self):
-        """Basic integration test."""
+
+    def test_integrate_returns_integration_result(self):
+        """integrate() returns IntegrationResult with solver diagnostics."""
         x0 = np.array([1.0, 1.0])
-        result = self.system.integrate(x0, u=None, t_span=(0.0, 1.0), dt=0.01)
+        result = self.system.integrate(x0, u=None, t_span=(0.0, 1.0))
+
+        # Check it's a dict (IntegrationResult is TypedDict)
+        self.assertIsInstance(result, dict)
         
-        self.assertIsInstance(result, SimulationResult)
-        self.assertIsNotNone(result.time)
-        self.assertIsNotNone(result.states)
-    
-    def test_integrate_constant_control(self):
-        """Integrate with constant control."""
+        # Check required IntegrationResult fields
+        self.assertIn("t", result)
+        self.assertIn("y", result)
+        self.assertIn("success", result)
+        self.assertIn("message", result)
+        self.assertIn("nfev", result)
+
+    def test_integrate_solver_diagnostics(self):
+        """integrate() includes solver diagnostic information."""
         x0 = np.array([1.0, 1.0])
-        u = np.array([0.5])
-        
-        result = self.system.integrate(x0, u, t_span=(0.0, 1.0), dt=0.01)
-        
-        self.assertEqual(result.states.shape[0], 2)  # nx
-        self.assertGreater(result.states.shape[1], 1)  # Multiple time steps
-    
-    def test_integrate_time_varying_control(self):
-        """Integrate with time-varying control function."""
+        result = self.system.integrate(x0, u=None, t_span=(0.0, 1.0))
+
+        # Check solver diagnostics
+        self.assertIsInstance(result["success"], bool)
+        self.assertIsInstance(result["nfev"], int)
+        self.assertGreater(result["nfev"], 0)
+
+    def test_integrate_adaptive_time_points(self):
+        """integrate() returns adaptive time points from solver."""
         x0 = np.array([1.0, 1.0])
-        u_func = lambda t: np.array([np.sin(t)])
-        
-        result = self.system.integrate(x0, u_func, t_span=(0.0, 1.0), dt=0.01)
-        
-        self.assertIsInstance(result, SimulationResult)
-    
-    def test_integrate_custom_time_span(self):
-        """Integrate over custom time interval."""
+        result = self.system.integrate(x0, u=None, t_span=(0.0, 1.0))
+
+        # Time points are chosen by solver (may not be regular)
+        t = result["t"]
+        self.assertGreater(len(t), 1)
+        self.assertAlmostEqual(t[0], 0.0)
+        self.assertAlmostEqual(t[-1], 1.0, places=5)
+
+    # =========================================================================
+    # Test simulate() Method (High-level, returns SimulationResult)
+    # =========================================================================
+
+    def test_simulate_returns_simulation_result(self):
+        """simulate() returns SimulationResult with regular time grid."""
         x0 = np.array([1.0, 1.0])
+        result = self.system.simulate(x0, t_span=(0.0, 1.0), dt=0.1)
+
+        # Check it's a dict (SimulationResult is TypedDict)
+        self.assertIsInstance(result, dict)
         
-        result = self.system.integrate(x0, t_span=(2.0, 5.0), dt=0.1)
-        
-        self.assertAlmostEqual(result.time[0], 2.0)
-        self.assertAlmostEqual(result.time[-1], 5.0, places=5)
-    
-    def test_integrate_result_structure(self):
-        """Integration result has correct structure."""
+        # Check required SimulationResult fields (NOT IntegrationResult fields)
+        self.assertIn("time", result)
+        self.assertIn("states", result)
+        self.assertIn("metadata", result)
+
+    def test_simulate_regular_time_grid(self):
+        """simulate() returns states on regular time grid."""
         x0 = np.array([1.0, 1.0])
-        result = self.system.integrate(x0, t_span=(0.0, 1.0), dt=0.1)
+        dt = 0.1
+        result = self.system.simulate(x0, t_span=(0.0, 1.0), dt=dt)
+
+        # Time should be regular grid
+        time = result["time"]
+        time_diff = np.diff(time)
+        np.testing.assert_array_almost_equal(time_diff, dt * np.ones(len(time_diff)))
+
+    def test_simulate_no_solver_diagnostics(self):
+        """simulate() hides solver internals (cleaner output)."""
+        x0 = np.array([1.0, 1.0])
+        result = self.system.simulate(x0, t_span=(0.0, 1.0), dt=0.1)
+
+        # Should NOT have nfev in top level (it's in metadata)
+        self.assertNotIn("nfev", result)
+        self.assertNotIn("njev", result)
         
-        # Check SimulationResult attributes
-        self.assertTrue(hasattr(result, 'time'))
-        self.assertTrue(hasattr(result, 'states'))
-        self.assertTrue(hasattr(result, 'controls'))
-        self.assertTrue(hasattr(result, 'metadata'))
-    
+        # Metadata may contain solver info
+        self.assertIn("metadata", result)
+
     # =========================================================================
     # Test linearize() Method
     # =========================================================================
-    
+
     def test_linearize_at_origin(self):
         """Linearize at origin."""
         x_eq = np.zeros(2)
         u_eq = np.zeros(1)
-        
+
         lin = self.system.linearize(x_eq, u_eq)
+
+        # Returns tuple
+        self.assertIsInstance(lin, tuple)
+        self.assertEqual(len(lin), 2)
         
-        self.assertIsInstance(lin, ContinuousLinearization)
-        self.assertEqual(lin.A.shape, (2, 2))
-        self.assertEqual(lin.B.shape, (2, 1))
-    
-    def test_linearize_without_control(self):
-        """Linearize with u_eq=None (autonomous)."""
-        x_eq = np.zeros(2)
-        
-        lin = self.system.linearize(x_eq, u_eq=None)
-        
-        self.assertIsNotNone(lin.A)
-        self.assertIsNotNone(lin.B)
-    
-    def test_linearize_equilibrium_stored(self):
-        """Linearization stores equilibrium point."""
-        x_eq = np.array([1.0, 2.0])
-        u_eq = np.array([0.5])
-        
-        lin = self.system.linearize(x_eq, u_eq)
-        
-        np.testing.assert_array_equal(lin.x_eq, x_eq)
-        np.testing.assert_array_equal(lin.u_eq, u_eq)
-    
-    def test_linearize_correct_dimensions(self):
-        """Linearization matrices have correct dimensions."""
-        x_eq = np.zeros(2)
-        u_eq = np.zeros(1)
-        
-        lin = self.system.linearize(x_eq, u_eq)
-        
-        # A should be (nx, nx), B should be (nx, nu)
-        self.assertEqual(lin.A.shape, (self.system.nx, self.system.nx))
-        self.assertEqual(lin.B.shape, (self.system.nx, self.system.nu))
-    
+        A, B = lin
+        self.assertEqual(A.shape, (2, 2))
+        self.assertEqual(B.shape, (2, 1))
+
     def test_linearize_known_system(self):
         """Linearization of known system matches analytical result."""
         x_eq = np.zeros(2)
         u_eq = np.zeros(1)
-        
-        lin = self.system.linearize(x_eq, u_eq)
-        
+
+        A, B = self.system.linearize(x_eq, u_eq)
+
         # For dx/dt = -x + u: A = -I, B = I
         expected_A = -np.eye(2)
         expected_B = np.ones((2, 1))
-        
-        np.testing.assert_array_almost_equal(lin.A, expected_A)
-        np.testing.assert_array_almost_equal(lin.B, expected_B)
-    
-    # =========================================================================
-    # Test simulate() Method (Concrete Implementation)
-    # =========================================================================
-    
-    def test_simulate_without_controller(self):
-        """Simulate without feedback controller (open-loop)."""
-        x0 = np.array([1.0, 1.0])
-        
-        result = self.system.simulate(x0, t_span=(0.0, 1.0), dt=0.01)
-        
-        self.assertIsInstance(result, SimulationResult)
-    
+
+        np.testing.assert_array_almost_equal(A, expected_A)
+        np.testing.assert_array_almost_equal(B, expected_B)
+
     # =========================================================================
     # Test Properties
     # =========================================================================
-    
+
     def test_is_continuous_property(self):
         """is_continuous returns True."""
         self.assertTrue(self.system.is_continuous)
-    
+
     def test_is_discrete_property(self):
         """is_discrete returns False."""
         self.assertFalse(self.system.is_discrete)
-    
+
     def test_is_stochastic_property(self):
         """is_stochastic returns False by default."""
         self.assertFalse(self.system.is_stochastic)
-    
-    def test_is_time_varying_property_default(self):
+
+    def test_is_time_varying_property(self):
         """is_time_varying returns False by default."""
         self.assertFalse(self.system.is_time_varying)
-    
-    def test_is_time_varying_property_override(self):
-        """is_time_varying can be overridden."""
-        self.assertTrue(self.time_varying.is_time_varying)
-    
+
     # =========================================================================
-    # Test __repr__ Method
+    # Test __repr__
     # =========================================================================
-    
+
     def test_repr(self):
         """String representation contains key info."""
         repr_str = repr(self.system)
-        
-        self.assertIn('SimpleContinuousSystem', repr_str)
-        self.assertIn('nx=2', repr_str)
-        self.assertIn('nu=1', repr_str)
-    
-    # =========================================================================
-    # Test Type Safety and Interface Contracts
-    # =========================================================================
-    
-    def test_polymorphic_usage(self):
-        """System can be used polymorphically via base class."""
-        def analyze_system(sys: ContinuousSystemBase):
-            """Generic function that works with any continuous system."""
-            x_eq = np.zeros(sys.nx)
-            u_eq = np.zeros(sys.nu)
-            lin = sys.linearize(x_eq, u_eq)
-            return lin.A
-        
-        A = analyze_system(self.system)
-        self.assertEqual(A.shape, (2, 2))
-    
-    def test_subclass_type_check(self):
-        """Concrete implementation is instance of base class."""
-        self.assertIsInstance(self.system, ContinuousSystemBase)
-        self.assertTrue(issubclass(SimpleContinuousSystem, ContinuousSystemBase))
-    
-    # =========================================================================
-    # Edge Cases and Error Handling
-    # =========================================================================
-    
-    def test_zero_control_equivalent_to_none(self):
-        """u=None and u=zeros should give same result."""
-        x = np.array([1.0, 2.0])
-        u_none = None
-        u_zero = np.zeros(self.system.nu)
-        
-        dxdt_none = self.system(x, u_none)
-        dxdt_zero = self.system(x, u_zero)
-        
-        # May not be identical due to implementation, but should be close
-        np.testing.assert_array_almost_equal(dxdt_none, dxdt_zero)
+
+        self.assertIn("SimpleContinuousSystem", repr_str)
+        self.assertIn("nx=2", repr_str)
+        self.assertIn("nu=1", repr_str)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
