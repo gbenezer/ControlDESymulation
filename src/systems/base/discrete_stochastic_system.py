@@ -30,7 +30,6 @@ import sympy as sp
 from src.systems.base.stochastic_dynamical_system import StochasticDynamicalSystem
 from src.systems.base.utils.stochastic.noise_analysis import NoiseType, SDEType
 
-
 class DiscreteStochasticSystem(StochasticDynamicalSystem):
     """
     Symbolic discrete-time stochastic dynamical system.
