@@ -48,7 +48,7 @@ The `src/types` directory contains a comprehensive, modular type system with:
 | `core.py` | Fundamental types | `StateVector`, `ControlVector`, `DynamicsFunction` |
 | `backends.py` | Backend/method selection | `Backend`, `Device`, `IntegrationMethod` |
 | `symbolic.py` | SymPy symbolic math | `SymbolicExpression`, `SymbolicMatrix` |
-| `trajectories.py` | Time series data | `StateTrajectory`, `SimulationResult` |
+| `trajectories.py` | Time series data | `StateTrajectory`, `SimulationResult`, `DiscreteSimulationResult` |
 | `linearization.py` | Linearization results | `LinearizationResult`, `StateJacobian` |
 | `control_classical.py` | LQR, LQG, Kalman | `LQRResult`, `KalmanFilterResult` |
 | `control_advanced.py` | MPC, H2/H-infinity | `MPCResult`, `HInfControlResult` |
@@ -397,17 +397,26 @@ class IntegrationResult(TypedDict, total=False):
     nfev: int               # Function evaluations
     njev: int               # Jacobian evaluations
     nlu: int                # LU decompositions
-    sol: Any                # Dense output interpolant
+    status: int             # Termination status code
 
 class SimulationResult(TypedDict, total=False):
-    states: StateTrajectory      # (n_steps+1, nx)
-    controls: ControlSequence    # (n_steps, nu)
-    outputs: OutputSequence      # (n_steps+1, ny)
-    noise: NoiseSequence         # (n_steps, nw)
-    time: TimePoints             # (n_steps+1,)
-    info: Dict[str, Any]         # Additional metadata
+    states: StateTrajectory           # (n_steps+1, nx)
+    controls: Optional[ControlSequence]  # (n_steps, nu)
+    outputs: Optional[OutputSequence]    # (n_steps+1, ny)
+    noise: Optional[NoiseSequence]       # (n_steps, nw)
+    time: Optional[TimePoints]           # (n_steps+1,)
+    metadata: Dict[str, Any]          # Additional information
 
-class TrajectoryStatistics(TypedDict):
+class DiscreteSimulationResult(TypedDict, total=False):
+    states: StateTrajectory           # (n_steps+1, nx) - includes x[0]
+    controls: Optional[ControlSequence]  # (n_steps, nu)
+    outputs: Optional[OutputSequence]    # (n_steps+1, ny)
+    noise: Optional[NoiseSequence]       # (n_steps, nw)
+    time_steps: ArrayLike             # [0, 1, 2, ..., n_steps]
+    dt: float                         # Sampling period
+    metadata: Dict[str, Any]          # Additional information
+
+class TrajectoryStatistics(TypedDict, total=False):
     mean: ArrayLike       # Mean value
     std: ArrayLike        # Standard deviation
     min: ArrayLike        # Minimum value
@@ -418,9 +427,9 @@ class TrajectoryStatistics(TypedDict):
     duration: float       # Total time span
 
 class TrajectorySegment(TypedDict):
-    states: StateTrajectory
-    controls: ControlSequence
-    time: TimePoints
+    states: ArrayLike           # State trajectory segment
+    controls: Optional[ArrayLike]  # Control sequence segment
+    time: ArrayLike             # Time points for segment
     start_index: int
     end_index: int
 ```
