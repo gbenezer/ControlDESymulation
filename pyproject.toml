@@ -174,24 +174,22 @@ Changelog = "https://github.com/gbenezer/ControlDESymulation/blob/main/CHANGELOG
 # SETUPTOOLS CONFIGURATION
 # ============================================================================
 [tool.setuptools]
-packages = ["src"]
+# Don't specify packages directly, use packages.find instead
 
 [tool.setuptools.package-dir]
 "" = "."
 
-# If you want to include package data (e.g., type stubs, data files)
-[tool.setuptools.package-data]
-src = ["py.typed"]
-
+# Automatically find packages
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["src*"]
 exclude = ["tests*", "docs*"]
 
-# Add this to include type information
+# Include package data (type stubs, data files)
 [tool.setuptools.package-data]
 src = ["py.typed", "*.pyi"]
 
+# Dynamic version from __version__.py
 [tool.setuptools.dynamic]
 version = {attr = "src.__version__"}
 
