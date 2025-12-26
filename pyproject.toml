@@ -12,7 +12,7 @@ build-backend = "setuptools.build_meta"
 # ============================================================================
 [project]
 name = "controldesymulation"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Symbolic dynamical systems with multi-backend numerical execution for control theory, RL environments, and synthetic data generation"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -182,6 +182,18 @@ packages = ["src"]
 # If you want to include package data (e.g., type stubs, data files)
 [tool.setuptools.package-data]
 src = ["py.typed"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+exclude = ["tests*", "docs*"]
+
+# Add this to include type information
+[tool.setuptools.package-data]
+src = ["py.typed", "*.pyi"]
+
+[tool.setuptools.dynamic]
+version = {attr = "src.__version__"}
 
 # ============================================================================
 # PYTEST CONFIGURATION
