@@ -112,7 +112,7 @@ except ImportError:
 from src.systems.base.discretization.discrete_linearization import DiscreteLinearization
 
 # Type alias
-ArrayLike = Union[np.ndarray, "torch.Tensor", "jnp.ndarray"]
+from src.types import ArrayLike
 
 
 class StochasticDiscreteLinearization(DiscreteLinearization):

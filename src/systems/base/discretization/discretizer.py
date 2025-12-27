@@ -90,16 +90,16 @@ Examples
 >>> x_next = discretizer_torch.step(x_batch, u_batch)
 """
 import warnings
-from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
 
 import numpy as np
 
 from src.systems.base.numerical_integration.integrator_base import (
-    ArrayLike,
     IntegratorBase,
     StepMode,
 )
 from src.systems.base.numerical_integration.integrator_factory import IntegratorFactory
+from src.types import ArrayLike
 
 if TYPE_CHECKING:
     import jax.numpy as jnp

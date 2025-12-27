@@ -91,7 +91,7 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Union
 
 import numpy as np
 
-from src.systems.base.numerical_integration.integrator_base import ArrayLike, StepMode
+from src.systems.base.numerical_integration.integrator_base import StepMode
 from src.systems.base.numerical_integration.stochastic.sde_integrator_base import (
     ConvergenceType,
     SDEIntegrationResult,
@@ -100,6 +100,7 @@ from src.systems.base.numerical_integration.stochastic.sde_integrator_base impor
 from src.systems.base.numerical_integration.stochastic.sde_integrator_factory import (
     SDEIntegratorFactory,
 )
+from src.types import ArrayLike
 
 if TYPE_CHECKING:
     import jax.numpy as jnp

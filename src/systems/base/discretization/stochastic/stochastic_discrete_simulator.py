@@ -70,7 +70,7 @@ except ImportError:
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.discretization.stochastic_discretizer import StochasticDiscretizer
+    from src.systems.base.discretization.stochastic.stochastic_discretizer import StochasticDiscretizer
     from src.observers.observer_base import Observer
     from src.systems.base.discrete_stochastic_system import DiscreteStochasticSystem
     from src.systems.base.stochastic_dynamical_system import StochasticDynamicalSystem
@@ -80,7 +80,7 @@ from src.systems.base.discretization.discrete_simulator import DiscreteSimulator
 from src.systems.base.discretization.stochastic.monte_carlo_result import MonteCarloResult
 
 # Type alias
-ArrayLike = Union[np.ndarray, "torch.Tensor", "jnp.ndarray"]
+from src.types import ArrayLike
 
 
 class StochasticDiscreteSimulator(DiscreteSimulator):

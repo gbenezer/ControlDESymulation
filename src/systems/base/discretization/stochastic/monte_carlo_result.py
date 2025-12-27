@@ -98,7 +98,7 @@ except ImportError:
     JAX_AVAILABLE = False
 
 # Type alias
-ArrayLike = Union[np.ndarray, "torch.Tensor", "jnp.ndarray"]
+from src.types import ArrayLike
 
 
 class MonteCarloResult:
