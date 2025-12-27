@@ -43,6 +43,7 @@ from src.types import ArrayLike
 from src.types.backends import Backend
 from src.types.core import ControlVector, InputMatrix, StateMatrix, StateVector
 from src.types.linearization import DeterministicLinearization
+from src.types.utilities import ExecutionStats
 
 if TYPE_CHECKING:
     import jax.numpy as jnp
@@ -871,7 +872,7 @@ class LinearizationEngine:
     # Performance Tracking
     # ========================================================================
 
-    def get_stats(self) -> dict:
+    def get_stats(self) -> ExecutionStats:
         """
         Get performance statistics.
 
