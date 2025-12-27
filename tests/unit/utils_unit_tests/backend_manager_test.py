@@ -1073,7 +1073,7 @@ class TestEnsureType:
         
         # Should be the same tensor (possibly moved to device)
         assert isinstance(x_ensured, torch.Tensor)
-        assert torch.allclose(x_ensured, torch.tensor([1.0, 2.0, 3.0]))
+        assert torch.allclose(x_ensured, torch.tensor([1.0, 2.0, 3.0], dtype=x_ensured.dtype))
 
     @pytest.mark.skipif(not torch_available, reason="PyTorch not installed")
     def test_ensure_type_torch_from_numpy(self):
@@ -1086,7 +1086,7 @@ class TestEnsureType:
         x_ensured = mgr.ensure_type(x_np, backend="torch")
         
         assert isinstance(x_ensured, torch.Tensor)
-        assert torch.allclose(x_ensured, torch.tensor([1.0, 2.0, 3.0]))
+        assert torch.allclose(x_ensured, torch.tensor([1.0, 2.0, 3.0], dtype=x_ensured.dtype))
         assert x_ensured.device.type == "cpu"
 
     @pytest.mark.skipif(not torch_available, reason="PyTorch not installed")
@@ -1126,7 +1126,7 @@ class TestEnsureType:
         x_ensured = mgr.ensure_type(x_list, backend="torch")
         
         assert isinstance(x_ensured, torch.Tensor)
-        assert torch.allclose(x_ensured, torch.tensor([1.0, 2.0, 3.0]))
+        assert torch.allclose(x_ensured, torch.tensor([1.0, 2.0, 3.0], dtype=torch.float64))
         assert x_ensured.dtype == torch.float64  # Default for non-numpy input
 
     @pytest.mark.skipif(not torch_available or not torch.cuda.is_available(), 
