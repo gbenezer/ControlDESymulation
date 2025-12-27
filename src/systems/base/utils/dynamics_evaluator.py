@@ -40,8 +40,7 @@ from typing_extensions import TypedDict
 # Import from centralized type system
 from src.types.backends import Backend
 from src.types.core import ArrayLike, ControlVector, StateVector
-from src.types.utilities import get_batch_size, is_batched
-from src.types.utilities import ExecutionStats
+from src.types.utilities import get_batch_size, is_batched, ExecutionStats
 
 if TYPE_CHECKING:
     import jax.numpy as jnp
