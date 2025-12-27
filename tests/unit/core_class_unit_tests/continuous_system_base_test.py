@@ -12,7 +12,7 @@ import numpy as np
 from src.types.core import ControlVector, StateVector
 from src.types.linearization import ContinuousLinearization
 from src.types.trajectories import IntegrationResult, SimulationResult
-from src.systems.base.continuous_system_base import ContinuousSystemBase
+from src.systems.base.core.continuous_system_base import ContinuousSystemBase
 
 
 # =============================================================================

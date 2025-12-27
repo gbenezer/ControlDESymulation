@@ -10,7 +10,7 @@ import numpy as np
 
 from src.types.core import ControlVector, StateVector
 from src.types.linearization import DiscreteLinearization
-from src.systems.base.discrete_system_base import DiscreteSystemBase
+from src.systems.base.core.discrete_system_base import DiscreteSystemBase
 
 
 # =============================================================================
