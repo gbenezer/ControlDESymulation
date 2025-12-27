@@ -10,11 +10,13 @@
 
 The `src/types` directory contains a comprehensive, modular type system with:
 
-- **170+ type definitions** for arrays, vectors, matrices, and functions
-- **40+ TypedDict result types** for structured return values
+- **218+ type definitions** for arrays, vectors, matrices, and functions
+- **53+ TypedDict result types** for structured return values
 - **15+ utility functions** for type guards, converters, and validators
 - **8+ Protocol definitions** for structural subtyping
 - **19 Python modules** organized by domain-specific functionality
+
+**Complete Documentation**: All 19 modules fully documented with examples and mathematical background.
 
 ---
 
@@ -35,9 +37,13 @@ The `src/types` directory contains a comprehensive, modular type system with:
 13. [Optimization Types](#12-optimization-types-optimizationpy)
 14. [Learning Types](#13-learning-types-learningpy)
 15. [Utility Types & Functions](#14-utility-types--functions-utilitiespy)
-16. [Design Principles](#design-principles)
-17. [Usage Patterns](#usage-patterns)
-18. [Integration Pipelines](#integration-pipelines)
+16. [Contraction Theory Types](#15-contraction-theory-types-contractionpy)
+17. [Conformal Prediction Types](#16-conformal-prediction-types-conformalpy)
+18. [Differential Flatness Types](#17-differential-flatness-types-flatnesspy)
+19. [Model Reduction Types](#18-model-reduction-types-model_reductionpy)
+20. [Design Principles](#design-principles)
+21. [Usage Patterns](#usage-patterns)
+22. [Integration Pipelines](#integration-pipelines)
 
 ---
 
@@ -1050,6 +1056,506 @@ class PerformanceMetrics(TypedDict):
 
 ---
 
+## 15. Contraction Theory Types (`contraction.py`)
+
+Types for contraction analysis and control - powerful tools for proving exponential convergence of dynamical systems.
+
+### Type Aliases
+
+```python
+ContractionMetric = ArrayLike  # M(x) ≻ 0, defines Riemannian metric
+ContractionRate = float        # β > 0, exponential convergence rate
+```
+
+**Mathematical Background**:
+- Virtual displacement: δx = x₁ - x₂
+- Metric norm: ||δx||²_M = δx' M(x) δx
+- Contraction: d/dt ||δx||_M ≤ -β ||δx||_M
+- Result: ||δx(t)||_M ≤ e^(-βt) ||δx(0)||_M
+
+**Usage**:
+```python
+beta: ContractionRate = 0.5  # 63% convergence in t=1/β=2 seconds
+M: ContractionMetric = np.eye(3)  # Euclidean metric
+```
+
+### Analysis Results
+
+#### ContractionAnalysisResult
+
+```python
+class ContractionAnalysisResult(TypedDict, total=False):
+    is_contracting: bool                    # System contracts
+    contraction_rate: ContractionRate       # Exponential rate β
+    metric: ContractionMetric               # M(x) ≻ 0
+    metric_type: str                        # 'constant', 'state_dependent'
+    verification_method: str                # 'LMI', 'SOS', 'optimization'
+    convergence_bound: Optional[Callable]   # Upper bound ||δx(t)||
+    exponential_convergence: bool           # True if exponential
+    incremental_stability: bool             # All trajectories converge
+    condition_number: Optional[float]       # κ(M) if constant metric
+```
+
+**Usage**:
+```python
+result: ContractionAnalysisResult = analyze_contraction(
+    dynamics=lambda x: -A @ x,
+    method='LMI'
+)
+
+if result['is_contracting']:
+    β = result['contraction_rate']
+    M = result['metric']
+    print(f"System contracts with rate β={β:.3f}")
+    
+    # Convergence bound
+    bound = result['convergence_bound']
+    t = np.linspace(0, 10, 100)
+    max_deviation = [bound(ti, 1.0) for ti in t]
+```
+
+#### CCMResult (Control Contraction Metrics)
+
+```python
+class CCMResult(TypedDict, total=False):
+    feedback_gain: GainMatrix               # K(x) or constant K
+    metric: ContractionMetric               # M(x)
+    contraction_rate: ContractionRate       # Guaranteed β
+    metric_condition_number: ArrayLike      # κ(M(x)) over state space
+    contraction_verified: bool              # LMI/SDP succeeded
+    robustness_margin: float                # Margin in contraction condition
+    geodesic_distance: Optional[Callable]   # d_M(x₁, x₂)
+```
+
+**Usage**:
+```python
+result: CCMResult = design_ccm_controller(
+    system=pendulum,
+    contraction_rate=0.5,
+    method='SDP'
+)
+
+if result['contraction_verified']:
+    K = result['feedback_gain']
+    
+    # Apply controller
+    def controller(x):
+        return K(x) if callable(K) else K @ x
+    
+    print(f"Robustness margin: {result['robustness_margin']:.3f}")
+```
+
+#### FunnelingResult
+
+```python
+class FunnelingResult(TypedDict):
+    controller: Callable                    # u(x, t)
+    tracking_funnel: Callable               # ρ(t) boundary
+    funnel_shape: str                       # 'exponential', 'polynomial'
+    reference_trajectory: StateTrajectory   # x_d(t)
+    performance_bound: Callable             # ||x - x_d|| ≤ bound(t)
+    transient_bound: float                  # Initial amplification
+    contraction_rate: ContractionRate       # Asymptotic rate
+```
+
+**Usage**:
+```python
+result: FunnelingResult = design_funnel_controller(
+    system=robot,
+    reference_trajectory=x_desired,
+    funnel_shape='exponential',
+    initial_funnel_width=1.0,
+    final_funnel_width=0.1
+)
+
+controller = result['controller']
+funnel = result['tracking_funnel']
+
+# Verify tracking stays within funnel
+error = np.linalg.norm(x_traj - x_desired, axis=1)
+bound = np.array([funnel(t) for t in t_sim])
+assert np.all(error <= bound + 1e-6)
+```
+
+#### IncrementalStabilityResult
+
+```python
+class IncrementalStabilityResult(TypedDict):
+    incrementally_stable: bool              # δ-GAS property
+    contraction_rate: Optional[ContractionRate]
+    metric: Optional[ContractionMetric]
+    kl_bound: Optional[Callable]            # β(||δx(0)||, t)
+    convergence_type: str                   # 'exponential', 'asymptotic'
+```
+
+**Usage**:
+```python
+result: IncrementalStabilityResult = check_incremental_stability(
+    system=nonlinear_system,
+    method='contraction'
+)
+
+if result['incrementally_stable']:
+    print("All trajectories converge to each other!")
+    if result['convergence_type'] == 'exponential':
+        β = result['contraction_rate']
+        print(f"Exponential rate: {β:.3f}")
+```
+
+---
+
+## 16. Conformal Prediction Types (`conformal.py`)
+
+Types for distribution-free uncertainty quantification with finite-sample coverage guarantees.
+
+### Type Aliases
+
+```python
+ConformalPredictionSet = Union[ArrayLike, Tuple[ArrayLike, ArrayLike]]
+# Interval: (lower_bounds, upper_bounds)
+# Ball: (center, radius)
+# Polytope: vertices array
+
+NonconformityScore = ArrayLike
+# Measures prediction "strangeness"
+# Lower score → more conforming to calibration data
+```
+
+**Mathematical Background**:
+- Split conformal: Train/calibration split
+- Coverage guarantee: P(y_new ∈ C(x_new)) ≥ 1-α (distribution-free!)
+- Nonconformity score: s_i = score(x_i, y_i, ŷ_i)
+- Quantile: q = Quantile(s₁,...,s_n; (1-α)(1 + 1/n))
+
+### Calibration Results
+
+#### ConformalCalibrationResult
+
+```python
+class ConformalCalibrationResult(TypedDict):
+    quantile: float                         # Calibrated threshold q
+    alpha: float                            # Target miscoverage (1-coverage)
+    empirical_coverage: float               # Observed coverage on cal set
+    calibration_scores: NonconformityScore  # From calibration data
+    n_calibration: int                      # Calibration set size
+    prediction_set_type: str                # 'interval', 'ball', 'polytope'
+```
+
+**Usage**:
+```python
+result: ConformalCalibrationResult = calibrate_conformal(
+    scores=residuals,
+    alpha=0.1  # Target 90% coverage
+)
+
+q = result['quantile']
+coverage = result['empirical_coverage']
+print(f"Calibrated quantile: {q:.3f}")
+print(f"Empirical coverage: {coverage*100:.1f}%")
+
+# Prediction set: {y : |y - ŷ| ≤ q}
+y_lower = y_pred - q
+y_upper = y_pred + q
+```
+
+### Prediction Results
+
+#### ConformalPredictionResult
+
+```python
+class ConformalPredictionResult(TypedDict, total=False):
+    prediction_set: ConformalPredictionSet  # Set(s) for test point(s)
+    point_prediction: StateVector           # Point estimate
+    coverage_guarantee: float               # Guaranteed coverage (1-α)
+    average_set_size: float                 # Average prediction set size
+    nonconformity_score: NonconformityScore # For test point(s)
+    threshold: float                        # Threshold q
+    adaptive: bool                          # Input-adaptive
+```
+
+**Usage**:
+```python
+cp = ConformalPredictor(model=my_model, calibration_data=(x_cal, y_cal))
+
+result: ConformalPredictionResult = cp.predict(
+    x_test=np.array([1.5, 2.0]),
+    alpha=0.1  # 90% coverage guarantee
+)
+
+if isinstance(result['prediction_set'], tuple):
+    lower, upper = result['prediction_set']
+    print(f"Prediction interval: [{lower}, {upper}]")
+
+print(f"Coverage guarantee: {result['coverage_guarantee']*100:.1f}%")
+print(f"Average set size: {result['average_set_size']:.3f}")
+```
+
+#### AdaptiveConformalResult
+
+```python
+class AdaptiveConformalResult(TypedDict):
+    threshold: float                        # Current adaptive q_t
+    coverage_history: ArrayLike             # Coverage over time
+    miscoverage_rate: float                 # Current miscoverage
+    target_alpha: float                     # Target (1-coverage)
+    adaptation_rate: float                  # Learning rate γ
+    effective_sample_size: int              # Effective calibration window
+```
+
+**Usage**:
+```python
+aci = AdaptiveConformalInference(
+    model=my_model,
+    target_alpha=0.1,
+    adaptation_rate=0.01
+)
+
+# Online updates
+for t in range(1000):
+    x_t, y_t = data_stream[t]
+    result: AdaptiveConformalResult = aci.update(x_t, y_t)
+    
+    if t % 100 == 0:
+        coverage = 1 - result['miscoverage_rate']
+        print(f"Step {t}: Coverage = {coverage*100:.1f}%")
+        print(f"Threshold: {result['threshold']:.3f}")
+```
+
+---
+
+## 17. Differential Flatness Types (`flatness.py`)
+
+Types for differential flatness - enables exact trajectory planning via algebraic inversion.
+
+### Type Aliases
+
+```python
+FlatnessOutput = ArrayLike  # Flat output y_flat (m,)
+# State and control algebraically expressible:
+#   x = φ_x(y_flat, ẏ_flat, ÿ_flat, ...)
+#   u = φ_u(y_flat, ẏ_flat, ÿ_flat, ...)
+```
+
+**Mathematical Background**:
+- System is flat if ∃ y_flat such that:
+  - y_flat = σ(x) (function of state)
+  - x = φ_x(y_flat, ẏ_flat, ..., y_flat^(r))
+  - u = φ_u(y_flat, ẏ_flat, ..., y_flat^(r))
+- dim(y_flat) = m (number of inputs)
+- Every trajectory ↔ unique flat output trajectory
+- Enables planning in flat space + algebraic inversion
+
+### Flatness Analysis
+
+#### DifferentialFlatnessResult
+
+```python
+class DifferentialFlatnessResult(TypedDict):
+    is_flat: bool                           # System is differentially flat
+    flat_output: Optional[Callable]         # y_flat = σ(x)
+    flat_dimension: int                     # dim(y_flat) = nu typically
+    differential_order: int                 # Max derivative order needed
+    state_from_flat: Optional[Callable]     # x = φ_x(y, ẏ, ÿ, ...)
+    control_from_flat: Optional[Callable]   # u = φ_u(y, ẏ, ÿ, ...)
+    verification_method: str                # 'analytic', 'symbolic', 'numerical'
+```
+
+**Usage**:
+```python
+result: DifferentialFlatnessResult = check_flatness(
+    system=quadrotor,
+    method='analytic'
+)
+
+if result['is_flat']:
+    print(f"System is flat! Flat output dim: {result['flat_dimension']}")
+    print(f"Derivative order: {result['differential_order']}")
+    
+    σ = result['flat_output']           # y = σ(x)
+    φ_x = result['state_from_flat']     # x = φ_x(y, ẏ, ...)
+    φ_u = result['control_from_flat']   # u = φ_u(y, ẏ, ...)
+    
+    # Plan trajectory in flat output space
+    y_flat_traj = plan_flat_output(t)
+    dy_flat = compute_derivatives(y_flat_traj, dt)
+    ddy_flat = compute_derivatives(dy_flat, dt)
+    
+    # Invert to get x(t) and u(t)
+    x_traj = φ_x(y_flat_traj, dy_flat, ddy_flat)
+    u_traj = φ_u(y_flat_traj, dy_flat, ddy_flat)
+```
+
+### Trajectory Planning
+
+#### TrajectoryPlanningResult
+
+```python
+class TrajectoryPlanningResult(TypedDict, total=False):
+    state_trajectory: StateTrajectory       # x(t) or x[k]
+    control_trajectory: ControlSequence     # u(t) or u[k]
+    flat_trajectory: Optional[ArrayLike]    # y_flat(t) if flat system
+    time_points: TimePoints                 # Time discretization
+    cost: float                             # Trajectory cost J
+    feasible: bool                          # Satisfies constraints
+    method: str                             # 'flatness', 'optimization', 'RRT'
+    computation_time: float                 # Planning time (seconds)
+```
+
+**Usage**:
+```python
+result: TrajectoryPlanningResult = plan_flat_trajectory(
+    system=quadrotor,
+    x_initial=np.zeros(12),
+    x_final=np.array([10, 10, 5, 0, ...]),
+    time_horizon=5.0
+)
+
+if result['feasible']:
+    x_ref = result['state_trajectory']
+    u_ff = result['control_trajectory']
+    
+    print(f"Planning time: {result['computation_time']:.3f}s")
+    print(f"Trajectory cost: {result['cost']:.2f}")
+    print(f"Method: {result['method']}")
+    
+    # Execute with feedforward + feedback
+    for k in range(len(result['time_points'])-1):
+        u_ff_k = u_ff[k]
+        e = x - x_ref[k]
+        u = u_ff_k - K @ e  # Feedforward + feedback
+        x = system.step(x, u, dt)
+    
+    # Visualize flat trajectory
+    if 'flat_trajectory' in result:
+        y_flat = result['flat_trajectory']
+        import matplotlib.pyplot as plt
+        plt.plot(y_flat[:, 0], y_flat[:, 1], label='Flat trajectory')
+        plt.xlabel('x position')
+        plt.ylabel('y position')
+```
+
+---
+
+## 18. Model Reduction Types (`model_reduction.py`)
+
+Types for creating lower-order approximations with guaranteed error bounds.
+
+### Balanced Realization
+
+#### BalancedRealizationResult
+
+```python
+class BalancedRealizationResult(TypedDict):
+    A_balanced: StateMatrix                 # Balanced A_bal (nx, nx)
+    B_balanced: InputMatrix                 # Balanced B_bal (nx, nu)
+    C_balanced: OutputMatrix                # Balanced C_bal (ny, nx)
+    transformation: ArrayLike               # Balancing transform T
+    hankel_singular_values: ArrayLike       # HSVs σ₁ ≥ σ₂ ≥ ... ≥ 0
+    controllability_gramian: CovarianceMatrix  # W_c
+    observability_gramian: CovarianceMatrix    # W_o
+```
+
+**Mathematical Background**:
+- Balanced coordinates: W_c = W_o = Σ = diag(σ₁, σ₂, ..., σ_n)
+- σ_i are Hankel singular values (HSVs)
+- HSVs measure state importance (controllability + observability)
+- States with small HSVs can be truncated
+
+**Usage**:
+```python
+result: BalancedRealizationResult = balanced_realization(
+    A=A, B=B, C=C
+)
+
+A_bal = result['A_balanced']
+B_bal = result['B_balanced']
+C_bal = result['C_balanced']
+hsv = result['hankel_singular_values']
+
+# Plot HSVs to choose reduced order
+import matplotlib.pyplot as plt
+plt.semilogy(hsv, 'o-')
+plt.axhline(1e-3, color='r', linestyle='--', label='Threshold')
+plt.xlabel('State index')
+plt.ylabel('Hankel singular value')
+plt.grid(True)
+
+# Choose order (keep HSVs > threshold)
+r = np.sum(hsv > 1e-3)
+print(f"Reduced order: {r}/{len(hsv)}")
+
+# Verify balanced gramians
+W_c = result['controllability_gramian']
+W_o = result['observability_gramian']
+assert np.allclose(W_c, W_o)
+assert np.allclose(W_c, np.diag(hsv))
+```
+
+### Reduced Order Models
+
+#### ReducedOrderModelResult
+
+```python
+class ReducedOrderModelResult(TypedDict):
+    A_reduced: StateMatrix                  # Reduced A_r (n_r, n_r)
+    B_reduced: InputMatrix                  # Reduced B_r (n_r, nu)
+    C_reduced: OutputMatrix                 # Reduced C_r (ny, n_r)
+    D_reduced: FeedthroughMatrix            # Reduced D_r (ny, nu)
+    original_order: int                     # Original nx
+    reduced_order: int                      # Reduced n_r
+    approximation_error: float              # Error bound ||G - G_r||_∞
+    method: str                             # 'balanced', 'modal', 'hankel', 'POD'
+    preserved_modes: np.ndarray             # Eigenvalues kept
+```
+
+**Mathematical Background**:
+- Balanced truncation error bound: ||G - G_r||_∞ ≤ 2(σ_r+1 + ... + σ_n)
+- Preserves stability (if original stable)
+- Guarantees quality of approximation
+
+**Usage**:
+```python
+result: ReducedOrderModelResult = reduce_model(
+    system=(A, B, C, D),
+    target_order=10,
+    method='balanced'
+)
+
+A_r = result['A_reduced']
+B_r = result['B_reduced']
+C_r = result['C_reduced']
+D_r = result['D_reduced']
+
+print(f"Original: {result['original_order']} states")
+print(f"Reduced: {result['reduced_order']} states")
+print(f"Error bound: {result['approximation_error']:.2e}")
+
+# Compare transfer functions
+from scipy import signal
+sys_orig = signal.StateSpace(A, B, C, D)
+sys_red = signal.StateSpace(A_r, B_r, C_r, D_r)
+
+omega = np.logspace(-2, 2, 100)
+_, G_orig = signal.freqresp((A, B, C, D), omega)
+_, G_red = signal.freqresp((A_r, B_r, C_r, D_r), omega)
+
+# Plot Bode comparison
+import matplotlib.pyplot as plt
+plt.loglog(omega, np.abs(G_orig[0, 0]), label='Original')
+plt.loglog(omega, np.abs(G_red[0, 0]), '--', label='Reduced')
+plt.xlabel('Frequency (rad/s)')
+plt.ylabel('Magnitude')
+plt.legend()
+
+# Verify error bound
+error = np.max(np.abs(G_orig - G_red))
+print(f"Max frequency error: {error:.2e}")
+print(f"Error bound: {result['approximation_error']:.2e}")
+assert error <= result['approximation_error']
+```
+
+---
+
 ## Design Principles
 
 ### 1. Backend Agnostic Design
@@ -1338,14 +1844,7 @@ elif is_jax(x):
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.0 | 2024 | Initial type system |
-| 1.1 | 2024 | Added SDE types, estimation |
-| 1.2 | 2024 | Added learning, reachability |
-
----
-
-## See Also
-
-- `src/systems/` - System implementations using these types
-- `src/control/` - Control algorithms returning these result types
-- `tests/types/` - Type system tests and examples
+| 1.0 | Dec 2025  | Initial type system |
+| 1.1 | Dec 2025  | Added SDE types, estimation |
+| 1.2 | Dec 2025  | Added learning, reachability |
+| 1.3 | Dec 2025 | Complete documentation: Added detailed sections for contraction, conformal, flatness, model_reduction |
