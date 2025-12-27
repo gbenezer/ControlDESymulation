@@ -228,6 +228,55 @@ class BackendManager:
                 msg = f"Backend '{backend}' not available"
 
             raise RuntimeError(msg)
+        
+    def ensure_type(
+        self,
+        arr: ArrayLike,
+        backend: Optional[Backend] = None
+    ) -> ArrayLike:
+        """
+        Ensure array is in specified backend type.
+        
+        Converts array only if it's not already the correct type.
+        Less aggressive than convert() - preserves existing type if compatible.
+
+        Args:
+            arr: Array to check/convert
+            backend: Target backend (None = use default_backend)
+
+        Returns:
+            Array in correct backend type
+
+        Example:
+            >>> mgr = BackendManager()
+            >>> x_np = np.array([1.0])
+            >>> x_ensured = mgr.ensure_type(x_np, 'numpy')
+            >>> assert x_ensured is x_np  # Same object (no conversion)
+        """
+        backend = backend or self.default_backend
+
+        if backend == "numpy":
+            if not isinstance(arr, np.ndarray):
+                return np.asarray(arr)
+            return arr
+
+        elif backend == "torch":
+            import torch
+
+            if not isinstance(arr, torch.Tensor):
+                if isinstance(arr, np.ndarray):
+                    dtype = torch.float64 if arr.dtype == np.float64 else torch.float32
+                    return torch.tensor(arr, dtype=dtype, device=self.preferred_device)
+                return torch.tensor(arr, dtype=torch.float64, device=self.preferred_device)
+            # Ensure correct device
+            return arr.to(self.preferred_device)
+
+        elif backend == "jax":
+            import jax.numpy as jnp
+
+            if not isinstance(arr, jnp.ndarray):
+                return jnp.asarray(arr)
+            return arr
 
     # ========================================================================
     # Array Conversion
