@@ -50,6 +50,7 @@ Usage
 
 # Conditional imports for type checking
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Protocol, Tuple
+from dataclasses import dataclass
 
 import numpy as np
 from typing_extensions import TypedDict
@@ -1030,6 +1031,28 @@ class ValidationResult(TypedDict, total=False):
     checks_passed: int
     checks_total: int
 
+
+@dataclass(frozen=True)
+class SymbolicValidationResult:
+    """
+    Container for symbolic system validation results.
+
+    Attributes
+    ----------
+    is_valid : bool
+        True if system passed all validation checks
+    errors : List[str]
+        List of validation errors (empty if valid)
+    warnings : List[str]
+        List of validation warnings (non-fatal issues)
+    info : Dict
+        Additional information about the validated system
+    """
+
+    is_valid: bool
+    errors: List[str]
+    warnings: List[str]
+    info: Dict
 
 class PerformanceMetrics(TypedDict, total=False):
     """

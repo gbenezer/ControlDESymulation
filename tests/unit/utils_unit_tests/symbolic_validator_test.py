@@ -36,8 +36,8 @@ import sympy as sp
 from src.systems.base.utils.symbolic_validator import (
     SymbolicValidator,
     ValidationError,
-    ValidationResult,
 )
+from src.types.utilities import ValidationResult, SymbolicValidationResult
 
 # ============================================================================
 # Mock System Classes for Testing
@@ -120,22 +120,22 @@ class TestValidationResult:
 
     def test_valid_result_creation(self):
         """Test creating valid ValidationResult."""
-        result = ValidationResult(is_valid=True, errors=[], warnings=[], info={"nx": 1, "nu": 1})
+        result = ValidationResult(valid=True, errors=[], warnings=[], info={"nx": 1, "nu": 1})
 
-        assert result.is_valid
-        assert len(result.errors) == 0
-        assert len(result.warnings) == 0
-        assert result.info["nx"] == 1
+        assert result["valid"]
+        assert len(result["errors"]) == 0
+        assert len(result["warnings"]) == 0
+        assert result["info"]["nx"] == 1
 
     def test_invalid_result_creation(self):
         """Test creating invalid ValidationResult."""
         result = ValidationResult(
-            is_valid=False, errors=["Dimension mismatch"], warnings=["Unusual order"], info={}
+            valid=False, errors=["Dimension mismatch"], warnings=["Unusual order"], info={}
         )
 
-        assert not result.is_valid
-        assert len(result.errors) == 1
-        assert len(result.warnings) == 1
+        assert not result["valid"]
+        assert len(result["errors"]) == 1
+        assert len(result["warnings"]) == 1
 
 
 # ============================================================================
@@ -789,7 +789,8 @@ class TestValidationResultReturn:
 
         result = validator.validate(raise_on_error=False)
 
-        assert isinstance(result, ValidationResult)
+        
+        assert isinstance(result, SymbolicValidationResult)
         assert result.is_valid
         assert isinstance(result.errors, list)
         assert isinstance(result.warnings, list)
@@ -804,7 +805,7 @@ class TestValidationResultReturn:
         validator = SymbolicValidator(system)
         result = validator.validate(raise_on_error=False)
 
-        assert isinstance(result, ValidationResult)
+        assert isinstance(result, SymbolicValidationResult)
         assert not result.is_valid
         assert len(result.errors) > 0
 
