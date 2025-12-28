@@ -1128,5 +1128,6 @@ __all__ = [
     # Validation and performance
     "ExecutionStats",
     "ValidationResult",
+    "SymbolicValidationResult",
     "PerformanceMetrics",
 ]
