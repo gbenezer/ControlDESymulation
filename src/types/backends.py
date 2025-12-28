@@ -44,6 +44,7 @@ Usage
 
 # Conditional imports
 from typing import TYPE_CHECKING, Any, Dict, Literal, Optional
+from enum import Enum
 
 import numpy as np
 from typing_extensions import TypedDict
@@ -172,104 +173,86 @@ Optimization method for control/estimation problems.
 # Noise and Stochastic Types
 # ============================================================================
 
-NoiseType = Literal["additive", "multiplicative", "diagonal", "scalar", "general"]
-"""
-Noise structure classification for stochastic systems.
+class NoiseType(Enum):
+    """
+    Noise structure classification for stochastic systems.
 
-Categories:
-- 'additive': g(x,u,t) = constant (state-independent)
-  * Most efficient - can precompute
-  * Example: dx = f(x)dt + σ*dW
-  
-- 'multiplicative': g(x,u,t) depends on state
-  * State-dependent noise intensity
-  * Example: dx = f(x)dt + σ*x*dW (Geometric Brownian Motion)
-  
-- 'diagonal': g(x,u,t) is diagonal matrix
-  * Independent noise sources
-  * Enables element-wise solvers
-  
-- 'scalar': Single noise source (nw=1)
-  * Simplest stochastic case
-  * One Wiener process
-  
-- 'general': Full coupling, no special structure
-  * Most general, least efficient
+    Categories:
+    - 'additive': g(x,u,t) = constant (state-independent)
+    * Most efficient - can precompute
+    * Example: dx = f(x)dt + σ*dW
+    
+    - 'multiplicative': g(x,u,t) depends on state
+    * State-dependent noise intensity
+    * Example: dx = f(x)dt + σ*x*dW (Geometric Brownian Motion)
+    
+    - 'diagonal': g(x,u,t) is diagonal matrix
+    * Independent noise sources
+    * Enables element-wise solvers
+    
+    - 'scalar': Single noise source (nw=1)
+    * Simplest stochastic case
+    * One Wiener process
+    
+    - 'general': Full coupling, no special structure
+    * Most general, least efficient
+    """
 
-Examples
---------
->>> noise_type: NoiseType = system.get_noise_type()
->>> 
->>> if noise_type == 'additive':
-...     # Can optimize: precompute constant diffusion
-...     G = system.get_constant_noise()
-... elif noise_type == 'multiplicative':
-...     # Must evaluate at each step
-...     G = system.diffusion(x, u)
-"""
+    ADDITIVE = "additive"  # g(x,u,t) = constant (most efficient)
+    MULTIPLICATIVE = "multiplicative"  # g(x,u,t) depends on x
+    DIAGONAL = "diagonal"  # Independent noise sources
+    SCALAR = "scalar"  # Single Wiener process
+    GENERAL = "general"  # Full matrix, state-dependent
 
-SDEType = Literal["ito", "stratonovich"]
-"""
-SDE interpretation type.
+class SDEType(Enum):
+    """
+    SDE interpretation type.
 
-Interpretations:
-- 'ito': Itô interpretation (more common in control/finance)
-  * dx = f(x)dt + g(x)dW
-  * Martingale property
-  * Simpler numerically
-  
-- 'stratonovich': Stratonovich interpretation (physics/engineering)
-  * dx = f(x)dt + g(x)∘dW
-  * Chain rule works normally
-  * More intuitive for physical systems
+    Interpretations:
+    - 'ito': Itô interpretation (more common in control/finance)
+    * dx = f(x)dt + g(x)dW
+    * Martingale property
+    * Simpler numerically
+    
+    - 'stratonovich': Stratonovich interpretation (physics/engineering)
+    * dx = f(x)dt + g(x)∘dW
+    * Chain rule works normally
+    * More intuitive for physical systems
 
-Conversion:
-  f_Stratonovich = f_Ito + 0.5 * g * (∂g/∂x)
+    Conversion:
+    f_Stratonovich = f_Ito + 0.5 * g * (∂g/∂x)
 
-For discrete systems: No distinction (both equivalent)
+    For discrete systems: No distinction (both equivalent)
+    """
 
-Examples
---------
->>> sde_type: SDEType = 'ito'
->>> system.sde_type = 'stratonovich'
->>> 
->>> # In define_system()
->>> self.sde_type = 'ito'
-"""
+    ITO = "ito"
+    STRATONOVICH = "stratonovich"
+    
+class ConvergenceType(Enum):
+    """
+    SDE convergence type for numerical integration.
 
-ConvergenceType = Literal["strong", "weak"]
-"""
-SDE convergence type for numerical integration.
+    Types:
+    - 'strong': Pathwise/strong convergence
+    * Individual sample paths converge
+    * E[|X_numerical - X_true|] → 0
+    * Needed for: Filtering, control synthesis, single trajectory accuracy
+    * More expensive to achieve
+    
+    - 'weak': Weak convergence
+    * Distributions/moments converge
+    * E[φ(X_numerical)] → E[φ(X_true)] for test functions φ
+    * Needed for: Monte Carlo, statistics, ensemble behavior
+    * Easier to achieve (higher order possible)
 
-Types:
-- 'strong': Pathwise/strong convergence
-  * Individual sample paths converge
-  * E[|X_numerical - X_true|] → 0
-  * Needed for: Filtering, control synthesis, single trajectory accuracy
-  * More expensive to achieve
-  
-- 'weak': Weak convergence
-  * Distributions/moments converge
-  * E[φ(X_numerical)] → E[φ(X_true)] for test functions φ
-  * Needed for: Monte Carlo, statistics, ensemble behavior
-  * Easier to achieve (higher order possible)
+    Order Comparison:
+    - Euler-Maruyama: Strong order 0.5, weak order 1.0
+    - Milstein: Strong order 1.0
+    - SRA1: Weak order 2.0
+    """
 
-Order Comparison:
-- Euler-Maruyama: Strong order 0.5, weak order 1.0
-- Milstein: Strong order 1.0
-- SRA1: Weak order 2.0
-
-Examples
---------
->>> conv_type: ConvergenceType = 'strong'
->>> integrator = SDEIntegrator(system, convergence_type='weak')
->>> 
->>> # For single trajectory (e.g., control)
->>> conv: ConvergenceType = 'strong'
->>> 
->>> # For Monte Carlo (e.g., option pricing)
->>> conv: ConvergenceType = 'weak'
-"""
+    STRONG = "strong"
+    WEAK = "weak"
 
 
 # ============================================================================
