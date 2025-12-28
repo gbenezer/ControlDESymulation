@@ -19,7 +19,7 @@ from typing import Dict, List, Optional, Callable
 import numpy as np
 
 from src.types.backends import Backend
-from src.types.core import EquilibriumState, EquilibriumControl, EquilibriumPoint, EquilibriumIdentifier, EquilibriumName
+from src.types.core import EquilibriumState, EquilibriumControl, EquilibriumPoint, EquilibriumName
 
 
 class EquilibriumHandler:
@@ -153,7 +153,7 @@ class EquilibriumHandler:
 
         self._equilibria[name] = {"x": x_eq, "u": u_eq, "metadata": metadata}
 
-    def get_x(self, name: Optional[EquilibriumIdentifier] = None, backend: Backend = "numpy") -> EquilibriumState:
+    def get_x(self, name: Optional[EquilibriumName] = None, backend: Backend = "numpy") -> EquilibriumState:
         """Get equilibrium state in specified backend"""
         name = name or self._default
 
@@ -164,7 +164,7 @@ class EquilibriumHandler:
         x_eq = self._equilibria[name]["x"]
         return self._convert_to_backend(x_eq, backend)
 
-    def get_u(self, name: Optional[EquilibriumIdentifier] = None, backend: Backend = "numpy") -> EquilibriumControl:
+    def get_u(self, name: Optional[EquilibriumName] = None, backend: Backend = "numpy") -> EquilibriumControl:
         """Get equilibrium control in specified backend"""
         name = name or self._default
 
@@ -175,12 +175,12 @@ class EquilibriumHandler:
         return self._convert_to_backend(u_eq, backend)
 
     def get_both(
-        self, name: Optional[EquilibriumIdentifier] = None, backend: Backend = "numpy"
+        self, name: Optional[EquilibriumName] = None, backend: Backend = "numpy"
     ) -> EquilibriumPoint:
         """Get both state and control equilibria"""
         return self.get_x(name, backend), self.get_u(name, backend)
 
-    def set_default(self, name: str):
+    def set_default(self, name: EquilibriumName):
         """Set default equilibrium"""
         if name not in self._equilibria:
             raise ValueError(f"Unknown equilibrium '{name}'")
@@ -190,7 +190,7 @@ class EquilibriumHandler:
         """List all equilibrium names"""
         return list(self._equilibria.keys())
 
-    def get_metadata(self, name: Optional[str] = None) -> Dict:
+    def get_metadata(self, name: Optional[EquilibriumName] = None) -> Dict:
         """Get metadata for equilibrium"""
         name = name or self._default
         if name not in self._equilibria:
