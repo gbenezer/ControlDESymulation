@@ -161,24 +161,24 @@ class TestNoiseTypes:
         noise4: NoiseType = NoiseType.SCALAR
         noise5: NoiseType = NoiseType.GENERAL
 
-        assert noise1 == "additive"
-        assert noise2 == "multiplicative"
+        assert noise1 == NoiseType.ADDITIVE
+        assert noise2 == NoiseType.MULTIPLICATIVE
 
     def test_sde_type_valid_values(self):
         """Test SDEType literal values."""
         sde1: SDEType = SDEType.ITO
         sde2: SDEType = SDEType.STRATONOVICH
 
-        assert sde1 == "ito"
-        assert sde2 == "stratonovich"
+        assert sde1 == SDEType.ITO
+        assert sde2 == SDEType.STRATONOVICH
 
     def test_convergence_type_valid_values(self):
         """Test ConvergenceType literal values."""
         conv1: ConvergenceType = ConvergenceType.STRONG
         conv2: ConvergenceType = ConvergenceType.WEAK
 
-        assert conv1 == "strong"
-        assert conv2 == "weak"
+        assert conv1 == ConvergenceType.STRONG
+        assert conv2 == ConvergenceType.WEAK
 
 
 # ============================================================================
@@ -247,7 +247,7 @@ class TestConfigurationTypes:
         }
 
         assert config["method"] == "milstein"
-        assert config["convergence_type"] == "strong"
+        assert config["convergence_type"] == ConvergenceType.STRONG
         assert config["seed"] == 42
 
 
@@ -402,7 +402,7 @@ class TestConfigurationValidation:
         }
 
         assert config["seed"] == 42
-        assert config["convergence_type"] == "strong"
+        assert config["convergence_type"] == ConvergenceType.STRONG
 
 
 # ============================================================================
@@ -544,9 +544,9 @@ class TestDocumentationExamples:
 
     def test_noise_type_conditional_example(self):
         """Test NoiseType conditional usage example."""
-        noise_type: NoiseType = "additive"
+        noise_type: NoiseType = NoiseType.ADDITIVE
 
-        if noise_type == "additive":
+        if noise_type == NoiseType.ADDITIVE:
             # Optimization available
             can_optimize = True
         else:
@@ -630,7 +630,7 @@ class TestIntegrationPatterns:
         }
 
         assert sde_config["seed"] == 42
-        assert sde_config["convergence_type"] == "strong"
+        assert sde_config["convergence_type"] == ConvergenceType.STRONG
 
     def test_discretization_for_control_design(self):
         """Test discretization config for controller design."""
