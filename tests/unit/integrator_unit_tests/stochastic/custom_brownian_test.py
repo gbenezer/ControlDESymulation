@@ -19,6 +19,12 @@ Unit Tests for CustomBrownianPath
 Tests the custom Brownian motion path implementation for Diffrax,
 which enables deterministic testing and custom noise patterns.
 
+Type System Integration
+-----------------------
+CustomBrownianPath uses semantic types from the centralized type system:
+- ScalarLike for time values (t0, t1)
+- ArrayLike/NoiseVector for Brownian increments (dW)
+
 Test Coverage:
 - Initialization and properties
 - Diffrax AbstractPath interface compliance

@@ -20,7 +20,7 @@ Provides a unified interface for numerical integration of SDEs across different
 backends (NumPy, PyTorch, JAX) with both fixed and adaptive time stepping.
 
 This module extends the integrator framework to handle stochastic systems,
-supporting both ItΓ΄ and Stratonovich interpretations.
+supporting both Itô and Stratonovich interpretations.
 
 Mathematical Form
 -----------------
@@ -29,8 +29,8 @@ Stochastic differential equations:
     dx = f(x, u, t)dt + g(x, u, t)dW
 
 where:
-    - f(x, u, t): Drift vector (nx Γ— 1) - deterministic dynamics
-    - g(x, u, t): Diffusion matrix (nx Γ— nw) - stochastic intensity
+    - f(x, u, t): Drift vector (nx × 1) - deterministic dynamics
+    - g(x, u, t): Diffusion matrix (nx × nw) - stochastic intensity
     - dW: Brownian motion increments (nw independent Wiener processes)
 
 Key Differences from ODE Integration
@@ -39,7 +39,7 @@ Key Differences from ODE Integration
 2. **Weak vs Strong Convergence**: Different accuracy measures
 3. **Noise Structure**: Additive, multiplicative, diagonal, scalar
 4. **Multiple Trajectories**: Monte Carlo simulation support
-5. **SDE Type**: ItΓ΄ vs Stratonovich interpretation
+5. **SDE Type**: Itô vs Stratonovich interpretation
 
 Architecture Consistency
 -----------------------
@@ -47,6 +47,12 @@ Architecture Consistency
 - Adds SDE-specific methods (drift, diffusion, noise handling)
 - Maintains same backend-agnostic interface
 - Compatible with StochasticDynamicalSystem
+
+Design Note
+-----------
+This module now uses TypedDict-based result types, following the project
+design principle: "Result types are TypedDict". This enables better type
+safety, IDE autocomplete, and consistency across the codebase.
 """
 
 from abc import abstractmethod
@@ -54,14 +60,28 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
+from typing_extensions import TypedDict
 
 from src.systems.base.numerical_integration.integrator_base import (
     IntegratorBase,
     StepMode,
 )
-from src.systems.base.utils.stochastic.noise_analysis import SDEType
 
-from src.types import ArrayLike
+from src.types.core import (
+    ArrayLike,
+    ControlVector,
+    ScalarLike,
+    StateVector,
+    NoiseVector,
+    DiffusionMatrix
+)
+from src.types.trajectories import (
+    SDEIntegrationResult,
+    TimePoints,
+    TimeSpan,
+)
+
+from src.types.backends import SDEType, NoiseType, ConvergenceType
 
 if TYPE_CHECKING:
     import jax.numpy as jnp
@@ -70,131 +90,50 @@ if TYPE_CHECKING:
     from src.systems.base.stochastic_dynamical_system import StochasticDynamicalSystem
 
 
-class ConvergenceType(Enum):
+def get_trajectory_statistics(result: SDEIntegrationResult) -> Dict[str, Any]:
     """
-    Convergence criterion for SDE solvers.
-
-    Attributes
+    Compute trajectory statistics for Monte Carlo analysis.
+    
+    Parameters
     ----------
-    STRONG : str
-        Strong convergence - pathwise accuracy
-        Error: E[|X(T) - X_h(T)|] = O(h^p)
-        Best for: Single trajectory accuracy, control applications
-
-    WEAK : str
-        Weak convergence - moment accuracy
-        Error: |E[f(X(T))] - E[f(X_h(T))]| = O(h^p)
-        Best for: Statistical properties, Monte Carlo estimation
+    result : SDEIntegrationResult
+        SDE integration result with single or multiple paths
+    
+    Returns
+    -------
+    Dict[str, Any]
+        Statistics including mean, std, quantiles across paths
+    
+    Examples
+    --------
+    >>> mc_result = integrator.integrate_monte_carlo(x0, u_func, (0, 10), n_paths=1000)
+    >>> stats = get_trajectory_statistics(mc_result)
+    >>> print(f"Mean at final time: {stats['mean'][-1]}")
+    >>> print(f"Std at final time: {stats['std'][-1]}")
     """
-
-    STRONG = "strong"
-    WEAK = "weak"
-
-
-class SDEIntegrationResult:
-    """
-    Container for SDE integration results.
-
-    Extends IntegrationResult with SDE-specific information like
-    multiple trajectories, noise samples, and convergence statistics.
-
-    Attributes
-    ----------
-    t : ArrayLike
-        Time points (T,)
-    x : ArrayLike
-        State trajectory (T, nx) or (n_paths, T, nx) for multiple paths
-    success : bool
-        Whether integration succeeded
-    message : str
-        Status message
-    nfev : int
-        Number of drift function evaluations
-    nsteps : int
-        Number of integration steps taken
-    diffusion_evals : int
-        Number of diffusion function evaluations
-    noise_samples : Optional[ArrayLike]
-        Brownian motion samples used (T, nw) or (n_paths, T, nw)
-    n_paths : int
-        Number of trajectories computed
-    convergence_type : ConvergenceType
-        Type of convergence (strong or weak)
-    solver : str
-        Solver method used
-    sde_type : SDEType
-        SDE interpretation (Ito or Stratonovich)
-    """
-
-    def __init__(
-        self,
-        t: ArrayLike,
-        x: ArrayLike,
-        success: bool = True,
-        message: str = "SDE integration successful",
-        nfev: int = 0,
-        nsteps: int = 0,
-        diffusion_evals: int = 0,
-        noise_samples: Optional[ArrayLike] = None,
-        n_paths: int = 1,
-        convergence_type: ConvergenceType = ConvergenceType.STRONG,
-        solver: Optional[str] = None,
-        sde_type: SDEType = SDEType.ITO,
-        **metadata,
-    ):
-        self.t = t
-        self.x = x
-        self.success = success
-        self.message = message
-        self.nfev = nfev
-        self.nsteps = nsteps
-        self.diffusion_evals = diffusion_evals
-        self.noise_samples = noise_samples
-        self.n_paths = n_paths
-        self.convergence_type = convergence_type
-        self.solver = solver
-        self.sde_type = sde_type
-        self.metadata = metadata
-
-    def __repr__(self) -> str:
-        return (
-            f"SDEIntegrationResult("
-            f"success={self.success}, "
-            f"nsteps={self.nsteps}, "
-            f"nfev={self.nfev}, "
-            f"diffusion_evals={self.diffusion_evals}, "
-            f"n_paths={self.n_paths})"
-        )
-
-    def get_statistics(self) -> Dict[str, Any]:
-        """
-        Compute trajectory statistics for Monte Carlo analysis.
-
-        Returns
-        -------
-        Dict[str, Any]
-            Statistics including mean, std, quantiles across paths
-        """
-        if self.n_paths == 1:
-            return {
-                "mean": self.x,
-                "std": None,
-                "n_paths": 1,
-                "note": "Single trajectory - no statistics available",
-            }
-
-        # Multiple paths: compute statistics
-        # x has shape (n_paths, T, nx)
+    n_paths = result.get("n_paths", 1)
+    x = result["x"]
+    
+    if n_paths == 1:
         return {
-            "mean": np.mean(self.x, axis=0),  # (T, nx)
-            "std": np.std(self.x, axis=0),  # (T, nx)
-            "min": np.min(self.x, axis=0),
-            "max": np.max(self.x, axis=0),
-            "median": np.median(self.x, axis=0),
-            "q25": np.quantile(self.x, 0.25, axis=0),
-            "q75": np.quantile(self.x, 0.75, axis=0),
-            "n_paths": self.n_paths,
+            "mean": x,
+            "std": None,
+            "n_paths": 1,
+            "note": "Single trajectory - no statistics available",
         }
+
+    # Multiple paths: compute statistics
+    # x has shape (n_paths, T, nx)
+    return {
+        "mean": np.mean(x, axis=0),  # (T, nx)
+        "std": np.std(x, axis=0),  # (T, nx)
+        "min": np.min(x, axis=0),
+        "max": np.max(x, axis=0),
+        "median": np.median(x, axis=0),
+        "q25": np.quantile(x, 0.25, axis=0),
+        "q75": np.quantile(x, 0.75, axis=0),
+        "n_paths": n_paths,
+    }
 
 
 class SDEIntegratorBase(IntegratorBase):
@@ -227,6 +166,17 @@ class SDEIntegratorBase(IntegratorBase):
     seed : Optional[int]
         Random seed for reproducibility
 
+    Result Types
+    ------------
+    Returns SDEIntegrationResult TypedDict with:
+    - t: Time points (T,)
+    - x: State trajectory (T, nx) or (n_paths, T, nx)
+    - diffusion_evals: Number of diffusion evaluations
+    - noise_samples: Brownian increments used
+    - n_paths: Number of trajectories
+    - convergence_type: 'strong' or 'weak'
+    - sde_type: 'ito' or 'stratonovich'
+
     Examples
     --------
     >>> # Create SDE integrator
@@ -243,6 +193,7 @@ class SDEIntegratorBase(IntegratorBase):
     ...     u_func=lambda t, x: np.zeros(1),
     ...     t_span=(0.0, 10.0)
     ... )
+    >>> print(f"State shape: {result['x'].shape}")
     >>>
     >>> # Multiple trajectories (Monte Carlo)
     >>> result = integrator.integrate_monte_carlo(
@@ -251,7 +202,7 @@ class SDEIntegratorBase(IntegratorBase):
     ...     t_span=(0.0, 10.0),
     ...     n_paths=1000
     ... )
-    >>> stats = result.get_statistics()
+    >>> stats = get_trajectory_statistics(result)
     >>> print(f"Mean trajectory: {stats['mean']}")
     >>> print(f"Standard deviation: {stats['std']}")
     >>>
@@ -266,7 +217,7 @@ class SDEIntegratorBase(IntegratorBase):
     def __init__(
         self,
         sde_system: "StochasticDynamicalSystem",
-        dt: Optional[float] = None,
+        dt: Optional[ScalarLike] = None,
         step_mode: StepMode = StepMode.FIXED,
         backend: str = "numpy",
         sde_type: Optional[SDEType] = None,
@@ -298,238 +249,118 @@ class SDEIntegratorBase(IntegratorBase):
         **options : dict
             Additional options:
             - cache_noise : bool
-                Cache noise samples for efficiency (default: True for additive)
-            - noise_generator : Callable
-                Custom noise generator (advanced)
-
-        Raises
-        ------
-        ValueError
-            If system is not stochastic
-            If FIXED mode specified without dt
-        TypeError
-            If sde_system is not StochasticDynamicalSystem
+                Cache noise samples (default: False)
+            - noise_samples : ArrayLike
+                Pre-generated noise (for deterministic testing)
         """
-        # Validate system type
-        from src.systems.base.stochastic_dynamical_system import StochasticDynamicalSystem
-
-        if not isinstance(sde_system, StochasticDynamicalSystem):
+        # Validate system type - check for required SDE methods
+        if not hasattr(sde_system, 'get_sde_type'):
             raise TypeError(
-                f"sde_system must be StochasticDynamicalSystem, " f"got {type(sde_system).__name__}"
+                f"sde_system must be a StochasticDynamicalSystem with get_sde_type() method, "
+                f"got {type(sde_system).__name__}"
             )
-
-        # Initialize parent (handles ODE functionality)
+        if not hasattr(sde_system, 'get_diffusion_matrix'):
+            raise TypeError(
+                f"sde_system must be a StochasticDynamicalSystem with get_diffusion_matrix() method, "
+                f"got {type(sde_system).__name__}"
+            )
+        
+        # Initialize base integrator
         super().__init__(sde_system, dt, step_mode, backend, **options)
 
-        # SDE-specific attributes
         self.sde_system = sde_system
-        self.nw = sde_system.nw  # Number of Wiener processes
 
         # SDE type (use system's if not specified)
         if sde_type is None:
-            self.sde_type = sde_system.sde_type
+            self.sde_type = sde_system.get_sde_type()
         else:
             self.sde_type = sde_type
 
         self.convergence_type = convergence_type
         self.seed = seed
 
-        # Initialize random state
+        # Random number generator
         self._rng = self._initialize_rng(backend, seed)
 
         # SDE-specific statistics
         self._stats["diffusion_evals"] = 0
         self._stats["noise_samples"] = 0
 
-        # Noise optimization flags
+        # Noise dimension
+        self.nw = sde_system.nw
+
+        # Analyze noise structure for optimization
         self._is_additive = sde_system.is_additive_noise()
-        self._is_multiplicative = sde_system.is_multiplicative_noise()
+        self._is_multiplicative = not self._is_additive
         self._is_diagonal = sde_system.is_diagonal_noise()
         self._is_scalar = sde_system.is_scalar_noise()
 
-        # Cache constant diffusion for additive noise
+        # Cache diffusion matrix if additive
         self._cached_diffusion = None
         if self._is_additive:
-            try:
-                # CRITICAL: Get constant noise in correct backend
-                self._cached_diffusion = self.sde_system.get_constant_noise(
-                    backend=self.backend  # Pass backend
-                )
-            except Exception as e:
-                # If caching fails, will evaluate each time
-                pass
+            # For additive noise, diffusion is constant
+            dummy_x = np.zeros(sde_system.nx)
+            dummy_u = np.zeros(sde_system.nu) if sde_system.nu > 0 else None
+            self._cached_diffusion = sde_system.get_diffusion_matrix(dummy_x, dummy_u, backend=backend)
 
     def _initialize_rng(self, backend: str, seed: Optional[int]):
-        """
-        Initialize random number generator for specified backend.
-
-        Parameters
-        ----------
-        backend : str
-            Backend name
-        seed : Optional[int]
-            Random seed
-
-        Returns
-        -------
-        RNG object appropriate for backend
-        """
+        """Initialize random number generator for backend."""
         if backend == "numpy":
-            # Create a new RandomState instance for reproducibility
-            if seed is not None:
-                return np.random.RandomState(seed)
-            return np.random.RandomState()
+            return np.random.default_rng(seed)
         elif backend == "torch":
             import torch
-
             if seed is not None:
                 torch.manual_seed(seed)
-            # Return the torch module itself (has randn method)
-            return torch
+            return None  # PyTorch uses global state
         elif backend == "jax":
             import jax
-
             if seed is not None:
                 return jax.random.PRNGKey(seed)
-            return jax.random.PRNGKey(0)
+            else:
+                return jax.random.PRNGKey(0)
         else:
-            raise ValueError(f"Unknown backend: {backend}")
+            return None
 
-    def _cache_constant_diffusion(self):
+    def _generate_noise(self, shape: Tuple[int, ...], dt: Optional[ScalarLike] = None) -> NoiseVector:
         """
-        Cache constant diffusion matrix for additive noise systems.
-
-        For additive noise, g(x,u,t) is constant, so we compute once
-        and reuse for significant performance gains.
-        """
-        if self._is_additive:
-            # Evaluate at arbitrary point (result is constant)
-            x_dummy = np.zeros(self.sde_system.nx)
-            u_dummy = np.zeros(self.sde_system.nu) if self.sde_system.nu > 0 else None
-
-            # CRITICAL: Pass backend parameter
-            self._cached_diffusion = self.sde_system.get_constant_noise(backend=self.backend)
-
-    # ========================================================================
-    # SDE-Specific Evaluation Methods
-    # ========================================================================
-
-    def _evaluate_drift(self, x, u=None):
-        """
-        Evaluate drift term f(x, u).
+        Generate Brownian motion increments.
 
         Parameters
         ----------
-        x : ArrayLike
-            Current state
-        u : ArrayLike, optional
-            Current control (None for autonomous systems)
+        shape : tuple
+            Shape of noise to generate
+        dt : Optional[float]
+            Time step for scaling (uses self.dt if None)
 
         Returns
         -------
         ArrayLike
-            Drift vector f(x, u), shape (nx,)
-            Type matches self.backend
-
-        Notes
-        -----
-        Ensures backend consistency by passing backend parameter.
-        """
-        # Defensive check
-        if hasattr(x, "shape") and x.ndim > 1 and x.shape[0] == 0:
-            raise RuntimeError(
-                f"Internal error: SDE integrator received empty batch. "
-                f"x.shape={x.shape}. This is a bug - please report."
-            )
-        # CRITICAL: Pass backend to ensure type consistency
-        f = self.sde_system.drift(x, u, backend=self.backend)  # Add backend parameter
-        self._stats["total_fev"] += 1
-        return f
-
-    def _evaluate_diffusion(self, x, u=None):
-        """
-        Evaluate diffusion term g(x, u).
-
-        For additive noise, uses cached constant matrix.
-        For multiplicative noise, evaluates at current state.
-
-        Parameters
-        ----------
-        x : ArrayLike
-            Current state
-        u : ArrayLike, optional
-            Current control (None for autonomous systems)
-
-        Returns
-        -------
-        ArrayLike
-            Diffusion matrix g(x, u), shape (nx, nw)
-            Type matches self.backend
-
-        Notes
-        -----
-        This method ensures backend consistency by explicitly passing
-        backend parameter to system.diffusion().
-        """
-        # Defensive check
-        if hasattr(x, "shape") and x.ndim > 1 and x.shape[0] == 0:
-            raise RuntimeError(
-                f"Internal error: SDE integrator received empty batch in diffusion. "
-                f"x.shape={x.shape}. This is a bug - please report."
-            )
-
-        if self._is_additive and self._cached_diffusion is not None:
-            # Use cached constant diffusion
-            self._stats["diffusion_cache_hits"] = self._stats.get("diffusion_cache_hits", 0) + 1
-            return self._cached_diffusion
-        else:
-            # Evaluate diffusion (multiplicative or not cached)
-            # CRITICAL: Pass backend to ensure type consistency
-            g = self.sde_system.diffusion(x, u, backend=self.backend)  # Add backend parameter
-            self._stats["diffusion_evals"] += 1
-            return g
-
-    def _generate_noise(self, shape: Tuple[int, ...], dt: float) -> ArrayLike:
-        """
-        Generate Brownian motion increments: dW ~ N(0, dt).
-
-        Parameters
-        ----------
-        shape : Tuple[int, ...]
-            Shape of noise array (typically (nw,) or (batch, nw))
-        dt : float
-            Time step (variance = dt)
-
-        Returns
-        -------
-        ArrayLike
-            Brownian increments with correct backend type
+            Brownian increments ~ N(0, dt*I)
         """
         self._stats["noise_samples"] += 1
-        sqrt_dt = np.sqrt(dt)
 
         if self.backend == "numpy":
-            return self._rng.randn(*shape) * sqrt_dt
+            dW = self._rng.standard_normal(shape)
         elif self.backend == "torch":
             import torch
-
-            return torch.randn(*shape) * sqrt_dt
+            dW = torch.randn(shape, dtype=torch.float64)
         elif self.backend == "jax":
             import jax
+            self._rng, subkey = jax.random.split(self._rng)
+            dW = jax.random.normal(subkey, shape)
+        else:
+            raise ValueError(f"Unknown backend: {self.backend}")
 
-            # JAX requires explicit key management
-            key, subkey = jax.random.split(self._rng)
-            self._rng = key  # Update stored key
-            return jax.random.normal(subkey, shape) * sqrt_dt
+        # Scale by sqrt(dt) for Brownian motion
+        dt_to_use = dt if dt is not None else self.dt
+        if dt_to_use is not None:
+            dW = dW * np.sqrt(dt_to_use)
 
-    def _apply_stratonovich_correction(
-        self, x: ArrayLike, u: Optional[ArrayLike], g: ArrayLike, dt: float
-    ) -> ArrayLike:
+        return dW
+
+    def _evaluate_diffusion(self, x: StateVector, u: Optional[ControlVector] = None) -> DiffusionMatrix:
         """
-        Apply Stratonovich correction term if using Stratonovich interpretation.
-
-        The Stratonovich-to-Ito conversion adds a correction term:
-            f_strat(x) = f_ito(x) + 0.5 * sum_j g_j * dg_j/dx
+        Evaluate diffusion matrix with caching for additive noise.
 
         Parameters
         ----------
@@ -537,48 +368,56 @@ class SDEIntegratorBase(IntegratorBase):
             State
         u : Optional[ArrayLike]
             Control
-        g : ArrayLike
-            Diffusion matrix (nx, nw)
-        dt : float
-            Time step
 
         Returns
         -------
         ArrayLike
-            Correction term to add to drift
+            Diffusion matrix G(x, u)
+        """
+        # Use cached value for additive noise
+        if self._is_additive and self._cached_diffusion is not None:
+            return self._cached_diffusion
 
+        # Evaluate diffusion
+        self._stats["diffusion_evals"] += 1
+        return self.sde_system.get_diffusion_matrix(x, u, backend=self.backend)
+
+    def _evaluate_drift(self, x: StateVector, u: Optional[ControlVector] = None) -> ArrayLike:
+        """
+        Evaluate drift term (deterministic dynamics).
+        
+        This is an alias for _evaluate_dynamics() providing clearer semantics
+        in the SDE context where we distinguish between drift and diffusion.
+        
+        Parameters
+        ----------
+        x : ArrayLike
+            State
+        u : Optional[ArrayLike]
+            Control
+        
+        Returns
+        -------
+        ArrayLike
+            Drift vector f(x, u)
+        
         Notes
         -----
-        This is only needed for Stratonovich SDEs. For Ito SDEs, returns zero.
-        The correction requires computing dg/dx, which can be expensive.
+        For SDE: dx = f(x,u) dt + g(x,u) dW
+        - f(x,u) is the drift (this method)
+        - g(x,u) is the diffusion (_evaluate_diffusion)
+        
+        This method is semantically equivalent to _evaluate_dynamics() from
+        the base IntegratorBase class, but provides clearer naming for SDE code.
+        
+        Examples
+        --------
+        >>> # Evaluate drift and diffusion separately
+        >>> f = integrator._evaluate_drift(x, u)      # Deterministic part
+        >>> g = integrator._evaluate_diffusion(x, u)  # Stochastic part
+        >>> # Euler-Maruyama step: x_next = x + f*dt + g*dW
         """
-        if self.sde_type == SDEType.ITO:
-            # No correction for Ito
-            if self.backend == "numpy":
-                return np.zeros_like(x)
-            elif self.backend == "torch":
-                import torch
-
-                return torch.zeros_like(x)
-            elif self.backend == "jax":
-                import jax.numpy as jnp
-
-                return jnp.zeros_like(x)
-
-        # Stratonovich correction: 0.5 * sum_j g_j * dg_j/dx
-        # This requires computing Jacobian of diffusion w.r.t. state
-        # For now, return zero and document that Stratonovich requires
-        # specialized implementation or automatic differentiation
-
-        # TODO: Implement Stratonovich correction using autodiff
-        # This requires:
-        # 1. Compute dg/dx for each noise dimension
-        # 2. Sum: 0.5 * sum_j g_j * (dg_j/dx)
-
-        raise NotImplementedError(
-            "Stratonovich correction not yet implemented. "
-            "Use sde_type=SDEType.ITO or implement correction in subclass."
-        )
+        return self._evaluate_dynamics(x, u)
 
     # ========================================================================
     # Abstract Methods (Must be Implemented by Subclasses)
@@ -587,25 +426,24 @@ class SDEIntegratorBase(IntegratorBase):
     @abstractmethod
     def step(
         self,
-        x: ArrayLike,
-        u: Optional[ArrayLike] = None,
-        dt: Optional[float] = None,
-        dW: Optional[ArrayLike] = None,
+        x: StateVector,
+        u: Optional[ControlVector] = None,
+        dt: Optional[ScalarLike] = None,
+        dW: Optional[NoiseVector] = None,
     ) -> ArrayLike:
         """
-        Take one SDE integration step: x(t) β†' x(t + dt).
+        Take one SDE integration step with noise.
 
         Parameters
         ----------
         x : ArrayLike
-            Current state (nx,) or (batch, nx)
+            Current state (nx,)
         u : Optional[ArrayLike]
-            Control input (nu,) or (batch, nu), or None for autonomous
+            Control input (nu,) or None for autonomous
         dt : Optional[float]
             Step size (uses self.dt if None)
         dW : Optional[ArrayLike]
-            Brownian increments (nw,) or (batch, nw)
-            If None, generated automatically
+            Brownian increment (nw,) - if None, generates random
 
         Returns
         -------
@@ -614,9 +452,9 @@ class SDEIntegratorBase(IntegratorBase):
 
         Notes
         -----
-        Subclasses implement specific SDE schemes:
-        - Euler-Maruyama (order 0.5 strong, 1.0 weak)
-        - Milstein (order 1.0 strong)
+        Subclasses implement specific SDE methods:
+        - Euler-Maruyama (order 0.5 strong, order 1 weak)
+        - Milstein (order 1 strong)
         - Runge-Kutta SDE methods
         - etc.
 
@@ -632,10 +470,10 @@ class SDEIntegratorBase(IntegratorBase):
     @abstractmethod
     def integrate(
         self,
-        x0: ArrayLike,
-        u_func: Callable[[float, ArrayLike], Optional[ArrayLike]],
-        t_span: Tuple[float, float],
-        t_eval: Optional[ArrayLike] = None,
+        x0: StateVector,
+        u_func: Callable[[ScalarLike, StateVector], Optional[ControlVector]],
+        t_span: TimeSpan,
+        t_eval: Optional[TimePoints] = None,
         dense_output: bool = False,
     ) -> SDEIntegrationResult:
         """
@@ -646,7 +484,7 @@ class SDEIntegratorBase(IntegratorBase):
         x0 : ArrayLike
             Initial state (nx,)
         u_func : Callable[[float, ArrayLike], Optional[ArrayLike]]
-            Control policy: (t, x) β†' u (or None for autonomous)
+            Control policy: (t, x) → u (or None for autonomous)
         t_span : Tuple[float, float]
             Integration interval (t_start, t_end)
         t_eval : Optional[ArrayLike]
@@ -657,7 +495,15 @@ class SDEIntegratorBase(IntegratorBase):
         Returns
         -------
         SDEIntegrationResult
-            Integration result with trajectory and noise samples
+            TypedDict containing:
+            - t: Time points (T,)
+            - x: State trajectory (T, nx)
+            - diffusion_evals: Number of diffusion evaluations
+            - noise_samples: Brownian increments used
+            - success: Integration succeeded
+            - solver: Integrator name
+            - convergence_type: 'strong' or 'weak'
+            - sde_type: 'ito' or 'stratonovich'
 
         Examples
         --------
@@ -666,6 +512,7 @@ class SDEIntegratorBase(IntegratorBase):
         ...     u_func=lambda t, x: np.zeros(1),
         ...     t_span=(0.0, 10.0)
         ... )
+        >>> print(f"Final state: {result['x'][-1]}")
         >>>
         >>> # Autonomous system
         >>> result = integrator.integrate(
@@ -683,10 +530,10 @@ class SDEIntegratorBase(IntegratorBase):
     def integrate_monte_carlo(
         self,
         x0: ArrayLike,
-        u_func: Callable[[float, ArrayLike], Optional[ArrayLike]],
-        t_span: Tuple[float, float],
+        u_func: Callable[[ScalarLike, StateVector], Optional[ControlVector]],
+        t_span: TimeSpan,
         n_paths: int,
-        t_eval: Optional[ArrayLike] = None,
+        t_eval: Optional[TimePoints] = None,
         store_paths: bool = True,
         parallel: bool = False,
     ) -> SDEIntegrationResult:
@@ -731,7 +578,7 @@ class SDEIntegratorBase(IntegratorBase):
         ... )
         >>>
         >>> # Get statistics
-        >>> stats = result.get_statistics()
+        >>> stats = get_trajectory_statistics(result)
         >>> print(f"Mean at t=10: {stats['mean'][-1]}")
         >>> print(f"Std at t=10: {stats['std'][-1]}")
         >>>
@@ -746,7 +593,7 @@ class SDEIntegratorBase(IntegratorBase):
             for i in range(n_paths):
                 # Integrate single path
                 result = self.integrate(x0, u_func, t_span, t_eval)
-                all_paths.append(result.x)
+                all_paths.append(result["x"])
 
             # Stack trajectories
             if self.backend == "numpy":
@@ -760,19 +607,20 @@ class SDEIntegratorBase(IntegratorBase):
 
                 x_all = jnp.stack(all_paths, axis=0)
 
-            return SDEIntegrationResult(
-                t=result.t,
-                x=x_all,
-                success=True,
-                message=f"Monte Carlo with {n_paths} paths completed",
-                nfev=self._stats["total_fev"],
-                nsteps=self._stats["total_steps"],
-                diffusion_evals=self._stats["diffusion_evals"],
-                n_paths=n_paths,
-                convergence_type=self.convergence_type,
-                solver=self.name,
-                sde_type=self.sde_type,
-            )
+            mc_result: SDEIntegrationResult = {
+                "t": result["t"],
+                "x": x_all,
+                "success": True,
+                "message": f"Monte Carlo with {n_paths} paths completed",
+                "nfev": self._stats["total_fev"],
+                "nsteps": self._stats["total_steps"],
+                "diffusion_evals": self._stats["diffusion_evals"],
+                "n_paths": n_paths,
+                "convergence_type": self.convergence_type.value,
+                "solver": self.name,
+                "sde_type": self.sde_type.value,
+            }
+            return mc_result
         else:
             # Online statistics (memory efficient)
             raise NotImplementedError(
@@ -849,6 +697,191 @@ class SDEIntegratorBase(IntegratorBase):
             ),
         }
         return {**base_stats, **sde_stats}
+
+    def _apply_stratonovich_correction(
+        self, 
+        x: StateVector, 
+        u: Optional[ControlVector], 
+        g: DiffusionMatrix, 
+        dt: ScalarLike
+    ) -> ArrayLike:
+        """
+        Apply Stratonovich correction term.
+        
+        Converts Stratonovich SDE to Itô form by adding drift correction:
+        
+            correction = 0.5 * Σ_j g_j · (∂g_j/∂x)
+        
+        where g_j is the j-th column of diffusion matrix G.
+        
+        This allows Stratonovich SDEs to be integrated using Itô methods
+        by modifying the drift term.
+        
+        Parameters
+        ----------
+        x : ArrayLike
+            Current state (nx,)
+        u : Optional[ArrayLike]
+            Control input (nu,) or None
+        g : ArrayLike
+            Diffusion matrix at current state (nx, nw)
+        dt : float
+            Time step (not used in correction, included for API consistency)
+            
+        Returns
+        -------
+        ArrayLike
+            Correction term to add to drift (nx,)
+            
+        Notes
+        -----
+        For additive noise (g constant), correction is zero.
+        For multiplicative noise, uses automatic differentiation when available.
+        
+        Implementation uses:
+        - NumPy: Finite differences
+        - PyTorch: Autograd
+        - JAX: jax.jacobian
+        
+        Examples
+        --------
+        >>> # Geometric Brownian motion: dx = μx dt + σx dW (Stratonovich)
+        >>> # Itô form: dx = (μ + 0.5*σ²)x dt + σx dW
+        >>> correction = integrator._apply_stratonovich_correction(x, u, g, dt)
+        >>> # correction = 0.5 * σ² * x for GBM
+        """
+        # For additive noise, correction is exactly zero
+        if self._is_additive:
+            return np.zeros_like(x)
+        
+        # Compute Stratonovich correction
+        nx = len(x)
+        nw = g.shape[1] if len(g.shape) > 1 else 1
+        
+        if self.backend == "numpy":
+            return self._stratonovich_correction_numpy(x, u, g, nx, nw)
+        elif self.backend == "torch":
+            return self._stratonovich_correction_torch(x, u, g, nx, nw)
+        elif self.backend == "jax":
+            return self._stratonovich_correction_jax(x, u, g, nx, nw)
+        else:
+            raise ValueError(f"Unknown backend: {self.backend}")
+    
+    def _stratonovich_correction_numpy(
+        self, x: StateVector, u: Optional[ControlVector], g: DiffusionMatrix, nx: int, nw: int
+    ) -> ArrayLike:
+        """Compute Stratonovich correction using finite differences (NumPy)."""
+        import numpy as np
+        
+        correction = np.zeros(nx)
+        eps = 1e-7  # Finite difference step
+        
+        # For each noise dimension j
+        for j in range(nw):
+            g_j = g[:, j] if nw > 1 else g.flatten()
+            
+            # Compute Jacobian ∂g_j/∂x using finite differences
+            # ∂g_j/∂x_i ≈ (g_j(x + eps*e_i) - g_j(x - eps*e_i)) / (2*eps)
+            dg_j_dx = np.zeros((nx, nx))
+            
+            for i in range(nx):
+                # Perturb state in i-th direction
+                x_plus = x.copy()
+                x_minus = x.copy()
+                x_plus[i] += eps
+                x_minus[i] -= eps
+                
+                # Evaluate diffusion at perturbed states
+                g_plus = self._evaluate_diffusion(x_plus, u)
+                g_minus = self._evaluate_diffusion(x_minus, u)
+                
+                # Extract j-th column
+                g_j_plus = g_plus[:, j] if nw > 1 else g_plus.flatten()
+                g_j_minus = g_minus[:, j] if nw > 1 else g_minus.flatten()
+                
+                # Finite difference approximation
+                dg_j_dx[:, i] = (g_j_plus - g_j_minus) / (2 * eps)
+            
+            # Add contribution: 0.5 * g_j · (∂g_j/∂x)
+            correction += 0.5 * dg_j_dx @ g_j
+        
+        return correction
+    
+    def _stratonovich_correction_torch(
+        self, x: StateVector, u: Optional[ControlVector], g: DiffusionMatrix, nx: int, nw: int
+    ) -> ArrayLike:
+        """Compute Stratonovich correction using autograd (PyTorch)."""
+        import torch
+        
+        # Ensure tensors require grad
+        x_torch = torch.as_tensor(x, dtype=torch.float64).requires_grad_(True)
+        u_torch = torch.as_tensor(u, dtype=torch.float64) if u is not None else None
+        
+        correction = torch.zeros(nx, dtype=torch.float64)
+        
+        # For each noise dimension j
+        for j in range(nw):
+            # Define function to differentiate: g_j(x)
+            def diffusion_column_j(x_var):
+                g_val = self.sde_system.get_diffusion_matrix(x_var, u_torch, backend="torch")
+                return g_val[:, j] if nw > 1 else g_val.flatten()
+            
+            # Compute g_j at current x
+            g_j = diffusion_column_j(x_torch)
+            
+            # Compute Jacobian ∂g_j/∂x using autograd
+            dg_j_dx = torch.zeros((nx, nx), dtype=torch.float64)
+            for i in range(nx):
+                # Compute ∂(g_j)_i/∂x
+                grad_outputs = torch.zeros_like(g_j)
+                grad_outputs[i] = 1.0
+                
+                # Clear previous gradients
+                if x_torch.grad is not None:
+                    x_torch.grad.zero_()
+                
+                # Compute gradient
+                g_j_i = diffusion_column_j(x_torch)[i]
+                g_j_i.backward(retain_graph=True)
+                
+                if x_torch.grad is not None:
+                    dg_j_dx[i, :] = x_torch.grad.clone()
+            
+            # Add contribution: 0.5 * g_j · (∂g_j/∂x)
+            correction += 0.5 * (dg_j_dx @ g_j.detach())
+        
+        return correction.detach().numpy()
+    
+    def _stratonovich_correction_jax(
+        self, x: StateVector, u: Optional[ControlVector], g: DiffusionMatrix, nx: int, nw: int
+    ) -> ArrayLike:
+        """Compute Stratonovich correction using jax.jacobian (JAX)."""
+        import jax
+        import jax.numpy as jnp
+        
+        x_jax = jnp.asarray(x)
+        u_jax = jnp.asarray(u) if u is not None else None
+        
+        correction = jnp.zeros(nx)
+        
+        # For each noise dimension j
+        for j in range(nw):
+            # Define function for j-th column of diffusion
+            def diffusion_column_j(x_var):
+                g_val = self.sde_system.get_diffusion_matrix(x_var, u_jax, backend="jax")
+                return g_val[:, j] if nw > 1 else g_val.flatten()
+            
+            # Compute g_j
+            g_j = diffusion_column_j(x_jax)
+            
+            # Compute Jacobian using JAX
+            jacobian_fn = jax.jacobian(diffusion_column_j)
+            dg_j_dx = jacobian_fn(x_jax)  # Shape: (nx, nx)
+            
+            # Add contribution: 0.5 * (∂g_j/∂x) @ g_j
+            correction += 0.5 * (dg_j_dx @ g_j)
+        
+        return np.asarray(correction)
 
     def reset_stats(self):
         """Reset all statistics including SDE-specific counters."""

@@ -37,47 +37,11 @@ from typing import Dict, List, Optional, Set
 
 import sympy as sp
 
-from src.types.backends import Backend
-
-# ============================================================================
-# Enumerations
-# ============================================================================
-
-
-class NoiseType(Enum):
-    """
-    Classification of stochastic noise structure.
-
-    Determines which specialized SDE solvers can be used efficiently.
-    """
-
-    ADDITIVE = "additive"  # g(x,u,t) = constant (most efficient)
-    MULTIPLICATIVE = "multiplicative"  # g(x,u,t) depends on x
-    DIAGONAL = "diagonal"  # Independent noise sources
-    SCALAR = "scalar"  # Single Wiener process
-    GENERAL = "general"  # Full matrix, state-dependent
-
-
-class SDEType(Enum):
-    """
-    Stochastic differential equation interpretation.
-
-    Attributes
-    ----------
-    ITO : str
-        Itô calculus - standard in probability theory and finance
-    STRATONOVICH : str
-        Stratonovich calculus - more natural for physics applications
-    """
-
-    ITO = "ito"
-    STRATONOVICH = "stratonovich"
-
+from src.types.backends import Backend, SDEType, NoiseType
 
 # ============================================================================
 # Analysis Results Container
 # ============================================================================
-
 
 @dataclass
 class NoiseCharacteristics:

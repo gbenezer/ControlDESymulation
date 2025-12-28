@@ -23,6 +23,17 @@ and configuration for stochastic differential equations.
 Supports Julia's DifferentialEquations.jl (NumPy), Diffrax (JAX), and TorchSDE (PyTorch).
 All integrators support both controlled and autonomous systems (nu=0).
 
+Design Note
+-----------
+This module uses types from the centralized type system:
+- ScalarLike for time values and parameters
+- Backend for backend specifications
+- SDEType, ConvergenceType, NoiseType from backends module
+- SDEIntegrationMethod for algorithm names
+
+This ensures consistency across the entire codebase and enables proper
+type checking during factory operations.
+
 Examples
 --------
 >>> # Automatic selection
@@ -50,11 +61,22 @@ Examples
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
+# Import from centralized type system
+from src.types.core import ScalarLike
+from src.types.backends import (
+    Backend,
+    SDEType,
+    ConvergenceType,
+    NoiseType,
+    SDEIntegrationMethod,
+    VALID_BACKENDS,
+    validate_backend,
+)
+
+# Import base classes and utilities
 from src.systems.base.numerical_integration.integrator_base import StepMode
 from src.systems.base.numerical_integration.stochastic.sde_integrator_base import (
-    ConvergenceType,
     SDEIntegratorBase,
-    SDEType,
 )
 
 if TYPE_CHECKING:
@@ -126,14 +148,14 @@ class SDEIntegratorFactory:
     """
 
     # Default methods for each backend
-    _BACKEND_DEFAULTS = {
+    _BACKEND_DEFAULTS: Dict[Backend, SDEIntegrationMethod] = {
         "numpy": "EM",  # Julia Euler-Maruyama
         "torch": "euler",  # TorchSDE euler
         "jax": "Euler",  # Diffrax Euler
     }
 
     # Method to backend mapping
-    _METHOD_TO_BACKEND = {
+    _METHOD_TO_BACKEND: Dict[SDEIntegrationMethod, Backend] = {
         # Julia DiffEqPy methods (numpy only)
         # Euler-Maruyama family
         "EM": "numpy",
@@ -189,9 +211,9 @@ class SDEIntegratorFactory:
     def create(
         cls,
         sde_system: "StochasticDynamicalSystem",
-        backend: str = "numpy",
-        method: Optional[str] = None,
-        dt: Optional[float] = 0.01,
+        backend: Backend = "numpy",
+        method: Optional[SDEIntegrationMethod] = None,
+        dt: Optional[ScalarLike] = 0.01,
         step_mode: StepMode = StepMode.FIXED,
         sde_type: Optional[SDEType] = None,
         convergence_type: ConvergenceType = ConvergenceType.STRONG,
@@ -205,14 +227,14 @@ class SDEIntegratorFactory:
         ----------
         sde_system : StochasticDynamicalSystem
             SDE system to integrate (controlled or autonomous)
-        backend : str, optional
+        backend : Backend
             Backend: 'numpy', 'torch', 'jax'. Default: 'numpy'
-        method : Optional[str]
+        method : Optional[SDEIntegrationMethod]
             Solver method. If None, uses backend default.
             - numpy: 'EM' (Julia Euler-Maruyama)
             - torch: 'euler' (TorchSDE euler)
             - jax: 'Euler' (Diffrax Euler)
-        dt : Optional[float]
+        dt : Optional[ScalarLike]
             Time step (default: 0.01)
         step_mode : StepMode
             FIXED or ADAPTIVE stepping (most SDE solvers use FIXED)
@@ -244,23 +266,30 @@ class SDEIntegratorFactory:
         >>>
         >>> # Julia high-accuracy solver
         >>> integrator = SDEIntegratorFactory.create(
-        ...     sde_system, backend='numpy', method='SRIW1'
+        ...     sde_system,
+        ...     backend='numpy',
+        ...     method='SRIW1',
+        ...     dt=0.001
         ... )
         >>>
         >>> # JAX for optimization
         >>> integrator = SDEIntegratorFactory.create(
-        ...     sde_system, backend='jax', method='Euler', seed=42
+        ...     sde_system,
+        ...     backend='jax',
+        ...     method='Euler',
+        ...     dt=0.01,
+        ...     seed=42
         ... )
         >>>
-        >>> # PyTorch neural SDE
+        >>> # PyTorch for neural SDEs
         >>> integrator = SDEIntegratorFactory.create(
         ...     neural_sde,
         ...     backend='torch',
         ...     method='euler',
-        ...     adjoint=True
+        ...     adjoint=True  # Memory-efficient backprop
         ... )
         >>>
-        >>> # Autonomous system
+        >>> # Autonomous system (no control)
         >>> integrator = SDEIntegratorFactory.create(autonomous_sde_system)
         >>> result = integrator.integrate(
         ...     x0=np.array([1.0, 0.0]),
@@ -268,93 +297,95 @@ class SDEIntegratorFactory:
         ...     t_span=(0.0, 10.0)
         ... )
         """
-        # Use default method if not specified
-        if method is None:
-            method = cls._BACKEND_DEFAULTS.get(backend, "EM")
-
         # Validate backend
-        valid_backends = ["numpy", "torch", "jax"]
-        if backend not in valid_backends:
-            raise ValueError(f"Invalid backend '{backend}'. Choose from: {valid_backends}")
+        backend = validate_backend(backend)
 
-        # Check if method requires specific backend
-        if method in cls._METHOD_TO_BACKEND:
-            required_backend = cls._METHOD_TO_BACKEND[method]
-
-            if required_backend != backend:
+        # Select method
+        if method is None:
+            method = cls._BACKEND_DEFAULTS[backend]
+        else:
+            # Verify method is compatible with backend
+            expected_backend = cls._METHOD_TO_BACKEND.get(method)
+            if expected_backend and expected_backend != backend:
                 raise ValueError(
-                    f"Method '{method}' requires backend='{required_backend}', "
-                    f"got backend='{backend}'"
+                    f"Method '{method}' requires backend '{expected_backend}', "
+                    f"but backend '{backend}' was specified. "
+                    f"Either change backend or use a compatible method."
                 )
 
-        # Create appropriate integrator
+        # Create integrator based on backend
         if backend == "numpy":
-            return cls._create_numpy_sde_integrator(
+            return cls._create_diffeqpy(
                 sde_system, method, dt, step_mode, sde_type, convergence_type, seed, **options
             )
         elif backend == "torch":
-            return cls._create_torch_sde_integrator(
+            return cls._create_torchsde(
                 sde_system, method, dt, step_mode, sde_type, convergence_type, seed, **options
             )
         elif backend == "jax":
-            return cls._create_jax_sde_integrator(
+            return cls._create_diffrax(
                 sde_system, method, dt, step_mode, sde_type, convergence_type, seed, **options
             )
+        else:
+            raise ValueError(f"Unknown backend: {backend}")
 
     @classmethod
-    def _create_numpy_sde_integrator(
+    def _create_diffeqpy(
         cls,
-        sde_system,
-        method: str,
-        dt: Optional[float],
+        sde_system: "StochasticDynamicalSystem",
+        method: SDEIntegrationMethod,
+        dt: Optional[ScalarLike],
         step_mode: StepMode,
         sde_type: Optional[SDEType],
         convergence_type: ConvergenceType,
         seed: Optional[int],
         **options,
-    ):
-        """Create NumPy-based SDE integrator (Julia DiffEqPy)."""
-
-        # All NumPy SDE methods use Julia DiffEqPy
+    ) -> SDEIntegratorBase:
+        """Create Julia DiffEqPy integrator."""
         try:
             from src.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator import (
                 DiffEqPySDEIntegrator,
             )
-
-            return DiffEqPySDEIntegrator(
-                sde_system,
-                dt=dt,
-                step_mode=step_mode,
-                backend="numpy",
-                algorithm=method,
-                sde_type=sde_type,
-                convergence_type=convergence_type,
-                seed=seed,
-                **options,
-            )
-        except ImportError:
+        except ImportError as e:
             raise ImportError(
-                f"Julia method '{method}' requires diffeqpy. "
-                f"Install Julia + DifferentialEquations.jl + diffeqpy"
-            )
+                "DiffEqPy integration requires diffeqpy package. "
+                "Install: pip install diffeqpy && python -c 'from diffeqpy import install; install()'"
+            ) from e
+
+        return DiffEqPySDEIntegrator(
+            sde_system,
+            dt=dt,
+            step_mode=step_mode,
+            backend="numpy",
+            algorithm=method,
+            sde_type=sde_type,
+            convergence_type=convergence_type,
+            seed=seed,
+            **options,
+        )
 
     @classmethod
-    def _create_torch_sde_integrator(
+    def _create_torchsde(
         cls,
-        sde_system,
-        method: str,
-        dt: Optional[float],
+        sde_system: "StochasticDynamicalSystem",
+        method: SDEIntegrationMethod,
+        dt: Optional[ScalarLike],
         step_mode: StepMode,
         sde_type: Optional[SDEType],
         convergence_type: ConvergenceType,
         seed: Optional[int],
         **options,
-    ):
-        """Create PyTorch-based SDE integrator (TorchSDE)."""
-
-        from src.systems.base.numerical_integration.stochastic.torchsde_integrator import (
-            TorchSDEIntegrator,
-        )
+    ) -> SDEIntegratorBase:
+        """Create TorchSDE integrator."""
+        try:
+            from src.systems.base.numerical_integration.stochastic.torchsde_integrator import (
+                TorchSDEIntegrator,
+            )
+        except ImportError as e:
+            raise ImportError(
+                "TorchSDE integration requires torchsde package. "
+                "Install: pip install torch torchsde"
+            ) from e
 
         return TorchSDEIntegrator(
             sde_system,
@@ -369,22 +400,27 @@ class SDEIntegratorFactory:
         )
 
     @classmethod
-    def _create_jax_sde_integrator(
+    def _create_diffrax(
         cls,
-        sde_system,
-        method: str,
-        dt: Optional[float],
+        sde_system: "StochasticDynamicalSystem",
+        method: SDEIntegrationMethod,
+        dt: Optional[ScalarLike],
         step_mode: StepMode,
         sde_type: Optional[SDEType],
         convergence_type: ConvergenceType,
         seed: Optional[int],
         **options,
-    ):
-        """Create JAX-based SDE integrator (Diffrax)."""
-
-        from src.systems.base.numerical_integration.stochastic.diffrax_sde_integrator import (
-            DiffraxSDEIntegrator,
-        )
+    ) -> SDEIntegratorBase:
+        """Create Diffrax integrator."""
+        try:
+            from src.systems.base.numerical_integration.stochastic.diffrax_sde_integrator import (
+                DiffraxSDEIntegrator,
+            )
+        except ImportError as e:
+            raise ImportError(
+                "Diffrax integration requires jax and diffrax packages. "
+                "Install: pip install jax diffrax"
+            ) from e
 
         return DiffraxSDEIntegrator(
             sde_system,
@@ -398,210 +434,180 @@ class SDEIntegratorFactory:
             **options,
         )
 
-    # ========================================================================
-    # Convenience Methods - Use Case-Specific Creation
-    # ========================================================================
-
     @classmethod
     def auto(
-        cls,
-        sde_system: "StochasticDynamicalSystem",
-        prefer_backend: Optional[str] = None,
-        **options,
+        cls, sde_system: "StochasticDynamicalSystem", seed: Optional[int] = None, **options
     ) -> SDEIntegratorBase:
         """
-        Automatically select best SDE integrator for system.
+        Automatically select best available SDE integrator.
 
-        Selection logic:
-        1. If JAX available and no preference → Diffrax (fast + gradients)
-        2. If PyTorch available and no preference → TorchSDE
-        3. Otherwise → Julia DiffEqPy (best accuracy/reliability)
-
-        Parameters
-        ----------
-        sde_system : StochasticDynamicalSystem
-            SDE system to integrate (controlled or autonomous)
-        prefer_backend : Optional[str]
-            Preferred backend if available
-        **options
-            Additional options
-
-        Returns
-        -------
-        SDEIntegratorBase
-            Best available SDE integrator
-
-        Examples
-        --------
-        >>> integrator = SDEIntegratorFactory.auto(sde_system)
-        >>> integrator = SDEIntegratorFactory.auto(sde_system, prefer_backend='jax')
-        >>>
-        >>> # Works with autonomous systems
-        >>> integrator = SDEIntegratorFactory.auto(autonomous_sde_system)
-        """
-        # Check backend availability
-        backends_available = []
-
-        try:
-            import jax
-
-            backends_available.append("jax")
-        except ImportError:
-            pass
-
-        try:
-            import torch
-
-            backends_available.append("torch")
-        except ImportError:
-            pass
-
-        backends_available.append("numpy")  # Always available
-
-        # Select backend
-        if prefer_backend and prefer_backend in backends_available:
-            backend = prefer_backend
-        elif "jax" in backends_available:
-            backend = "jax"  # Prefer JAX (best for optimization)
-        elif "torch" in backends_available:
-            backend = "torch"
-        else:
-            backend = "numpy"
-
-        return cls.create(sde_system, backend=backend, **options)
-
-    @classmethod
-    def for_production(
-        cls,
-        sde_system: "StochasticDynamicalSystem",
-        use_julia: bool = True,
-        noise_type: Optional[str] = None,
-        **options,
-    ) -> SDEIntegratorBase:
-        """
-        Create integrator for production use.
-
-        Uses Julia's high-quality SDE solvers (default) or optimized
-        alternatives based on noise structure.
+        Tries backends in order of preference:
+        1. JAX (Diffrax) - best for gradients and performance
+        2. PyTorch (TorchSDE) - good for neural SDEs
+        3. NumPy (DiffEqPy) - fallback, most features
 
         Parameters
         ----------
         sde_system : StochasticDynamicalSystem
             SDE system to integrate
-        use_julia : bool
-            If True, use Julia DiffEqPy. Default: True
-        noise_type : Optional[str]
-            Noise structure: 'additive', 'diagonal', 'general'
-            Auto-detected if None
+        seed : Optional[int]
+            Random seed for reproducibility
         **options
-            Additional options (rtol, atol, etc.)
+            Additional integrator options
 
         Returns
         -------
         SDEIntegratorBase
-            Production-grade SDE integrator
+            Best available integrator
 
         Examples
         --------
-        >>> # Julia (default, best accuracy)
-        >>> integrator = SDEIntegratorFactory.for_production(
-        ...     sde_system, rtol=1e-6, atol=1e-8
-        ... )
+        >>> # Auto-select based on what's installed
+        >>> integrator = SDEIntegratorFactory.auto(sde_system)
         >>>
-        >>> # Optimized for additive noise
-        >>> integrator = SDEIntegratorFactory.for_production(
-        ...     additive_sde, noise_type='additive'
+        >>> # With reproducibility
+        >>> integrator = SDEIntegratorFactory.auto(sde_system, seed=42)
+        >>>
+        >>> # Autonomous system
+        >>> integrator = SDEIntegratorFactory.auto(autonomous_sde_system)
+        """
+        # Try backends in order of preference
+        for backend in ["jax", "torch", "numpy"]:
+            try:
+                return cls.create(sde_system, backend=backend, seed=seed, **options)
+            except ImportError:
+                continue
+
+        raise ImportError(
+            "No SDE integrator backend available. "
+            "Install at least one of: diffeqpy, torchsde, or diffrax"
+        )
+
+    @classmethod
+    def for_optimization(
+        cls,
+        sde_system: "StochasticDynamicalSystem",
+        backend: Optional[Backend] = None,
+        **options,
+    ) -> SDEIntegratorBase:
+        """
+        Create SDE integrator optimized for gradient-based optimization.
+
+        Prefers JAX (Diffrax) for JIT compilation and autodiff,
+        fallback to PyTorch (TorchSDE).
+
+        Parameters
+        ----------
+        sde_system : StochasticDynamicalSystem
+            SDE system to integrate
+        backend : Optional[Backend]
+            Preferred backend (None = auto-select)
+        **options
+            Additional integrator options
+
+        Returns
+        -------
+        SDEIntegratorBase
+            Optimization-ready integrator
+
+        Examples
+        --------
+        >>> # Auto-select best optimization backend
+        >>> integrator = SDEIntegratorFactory.for_optimization(sde_system)
+        >>>
+        >>> # Force specific backend
+        >>> integrator = SDEIntegratorFactory.for_optimization(
+        ...     sde_system,
+        ...     backend='jax',
+        ...     dt=0.001
         ... )
         """
-        if use_julia:
-            # Detect noise type for algorithm selection
-            if noise_type is None:
-                if sde_system.is_additive_noise():
-                    noise_type = "additive"
-                elif sde_system.is_diagonal_noise():
-                    noise_type = "diagonal"
-                else:
-                    noise_type = "general"
+        if backend:
+            return cls.create(sde_system, backend=backend, **options)
 
-            # Select Julia algorithm based on noise
-            if noise_type == "additive":
-                algorithm = "SRA3"  # Optimized for additive
-            elif noise_type == "diagonal":
-                algorithm = "SRIW1"  # High accuracy for diagonal
-            else:
-                algorithm = "EM"  # Robust general purpose
-
-            # Set conservative defaults
-            default_options = {
-                "rtol": 1e-6,
-                "atol": 1e-8,
-            }
-            default_options.update(options)
-
-            return cls.for_julia(sde_system, algorithm=algorithm, **default_options)
-        else:
-            # Non-Julia fallback
+        # Try JAX first, then PyTorch
+        for preferred_backend in ["jax", "torch"]:
             try:
-                import jax
-
-                return cls.create(sde_system, backend="jax", method="Euler", **options)
+                return cls.create(sde_system, backend=preferred_backend, **options)
             except ImportError:
-                try:
-                    import torch
+                continue
 
-                    return cls.create(sde_system, backend="torch", method="euler", **options)
-                except ImportError:
-                    raise ImportError(
-                        "No SDE backend available. " "Install JAX (diffrax) or PyTorch (torchsde)"
-                    )
+        raise ImportError(
+            "Optimization requires JAX (diffrax) or PyTorch (torchsde). "
+            "Install: pip install jax diffrax  OR  pip install torch torchsde"
+        )
+
+    @classmethod
+    def for_neural_sde(
+        cls, sde_system: "StochasticDynamicalSystem", adjoint: bool = True, **options
+    ) -> SDEIntegratorBase:
+        """
+        Create SDE integrator for neural SDEs.
+
+        Uses TorchSDE with adjoint method for memory-efficient backpropagation.
+
+        Parameters
+        ----------
+        sde_system : StochasticDynamicalSystem
+            Neural SDE system to integrate
+        adjoint : bool
+            Use adjoint method (default: True)
+        **options
+            Additional integrator options
+
+        Returns
+        -------
+        SDEIntegratorBase
+            Neural SDE integrator
+
+        Examples
+        --------
+        >>> # Neural SDE with adjoint
+        >>> integrator = SDEIntegratorFactory.for_neural_sde(neural_sde)
+        >>>
+        >>> # Without adjoint (more memory, faster forward)
+        >>> integrator = SDEIntegratorFactory.for_neural_sde(
+        ...     neural_sde,
+        ...     adjoint=False
+        ... )
+        """
+        return cls.create(
+            sde_system, backend="torch", method="euler", adjoint=adjoint, **options
+        )
 
     @classmethod
     def for_julia(
-        cls, sde_system: "StochasticDynamicalSystem", algorithm: str = "EM", **options
+        cls,
+        sde_system: "StochasticDynamicalSystem",
+        algorithm: SDEIntegrationMethod = "SRIW1",
+        **options,
     ) -> SDEIntegratorBase:
         """
-        Create Julia DiffEqPy SDE integrator.
+        Create Julia-based SDE integrator (DiffEqPy).
 
-        Provides access to Julia's extensive SDE solver ecosystem.
-        Best for high accuracy, stiff SDEs, or specialized solvers.
+        Access to Julia's extensive SDE solver ecosystem.
 
         Parameters
         ----------
         sde_system : StochasticDynamicalSystem
             SDE system to integrate
-        algorithm : str
-            Julia algorithm name. Default: 'EM'
-            Options: EM, SRIW1, SRA1, SRA3, ImplicitEM, etc.
+        algorithm : SDEIntegrationMethod
+            Julia algorithm (default: 'SRIW1')
         **options
-            Additional options (rtol, atol, etc.)
+            Additional integrator options
 
         Returns
         -------
         SDEIntegratorBase
-            DiffEqPy SDE integrator
-
-        Raises
-        ------
-        ImportError
-            If Julia/diffeqpy not installed
+            Julia-powered integrator
 
         Examples
         --------
-        >>> # Default (Euler-Maruyama)
-        >>> integrator = SDEIntegratorFactory.for_julia(sde_system)
+        >>> # High-accuracy diagonal noise
+        >>> integrator = SDEIntegratorFactory.for_julia(sde_system, algorithm='SRIW1')
         >>>
-        >>> # High accuracy diagonal noise
-        >>> integrator = SDEIntegratorFactory.for_julia(
-        ...     sde_system,
-        ...     algorithm='SRIW1',
-        ...     rtol=1e-6
-        ... )
-        >>>
-        >>> # Additive noise optimization
-        >>> integrator = SDEIntegratorFactory.for_julia(
-        ...     additive_sde,
-        ...     algorithm='SRA3'
-        ... )
+        >>> # Simple and fast
+        >>> integrator = SDEIntegratorFactory.for_julia(sde_system, algorithm='EM')
         >>>
         >>> # Stiff drift
         >>> integrator = SDEIntegratorFactory.for_julia(
@@ -609,379 +615,92 @@ class SDEIntegratorFactory:
         ...     algorithm='ImplicitEM'
         ... )
         """
-        try:
-            from src.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator import (
-                DiffEqPySDEIntegrator,
-            )
-        except ImportError:
-            raise ImportError(
-                "Julia SDE integration requires diffeqpy.\n\n"
-                "Installation:\n"
-                "1. Install Julia from https://julialang.org/downloads/\n"
-                "2. Install DifferentialEquations.jl:\n"
-                "   julia> using Pkg\n"
-                "   julia> Pkg.add('DifferentialEquations')\n"
-                "3. Install Python package:\n"
-                "   pip install diffeqpy"
-            )
-
-        return DiffEqPySDEIntegrator(sde_system, backend="numpy", algorithm=algorithm, **options)
-
-    @classmethod
-    def for_optimization(
-        cls, sde_system: "StochasticDynamicalSystem", prefer_backend: str = "jax", **options
-    ) -> SDEIntegratorBase:
-        """
-        Create SDE integrator for optimization/parameter estimation.
-
-        Prioritizes gradient computation and JIT compilation.
-
-        Parameters
-        ----------
-        sde_system : StochasticDynamicalSystem
-            SDE system to integrate
-        prefer_backend : str
-            Preferred backend ('jax' or 'torch')
-        **options
-            Additional options
-
-        Returns
-        -------
-        SDEIntegratorBase
-            SDE integrator with gradient support
-
-        Examples
-        --------
-        >>> integrator = SDEIntegratorFactory.for_optimization(sde_system)
-        >>>
-        >>> # PyTorch optimization
-        >>> integrator = SDEIntegratorFactory.for_optimization(
-        ...     sde_system, prefer_backend='torch'
-        ... )
-        """
-        # Try preferred backend first
-        try:
-            if prefer_backend == "jax":
-                import jax
-
-                from src.systems.base.numerical_integration.stochastic.diffrax_sde_integrator import (
-                    DiffraxSDEIntegrator,
-                )
-
-                # Choose solver based on noise type
-                if sde_system.is_additive_noise():
-                    solver = "SEA"  # Optimized for additive
-                else:
-                    solver = "Euler"
-
-                return DiffraxSDEIntegrator(
-                    sde_system,
-                    dt=options.pop("dt", 0.01),
-                    step_mode=options.pop("step_mode", StepMode.FIXED),
-                    backend="jax",
-                    solver=solver,
-                    adjoint=options.pop("adjoint", "recursive_checkpoint"),
-                    seed=options.pop("seed", None),
-                    **options,
-                )
-            elif prefer_backend == "torch":
-                import torch
-
-                from src.systems.base.numerical_integration.stochastic.torchsde_integrator import (
-                    TorchSDEIntegrator,
-                )
-
-                return TorchSDEIntegrator(
-                    sde_system,
-                    dt=options.pop("dt", 0.01),
-                    step_mode=options.pop("step_mode", StepMode.FIXED),
-                    backend="torch",
-                    method="euler",
-                    adjoint=options.pop("adjoint", False),  # User can enable
-                    seed=options.pop("seed", None),
-                    **options,
-                )
-        except ImportError:
-            pass
-
-        # Fallback: try JAX, then torch, then Julia
-        try:
-            import jax
-
-            from src.systems.base.numerical_integration.stochastic.diffrax_sde_integrator import (
-                DiffraxSDEIntegrator,
-            )
-
-            return DiffraxSDEIntegrator(
-                sde_system,
-                dt=options.pop("dt", 0.01),
-                step_mode=StepMode.FIXED,
-                backend="jax",
-                solver="Euler",
-                seed=options.pop("seed", None),
-                **options,
-            )
-        except ImportError:
-            pass
-
-        try:
-            import torch
-
-            from src.systems.base.numerical_integration.stochastic.torchsde_integrator import (
-                TorchSDEIntegrator,
-            )
-
-            return TorchSDEIntegrator(
-                sde_system,
-                dt=options.pop("dt", 0.01),
-                step_mode=StepMode.FIXED,
-                backend="torch",
-                method="euler",
-                seed=options.pop("seed", None),
-                **options,
-            )
-        except ImportError:
-            pass
-
-        # Last resort: Julia (no gradients)
-        from src.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator import (
-            DiffEqPySDEIntegrator,
-        )
-
-        return DiffEqPySDEIntegrator(
-            sde_system,
-            backend="numpy",
-            algorithm="EM",
-            dt=options.pop("dt", 0.01),
-            seed=options.pop("seed", None),
-            **options,
-        )
-
-    @classmethod
-    def for_neural_sde(
-        cls, neural_sde_system, backend: str = "torch", **options
-    ) -> SDEIntegratorBase:
-        """
-        Create integrator for Neural SDE training.
-
-        Uses PyTorch with adjoint method for memory efficiency.
-
-        Parameters
-        ----------
-        neural_sde_system : StochasticDynamicalSystem
-            Neural network defining SDE dynamics
-        backend : str
-            'torch' (recommended) or 'jax'
-        **options
-            Additional options
-
-        Returns
-        -------
-        SDEIntegratorBase
-            SDE integrator with adjoint method
-
-        Raises
-        ------
-        ImportError
-            If PyTorch/JAX not installed
-
-        Examples
-        --------
-        >>> class NeuralSDE(nn.Module):
-        ...     def drift(self, x, u):
-        ...         return self.drift_net(x)
-        ...     def diffusion(self, x, u):
-        ...         return self.diffusion_net(x)
-        >>>
-        >>> neural_sde = NeuralSDE()
-        >>> integrator = SDEIntegratorFactory.for_neural_sde(neural_sde)
-        """
-        if backend == "torch":
-            try:
-                from src.systems.base.numerical_integration.stochastic.torchsde_integrator import (
-                    TorchSDEIntegrator,
-                )
-            except ImportError:
-                raise ImportError(
-                    "PyTorch is required for Neural SDE integration. "
-                    "Install with: pip install torch torchsde"
-                )
-
-            return TorchSDEIntegrator(
-                neural_sde_system,
-                backend="torch",
-                method="euler",
-                adjoint=True,  # Memory-efficient for neural networks
-                **options,
-            )
-        elif backend == "jax":
-            try:
-                from src.systems.base.numerical_integration.stochastic.diffrax_sde_integrator import (
-                    DiffraxSDEIntegrator,
-                )
-            except ImportError:
-                raise ImportError(
-                    "JAX is required for Neural SDE integration. "
-                    "Install with: pip install jax diffrax"
-                )
-
-            return DiffraxSDEIntegrator(
-                neural_sde_system,
-                backend="jax",
-                solver="Euler",
-                adjoint="recursive_checkpoint",
-                **options,
-            )
-        else:
-            raise ValueError(
-                f"Backend '{backend}' not supported for Neural SDEs. " f"Use 'torch' or 'jax'"
-            )
+        return cls.create(sde_system, backend="numpy", method=algorithm, **options)
 
     @classmethod
     def for_monte_carlo(
-        cls, sde_system: "StochasticDynamicalSystem", prefer_backend: str = "numpy", **options
-    ) -> SDEIntegratorBase:
-        """
-        Create integrator optimized for Monte Carlo simulations.
-
-        Prioritizes weak convergence (moment accuracy) over strong
-        convergence (pathwise accuracy).
-
-        Parameters
-        ----------
-        sde_system : StochasticDynamicalSystem
-            SDE system to integrate
-        prefer_backend : str
-            Preferred backend (default: 'numpy' for Julia's weak solvers)
-        **options
-            Additional options
-
-        Returns
-        -------
-        SDEIntegratorBase
-            SDE integrator optimized for weak convergence
-
-        Examples
-        --------
-        >>> integrator = SDEIntegratorFactory.for_monte_carlo(
-        ...     sde_system, prefer_backend='numpy'
-        ... )
-        >>>
-        >>> # Run Monte Carlo
-        >>> result = integrator.integrate_monte_carlo(
-        ...     x0, u_func, t_span, n_paths=10000
-        ... )
-        >>> stats = result.get_statistics()
-        """
-        # Select weak convergence algorithm
-        if prefer_backend == "numpy":
-            # Julia has best weak convergence algorithms
-            if sde_system.is_additive_noise():
-                algorithm = "SRA3"  # Order 2.0 weak for additive
-            elif sde_system.is_diagonal_noise():
-                algorithm = "SRA1"  # Order 2.0 weak for diagonal
-            else:
-                algorithm = "EM"  # Order 1.0 weak (general)
-
-            return cls.for_julia(
-                sde_system, algorithm=algorithm, convergence_type=ConvergenceType.WEAK, **options
-            )
-        elif prefer_backend == "jax":
-            # JAX/Diffrax weak solvers
-            if sde_system.is_additive_noise():
-                solver = "SRA1"  # Order 2.0 weak
-            else:
-                solver = "Euler"
-
-            return cls.create(
-                sde_system,
-                backend="jax",
-                method=solver,
-                convergence_type=ConvergenceType.WEAK,
-                **options,
-            )
-        else:  # torch
-            return cls.create(
-                sde_system,
-                backend="torch",
-                method="euler",
-                convergence_type=ConvergenceType.WEAK,
-                **options,
-            )
-
-    @classmethod
-    def for_simple_simulation(
         cls,
         sde_system: "StochasticDynamicalSystem",
-        dt: float = 0.01,
-        backend: str = "numpy",
-        seed: Optional[int] = None,
+        noise_type: str = "general",
         **options,
     ) -> SDEIntegratorBase:
         """
-        Create simple Euler-Maruyama integrator.
+        Create SDE integrator optimized for Monte Carlo simulation.
 
-        Good for prototyping and educational purposes.
+        Uses weak convergence methods optimized for moment accuracy.
 
         Parameters
         ----------
         sde_system : StochasticDynamicalSystem
             SDE system to integrate
-        dt : float
-            Time step. Default: 0.01
-        backend : str
-            Backend to use. Default: 'numpy'
-        seed : Optional[int]
-            Random seed for reproducibility
+        noise_type : str
+            'additive', 'diagonal', or 'general'
         **options
-            Additional options
+            Additional integrator options
 
         Returns
         -------
         SDEIntegratorBase
-            Euler-Maruyama SDE integrator
+            Monte Carlo integrator with weak convergence
 
         Examples
         --------
-        >>> integrator = SDEIntegratorFactory.for_simple_simulation(
-        ...     sde_system, dt=0.01, seed=42
+        >>> # Additive noise (fastest)
+        >>> integrator = SDEIntegratorFactory.for_monte_carlo(
+        ...     sde_system,
+        ...     noise_type='additive'
+        ... )
+        >>>
+        >>> # General noise
+        >>> integrator = SDEIntegratorFactory.for_monte_carlo(
+        ...     sde_system,
+        ...     noise_type='general'
         ... )
         """
-        if backend == "numpy":
-            method = "EM"
-        elif backend == "torch":
-            method = "euler"
-        elif backend == "jax":
-            method = "Euler"
+        # Select method based on noise type
+        if noise_type == "additive":
+            method = "SRA3"  # Order 2.0 weak for additive noise
+        elif noise_type == "diagonal":
+            method = "SRA1"  # Order 2.0 weak for diagonal noise
         else:
-            raise ValueError(f"Unknown backend: {backend}")
+            method = "EM"  # General fallback
 
-        return cls.create(sde_system, backend=backend, method=method, dt=dt, seed=seed, **options)
-
-    # ========================================================================
-    # Utility Methods
-    # ========================================================================
+        return cls.create(
+            sde_system,
+            backend="numpy",
+            method=method,
+            convergence_type=ConvergenceType.WEAK,
+            **options,
+        )
 
     @staticmethod
-    def list_methods(backend: Optional[str] = None) -> Dict[str, List[str]]:
+    def list_methods(backend: Optional[Backend] = None) -> Dict[Backend, List[SDEIntegrationMethod]]:
         """
         List available SDE methods for each backend.
 
+        Parameters
+        ----------
+        backend : Optional[Backend]
+            If specified, return only methods for that backend
+
         Returns
         -------
-        Dict[str, List[str]]
-            SDE methods available for each backend
+        Dict[Backend, List[SDEIntegrationMethod]]
+            Methods available for each backend
 
         Examples
         --------
+        >>> # All methods
         >>> methods = SDEIntegratorFactory.list_methods()
-        >>> print(methods['numpy'][:5])
-        ['EM', 'SRIW1', 'SRA1', 'ImplicitEM', ...]
+        >>> print(methods['jax'])
+        ['Euler', 'EulerHeun', 'Heun', 'ItoMilstein', ...]
         >>>
-        >>> # Just one backend
-        >>> numpy_methods = SDEIntegratorFactory.list_methods('numpy')
+        >>> # Specific backend
+        >>> torch_methods = SDEIntegratorFactory.list_methods('torch')
+        >>> print(torch_methods['torch'])
+        ['euler', 'milstein', 'srk', ...]
         """
-        all_methods = {
+        all_methods: Dict[Backend, List[SDEIntegrationMethod]] = {
             "numpy": [
                 # Julia DiffEqPy methods
                 # Euler-Maruyama family
@@ -1136,15 +855,15 @@ class SDEIntegratorFactory:
         return rec
 
     @staticmethod
-    def get_info(backend: str, method: str) -> Dict[str, Any]:
+    def get_info(backend: Backend, method: SDEIntegrationMethod) -> Dict[str, Any]:
         """
         Get information about a specific SDE integrator configuration.
 
         Parameters
         ----------
-        backend : str
+        backend : Backend
             Backend name
-        method : str
+        method : SDEIntegrationMethod
             Method name
 
         Returns
@@ -1196,8 +915,8 @@ class SDEIntegratorFactory:
 
 def create_sde_integrator(
     sde_system: "StochasticDynamicalSystem",
-    backend: str = "numpy",
-    method: Optional[str] = None,
+    backend: Backend = "numpy",
+    method: Optional[SDEIntegrationMethod] = None,
     **options,
 ) -> SDEIntegratorBase:
     """

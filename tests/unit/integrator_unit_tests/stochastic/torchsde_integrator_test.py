@@ -41,9 +41,13 @@ except ImportError:
     TORCH_AVAILABLE = False
     CUDA_AVAILABLE = False
 
-from src.systems.base.numerical_integration.stochastic.sde_integrator_base import (
+# Import from centralized type system
+from src.types.backends import (
     ConvergenceType,
     SDEType,
+    NoiseType,
+)
+from src.systems.base.numerical_integration.stochastic.sde_integrator_base import (
     StepMode,
 )
 from src.systems.base.numerical_integration.stochastic.torchsde_integrator import (
@@ -87,6 +91,43 @@ class OrnsteinUhlenbeck(StochasticDynamicalSystem):
         self.diffusion_expr = sp.Matrix([[sigma_sym]])
         self.sde_type = "ito"
 
+    def get_sde_type(self) -> SDEType:
+        """Return SDE type (required for integrator compatibility)."""
+        return SDEType.ITO
+
+    def get_diffusion_matrix(self, x, u=None, backend="numpy"):
+        """
+        Return diffusion matrix (required for integrator).
+        
+        Parameters
+        ----------
+        x : array_like
+            State vector
+        u : array_like, optional
+            Control input
+        backend : str
+            Backend to use ('numpy', 'torch', 'jax')
+        
+        Returns
+        -------
+        array_like
+            Diffusion matrix (nx, nw)
+        """
+        if backend == "torch":
+            import torch
+            # Get sigma parameter value
+            sigma = list(self.parameters.values())[1]  # Second parameter is sigma
+            # Ensure x is a tensor
+            if not isinstance(x, torch.Tensor):
+                x = torch.tensor(x, dtype=torch.float32)
+            # Return constant diffusion matrix
+            return torch.tensor([[sigma]], dtype=x.dtype, device=x.device)
+        elif backend == "numpy":
+            sigma = list(self.parameters.values())[1]
+            return np.array([[sigma]])
+        else:
+            raise ValueError(f"Unsupported backend: {backend}")
+
 
 class BrownianMotion(StochasticDynamicalSystem):
     """Pure Brownian motion: dx = sigma * dW (zero drift)"""
@@ -105,6 +146,24 @@ class BrownianMotion(StochasticDynamicalSystem):
 
         self.diffusion_expr = sp.Matrix([[sigma_sym]])
         self.sde_type = "ito"
+
+    def get_sde_type(self) -> SDEType:
+        """Return SDE type."""
+        return SDEType.ITO
+
+    def get_diffusion_matrix(self, x, u=None, backend="numpy"):
+        """Return diffusion matrix."""
+        if backend == "torch":
+            import torch
+            sigma = list(self.parameters.values())[0]
+            if not isinstance(x, torch.Tensor):
+                x = torch.tensor(x, dtype=torch.float32)
+            return torch.tensor([[sigma]], dtype=x.dtype, device=x.device)
+        elif backend == "numpy":
+            sigma = list(self.parameters.values())[0]
+            return np.array([[sigma]])
+        else:
+            raise ValueError(f"Unsupported backend: {backend}")
 
 
 class ControlledOU(StochasticDynamicalSystem):
@@ -127,6 +186,24 @@ class ControlledOU(StochasticDynamicalSystem):
         self.diffusion_expr = sp.Matrix([[sigma_sym]])
         self.sde_type = "ito"
 
+    def get_sde_type(self) -> SDEType:
+        """Return SDE type."""
+        return SDEType.ITO
+
+    def get_diffusion_matrix(self, x, u=None, backend="numpy"):
+        """Return diffusion matrix."""
+        if backend == "torch":
+            import torch
+            sigma = list(self.parameters.values())[1]
+            if not isinstance(x, torch.Tensor):
+                x = torch.tensor(x, dtype=torch.float32)
+            return torch.tensor([[sigma]], dtype=x.dtype, device=x.device)
+        elif backend == "numpy":
+            sigma = list(self.parameters.values())[1]
+            return np.array([[sigma]])
+        else:
+            raise ValueError(f"Unsupported backend: {backend}")
+
 
 class TwoDimensionalOU(StochasticDynamicalSystem):
     """2D OU with diagonal noise (autonomous)"""
@@ -147,6 +224,29 @@ class TwoDimensionalOU(StochasticDynamicalSystem):
 
         self.diffusion_expr = sp.Matrix([[sigma1_sym, 0], [0, sigma2_sym]])
         self.sde_type = "ito"
+
+    def get_sde_type(self) -> SDEType:
+        """Return SDE type."""
+        return SDEType.ITO
+
+    def get_diffusion_matrix(self, x, u=None, backend="numpy"):
+        """Return diffusion matrix."""
+        if backend == "torch":
+            import torch
+            # Get sigma1 and sigma2 parameter values
+            params = list(self.parameters.values())
+            sigma1, sigma2 = params[1], params[2]
+            if not isinstance(x, torch.Tensor):
+                x = torch.tensor(x, dtype=torch.float32)
+            return torch.tensor(
+                [[sigma1, 0.0], [0.0, sigma2]], dtype=x.dtype, device=x.device
+            )
+        elif backend == "numpy":
+            params = list(self.parameters.values())
+            sigma1, sigma2 = params[1], params[2]
+            return np.array([[sigma1, 0.0], [0.0, sigma2]])
+        else:
+            raise ValueError(f"Unsupported backend: {backend}")
 
 
 # ============================================================================
@@ -236,7 +336,7 @@ class TestTorchSDEInitialization:
     def test_stratonovich_method_with_ito_system_raises(self, ou_system):
         """Test that Stratonovich-only methods raise error with Ito systems."""
         # OU system is Ito by default
-        assert ou_system.sde_type.value == "ito"
+        assert ou_system.get_sde_type() == SDEType.ITO
 
         # Midpoint is Stratonovich-only, should raise
         with pytest.raises(ValueError, match="only supports Stratonovich"):
@@ -287,13 +387,13 @@ class TestAutonomousSystems:
 
         result = integrator.integrate(x0, u_func, t_span)
 
-        assert result.success, f"Integration failed: {result.message}"
-        assert result.x.shape[0] > 10, "Not enough time points"
-        assert result.x.shape[1] == 1, "Wrong state dimension"
-        assert result.nsteps > 0, "No steps recorded"
+        assert result["success"], f"Integration failed: {result['message']}"
+        assert result["x"].shape[0] > 10, "Not enough time points"
+        assert result["x"].shape[1] == 1, "Wrong state dimension"
+        assert result["nsteps"] > 0, "No steps recorded"
 
         # State should have evolved
-        assert not torch.allclose(result.x[-1], x0), "State didn't evolve"
+        assert not torch.allclose(result["x"][-1], x0), "State didn't evolve"
 
     def test_autonomous_2d_integration(self, ou_2d_system):
         """Test integration of 2D autonomous system."""
@@ -305,13 +405,13 @@ class TestAutonomousSystems:
 
         result = integrator.integrate(x0, u_func, t_span)
 
-        assert result.success
-        assert result.x.shape[1] == 2, "Should be 2D system"
-        assert result.x.shape[0] > 10, "Need multiple time points"
+        assert result["success"]
+        assert result["x"].shape[1] == 2, "Should be 2D system"
+        assert result["x"].shape[0] > 10, "Need multiple time points"
 
         # Both dimensions should evolve
-        assert not torch.allclose(result.x[-1, 0], x0[0])
-        assert not torch.allclose(result.x[-1, 1], x0[1])
+        assert not torch.allclose(result["x"][-1, 0], x0[0])
+        assert not torch.allclose(result["x"][-1, 1], x0[1])
 
     def test_autonomous_reproducibility_with_seed(self, ou_system):
         """Test that same seed gives similar results (torchsde has limited reproducibility)."""
@@ -330,11 +430,11 @@ class TestAutonomousSystems:
 
         # torchsde may not be perfectly reproducible
         # Just check that results are reasonable (both succeeded)
-        assert result1.success
-        assert result2.success
+        assert result1["success"]
+        assert result2["success"]
 
         # Results should be in same ballpark (very loose tolerance)
-        mean_diff = torch.abs(result1.x[-1] - result2.x[-1]).mean()
+        mean_diff = torch.abs(result1["x"][-1] - result2["x"][-1]).mean()
         assert mean_diff < 2.0, "Results too different even with same seed"
 
     def test_autonomous_different_seeds_differ(self, ou_system):
@@ -353,7 +453,7 @@ class TestAutonomousSystems:
         result2 = integrator2.integrate(x0, u_func, t_span)
 
         # Should be different
-        assert not torch.allclose(result1.x, result2.x)
+        assert not torch.allclose(result1["x"], result2["x"])
 
 
 # ============================================================================
@@ -381,9 +481,9 @@ class TestPureDiffusionSystems:
 
         result = integrator.integrate(x0, u_func, t_span)
 
-        assert result.success
-        assert result.x.shape[0] > 10
-        assert result.nsteps > 0
+        assert result["success"]
+        assert result["x"].shape[0] > 10
+        assert result["nsteps"] > 0
 
     def test_pure_diffusion_zero_drift(self, brownian_system):
         """Test that drift is exactly zero for pure diffusion."""
@@ -414,11 +514,11 @@ class TestPureDiffusionSystems:
 
         # torchsde may not be perfectly reproducible
         # Just verify both succeeded
-        assert result1.success
-        assert result2.success
+        assert result1["success"]
+        assert result2["success"]
 
         # Check they're in same ballpark
-        mean_diff = torch.abs(result1.x[-1] - result2.x[-1]).mean()
+        mean_diff = torch.abs(result1["x"][-1] - result2["x"][-1]).mean()
         assert mean_diff < 2.0, "Results too different"
 
     @pytest.mark.slow
@@ -438,7 +538,7 @@ class TestPureDiffusionSystems:
             result = integrator.integrate(x0, u_func, (0.0, t_final))
 
             # Extract final states
-            final_states = result.x[-1, :, 0]  # (n_paths,)
+            final_states = result["x"][-1, :, 0]  # (n_paths,)
             empirical_var = final_states.var().item()
 
             # Expected: Var[B(t)] = σ² * t = 0.25 * t
@@ -470,8 +570,8 @@ class TestPureDiffusionSystems:
         # ONE call integrates ALL 100 paths in parallel!
         result = integrator.integrate(x0_batch, u_func, t_span)
 
-        # Extract final states: result.x has shape (T, n_paths, 1)
-        final_states = result.x[-1, :, 0]  # (n_paths,)
+        # Extract final states: result["x"] has shape (T, n_paths, 1)
+        final_states = result["x"][-1, :, 0]  # (n_paths,)
 
         # Statistical tests for Brownian motion B(t) ~ N(0, σ²t)
         # With σ=0.5, t=1.0: B(1) ~ N(0, 0.25)
@@ -523,7 +623,7 @@ class TestPureDiffusionSystems:
             torch.manual_seed(seed)
             integrator = TorchSDEIntegrator(brownian_system, dt=0.01, method="euler", seed=seed)
             result = integrator.integrate(x0, u_func, t_span)
-            results.append(result.x[-1].item())
+            results.append(result["x"][-1].item())
 
         # Different seeds should produce different results
         # (not all equal)
@@ -544,7 +644,7 @@ class TestPureDiffusionSystems:
         # Batched
         x0_batch = torch.zeros(10, 1)
         result = integrator.integrate(x0_batch, lambda t, x: None, (0.0, 2.0))
-        final_states = result.x[-1, :, 0].numpy()
+        final_states = result["x"][-1, :, 0].numpy()
 
         # States should vary
         unique_values = len(set([round(s, 6) for s in final_states]))
@@ -561,13 +661,13 @@ class TestPureDiffusionSystems:
         integrator = TorchSDEIntegrator(brownian_system, dt=0.01, method="euler", seed=42)
         x0_batch = torch.zeros(n_paths, 1)
         result_t1 = integrator.integrate(x0_batch, lambda t, x: None, (0.0, t1))
-        states_t1 = result_t1.x[-1, :, 0]
+        states_t1 = result_t1["x"][-1, :, 0]
 
         # Batched samples at t2 (need new integrator for different seed)
         torch.manual_seed(43)
         integrator2 = TorchSDEIntegrator(brownian_system, dt=0.01, method="euler", seed=43)
         result_t2 = integrator2.integrate(x0_batch, lambda t, x: None, (0.0, t2))
-        states_t2 = result_t2.x[-1, :, 0]
+        states_t2 = result_t2["x"][-1, :, 0]
 
         var_t1 = states_t1.var().item()
         var_t2 = states_t2.var().item()
@@ -597,9 +697,9 @@ class TestControlledSystems:
 
         result = integrator.integrate(x0, u_func, t_span)
 
-        assert result.success
-        assert result.x.shape[0] > 10
-        assert result.nsteps > 0
+        assert result["success"]
+        assert result["x"].shape[0] > 10
+        assert result["nsteps"] > 0
 
     def test_state_feedback_control(self, controlled_system):
         """Test state feedback control."""
@@ -612,8 +712,8 @@ class TestControlledSystems:
 
         result = integrator.integrate(x0, u_func, t_span)
 
-        assert result.success
-        assert result.x.shape[0] > 10
+        assert result["success"]
+        assert result["x"].shape[0] > 10
 
     def test_time_varying_control(self, controlled_system):
         """Test time-varying control."""
@@ -625,7 +725,7 @@ class TestControlledSystems:
 
         result = integrator.integrate(x0, u_func, t_span)
 
-        assert result.success
+        assert result["success"]
 
 
 # ============================================================================
@@ -644,11 +744,12 @@ class TestIntegrationMethods:
 
         result = integrator_euler.integrate(x0, u_func, t_span)
 
-        assert hasattr(result, "t")
-        assert hasattr(result, "x")
-        assert hasattr(result, "success")
-        assert hasattr(result, "nsteps")
-        assert result.success
+        # Check TypedDict fields using membership tests
+        assert "t" in result
+        assert "x" in result
+        assert "success" in result
+        assert "nsteps" in result
+        assert result["success"]
 
     def test_integrate_with_t_eval(self, integrator_euler):
         """Test integration with specific evaluation times."""
@@ -659,8 +760,8 @@ class TestIntegrationMethods:
 
         result = integrator_euler.integrate(x0, u_func, t_span, t_eval=t_eval)
 
-        assert result.success
-        assert len(result.t) == len(t_eval)
+        assert result["success"]
+        assert len(result["t"]) == len(t_eval)
 
     def test_step_method(self, integrator_euler):
         """Test single step method."""
@@ -744,7 +845,7 @@ class TestPyTorchFeatures:
         t_span = (0.0, 0.5)
 
         def loss_fn(result):
-            return torch.sum(result.x[-1] ** 2)
+            return torch.sum(result["x"][-1] ** 2)
 
         loss, grad = integrator.integrate_with_gradient(x0, u_func, t_span, loss_fn)
 
@@ -790,14 +891,7 @@ class TestPyTorchFeatures:
 
         result = integrator.integrate(x0, u_func, t_span)
 
-        assert result.x.device.type == "cuda"
-
-        # # May fail due to torchsde GPU issues - be lenient
-        # if result.success:
-        #     assert result.x.device.type == 'cuda'
-        # else:
-        #     # GPU integration might not work in all environments
-        #     pytest.skip(f"GPU integration failed: {result.message}")
+        assert result["x"].device.type == "cuda"
 
 
 # ============================================================================
@@ -815,7 +909,7 @@ class TestDifferentMethods:
         x0 = torch.tensor([1.0])
         result = integrator.integrate(x0, lambda t, x: None, (0.0, 1.0))
 
-        assert result.success
+        assert result["success"]
 
     def test_milstein_method(self, ou_system):
         """Test Milstein method."""
@@ -824,7 +918,7 @@ class TestDifferentMethods:
         x0 = torch.tensor([1.0])
         result = integrator.integrate(x0, lambda t, x: None, (0.0, 1.0))
 
-        assert result.success
+        assert result["success"]
 
     def test_srk_method(self, ou_system):
         """Test Stochastic Runge-Kutta method."""
@@ -833,7 +927,7 @@ class TestDifferentMethods:
         x0 = torch.tensor([1.0])
         result = integrator.integrate(x0, lambda t, x: None, (0.0, 1.0))
 
-        assert result.success
+        assert result["success"]
 
     def test_midpoint_method(self, ou_system):
         """Test midpoint method (Stratonovich-only)."""
@@ -861,7 +955,7 @@ class TestAdjointMethod:
 
         result = integrator.integrate(x0, u_func, t_span)
 
-        assert result.success
+        assert result["success"]
 
     def test_adjoint_gradient_computation(self, ou_system):
         """Test that adjoint method computes gradients."""
@@ -872,7 +966,7 @@ class TestAdjointMethod:
         t_span = (0.0, 0.5)
 
         result = integrator.integrate(x0, u_func, t_span)
-        loss = torch.sum(result.x[-1] ** 2)
+        loss = torch.sum(result["x"][-1] ** 2)
         loss.backward()
 
         assert x0.grad is not None
@@ -947,7 +1041,7 @@ class TestEdgeCasesErrorHandling:
 
         result = integrator_euler.integrate(x0, u_func, t_span)
 
-        assert result.success or len(result.t) >= 1
+        assert result["success"] or len(result["t"]) >= 1
 
 
 # ============================================================================
@@ -1021,7 +1115,7 @@ class TestQualitativeBehavior:
         result = integrator.integrate(x0_batch, lambda t, x: None, (0.0, 3.0))
 
         # Mean of final states
-        mean_final = result.x[-1, :, 0].mean().item()
+        mean_final = result["x"][-1, :, 0].mean().item()
         assert abs(mean_final) < 5.0
 
     def test_diffusion_increases_spread(self, ou_system):
@@ -1042,8 +1136,8 @@ class TestQualitativeBehavior:
         # Single batched call instead of 20 sequential integrations
         result = integrator.integrate(x0_batch, u_func, t_span)
 
-        # Extract final states: result.x has shape (T, n_paths, 1)
-        final_states = result.x[-1, :, 0]  # (n_paths,)
+        # Extract final states: result["x"] has shape (T, n_paths, 1)
+        final_states = result["x"][-1, :, 0]  # (n_paths,)
 
         # States should have non-zero spread due to diffusion
         spread = final_states.std().item()

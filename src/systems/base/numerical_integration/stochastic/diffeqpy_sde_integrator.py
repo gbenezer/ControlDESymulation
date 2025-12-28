@@ -124,21 +124,20 @@ Examples
 ... )
 """
 
+import time
 import warnings
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 
 from src.systems.base.numerical_integration.stochastic.sde_integrator_base import (
-    ConvergenceType,
-    SDEIntegrationResult,
     SDEIntegratorBase,
-    SDEType,
     StepMode,
 )
 
 from src.types import ArrayLike
-
+from src.types.trajectories import SDEIntegrationResult
+from src.types.backends import SDEType, NoiseType, ConvergenceType
 
 class DiffEqPySDEIntegrator(SDEIntegratorBase):
     """
@@ -665,6 +664,9 @@ class DiffEqPySDEIntegrator(SDEIntegratorBase):
         >>> t_eval = np.linspace(0, 10, 1001)
         >>> result = integrator.integrate(x0, u_func, (0, 10), t_eval=t_eval)
         """
+        # Start timing
+        start_time = time.perf_counter()
+        
         x0 = np.asarray(x0, dtype=np.float64)
         t0, tf = t_span
 
@@ -707,6 +709,7 @@ class DiffEqPySDEIntegrator(SDEIntegratorBase):
                 x_out = np.array([np.asarray(u, dtype=np.float64) for u in sol.u])
             else:
                 # Integration failed - no solution
+                integration_time = time.perf_counter() - start_time
                 return SDEIntegrationResult(
                     t=np.array([t0]),
                     x=x0.reshape(1, -1),
@@ -714,11 +717,12 @@ class DiffEqPySDEIntegrator(SDEIntegratorBase):
                     message="Julia SDE integration produced no output",
                     nfev=0,
                     nsteps=0,
+                    solver=self.algorithm,
+                    integration_time=integration_time,
                     diffusion_evals=0,
                     n_paths=1,
-                    convergence_type=self.convergence_type,
-                    solver=self.algorithm,
-                    sde_type=self.sde_type,
+                    convergence_type=self.convergence_type.value,
+                    sde_type=self.sde_type.value if hasattr(self.sde_type, 'value') else str(self.sde_type),
                 )
 
             # Check success
@@ -736,6 +740,9 @@ class DiffEqPySDEIntegrator(SDEIntegratorBase):
             self._stats["diffusion_evals"] += diffusion_evals_estimate
             self._stats["total_steps"] += nsteps
 
+            # Calculate integration time
+            integration_time = time.perf_counter() - start_time
+
             return SDEIntegrationResult(
                 t=t_out,
                 x=x_out,
@@ -747,17 +754,20 @@ class DiffEqPySDEIntegrator(SDEIntegratorBase):
                 ),
                 nfev=self._stats["total_fev"],
                 nsteps=nsteps,
+                solver=self.algorithm,
+                integration_time=integration_time,
                 diffusion_evals=self._stats["diffusion_evals"],
                 noise_samples=None,  # Julia doesn't expose noise samples
                 n_paths=1,
-                convergence_type=self.convergence_type,
-                solver=self.algorithm,
-                sde_type=self.sde_type,
-                dense_solution=sol if dense_output else None,
+                convergence_type=self.convergence_type.value,
+                sde_type=self.sde_type.value if hasattr(self.sde_type, 'value') else str(self.sde_type),
             )
 
         except Exception as e:
             import traceback
+
+            # Calculate integration time even on failure
+            integration_time = time.perf_counter() - start_time
 
             return SDEIntegrationResult(
                 t=np.array([t0]),
@@ -766,11 +776,12 @@ class DiffEqPySDEIntegrator(SDEIntegratorBase):
                 message=f"Julia SDE integration failed: {str(e)}\n{traceback.format_exc()}",
                 nfev=0,
                 nsteps=0,
+                solver=self.algorithm,
+                integration_time=integration_time,
                 diffusion_evals=0,
                 n_paths=1,
-                convergence_type=self.convergence_type,
-                solver=self.algorithm,
-                sde_type=self.sde_type,
+                convergence_type=self.convergence_type.value,
+                sde_type=self.sde_type.value if hasattr(self.sde_type, 'value') else str(self.sde_type),
             )
 
     def validate_julia_setup(self):
