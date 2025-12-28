@@ -26,8 +26,9 @@ This module should be placed at:
 from abc import ABC, abstractmethod
 from typing import Callable, Optional, Union
 
-from src.types.core import ControlVector, StateVector
+from src.types.core import ControlVector, StateVector, ControlInput, FeedbackController
 from src.types.linearization import LinearizationResult
+from src.types.backends import IntegrationMethod
 from src.types.trajectories import IntegrationResult, SimulationResult
 
 
@@ -130,9 +131,9 @@ class ContinuousSystemBase(ABC):
     def integrate(
         self,
         x0: StateVector,
-        u: Union[ControlVector, Callable[[float], ControlVector], None] = None,
+        u: ControlInput = None,
         t_span: tuple[float, float] = (0.0, 10.0),
-        method: str = "RK45",
+        method: IntegrationMethod = "RK45",
         **integrator_kwargs
     ) -> IntegrationResult:
         """
@@ -296,10 +297,10 @@ class ContinuousSystemBase(ABC):
     def simulate(
         self,
         x0: StateVector,
-        controller: Optional[Callable[[StateVector, float], ControlVector]] = None,
+        controller: Optional[FeedbackController] = None,
         t_span: tuple[float, float] = (0.0, 10.0),
         dt: float = 0.01,
-        method: str = "RK45",
+        method: IntegrationMethod = "RK45",
         **kwargs
     ) -> SimulationResult:
         """
