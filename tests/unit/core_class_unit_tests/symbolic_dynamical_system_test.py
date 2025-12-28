@@ -1021,11 +1021,13 @@ class TestBackendSwitching:
 
         info = system.get_backend_info()
 
-        assert "default_backend" in info
-        assert "available_backends" in info
+        assert "backend" in info
         assert "compiled_backends" in info
-        assert "numpy" in info["available_backends"]
-        assert info["default_backend"] == "numpy"
+        assert "device" in info
+        assert info["backend"] == "numpy"
+        assert "dtype" in info
+        assert "initialized" in info
+        assert info["initialized"] == True
 
 
 # ============================================================================
