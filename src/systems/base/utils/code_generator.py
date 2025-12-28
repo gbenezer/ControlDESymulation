@@ -37,6 +37,7 @@ import sympy as sp
 
 # Import from centralized type system
 from src.types.backends import Backend
+from src.types.core import DynamicsFunction, OutputFunction
 
 if TYPE_CHECKING:
     from src.systems.base.symbolic_dynamical_system import SymbolicDynamicalSystem
@@ -71,9 +72,9 @@ class CodeGenerator:
         self.system = system
 
         # Cache for generated functions (backend → function)
-        self._f_funcs: Dict[str, Optional[Callable]] = {"numpy": None, "torch": None, "jax": None}
+        self._f_funcs: Dict[str, Optional[DynamicsFunction]] = {"numpy": None, "torch": None, "jax": None}
 
-        self._h_funcs: Dict[str, Optional[Callable]] = {"numpy": None, "torch": None, "jax": None}
+        self._h_funcs: Dict[str, Optional[OutputFunction]] = {"numpy": None, "torch": None, "jax": None}
 
         # Cache for Jacobian functions
         self._A_funcs: Dict[str, Optional[Callable]] = {"numpy": None, "torch": None, "jax": None}
@@ -91,8 +92,7 @@ class CodeGenerator:
     # Dynamics Function Generation
     # ========================================================================
 
-    # TODO: use DynamicsFunction TypedDict
-    def generate_dynamics(self, backend: Backend, **kwargs) -> Callable:
+    def generate_dynamics(self, backend: Backend, **kwargs) -> DynamicsFunction:
         """
         Generate f(x, u) function for specified backend.
 
@@ -103,7 +103,7 @@ class CodeGenerator:
             **kwargs: Backend-specific options (e.g., jit=True for JAX)
 
         Returns:
-            Callable function: (x, u) → dx/dt
+            DynamicsFunction: (x, u) → dx/dt
 
         Example:
             >>> f_numpy = code_gen.generate_dynamics('numpy')
@@ -139,8 +139,7 @@ class CodeGenerator:
 
         return func
 
-    # TODO: use DynamicsFunction TypedDict
-    def get_dynamics(self, backend: Backend) -> Optional[Callable]:
+    def get_dynamics(self, backend: Backend) -> Optional[DynamicsFunction]:
         """
         Get cached dynamics function without generating.
 
@@ -156,8 +155,7 @@ class CodeGenerator:
     # Output Function Generation
     # ========================================================================
 
-    # TODO: use OutputFunction TypedDict
-    def generate_output(self, backend: Backend, **kwargs) -> Optional[Callable]:
+    def generate_output(self, backend: Backend, **kwargs) -> Optional[OutputFunction]:
         """
         Generate h(x) function for specified backend.
 
@@ -168,7 +166,7 @@ class CodeGenerator:
             **kwargs: Backend-specific options
 
         Returns:
-            Callable function: (x) → y, or None if no custom output
+            OutputFunction: (x) → y, or None if no custom output
 
         Example:
             >>> h_numpy = code_gen.generate_output('numpy')
@@ -201,8 +199,7 @@ class CodeGenerator:
 
         return func
 
-    # TODO: use OutputFunction TypedDict
-    def get_output(self, backend: Backend) -> Optional[Callable]:
+    def get_output(self, backend: Backend) -> Optional[OutputFunction]:
         """
         Get cached output function without generating.
 
