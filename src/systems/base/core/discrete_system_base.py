@@ -28,7 +28,12 @@ from typing import Callable, Optional, Sequence, Union
 
 import numpy as np
 
-from src.types.core import ControlVector, StateVector
+from src.types.core import (
+    ControlVector,
+    DiscreteControlInput,
+    DiscreteFeedbackPolicy,
+    StateVector,
+)
 from src.types.linearization import DiscreteLinearization
 from src.types.trajectories import DiscreteSimulationResult
 
@@ -183,8 +188,7 @@ class DiscreteSystemBase(ABC):
     def simulate(
         self,
         x0: StateVector,
-        u_sequence: Optional[Union[ControlVector, Sequence[ControlVector], 
-                                   Callable[[int], ControlVector]]] = None,
+        u_sequence: DiscreteControlInput = None,
         n_steps: int = 100,
         **kwargs
     ) -> DiscreteSimulationResult:
@@ -338,7 +342,7 @@ class DiscreteSystemBase(ABC):
     def rollout(
         self,
         x0: StateVector,
-        policy: Optional[Callable[[StateVector, int], ControlVector]] = None,
+        policy: Optional[DiscreteFeedbackPolicy] = None,
         n_steps: int = 100,
         **kwargs
     ) -> DiscreteSimulationResult:
