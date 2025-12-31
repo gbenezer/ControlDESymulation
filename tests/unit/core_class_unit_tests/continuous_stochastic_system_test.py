@@ -1264,8 +1264,9 @@ class TestEdgeCasesAndErrorHandling:
                 # Empty diffusion - nw=0 is invalid for SDE
                 self.diffusion_expr = sp.Matrix(1, 0, [])  # 1 row, 0 columns
 
-        # Should raise validation error (stochastic system needs nw > 0)
-        with pytest.raises((ValidationError, ValueError, IndexError, TypeError)):
+        # Should raise ValidationError (stochastic system needs nw > 0)
+        # The validation error gets wrapped, so catch the outer ValidationError
+        with pytest.raises(ValidationError, match="SDE validation failed"):
             ZeroNoise()
 
     def test_invalid_sde_type_value(self):
