@@ -80,6 +80,20 @@ from src.types.linearization import DiscreteLinearization
 from src.types.trajectories import DiscreteSimulationResult
 from src.systems.base.core.discrete_system_base import DiscreteSystemBase
 
+# Conditional imports for backends
+torch_available = True
+try:
+    import torch
+except ImportError:
+    torch_available = False
+
+jax_available = True
+try:
+    import jax
+    import jax.numpy as jnp
+except ImportError:
+    jax_available = False
+    
 
 # =============================================================================
 # Advanced Test System Implementations (TIME-MAJOR)

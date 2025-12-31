@@ -85,6 +85,19 @@ from src.systems.base.utils.symbolic_validator import (
     ValidationError,
 )
 
+# Conditional imports for backends
+torch_available = True
+try:
+    import torch
+except ImportError:
+    torch_available = False
+
+jax_available = True
+try:
+    import jax
+    import jax.numpy as jnp
+except ImportError:
+    jax_available = False
 
 # ============================================================================
 # Test Systems for Advanced Scenarios

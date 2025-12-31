@@ -24,6 +24,20 @@ from src.types.linearization import ContinuousLinearization
 from src.types.trajectories import IntegrationResult, SimulationResult
 from src.systems.base.core.continuous_system_base import ContinuousSystemBase
 
+# Conditional imports for backends
+torch_available = True
+try:
+    import torch
+except ImportError:
+    torch_available = False
+
+jax_available = True
+try:
+    import jax
+    import jax.numpy as jnp
+except ImportError:
+    jax_available = False
+
 
 # =============================================================================
 # Test System Implementations

@@ -70,12 +70,19 @@ import pytest
 import sympy as sp
 from unittest.mock import Mock, patch, MagicMock
 
+# Conditional imports for backends
+torch_available = True
 try:
     import torch
-
-    TORCH_AVAILABLE = True
 except ImportError:
-    TORCH_AVAILABLE = False
+    torch_available = False
+
+jax_available = True
+try:
+    import jax
+    import jax.numpy as jnp
+except ImportError:
+    jax_available = False
 
 from src.systems.base.core.continuous_symbolic_system import (
     ContinuousSymbolicSystem,
@@ -623,7 +630,7 @@ class TestLinearization:
         assert isinstance(A_sym, sp.Matrix)
 
     @pytest.mark.skipif(
-        not TORCH_AVAILABLE,  # requires torch
+        not torch_available,  # requires torch
         reason="Requires PyTorch for autodiff"
     )
     def test_verify_jacobians_torch(self):
