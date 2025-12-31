@@ -612,35 +612,38 @@ class NoiseCharacterizer:
         >>> if hints['can_precompute']:
         ...     print("Can precompute constant noise!")
         """
+        char = self.characteristics
         return {
-            "can_precompute_diffusion": self.is_additive,
-            "can_use_diagonal_solver": self.is_diagonal,
-            "can_use_scalar_solver": self.is_scalar,
-            "requires_reevaluation": self.is_multiplicative,
+            "can_precompute_diffusion": char.is_additive,
+            "can_use_diagonal_solver": char.is_diagonal,
+            "can_use_scalar_solver": char.is_scalar,
+            "requires_reevaluation": char.is_multiplicative,
             "complexity": self._estimate_complexity(),
             "recommended_backends": self._recommend_backends(),
         }
 
     def _estimate_complexity(self) -> str:
         """Estimate computational complexity of diffusion evaluation."""
-        if self.is_additive:
+        char = self.characteristics
+        if char.is_additive:
             return "O(1) - constant, precomputable"
-        elif self.is_scalar:
+        elif char.is_scalar:
             return "O(nx) - scalar multiplication"
-        elif self.is_diagonal:
+        elif char.is_diagonal:
             return "O(nx) - element-wise"
-        elif self.noise_type == NoiseType.MULTIPLICATIVE:
+        elif char.noise_type == NoiseType.MULTIPLICATIVE:
             return "O(nx * nw) - full matrix, state-dependent"
         else:
             return "O(nx * nw) - full matrix, general"
 
     def _recommend_backends(self) -> List[str]:
         """Recommend backends based on noise structure."""
+        char = self.characteristics
         # All backends support general noise
         recommended = ["jax", "torch", "numpy"]
 
         # JAX has best specialized solvers for additive
-        if self.is_additive:
+        if char.is_additive:
             recommended = ["jax", "numpy", "torch"]  # JAX first
 
         return recommended
