@@ -190,9 +190,9 @@ class MockDiscreteSystem(SymbolicSystemBase, DiscreteSystemBase):
         return a * x + b * u
 
     def simulate(self, x0, u_sequence=None, n_steps=100, **kwargs):
-        """Multi-step simulation."""
-        states = np.zeros((self.nx, n_steps + 1))
-        states[:, 0] = x0
+        """Multi-step simulation with TIME-MAJOR ordering."""
+        states = np.zeros((n_steps + 1, self.nx))  # TIME-MAJOR: (n_steps+1, nx)
+        states[0, :] = x0
 
         # Prepare control function
         if u_sequence is None:
@@ -205,22 +205,20 @@ class MockDiscreteSystem(SymbolicSystemBase, DiscreteSystemBase):
             u_func = lambda k: u_sequence[k] if k < len(u_sequence) else u_sequence[-1]
 
         # Simulate
-        x = x0
         controls = []
         for k in range(n_steps):
             u = u_func(k)
             controls.append(u)
-            x = self.step(x, u, k)
-            states[:, k + 1] = x
+            states[k + 1, :] = self.step(states[k, :], u, k)
 
-        controls_array = np.array(controls).T if controls[0] is not None else None
+        controls_array = np.array(controls) if controls[0] is not None else None  # (n_steps, nu)
 
         return {
-            "states": states,
-            "controls": controls_array,
+            "states": states,  # (n_steps+1, nx)
+            "controls": controls_array,  # (n_steps, nu)
             "time_steps": np.arange(n_steps + 1),
             "dt": self.dt,
-            "metadata": {"method": "discrete_step", "success": True}
+            "metadata": {"method": "discrete_step", "success": True, **kwargs}
         }
 
     def linearize(self, x_eq, u_eq=None):
@@ -436,12 +434,13 @@ class TestFunctionalValidation:
         x0 = np.array([1.0])
         result = system.simulate(x0, u_sequence=None, n_steps=10)
         
-        assert result['states'].shape == (1, 11)  # n_steps + 1
+        # TIME-MAJOR: (n_steps+1, nx)
+        assert result['states'].shape == (11, 1)  # Not (1, 11)
         assert result['time_steps'].shape == (11,)
         assert result['dt'] == 0.1
         
         # System should decay toward zero
-        assert np.abs(result['states'][0, -1]) < np.abs(x0[0])
+        assert np.abs(result['states'][-1, 0]) < np.abs(x0[0])
 
     def test_discrete_linearization(self):
         """Discrete system can linearize."""
@@ -467,7 +466,8 @@ class TestFunctionalValidation:
         x0 = np.array([1.0])
         result = system.rollout(x0, policy, n_steps=10)
         
-        assert result['states'].shape == (1, 11)
+        # TIME-MAJOR: (n_steps+1, nx)
+        assert result['states'].shape == (11, 1)  # Not (1, 11)
         assert result['controls'] is not None
 
 
@@ -795,8 +795,8 @@ class TestCompleteWorkflows:
         
         result = system.rollout(np.array([1.0]), policy, n_steps=50)
         
-        # 4. Verify convergence
-        final_state = result['states'][:, -1]
+        # 4. Verify convergence (TIME-MAJOR)
+        final_state = result['states'][-1, :]  # Not [:, -1]
         assert np.abs(final_state[0]) < 0.1  # Should converge toward zero
 
 
