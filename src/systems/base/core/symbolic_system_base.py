@@ -1431,32 +1431,41 @@ class SymbolicSystemBase(ABC):
         # Concrete subclasses override to provide verification via _verify_equilibrium_numpy
         
         # CRITICAL FIX: Properly handle verification function
-        verify_fn = None
+        # FIXED IMPLEMENTATION: Verify first, then add
         
+        # TODO: having a _verify_equilibrium_numpy() function seems ad-hoc
+        # compared to having the verification be handled by the EquilibriumHandler;
+        # may need minor refactoring
+    
         if verify:
             # Check if concrete class implements verification
             try:
-                # Try to call the hook method to see if it's implemented
-                # We pass dummy values just to check if it raises NotImplementedError
-                test_result = self._verify_equilibrium_numpy(x_eq, u_eq, tol)
+                is_valid = self._verify_equilibrium_numpy(x_eq, u_eq, tol)
                 
-                # If we get here, method is implemented - use it
-                def verify_fn(x, u):
-                    return self._verify_equilibrium_numpy(x, u, tol)
+                if not is_valid:
+                    # Equilibrium verification failed
+                    import warnings
+                    warnings.warn(
+                        f"Equilibrium '{name}' at x={x_eq}, u={u_eq} failed verification. "
+                        f"The equilibrium condition is not satisfied within tolerance {tol}. "
+                        f"Adding anyway, but this may not be a true equilibrium point.",
+                        UserWarning,
+                        stacklevel=2
+                    )
                     
             except NotImplementedError:
-                # Method not implemented - warn but continue
-                
+                # Method not implemented - warn
                 import warnings
                 warnings.warn(
                     f"{self.__class__.__name__} does not implement _verify_equilibrium_numpy(). "
                     f"Equilibrium '{name}' will be added without verification.",
-                    UserWarning
+                    UserWarning,
+                    stacklevel=2
                 )
-                
-                verify_fn = None
-
-        self.equilibria.add(name, x_eq, u_eq, verify_fn=verify_fn, tol=tol, **metadata)
+        
+        # Add to handler (without verify_fn - we already checked)
+        # Pass verify_fn=None to prevent EquilibriumHandler from trying to verify again
+        self.equilibria.add(name, x_eq, u_eq, verify_fn=None, tol=tol, **metadata)
 
     def set_default_equilibrium(self, name: EquilibriumName) -> "SymbolicSystemBase":
         """
