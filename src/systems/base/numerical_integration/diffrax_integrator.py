@@ -38,7 +38,7 @@ the codebase.
 """
 
 import time
-from typing import Callable, Optional
+from typing import Callable, Optional, TYPE_CHECKING
 
 import diffrax as dfx
 import jax
@@ -49,10 +49,10 @@ from src.systems.base.numerical_integration.integrator_base import (
     IntegratorBase,
     StepMode,
 )
+from src.types.backends import Backend
 
 # Import types from centralized type system
 from src.types.core import (
-    ArrayLike,
     ControlVector,
     ScalarLike,
     StateVector,
@@ -62,6 +62,9 @@ from src.types.trajectories import (
     TimePoints,
     TimeSpan,
 )
+
+if TYPE_CHECKING:
+    from src.systems.base.core.continuous_system_base import ContinuousSystemBase
 
 
 class DiffraxIntegrator(IntegratorBase):
@@ -149,10 +152,10 @@ class DiffraxIntegrator(IntegratorBase):
 
     def __init__(
         self,
-        system,
+        system: ContinuousSystemBase,
         dt: Optional[float] = None,
         step_mode: StepMode = StepMode.ADAPTIVE,
-        backend: str = "jax",
+        backend: Backend = "jax",
         solver: str = "tsit5",
         adjoint: str = "recursive_checkpoint",
         **options,

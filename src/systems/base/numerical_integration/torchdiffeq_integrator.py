@@ -32,7 +32,7 @@ the codebase.
 """
 
 import time
-from typing import Callable, Optional
+from typing import Callable, Optional, TYPE_CHECKING
 
 import torch
 import torchdiffeq
@@ -45,7 +45,6 @@ from src.systems.base.numerical_integration.integrator_base import (
 
 # Import types from centralized type system
 from src.types.core import (
-    ArrayLike,
     ControlVector,
     ScalarLike,
     StateVector,
@@ -55,6 +54,10 @@ from src.types.trajectories import (
     TimePoints,
     TimeSpan,
 )
+from src.types.backends import Backend
+
+if TYPE_CHECKING:
+    from src.systems.base.core.continuous_system_base import ContinuousSystemBase
 
 
 class TorchDiffEqIntegrator(IntegratorBase):
@@ -159,10 +162,10 @@ class TorchDiffEqIntegrator(IntegratorBase):
 
     def __init__(
         self,
-        system,
+        system: ContinuousSystemBase,
         dt: Optional[ScalarLike] = None,
         step_mode: StepMode = StepMode.ADAPTIVE,
-        backend: str = "torch",
+        backend: Backend = "torch",
         method: str = "dopri5",
         adjoint: bool = False,
         **options,

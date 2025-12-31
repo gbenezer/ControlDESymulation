@@ -66,9 +66,10 @@ from src.systems.base.numerical_integration.integrator_base import IntegratorBas
 
 # Import semantic types from centralized type system
 from src.types.core import ScalarLike
+from src.types.backends import Backend, IntegrationMethod
 
 if TYPE_CHECKING:
-    from src.systems.base.symbolic_dynamical_system import SymbolicDynamicalSystem
+    from src.systems.base.core.continuous_system_base import ContinuousSystemBase
 
 
 class IntegratorType(Enum):
@@ -196,9 +197,9 @@ class IntegratorFactory:
     @classmethod
     def create(
         cls,
-        system: "SymbolicDynamicalSystem",
-        backend: str = "numpy",
-        method: Optional[str] = None,
+        system: ContinuousSystemBase,
+        backend: Backend = "numpy",
+        method: Optional[IntegrationMethod] = None,
         dt: Optional[ScalarLike] = None,
         step_mode: StepMode = StepMode.ADAPTIVE,
         **options,
@@ -326,8 +327,8 @@ class IntegratorFactory:
     @classmethod
     def _create_numpy_integrator(
         cls,
-        system,
-        method: str,
+        system: ContinuousSystemBase,
+        method: IntegrationMethod,
         dt: Optional[ScalarLike],
         step_mode: StepMode,
         **options,
@@ -383,7 +384,7 @@ class IntegratorFactory:
             return ScipyIntegrator(system, dt=dt, method=method, backend="numpy", **options)
 
     @classmethod
-    def _is_julia_method(cls, method: str) -> bool:
+    def _is_julia_method(cls, method: IntegrationMethod) -> bool:
         """
         Check if method is a Julia DiffEqPy method.
 
@@ -417,7 +418,7 @@ class IntegratorFactory:
             return False
 
     @classmethod
-    def _is_fixed_step_method(cls, method: str) -> bool:
+    def _is_fixed_step_method(cls, method: IntegrationMethod) -> bool:
         """
         Check if method is a manual fixed-step implementation.
 
@@ -436,7 +437,7 @@ class IntegratorFactory:
         return method in ["euler", "midpoint", "rk4"]
 
     @classmethod
-    def _is_scipy_method(cls, method: str) -> bool:
+    def _is_scipy_method(cls, method: IntegrationMethod) -> bool:
         """
         Check if method is a scipy solver.
 
@@ -458,8 +459,8 @@ class IntegratorFactory:
     @classmethod
     def _create_torch_integrator(
         cls,
-        system,
-        method: str,
+        system: ContinuousSystemBase,
+        method: IntegrationMethod,
         dt: Optional[ScalarLike],
         step_mode: StepMode,
         **options,
@@ -477,8 +478,8 @@ class IntegratorFactory:
     @classmethod
     def _create_jax_integrator(
         cls,
-        system,
-        method: str,
+        system: ContinuousSystemBase,
+        method: IntegrationMethod,
         dt: Optional[ScalarLike],
         step_mode: StepMode,
         **options,
@@ -516,7 +517,7 @@ class IntegratorFactory:
 
     @classmethod
     def auto(
-        cls, system: "SymbolicDynamicalSystem", prefer_backend: Optional[str] = None, **options
+        cls, system: ContinuousSystemBase, prefer_backend: Optional[Backend] = None, **options
     ) -> IntegratorBase:
         """
         Automatically select best integrator for system.
@@ -581,7 +582,7 @@ class IntegratorFactory:
 
     @classmethod
     def for_production(
-        cls, system: "SymbolicDynamicalSystem", use_julia: bool = False, **options
+        cls, system: ContinuousSystemBase, use_julia: bool = False, **options
     ) -> IntegratorBase:
         """
         Create integrator for production use.
@@ -632,7 +633,7 @@ class IntegratorFactory:
                 default_options.update(options)
 
                 return DiffEqPyIntegrator(
-                    system, backend="numpy", algorithm="AutoTsit5(Rosenbrock23())", **default_options
+                    system: ContinuousSystemBase, backend="numpy", algorithm="AutoTsit5(Rosenbrock23())", **default_options
                 )
             except ImportError:
                 raise ImportError(
@@ -648,11 +649,11 @@ class IntegratorFactory:
             }
             default_options.update(options)
 
-            return cls.create(system, backend="numpy", method="LSODA", **default_options)
+            return cls.create(system: ContinuousSystemBase, backend="numpy", method="LSODA", **default_options)
 
     @classmethod
     def for_optimization(
-        cls, system: "SymbolicDynamicalSystem", prefer_backend: Optional[str] = None, **options
+        cls, system: ContinuousSystemBase, prefer_backend: Optional[Backend] = None, **options
     ) -> IntegratorBase:
         """
         Create integrator optimized for gradient-based optimization.
@@ -686,7 +687,7 @@ class IntegratorFactory:
             try:
                 import torch
 
-                return cls.create(system, backend="torch", method="dopri5", **options)
+                return cls.create(system: ContinuousSystemBase, backend="torch", method="dopri5", **options)
             except ImportError:
                 raise ImportError("PyTorch backend requires: pip install torch torchdiffeq")
 
@@ -694,7 +695,7 @@ class IntegratorFactory:
             try:
                 import jax
 
-                return cls.create(system, backend="jax", method="tsit5", **options)
+                return cls.create(system: ContinuousSystemBase, backend="jax", method="tsit5", **options)
             except ImportError:
                 raise ImportError("JAX backend requires: pip install jax diffrax")
 
@@ -703,12 +704,12 @@ class IntegratorFactory:
             try:
                 import jax
 
-                return cls.create(system, backend="jax", method="tsit5", **options)
+                return cls.create(system: ContinuousSystemBase, backend="jax", method="tsit5", **options)
             except ImportError:
                 try:
                     import torch
 
-                    return cls.create(system, backend="torch", method="dopri5", **options)
+                    return cls.create(system: ContinuousSystemBase, backend="torch", method="dopri5", **options)
                 except ImportError:
                     raise ImportError(
                         "Optimization requires JAX or PyTorch. Install either:\n"
@@ -718,7 +719,7 @@ class IntegratorFactory:
 
     @classmethod
     def for_neural_ode(
-        cls, system: "SymbolicDynamicalSystem", use_adjoint: bool = True, **options
+        cls, system: ContinuousSystemBase, use_adjoint: bool = True, **options
     ) -> IntegratorBase:
         """
         Create integrator for Neural ODE training.
@@ -756,7 +757,7 @@ class IntegratorFactory:
     @classmethod
     def for_julia(
         cls,
-        system: "SymbolicDynamicalSystem",
+        system: ContinuousSystemBase,
         algorithm: str = "Tsit5",
         **options,
     ) -> IntegratorBase:
@@ -798,7 +799,7 @@ class IntegratorFactory:
                 DiffEqPyIntegrator,
             )
 
-            return DiffEqPyIntegrator(system, backend="numpy", algorithm=algorithm, **options)
+            return DiffEqPyIntegrator(system: ContinuousSystemBase, backend="numpy", algorithm=algorithm, **options)
         except ImportError:
             raise ImportError(
                 "Julia integration requires diffeqpy. "
@@ -809,9 +810,9 @@ class IntegratorFactory:
     @classmethod
     def for_simple(
         cls,
-        system: "SymbolicDynamicalSystem",
+        system: ContinuousSystemBase,
         dt: ScalarLike = 0.01,
-        backend: str = "numpy",
+        backend: Backend = "numpy",
         **options,
     ) -> IntegratorBase:
         """
@@ -843,15 +844,15 @@ class IntegratorFactory:
         >>> integrator = IntegratorFactory.for_simple(autonomous_system)
         """
         return cls.create(
-            system, backend=backend, method="rk4", dt=dt, step_mode=StepMode.FIXED, **options
+            system: ContinuousSystemBase, backend=backend, method="rk4", dt=dt, step_mode=StepMode.FIXED, **options
         )
 
     @classmethod
     def for_educational(
         cls,
-        system: "SymbolicDynamicalSystem",
+        system: ContinuousSystemBase,
         dt: ScalarLike = 0.01,
-        backend: str = "numpy",
+        backend: Backend = "numpy",
         **options,
     ) -> IntegratorBase:
         """
@@ -883,7 +884,7 @@ class IntegratorFactory:
         >>> integrator = IntegratorFactory.for_educational(autonomous_system)
         """
         return cls.create(
-            system, backend=backend, method="euler", dt=dt, step_mode=StepMode.FIXED, **options
+            system: ContinuousSystemBase, backend=backend, method="euler", dt=dt, step_mode=StepMode.FIXED, **options
         )
 
     # ========================================================================
@@ -891,7 +892,7 @@ class IntegratorFactory:
     # ========================================================================
 
     @staticmethod
-    def list_methods(backend: Optional[str] = None) -> Dict[str, list]:
+    def list_methods(backend: Optional[Backend] = None) -> Dict[str, list]:
         """
         List available methods for each backend.
 
@@ -1049,7 +1050,7 @@ class IntegratorFactory:
         return rec
 
     @staticmethod
-    def get_info(backend: str, method: str) -> Dict[str, Any]:
+    def get_info(backend: Backend, method: IntegrationMethod) -> Dict[str, Any]:
         """
         Get information about a specific integrator configuration.
 
@@ -1227,8 +1228,8 @@ class IntegratorFactory:
 
 
 def create_integrator(
-    system: "SymbolicDynamicalSystem",
-    backend: str = "numpy",
+    system: ContinuousSystemBase,
+    backend: Backend = "numpy",
     method: Optional[str] = None,
     **options,
 ) -> IntegratorBase:
@@ -1246,10 +1247,10 @@ def create_integrator(
     >>> # Autonomous system
     >>> integrator = create_integrator(autonomous_system)
     """
-    return IntegratorFactory.create(system, backend, method, **options)
+    return IntegratorFactory.create(system: ContinuousSystemBase, backend, method, **options)
 
 
-def auto_integrator(system: "SymbolicDynamicalSystem", **options) -> IntegratorBase:
+def auto_integrator(system: ContinuousSystemBase, **options) -> IntegratorBase:
     """
     Automatically select best available integrator.
 
@@ -1262,4 +1263,4 @@ def auto_integrator(system: "SymbolicDynamicalSystem", **options) -> IntegratorB
     >>> # Autonomous system
     >>> integrator = auto_integrator(autonomous_system)
     """
-    return IntegratorFactory.auto(system, **options)
+    return IntegratorFactory.auto(system: ContinuousSystemBase, **options)

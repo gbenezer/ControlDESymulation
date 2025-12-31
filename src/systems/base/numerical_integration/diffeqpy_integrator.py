@@ -133,7 +133,6 @@ from src.systems.base.numerical_integration.integrator_base import (
 )
 
 from src.types.core import (
-    ArrayLike,
     ControlVector,
     ScalarLike,
     StateVector,
@@ -144,8 +143,10 @@ from src.types.trajectories import (
     TimeSpan,
 )
 
+from src.types.backends import Backend
+
 if TYPE_CHECKING:
-    from src.systems.base.symbolic_dynamical_system import SymbolicDynamicalSystem
+    from src.systems.base.core.continuous_system_base import ContinuousSystemBase
 
 
 # Debug flag - set via environment variable
@@ -270,10 +271,10 @@ class DiffEqPyIntegrator(IntegratorBase):
 
     def __init__(
         self,
-        system: "SymbolicDynamicalSystem",
+        system: ContinuousSystemBase,
         dt: Optional[ScalarLike] = None,
         step_mode: StepMode = StepMode.ADAPTIVE,
-        backend: str = "numpy",
+        backend: Backend = "numpy",
         algorithm: str = "Tsit5",
         save_everystep: bool = False,
         dense: bool = False,
@@ -832,15 +833,15 @@ def list_algorithms() -> Dict[str, List[str]]:
     """
     return {
         "nonstiff": [
-            "Tsit5",  # ✅ Works - RECOMMENDED DEFAULT
-            "Vern6",  # ✅ Works
-            "Vern7",  # ✅ Works
-            "Vern8",  # ✅ Works
-            "Vern9",  # ✅ Works - very high accuracy
-            "DP5",  # ✅ Works
-            "DP8",  # ✅ Works
-            "TanYam7",  # ✅ Works
-            "TsitPap8",  # ✅ Works
+            "Tsit5",  # Works - RECOMMENDED DEFAULT
+            "Vern6",  # Works
+            "Vern7",  # Works
+            "Vern8",  # Works
+            "Vern9",  # Works - very high accuracy
+            "DP5",  # Works
+            "DP8",  # Works
+            "TanYam7",  # Works
+            "TsitPap8",  # Works
         ],
         "stiff_rosenbrock": [
             # All fail with Python ODEs - use scipy.BDF instead
@@ -999,7 +1000,7 @@ def print_algorithm_recommendations():
 
 
 def create_diffeqpy_integrator(
-    system: "SymbolicDynamicalSystem",
+    system: ContinuousSystemBase,
     algorithm: str = "Tsit5",
     dt: Optional[float] = None,
     step_mode: StepMode = StepMode.ADAPTIVE,

@@ -48,7 +48,6 @@ from src.systems.base.numerical_integration.integrator_base import (
     StepMode,
 )
 from src.types.core import (
-    ArrayLike,
     ControlVector,
     ScalarLike,
     StateVector,
@@ -59,8 +58,10 @@ from src.types.trajectories import (
     TimeSpan,
 )
 
+from src.types.backends import Backend
+    
 if TYPE_CHECKING:
-    from src.systems.base.symbolic_dynamical_system import SymbolicDynamicalSystem
+    from src.systems.base.core.continuous_system_base import ContinuousSystemBase
 
 
 class ExplicitEulerIntegrator(IntegratorBase):
@@ -107,7 +108,7 @@ class ExplicitEulerIntegrator(IntegratorBase):
     """
 
     def __init__(
-        self, system: "SymbolicDynamicalSystem", dt: ScalarLike, backend: str = "numpy", **options
+        self, system: ContinuousSystemBase, dt: ScalarLike, backend: Backend = "numpy", **options
     ):
         """
         Initialize Explicit Euler integrator.
@@ -318,7 +319,7 @@ class MidpointIntegrator(IntegratorBase):
     """
 
     def __init__(
-        self, system: "SymbolicDynamicalSystem", dt: ScalarLike, backend: str = "numpy", **options
+        self, system: ContinuousSystemBase, dt: ScalarLike, backend: Backend = "numpy", **options
     ):
         super().__init__(system, dt, StepMode.FIXED, backend, **options)
 
@@ -527,7 +528,7 @@ class RK4Integrator(IntegratorBase):
     """
 
     def __init__(
-        self, system: "SymbolicDynamicalSystem", dt: ScalarLike, backend: str = "numpy", **options
+        self, system: ContinuousSystemBase, dt: ScalarLike, backend: Backend = "numpy", **options
     ):
         """
         Initialize RK4 integrator.
@@ -708,7 +709,7 @@ class RK4Integrator(IntegratorBase):
 
 
 def create_fixed_step_integrator(
-    method: str, system: "SymbolicDynamicalSystem", dt: float, backend: str = "numpy"
+    method: str, system: ContinuousSystemBase, dt: float, backend: Backend = "numpy"
 ) -> IntegratorBase:
     """
     Quick factory for fixed-step integrators.

@@ -40,11 +40,11 @@ import numpy as np
 if TYPE_CHECKING:
     import jax.numpy as jnp
     import torch
-
-    from src.systems.base.symbolic_dynamical_system import SymbolicDynamicalSystem
+    from src.systems.base.core.continuous_system_base import ContinuousSystemBase
 
 # Import types from centralized type system
 from src.types import ArrayLike
+from src.types.backends import Backend
 from src.types.core import ScalarLike, StateVector, ControlVector
 from src.types.trajectories import TimePoints, TimeSpan, IntegrationResult
 
@@ -115,10 +115,10 @@ class IntegratorBase(ABC):
 
     def __init__(
         self,
-        system: "SymbolicDynamicalSystem",
+        system: ContinuousSystemBase,
         dt: Optional[ScalarLike] = None,
         step_mode: StepMode = StepMode.FIXED,
-        backend: str = "numpy",
+        backend: Backend = "numpy",
         **options,
     ):
         """

@@ -55,7 +55,6 @@ from src.systems.base.numerical_integration.integrator_base import (
 )
 
 from src.types.core import (
-    ArrayLike,
     ControlVector,
     ScalarLike,
     StateVector,
@@ -65,9 +64,10 @@ from src.types.trajectories import (
     TimePoints,
     TimeSpan,
 )
+from src.types.backends import Backend
 
 if TYPE_CHECKING:
-    from src.systems.base.symbolic_dynamical_system import SymbolicDynamicalSystem
+    from src.systems.base.core.continuous_system_base import ContinuousSystemBase
 
 
 class ScipyIntegrator(IntegratorBase):
@@ -163,10 +163,10 @@ class ScipyIntegrator(IntegratorBase):
 
     def __init__(
         self,
-        system: "SymbolicDynamicalSystem",
+        system: ContinuousSystemBase,
         dt: Optional[ScalarLike] = 0.01,
         method: str = "RK45",
-        backend: str = "numpy",
+        backend: Backend = "numpy",
         **options,
     ):
         """
