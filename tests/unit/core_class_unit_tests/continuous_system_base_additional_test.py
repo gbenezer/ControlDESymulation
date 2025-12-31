@@ -543,7 +543,7 @@ class TestComplexControlScenarios(unittest.TestCase):
         system = ControlledOscillator()
         x0 = np.array([2.0, 0.0])
         
-        def state_controller(t, x):
+        def state_controller(x, t):  # (x, t) not (t, x)
             """Simple proportional control: u = -K*x"""
             K = np.array([[1.0, 0.5]])
             return -K @ x
@@ -561,7 +561,7 @@ class TestComplexControlScenarios(unittest.TestCase):
         system = ControlledOscillator()
         x0 = np.array([5.0, 0.0])
         
-        def saturated_controller(t, x):
+        def saturated_controller(x, t):  # ← FIXED: (x, t) not (t, x)
             """Saturate control between -1 and 1."""
             u_desired = -2.0 * x[0] - 0.5 * x[1]
             return np.array([np.clip(u_desired, -1.0, 1.0)])
@@ -578,7 +578,7 @@ class TestComplexControlScenarios(unittest.TestCase):
         system = ControlledOscillator()
         x0 = np.array([1.0, 0.0])
         
-        def adaptive_controller(t, x):
+        def adaptive_controller(x, t):  # (x, t) not (t, x)
             """Gain increases with time."""
             K = 0.1 + 0.1 * t
             return np.array([-K * x[0]])
@@ -849,7 +849,7 @@ class TestControllerComplexity(unittest.TestCase):
         system = ControlledOscillator()
         x0 = np.array([1.0, 0.0])
         
-        def nested_controller(t, x):
+        def nested_controller(x, t):  # (x, t) not (t, x)
             """Controller that evaluates system dynamics."""
             dx = system(x, np.zeros(1), t)
             # Simple logic based on derivative
@@ -868,7 +868,7 @@ class TestControllerComplexity(unittest.TestCase):
         # Create stateful controller
         integral_error = [0.0]  # Mutable to allow closure modification
         
-        def pi_controller(t, x):
+        def pi_controller(x, t):  # (x, t) not (t, x)
             """PI controller with integral action."""
             error = x[0]  # Error from setpoint (0)
             integral_error[0] += error * 0.1  # Rough integration

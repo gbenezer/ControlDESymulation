@@ -112,7 +112,21 @@ class MassSpringDamper(ContinuousSystemBase):
         from scipy.integrate import solve_ivp
         
         def rhs(t, x):
-            u_val = u(t) if callable(u) else (u if u is not None else None)
+            if u is None:
+                u_val = None
+            elif callable(u):
+                # Check how many parameters u expects
+                import inspect
+                sig = inspect.signature(u)
+                if len(sig.parameters) == 1:
+                    u_val = u(t)  # Time-only
+                elif len(sig.parameters) == 2:
+                    u_val = u(t, x)  # State-feedback ← Now passes x from rhs!
+                else:
+                    raise ValueError(f"Control function must have 1 or 2 parameters")
+            else:
+                u_val = u  # Constant array
+            
             return self(x, u_val, t)
         
         result = solve_ivp(rhs, t_span, x0, method=method, **kwargs)
@@ -167,7 +181,22 @@ class DoublePendulum(ContinuousSystemBase):
         from scipy.integrate import solve_ivp
         
         def rhs(t, x):
-            return self(x, u, t)
+            if u is None:
+                u_val = None
+            elif callable(u):
+                # Check how many parameters u expects
+                import inspect
+                sig = inspect.signature(u)
+                if len(sig.parameters) == 1:
+                    u_val = u(t)  # Time-only
+                elif len(sig.parameters) == 2:
+                    u_val = u(t, x)  # State-feedback ← Now passes x from rhs!
+                else:
+                    raise ValueError(f"Control function must have 1 or 2 parameters")
+            else:
+                u_val = u  # Constant array
+            
+            return self(x, u_val, t)
         
         result = solve_ivp(rhs, t_span, x0, method=method, **kwargs)
         return {
@@ -215,7 +244,21 @@ class SystemWithOutput(ContinuousSystemBase):
         from scipy.integrate import solve_ivp
         
         def rhs(t, x):
-            u_val = u(t) if callable(u) else (u if u is not None else None)
+            if u is None:
+                u_val = None
+            elif callable(u):
+                # Check how many parameters u expects
+                import inspect
+                sig = inspect.signature(u)
+                if len(sig.parameters) == 1:
+                    u_val = u(t)  # Time-only
+                elif len(sig.parameters) == 2:
+                    u_val = u(t, x)  # State-feedback ← Now passes x from rhs!
+                else:
+                    raise ValueError(f"Control function must have 1 or 2 parameters")
+            else:
+                u_val = u  # Constant array
+            
             return self(x, u_val, t)
         
         result = solve_ivp(rhs, t_span, x0, method=method, **kwargs)
@@ -258,7 +301,21 @@ class ParametricSystem(ContinuousSystemBase):
         from scipy.integrate import solve_ivp
         
         def rhs(t, x):
-            u_val = u(t) if callable(u) else (u if u is not None else None)
+            if u is None:
+                u_val = None
+            elif callable(u):
+                # Check how many parameters u expects
+                import inspect
+                sig = inspect.signature(u)
+                if len(sig.parameters) == 1:
+                    u_val = u(t)  # Time-only
+                elif len(sig.parameters) == 2:
+                    u_val = u(t, x)  # State-feedback ← Now passes x from rhs!
+                else:
+                    raise ValueError(f"Control function must have 1 or 2 parameters")
+            else:
+                u_val = u  # Constant array
+            
             return self(x, u_val, t)
         
         result = solve_ivp(rhs, t_span, x0, method=method, **kwargs)
@@ -325,7 +382,21 @@ class SwitchedSystem(ContinuousSystemBase):
         from scipy.integrate import solve_ivp
         
         def rhs(t, x):
-            u_val = u(t) if callable(u) else (u if u is not None else None)
+            if u is None:
+                u_val = None
+            elif callable(u):
+                # Check how many parameters u expects
+                import inspect
+                sig = inspect.signature(u)
+                if len(sig.parameters) == 1:
+                    u_val = u(t)  # Time-only
+                elif len(sig.parameters) == 2:
+                    u_val = u(t, x)  # State-feedback ← Now passes x from rhs!
+                else:
+                    raise ValueError(f"Control function must have 1 or 2 parameters")
+            else:
+                u_val = u  # Constant array
+            
             return self(x, u_val, t)
         
         result = solve_ivp(rhs, t_span, x0, method=method, **kwargs)
@@ -410,11 +481,11 @@ class TestMultiSystemComposition(unittest.TestCase):
         # Simple proportional feedback
         K = np.array([[2.0, 0.5]])
         
-        def feedback_control(t):
+        def feedback_control(t, x):  # (t, x) for integrate()
             # In practice, would need access to current state
             # This is simplified
             return np.array([0.0])  # Placeholder
-        
+
         result = system.integrate(x0, u=feedback_control, t_span=(0, 10))
         self.assertTrue(result['success'])
 
@@ -815,10 +886,10 @@ class TestControlDesignIntegration(unittest.TestCase):
             # Closed-loop with LQR
             x0 = np.array([1.0, 0.0])
             
-            def lqr_controller(t):
+            def lqr_controller(t, x):  # (t, x) for integrate()
                 # Would need current state in practice
                 return np.array([0.0])  # Placeholder
-            
+
             result = system.integrate(x0, u=lqr_controller, t_span=(0, 10))
             self.assertTrue(result['success'])
         except np.linalg.LinAlgError:
