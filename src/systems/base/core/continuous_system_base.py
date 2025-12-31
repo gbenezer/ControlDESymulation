@@ -25,6 +25,7 @@ This module should be placed at:
 
 from abc import ABC, abstractmethod
 from typing import Callable, Optional, Union
+import numpy as np
 
 from src.types.core import ControlVector, StateVector, ControlInput, FeedbackController, ScalarLike
 from src.types.linearization import LinearizationResult
@@ -333,7 +334,7 @@ class ContinuousSystemBase(ABC):
         SimulationResult
             TypedDict (returns as dict) containing:
             - time: Regular time points (n_steps,) with spacing dt
-            - states: State trajectory (nx, n_steps)
+            - states: State trajectory (nx, n_steps) - **NOTE: (nx, T) for backward compat**
             - controls: Control trajectory (nu, n_steps) if controller provided
             - metadata: Additional information (method, dt, success, etc.)
 
@@ -345,15 +346,16 @@ class ContinuousSystemBase(ABC):
         - Hides solver diagnostics (cleaner output)
         - Is easier to use for plotting and analysis
 
-        For closed-loop simulation with state feedback, this method internally
-        wraps the controller to work with the ODE solver.
+        **IMPORTANT**: This method returns states in (nx, T) shape for backward
+        compatibility with existing code, even though integrate() returns (T, nx).
+        The transpose happens internally.
 
         Examples
         --------
         Open-loop simulation:
 
         >>> result = system.simulate(x0, t_span=(0, 5), dt=0.01)
-        >>> plt.plot(result["time"], result["states"][0, :])
+        >>> plt.plot(result["time"], result["states"][0, :])  # Note: states[0, :]
         >>> plt.xlabel("Time (s)")
         >>> plt.ylabel("State")
 
@@ -370,45 +372,87 @@ class ContinuousSystemBase(ABC):
         ...     x_ref = np.array([np.sin(t), np.cos(t)])
         ...     return K @ (x_ref - x)
         >>> result = system.simulate(x0, controller, t_span=(0, 10))
-
-        Access simulation data:
-
-        >>> time = result["time"]
-        >>> states = result["states"]
-        >>> if "controls" in result and result["controls"] is not None:
-        ...     controls = result["controls"]
-        ...     plt.plot(time, controls[0, :])
         """
-        # For now, this is a placeholder that calls integrate()
-        # Concrete implementations should override this for proper closed-loop support
         
-        # Convert controller to control function
+        # Create regular time grid
+        t_regular = np.arange(t_span[0], t_span[1] + dt, dt)
+        
+        # Convert controller to control function for integrate()
         if controller is None:
             u_func = None
         else:
-            # This is simplified - actual implementation needs state tracking
-            u_func = lambda t: controller(x0, t)  # Placeholder
+            # Controller has signature (x, t) - need to swap to (t, x) for integrate()
+            u_func = lambda t, x: controller(x, t)
         
-        # Call low-level integrate
-        int_result = self.integrate(x0, u_func, t_span, method=method, **kwargs)
+        # Call low-level integrate() with regular time grid
+        int_result = self.integrate(
+            x0=x0,
+            u=u_func,
+            t_span=t_span,
+            t_eval=t_regular,  # Request specific times
+            method=method,
+            **kwargs
+        )
         
-        # Post-process to regular grid
-        import numpy as np
-        t_regular = np.arange(t_span[0], t_span[1] + dt, dt)
+        # Handle both conventions: integrator might return (T, nx) or (nx, T)
+        # Detect which one based on shape
+        if int_result["x"].shape[0] == len(int_result["t"]):
+            # Time-major (T, nx) - need to transpose for backward compat
+            states_time_major = int_result["x"]  # (T, nx)
+            states_regular = states_time_major.T  # (nx, T)
+        else:
+            # Already (nx, T) - use as-is
+            states_regular = int_result["x"]
         
-        # Interpolate to regular grid (simple linear interpolation)
-        states_regular = np.zeros((int_result["x"].shape[0], len(t_regular)))
-        for i in range(int_result["x"].shape[0]):
-            states_regular[i, :] = np.interp(
-                t_regular, 
-                int_result["t"], 
-                int_result["x"][i, :]
-            )
+        # If times don't exactly match requested grid, interpolate
+        if not np.allclose(int_result["t"], t_regular, rtol=1e-10):
+            # Need to interpolate
+            nx = states_regular.shape[0]
+            states_interp = np.zeros((nx, len(t_regular)))
+            
+            # Handle both possible input shapes
+            if int_result["x"].shape[0] == len(int_result["t"]):
+                # Time-major input (T, nx)
+                for i in range(nx):
+                    states_interp[i, :] = np.interp(
+                        t_regular,
+                        int_result["t"],
+                        int_result["x"][:, i]
+                    )
+            else:
+                # State-major input (nx, T)
+                for i in range(nx):
+                    states_interp[i, :] = np.interp(
+                        t_regular,
+                        int_result["t"],
+                        int_result["x"][i, :]
+                    )
+            
+            states_regular = states_interp
+        
+        # Reconstruct control trajectory if controller provided
+        controls = None
+        if controller is not None:
+            # Evaluate controller at each time point
+            controls_list = []
+            for i, t in enumerate(t_regular):
+                # Extract state at this time (handle both shapes)
+                if states_regular.shape[0] < states_regular.shape[1]:
+                    # (nx, T) - standard
+                    x_t = states_regular[:, i]
+                else:
+                    # (T, nx) - transposed
+                    x_t = states_regular[i, :]
+                
+                u_t = controller(x_t, t)
+                controls_list.append(u_t)
+            
+            controls = np.array(controls_list).T  # (nu, T)
         
         return {
             "time": t_regular,
-            "states": states_regular,
-            "controls": None,  # Would need to reconstruct from controller
+            "states": states_regular,  # (nx, T) for backward compatibility
+            "controls": controls,
             "metadata": {
                 "method": method,
                 "dt": dt,
