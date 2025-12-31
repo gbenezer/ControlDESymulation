@@ -74,6 +74,8 @@ from src.types.protocols import (
 from src.types.core import StateVector, ControlVector
 from src.types.linearization import DiscreteLinearization
 from src.types.trajectories import DiscreteSimulationResult
+from src.systems.base.core.continuous_symbolic_system import ContinuousSymbolicSystem
+from src.systems.base.core.discrete_symbolic_system import DiscreteSymbolicSystem
 
 
 # ============================================================================
@@ -776,7 +778,6 @@ class TestRealSystemIntegration:
     def test_discrete_symbolic_system_satisfies_protocols(self):
         """Real DiscreteSymbolicSystem should satisfy SymbolicDiscreteProtocol."""
         try:
-            from src.systems import DiscreteSymbolicSystem
             import sympy as sp
 
             # Create simple test system
@@ -838,7 +839,6 @@ class TestRealSystemIntegration:
     def test_continuous_symbolic_system_satisfies_protocols(self):
         """Real ContinuousSymbolicSystem should satisfy SymbolicContinuousProtocol."""
         try:
-            from src.systems import ContinuousSymbolicSystem
             import sympy as sp
 
             class SimpleContinuous(ContinuousSymbolicSystem):
