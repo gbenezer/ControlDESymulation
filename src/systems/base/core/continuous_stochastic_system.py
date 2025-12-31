@@ -871,6 +871,8 @@ class ContinuousStochasticSystem(ContinuousSymbolicSystem):
     def get_sde_type(self) -> SDEType:
         return self.sde_type
     
+    # May need to make this more elaborate or otherwise replace with
+    # cleaner implementation
     def get_diffusion_matrix(self, x, u=None, backend=Backend | None):
         return self.diffusion(x, u, backend=backend)
 
