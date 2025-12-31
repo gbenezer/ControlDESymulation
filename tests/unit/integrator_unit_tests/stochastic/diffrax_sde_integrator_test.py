@@ -397,32 +397,34 @@ class TestCustomNoiseSupport:
 
         assert_allclose(x_next, expected, rtol=1e-6, atol=1e-8)
 
-    def test_zero_noise_matches_deterministic_ode(self, ou_system):
-        """
-        Test that SDE with zero noise matches deterministic ODE.
+    # Discretization framework is deprecated
+    # TODO: reformulate this test
+    # def test_zero_noise_matches_deterministic_ode(self, ou_system):
+    #     """
+    #     Test that SDE with zero noise matches deterministic ODE.
 
-        This verifies that zero noise truly gives drift-only dynamics.
-        """
-        from src.systems.base.discretization.discretizer import Discretizer
+    #     This verifies that zero noise truly gives drift-only dynamics.
+    #     """
+    #     from src.systems.base.discretization.discretizer import Discretizer
 
-        integrator_sde = DiffraxSDEIntegrator(ou_system, dt=0.01, solver="Euler")
+    #     integrator_sde = DiffraxSDEIntegrator(ou_system, dt=0.01, solver="Euler")
 
-        # Create deterministic version
-        det_system = ou_system.to_deterministic()
-        integrator_ode = Discretizer(det_system, dt=0.01, method="euler", backend="jax")
+    #     # Create deterministic version
+    #     det_system = ou_system.to_deterministic()
+    #     integrator_ode = Discretizer(det_system, dt=0.01, method="euler", backend="jax")
 
-        x = jnp.array([1.0])
-        u = None
-        dt = 0.01
+    #     x = jnp.array([1.0])
+    #     u = None
+    #     dt = 0.01
 
-        # SDE with zero noise
-        x_sde = integrator_sde.step(x, u, dt, dW=jnp.zeros(1))
+    #     # SDE with zero noise
+    #     x_sde = integrator_sde.step(x, u, dt, dW=jnp.zeros(1))
 
-        # ODE (no noise)
-        x_ode = integrator_ode.step(x, u, dt)
+    #     # ODE (no noise)
+    #     x_ode = integrator_ode.step(x, u, dt)
 
-        # Should be identical
-        assert_allclose(x_sde, x_ode, rtol=1e-10, atol=1e-12)
+    #     # Should be identical
+    #     assert_allclose(x_sde, x_ode, rtol=1e-10, atol=1e-12)
 
     def test_custom_noise_with_controlled_system(self, controlled_system):
         """Test custom noise with controlled SDE."""
