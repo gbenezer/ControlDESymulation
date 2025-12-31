@@ -26,10 +26,10 @@ This module should be placed at:
 from abc import ABC, abstractmethod
 from typing import Callable, Optional, Union
 
-from src.types.core import ControlVector, StateVector, ControlInput, FeedbackController
+from src.types.core import ControlVector, StateVector, ControlInput, FeedbackController, ScalarLike
 from src.types.linearization import LinearizationResult
 from src.types.backends import IntegrationMethod
-from src.types.trajectories import IntegrationResult, SimulationResult
+from src.types.trajectories import IntegrationResult, SimulationResult, TimeSpan
 
 
 class ContinuousSystemBase(ABC):
@@ -80,7 +80,7 @@ class ContinuousSystemBase(ABC):
         self,
         x: StateVector,
         u: Optional[ControlVector] = None,
-        t: float = 0.0
+        t: ScalarLike = 0.0
     ) -> StateVector:
         """
         Evaluate continuous-time dynamics: dx/dt = f(x, u, t).
@@ -132,7 +132,7 @@ class ContinuousSystemBase(ABC):
         self,
         x0: StateVector,
         u: ControlInput = None,
-        t_span: tuple[float, float] = (0.0, 10.0),
+        t_span: TimeSpan = (0.0, 10.0),
         method: IntegrationMethod = "RK45",
         **integrator_kwargs
     ) -> IntegrationResult:
@@ -298,8 +298,8 @@ class ContinuousSystemBase(ABC):
         self,
         x0: StateVector,
         controller: Optional[FeedbackController] = None,
-        t_span: tuple[float, float] = (0.0, 10.0),
-        dt: float = 0.01,
+        t_span: TimeSpan = (0.0, 10.0),
+        dt: ScalarLike = 0.01,
         method: IntegrationMethod = "RK45",
         **kwargs
     ) -> SimulationResult:
@@ -308,7 +308,8 @@ class ContinuousSystemBase(ABC):
 
         This method wraps integrate() and post-processes the result to provide
         a regular time grid and cleaner output. This is the recommended method
-        for most use cases.
+        for most use cases (currently, may be deprecated once DiscretizedSystem is
+        developed).
 
         Parameters
         ----------
@@ -395,12 +396,12 @@ class ContinuousSystemBase(ABC):
         t_regular = np.arange(t_span[0], t_span[1] + dt, dt)
         
         # Interpolate to regular grid (simple linear interpolation)
-        states_regular = np.zeros((int_result["y"].shape[0], len(t_regular)))
-        for i in range(int_result["y"].shape[0]):
+        states_regular = np.zeros((int_result["x"].shape[0], len(t_regular)))
+        for i in range(int_result["x"].shape[0]):
             states_regular[i, :] = np.interp(
                 t_regular, 
                 int_result["t"], 
-                int_result["y"][i, :]
+                int_result["x"][i, :]
             )
         
         return {
