@@ -1,7 +1,17 @@
 # Copyright (C) 2025 Gil Benezer
 #
-# COMPREHENSIVE Unit Tests for DiscreteSystemBase
-# Place at: tests/unit/core_class_unit_tests/discrete_system_base_test.py
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import unittest
 from typing import Optional, Sequence, Union, Callable
@@ -56,9 +66,9 @@ class SimpleDiscreteSystem(DiscreteSystemBase):
         n_steps: int = 100,
         **kwargs
     ) -> dict:
-        """Simulate for n_steps - returns plain dict."""
-        states = np.zeros((self.nx, n_steps + 1))
-        states[:, 0] = x0
+        """Simulate for n_steps - returns plain dict with TIME-MAJOR order."""
+        states = np.zeros((n_steps + 1, self.nx))  # TIME-MAJOR: (n_steps+1, nx)
+        states[0, :] = x0
 
         controls = [] if u_sequence is not None else None
 
@@ -75,13 +85,13 @@ class SimpleDiscreteSystem(DiscreteSystemBase):
             if controls is not None and u is not None:
                 controls.append(u)
 
-            states[:, k + 1] = self.step(states[:, k], u, k)
+            states[k + 1, :] = self.step(states[k, :], u, k)
 
-        controls_array = np.array(controls).T if controls else None
+        controls_array = np.array(controls) if controls else None  # (n_steps, nu)
 
         return {
-            "states": states,
-            "controls": controls_array,
+            "states": states,  # Shape: (n_steps+1, nx)
+            "controls": controls_array,  # Shape: (n_steps, nu) or None
             "time_steps": np.arange(n_steps + 1),
             "dt": self.dt,
             "metadata": kwargs
@@ -115,19 +125,19 @@ class TimeVaryingDiscreteSystem(DiscreteSystemBase):
         return alpha * x + u
     
     def simulate(self, x0, u_sequence=None, n_steps=100, **kwargs):
-        states = np.zeros((self.nx, n_steps + 1))
-        states[:, 0] = x0
+        states = np.zeros((n_steps + 1, self.nx))  # TIME-MAJOR
+        states[0, :] = x0
         controls = []
         
         for k in range(n_steps):
             u = self._get_control(u_sequence, k)
             if u is not None:
                 controls.append(u)
-            states[:, k + 1] = self.step(states[:, k], u, k)
+            states[k + 1, :] = self.step(states[k, :], u, k)
         
         return {
-            "states": states,
-            "controls": np.array(controls).T if controls else None,
+            "states": states,  # (n_steps+1, nx)
+            "controls": np.array(controls) if controls else None,  # (n_steps, nu)
             "time_steps": np.arange(n_steps + 1),
             "dt": self.dt,
             "metadata": kwargs
@@ -174,19 +184,19 @@ class UnstableDiscreteSystem(DiscreteSystemBase):
         return self.Ad @ x + self.Bd @ u.flatten()
     
     def simulate(self, x0, u_sequence=None, n_steps=100, **kwargs):
-        states = np.zeros((self.nx, n_steps + 1))
-        states[:, 0] = x0
+        states = np.zeros((n_steps + 1, self.nx))  # TIME-MAJOR
+        states[0, :] = x0
         controls = []
         
         for k in range(n_steps):
             u = self._get_control(u_sequence, k)
             if u is not None:
                 controls.append(u)
-            states[:, k + 1] = self.step(states[:, k], u, k)
+            states[k + 1, :] = self.step(states[k, :], u, k)
         
         return {
             "states": states,
-            "controls": np.array(controls).T if controls else None,
+            "controls": np.array(controls) if controls else None,
             "time_steps": np.arange(n_steps + 1),
             "dt": self.dt,
             "metadata": kwargs
@@ -224,19 +234,19 @@ class NonlinearDiscreteSystem(DiscreteSystemBase):
         return np.tanh(x) + u
     
     def simulate(self, x0, u_sequence=None, n_steps=100, **kwargs):
-        states = np.zeros((self.nx, n_steps + 1))
-        states[:, 0] = x0
+        states = np.zeros((n_steps + 1, self.nx))  # TIME-MAJOR
+        states[0, :] = x0
         controls = []
         
         for k in range(n_steps):
             u = self._get_control(u_sequence, k)
             if u is not None:
                 controls.append(u)
-            states[:, k + 1] = self.step(states[:, k], u, k)
+            states[k + 1, :] = self.step(states[k, :], u, k)
         
         return {
             "states": states,
-            "controls": np.array(controls).T if controls else None,
+            "controls": np.array(controls) if controls else None,
             "time_steps": np.arange(n_steps + 1),
             "dt": self.dt,
             "metadata": kwargs
@@ -528,20 +538,20 @@ class TestDiscreteSystemBase(unittest.TestCase):
             self.assertIn(field, result)
 
     def test_simulate_states_shape(self):
-        """Simulation states have correct shape."""
+        """Simulation states have correct shape (TIME-MAJOR)."""
         x0 = np.array([1.0, 1.0])
         n_steps = 10
         result = self.system.simulate(x0, n_steps=n_steps)
 
-        # States should be (nx, n_steps+1) - includes initial state
-        self.assertEqual(result["states"].shape, (self.system.nx, n_steps + 1))
+        # States should be (n_steps+1, nx) - TIME-MAJOR includes initial state
+        self.assertEqual(result["states"].shape, (n_steps + 1, self.system.nx))
 
     def test_simulate_includes_initial_state(self):
         """Simulation result includes initial state."""
         x0 = np.array([2.5, -1.3])
         result = self.system.simulate(x0, n_steps=5)
 
-        np.testing.assert_array_equal(result["states"][:, 0], x0)
+        np.testing.assert_array_equal(result["states"][0, :], x0)
 
     def test_simulate_time_steps_correct(self):
         """Time steps array is correct."""
@@ -567,7 +577,8 @@ class TestDiscreteSystemBase(unittest.TestCase):
         result = self.system.simulate(x0, u, n_steps=10)
 
         self.assertIsNotNone(result["controls"])
-        self.assertEqual(result["controls"].shape[0], self.system.nu)
+        # Controls should be (n_steps, nu)
+        self.assertEqual(result["controls"].shape, (10, self.system.nu))
 
     def test_simulate_with_control_sequence(self):
         """Simulate with pre-computed control sequence."""
@@ -577,6 +588,7 @@ class TestDiscreteSystemBase(unittest.TestCase):
         result = self.system.simulate(x0, u_seq, n_steps=10)
 
         self.assertIsNotNone(result["controls"])
+        self.assertEqual(result["controls"].shape, (10, self.system.nu))
 
     def test_simulate_with_control_function(self):
         """Simulate with control as function of time step."""
@@ -586,6 +598,7 @@ class TestDiscreteSystemBase(unittest.TestCase):
         result = self.system.simulate(x0, u_func, n_steps=20)
 
         self.assertTrue("controls" in result)
+        self.assertEqual(result["controls"].shape, (20, self.system.nu))
 
     def test_simulate_autonomous(self):
         """Simulate autonomous system (no control)."""
@@ -593,7 +606,7 @@ class TestDiscreteSystemBase(unittest.TestCase):
         result = self.system.simulate(x0, u_sequence=None, n_steps=20)
 
         # Stable system should decay
-        final_state = result["states"][:, -1]
+        final_state = result["states"][-1, :]
         self.assertLess(np.linalg.norm(final_state), np.linalg.norm(x0))
 
     def test_simulate_zero_steps(self):
@@ -601,8 +614,8 @@ class TestDiscreteSystemBase(unittest.TestCase):
         x0 = np.array([1.0, 1.0])
         result = self.system.simulate(x0, n_steps=0)
 
-        self.assertEqual(result["states"].shape[1], 1)
-        np.testing.assert_array_equal(result["states"][:, 0], x0)
+        self.assertEqual(result["states"].shape, (1, self.system.nx))
+        np.testing.assert_array_equal(result["states"][0, :], x0)
 
     def test_simulate_one_step(self):
         """Simulate with n_steps=1 works correctly."""
@@ -612,11 +625,11 @@ class TestDiscreteSystemBase(unittest.TestCase):
         result = self.system.simulate(x0, u, n_steps=1)
         
         # Should have 2 states: x[0] and x[1]
-        self.assertEqual(result["states"].shape[1], 2)
+        self.assertEqual(result["states"].shape, (2, self.system.nx))
         
         # x[1] should match manual step
         x1_manual = self.system.step(x0, u, k=0)
-        np.testing.assert_array_almost_equal(result["states"][:, 1], x1_manual)
+        np.testing.assert_array_almost_equal(result["states"][1, :], x1_manual)
 
     def test_simulate_many_steps(self):
         """Simulate with many steps."""
@@ -625,7 +638,7 @@ class TestDiscreteSystemBase(unittest.TestCase):
         
         result = self.system.simulate(x0, n_steps=n_steps)
         
-        self.assertEqual(result["states"].shape[1], n_steps + 1)
+        self.assertEqual(result["states"].shape, (n_steps + 1, self.system.nx))
 
     def test_simulate_metadata_stores_kwargs(self):
         """Simulation metadata stores additional kwargs."""
@@ -644,7 +657,8 @@ class TestDiscreteSystemBase(unittest.TestCase):
             
             result = sys.simulate(x0, u, n_steps=10)
             
-            self.assertEqual(result["states"].shape[0], nx)
+            self.assertEqual(result["states"].shape, (11, nx))
+            self.assertEqual(result["controls"].shape, (10, nu))
 
     def test_simulate_unstable_system_grows(self):
         """Unstable system simulation shows growth."""
@@ -652,7 +666,7 @@ class TestDiscreteSystemBase(unittest.TestCase):
         result = self.unstable.simulate(x0, u_sequence=None, n_steps=20)
 
         # Unstable system should grow
-        final_state = result["states"][:, -1]
+        final_state = result["states"][-1, :]
         self.assertGreater(np.linalg.norm(final_state), np.linalg.norm(x0))
 
     # =========================================================================
@@ -666,6 +680,8 @@ class TestDiscreteSystemBase(unittest.TestCase):
 
         self.assertIsInstance(result, dict)
         self.assertIn("states", result)
+        # Should have time-major shape
+        self.assertEqual(result["states"].shape, (11, self.system.nx))
 
     def test_rollout_with_state_feedback(self):
         """rollout() with state feedback policy."""
@@ -679,6 +695,8 @@ class TestDiscreteSystemBase(unittest.TestCase):
 
         self.assertTrue("controls" in result)
         self.assertIsNotNone(result["controls"])
+        # Controls should be time-major too
+        self.assertEqual(result["controls"].shape, (20, self.system.nu))
 
     def test_rollout_closed_loop_flag(self):
         """rollout() sets closed_loop flag in metadata."""
@@ -703,7 +721,7 @@ class TestDiscreteSystemBase(unittest.TestCase):
 
         # Controls should vary
         controls = result["controls"]
-        self.assertNotEqual(controls[0, 0], controls[0, -1])
+        self.assertNotEqual(controls[0, 0], controls[-1, 0])
 
     def test_rollout_stabilizing_policy(self):
         """rollout() with stabilizing policy improves stability."""
@@ -718,7 +736,7 @@ class TestDiscreteSystemBase(unittest.TestCase):
         result = self.system.rollout(x0, policy, n_steps=50)
 
         # Should converge to origin
-        final_state = result["states"][:, -1]
+        final_state = result["states"][-1, :]
         self.assertLess(np.linalg.norm(final_state), 0.1)
 
     # =========================================================================
@@ -966,7 +984,7 @@ class TestDiscreteSystemBase(unittest.TestCase):
         # This should work but may take time
         result = self.system.simulate(x0, n_steps=10000)
 
-        self.assertEqual(result["states"].shape[1], 10001)
+        self.assertEqual(result["states"].shape, (10001, self.system.nx))
 
     def test_simulate_with_zero_initial_state(self):
         """Simulate from zero initial state."""
@@ -976,7 +994,7 @@ class TestDiscreteSystemBase(unittest.TestCase):
         result = self.system.simulate(x0, u, n_steps=10)
 
         # Should propagate due to control
-        final_state = result["states"][:, -1]
+        final_state = result["states"][-1, :]
         self.assertGreater(np.linalg.norm(final_state), 0)
 
 
