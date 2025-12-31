@@ -815,6 +815,59 @@ class DiscreteSymbolicSystem(SymbolicSystemBase, DiscreteSystemBase):
             x, u = self.equilibria.get_both(x, backend)
 
         return self._linearization.compute_dynamics(x, u, backend)
+    
+    def verify_jacobians(
+        self,
+        x: StateVector,
+        u: Optional[ControlVector] = None,
+        tol: float = 1e-3,
+        backend: Backend = "torch"
+    ) -> Dict[str, Union[bool, float]]:
+        """
+        Verify symbolic Jacobians against automatic differentiation.
+
+        Compares analytically-derived discrete Jacobians (from SymPy) against
+        numerically-computed Jacobians (from PyTorch/JAX autodiff).
+
+        Parameters
+        ----------
+        x : StateVector
+            State at which to verify
+        u : Optional[ControlVector]
+            Control at which to verify (None for autonomous)
+        tol : float
+            Tolerance for considering Jacobians equal
+        backend : str
+            Backend for autodiff ('torch' or 'jax', not 'numpy')
+
+        Returns
+        -------
+        Dict[str, Union[bool, float]]
+            Verification results:
+            - 'Ad_match': bool - True if Ad matches
+            - 'Bd_match': bool - True if Bd matches
+            - 'Ad_error': float - Maximum absolute error in Ad
+            - 'Bd_error': float - Maximum absolute error in Bd
+
+        Examples
+        --------
+        >>> x = np.array([0.1, 0.0])
+        >>> u = np.array([0.0])
+        >>> results = system.verify_jacobians(x, u, backend='torch')
+        >>> 
+        >>> if results['Ad_match'] and results['Bd_match']:
+        ...     print("✓ Jacobians verified!")
+        ... else:
+        ...     print(f"✗ Ad error: {results['Ad_error']:.2e}")
+        ...     print(f"✗ Bd error: {results['Bd_error']:.2e}")
+        
+        Notes
+        -----
+        Requires PyTorch or JAX for automatic differentiation.
+        Small errors (< 1e-6) are usually numerical precision issues.
+        Large errors indicate bugs in symbolic Jacobian computation.
+        """
+        return self._linearization.verify_jacobians(x, u, backend, tol)
 
     def linearized_dynamics_symbolic(
         self,
