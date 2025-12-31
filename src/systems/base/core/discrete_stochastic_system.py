@@ -185,7 +185,7 @@ from typing import Any, Dict, List, Optional, Union
 import numpy as np
 import sympy as sp
 
-from src.systems.discrete_symbolic_system import DiscreteSymbolicSystem
+from src.systems.base.core.discrete_symbolic_system import DiscreteSymbolicSystem
 from src.systems.base.utils.stochastic.diffusion_handler import DiffusionHandler
 from src.systems.base.utils.stochastic.noise_analysis import (
     NoiseCharacteristics,
@@ -195,7 +195,7 @@ from src.systems.base.utils.stochastic.noise_analysis import (
 from src.systems.base.utils.stochastic.sde_validator import SDEValidator, ValidationError
 
 # Type imports
-from src.types.core import StateVector, ControlVector, ScalarLike
+from src.types.core import StateVector, ControlVector, ScalarLike, NoiseVector, DiscreteControlInput
 from src.types.backends import Backend
 from src.types.trajectories import DiscreteSimulationResult
 
@@ -630,7 +630,7 @@ class DiscreteStochasticSystem(DiscreteSymbolicSystem):
         self,
         x: StateVector,
         u: Optional[ControlVector] = None,
-        w: Optional[ArrayLike] = None,
+        w: Optional[NoiseVector] = None,
         k: int = 0,
         backend: Optional[Backend] = None
     ) -> StateVector:
@@ -761,7 +761,7 @@ class DiscreteStochasticSystem(DiscreteSymbolicSystem):
     def simulate_stochastic(
         self,
         x0: StateVector,
-        u_sequence: Optional[Union[ControlVector, 'DiscreteControlInput']] = None,
+        u_sequence: Optional[Union[ControlVector, DiscreteControlInput]] = None,
         n_steps: int = 100,
         n_paths: int = 1,
         seed: Optional[int] = None,
