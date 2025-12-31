@@ -336,7 +336,7 @@ class DiscreteSymbolicSystem(SymbolicSystemBase, DiscreteSystemBase):
         x = x0
         controls = []
         for k in range(n_steps):
-            u = u_func(k, x)
+            u = u_func(x, k)
             controls.append(u)
             x = self.step(x, u, k)
             states[:, k + 1] = x
@@ -501,104 +501,247 @@ class DiscreteSymbolicSystem(SymbolicSystemBase, DiscreteSystemBase):
         self,
         u_sequence: DiscreteControlInput,
         n_steps: int
-    ) -> Callable[[int, StateVector], Optional[ControlVector]]:
+    ) -> Callable[[StateVector, int], Optional[ControlVector]]:
         """
         Convert various control sequence formats to standard function.
 
-        Converts DiscreteControlInput to (k, x) → u function.
+        Converts the flexible DiscreteControlInput type to the standard (x, k) → u
+        function signature used by both simulate() and rollout().
+
+        **IMPORTANT**: Returns function with signature (x, k) → u to match rollout()
+        convention where state is the primary argument.
 
         Parameters
         ----------
         u_sequence : DiscreteControlInput
-            Control in various formats
+            Control input in various formats:
+            - None: Zero control or autonomous
+            - Array (nu,): Constant control
+            - Array (n_steps, nu): Pre-computed sequence (time-major)
+            - Array (nu, n_steps): Pre-computed sequence (state-major)
+            - Callable(k): Time-indexed u[k] = u_func(k)
+            - Callable(x, k): State-feedback u = policy(x, k)
+            - List/tuple: Sequence of control values
         n_steps : int
-            Number of steps (for validation)
+            Number of simulation steps (for validation)
 
         Returns
         -------
-        Callable[[int, StateVector], Optional[ControlVector]]
-            Standard function: (k, x) → u[k]
+        Callable[[StateVector, int], Optional[ControlVector]]
+            Standard control function with signature: (x, k) → u[k]
+            **Note**: State comes FIRST, then time index (matches rollout)
+
+        Raises
+        ------
+        ValueError
+            If control dimensions don't match system
+        TypeError
+            If control type is invalid
+
+        Examples
+        --------
+        Constant control:
+        >>> u_const = np.array([0.5])
+        >>> u_func = system._prepare_control_sequence(u_const, n_steps=100)
+        >>> u = u_func(x=np.array([1.0]), k=0)  # Returns [0.5]
+
+        Time-indexed:
+        >>> u_func = system._prepare_control_sequence(lambda k: np.array([k*0.1]), 100)
+        >>> u = u_func(x=np.array([1.0]), k=5)  # Returns [0.5]
+
+        State feedback:
+        >>> policy = lambda x, k: -0.5 * x
+        >>> u_func = system._prepare_control_sequence(policy, 100)
+        >>> u = u_func(x=np.array([2.0]), k=0)  # Returns [-1.0]
+
+        Notes
+        -----
+        This method handles the impedance mismatch between user-friendly
+        DiscreteControlInput API and the internal (x, k) → u signature
+        used consistently in discrete systems.
+        
+        The (x, k) signature is chosen to match:
+        - rollout() which uses policy(x, k)
+        - Standard control theory where state is primary
+        - Consistency with continuous systems' (x, t) pattern
         """
         if u_sequence is None:
             # Zero control or autonomous
             if self.nu == 0:
-                return lambda k, x: None
+                # Autonomous system - return None
+                return lambda x, k: None
             else:
-                return lambda k, x: np.zeros(self.nu)
+                # Non-autonomous but zero control
+                return lambda x, k: np.zeros(self.nu)
 
         elif callable(u_sequence):
-            # Time-indexed function or state feedback
+            # Function - could be u(k) or u(x, k) or u(k, x)
             import inspect
             sig = inspect.signature(u_sequence)
             n_params = len(sig.parameters)
 
             if n_params == 1:
-                # u(k) - time-indexed
-                return lambda k, x: u_sequence(k)
+                # u(k) - time-indexed only
+                # Convert to (x, k) → u signature
+                return lambda x, k: u_sequence(k)
+
             elif n_params == 2:
-                # u(k, x) or u(x, k) - state feedback
-                # Try to detect order
-                try:
-                    test_x = np.zeros(self.nx)
-                    _ = u_sequence(0, test_x)
-                    # Works with (k, x)
+                # u(x, k) or u(k, x) - state feedback
+                # Need to determine parameter order
+                
+                # Strategy 1: Check parameter names
+                param_names = list(sig.parameters.keys())
+                
+                if param_names[0] in ['x', 'state', 'x_k'] and param_names[1] in ['k', 't', 'time', 'step']:
+                    # (x, k) order - correct! Use as-is
                     return u_sequence
-                except:
-                    # Try (x, k)
+                
+                elif param_names[0] in ['k', 't', 'time', 'step'] and param_names[1] in ['x', 'state', 'x_k']:
+                    # (k, x) order - need to swap
+                    return lambda x, k: u_sequence(k, x)
+                
+                else:
+                    # Strategy 2: Try calling with test values
                     try:
-                        _ = u_sequence(test_x, 0)
-                        # Works with (x, k) - swap
-                        return lambda k, x: u_sequence(x, k)
-                    except:
-                        # Assume (k, x) standard
-                        return u_sequence
+                        # Try (x, k) order first (our standard)
+                        test_x = np.zeros(self.nx)
+                        test_result = u_sequence(test_x, 0)
+                        
+                        # Validate result
+                        test_result_array = np.asarray(test_result)
+                        if test_result_array.shape[0] == self.nu:
+                            # Success with (x, k) - use as-is
+                            return u_sequence
+                        else:
+                            # Wrong dimension - might be wrong order
+                            raise ValueError("Dimension mismatch")
+                    
+                    except Exception:
+                        # Failed with (x, k), try (k, x)
+                        try:
+                            test_x = np.zeros(self.nx)
+                            test_result = u_sequence(0, test_x)
+                            
+                            # Validate result
+                            test_result_array = np.asarray(test_result)
+                            if test_result_array.shape[0] == self.nu:
+                                # Success with (k, x) - swap to our standard
+                                return lambda x, k: u_sequence(k, x)
+                            else:
+                                raise ValueError("Dimension mismatch")
+                        
+                        except Exception as e:
+                            # Can't determine order - raise helpful error
+                            raise ValueError(
+                                f"Could not determine parameter order for control function. "
+                                f"Please use signature u(x, k) or u(k) for time-indexed control. "
+                                f"Function signature: {sig}. Error: {e}"
+                            )
+            
             else:
+                # Wrong number of parameters
                 raise ValueError(
-                    f"Control function must accept 1 or 2 parameters, "
-                    f"got {n_params}"
+                    f"Control function must have 1 or 2 parameters, got {n_params}. "
+                    f"Use u(k) for time-indexed or u(x, k) for state feedback. "
+                    f"Function signature: {sig}"
                 )
 
         elif isinstance(u_sequence, np.ndarray):
+            # NumPy array - could be constant, time-major, or state-major sequence
+            
             if u_sequence.ndim == 1:
-                # Constant control
+                # 1D array - constant control
                 if u_sequence.shape[0] != self.nu:
                     raise ValueError(
                         f"Control dimension mismatch. Expected (nu={self.nu},), "
                         f"got shape {u_sequence.shape}"
                     )
-                return lambda k, x: u_sequence
+                # Return constant control
+                return lambda x, k: u_sequence
             
             elif u_sequence.ndim == 2:
-                # Pre-computed sequence (n_steps, nu) or (nu, n_steps)
-                if u_sequence.shape[0] == n_steps:
-                    # (n_steps, nu) - time-major
-                    return lambda k, x: u_sequence[k] if k < len(u_sequence) else u_sequence[-1]
-                elif u_sequence.shape[1] == n_steps:
+                # 2D array - pre-computed sequence
+                # Could be (n_steps, nu) time-major or (nu, n_steps) state-major
+                
+                if u_sequence.shape[0] == n_steps and u_sequence.shape[1] == self.nu:
+                    # (n_steps, nu) - time-major (preferred)
+                    def time_major_control(x, k):
+                        if k < len(u_sequence):
+                            return u_sequence[k, :]
+                        else:
+                            # Repeat last control
+                            return u_sequence[-1, :]
+                    return time_major_control
+                
+                elif u_sequence.shape[0] == self.nu and u_sequence.shape[1] == n_steps:
                     # (nu, n_steps) - state-major
-                    return lambda k, x: u_sequence[:, k] if k < u_sequence.shape[1] else u_sequence[:, -1]
-                else:
-                    raise ValueError(
-                        f"Control sequence shape mismatch. Expected ({n_steps}, {self.nu}) or "
-                        f"({self.nu}, {n_steps}), got {u_sequence.shape}"
+                    def state_major_control(x, k):
+                        if k < u_sequence.shape[1]:
+                            return u_sequence[:, k]
+                        else:
+                            # Repeat last control
+                            return u_sequence[:, -1]
+                    return state_major_control
+                
+                elif u_sequence.shape[0] == self.nu:
+                    # Ambiguous: could be (nu, T) where T != n_steps
+                    # Treat as state-major sequence
+                    def ambiguous_control(x, k):
+                        if k < u_sequence.shape[1]:
+                            return u_sequence[:, k]
+                        else:
+                            return u_sequence[:, -1]
+                    
+                    import warnings
+                    warnings.warn(
+                        f"Control sequence shape {u_sequence.shape} is ambiguous. "
+                        f"Treating as (nu={self.nu}, n_times={u_sequence.shape[1]}) state-major. "
+                        f"For clarity, use (n_steps, nu) time-major shape.",
+                        UserWarning
                     )
+                    return ambiguous_control
+                
+                else:
+                    # Shape doesn't match expected patterns
+                    raise ValueError(
+                        f"Control sequence shape {u_sequence.shape} doesn't match expected patterns. "
+                        f"Expected: (n_steps={n_steps}, nu={self.nu}) time-major, "
+                        f"or (nu={self.nu}, n_steps={n_steps}) state-major."
+                    )
+            
             else:
+                # 3D or higher - not supported
                 raise ValueError(
-                    f"Control array must be 1D or 2D, got {u_sequence.ndim}D"
+                    f"Control array must be 1D or 2D, got {u_sequence.ndim}D with shape {u_sequence.shape}"
                 )
 
         elif isinstance(u_sequence, (list, tuple)):
-            # List of control values
-            def list_control(k, x):
+            # List or tuple of control values
+            def list_control(x, k):
                 if k < len(u_sequence):
-                    return np.asarray(u_sequence[k])
+                    u_k = u_sequence[k]
+                    # Convert to array if needed
+                    u_array = np.asarray(u_k)
+                    
+                    # Validate dimension
+                    if u_array.shape[0] != self.nu:
+                        raise ValueError(
+                            f"Control at step {k} has wrong dimension. "
+                            f"Expected ({self.nu},), got {u_array.shape}"
+                        )
+                    return u_array
                 else:
+                    # Repeat last control
                     return np.asarray(u_sequence[-1])
+            
             return list_control
 
         else:
+            # Unknown type
             raise TypeError(
                 f"Invalid control sequence type: {type(u_sequence)}. "
-                f"Expected None, array, callable, or sequence."
+                f"Expected: None, np.ndarray, callable, list, or tuple. "
+                f"Got: {type(u_sequence).__name__}"
             )
 
     # ========================================================================
