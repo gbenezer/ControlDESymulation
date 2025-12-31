@@ -506,7 +506,8 @@ class DiscreteStochasticSystem(DiscreteSymbolicSystem):
         >>> w_k = np.random.randn(system.nw)
         >>> x_next = f + g @ w_k
         """
-        return super().__call__(x, u, k, backend)
+        # Call parent's step method (NOT __call__)
+        return self.step(x, u, k, backend)
 
     def diffusion(
         self,
