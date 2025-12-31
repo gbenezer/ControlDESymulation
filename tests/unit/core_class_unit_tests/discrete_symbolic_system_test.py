@@ -288,7 +288,8 @@ class TestDiscreteInterface:
             n_steps=10
         )
 
-        assert result['states'].shape[1] == 11  # n_steps + 1
+        # Time-major: (T, nx)
+        assert result['states'].shape == (11, 1)  # (n_steps+1, nx)
         assert result['controls'] is not None
 
 
