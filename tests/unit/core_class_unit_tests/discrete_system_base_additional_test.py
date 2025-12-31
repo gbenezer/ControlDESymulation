@@ -14,8 +14,8 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 """
-Additional Unit Tests for DiscreteSystemBase
-============================================
+Additional Unit Tests for DiscreteSystemBase (TIME-MAJOR)
+=========================================================
 
 Advanced test coverage complementing the base test suite, focusing on:
 
@@ -74,7 +74,7 @@ from src.systems.base.core.discrete_system_base import DiscreteSystemBase
 
 
 # =============================================================================
-# Advanced Test System Implementations
+# Advanced Test System Implementations (TIME-MAJOR)
 # =============================================================================
 
 
@@ -99,8 +99,8 @@ class LinearDiscrete(DiscreteSystemBase):
         return self.A @ x + self.B @ u
     
     def simulate(self, x0, u_sequence=None, n_steps=100):
-        states = [x0]
-        x = x0.copy()
+        states = np.zeros((n_steps + 1, self.nx))  # TIME-MAJOR
+        states[0, :] = x0
         
         for k in range(n_steps):
             if u_sequence is None:
@@ -112,14 +112,12 @@ class LinearDiscrete(DiscreteSystemBase):
             else:
                 u = u_sequence[k]
             
-            x = self.step(x, u, k)
-            states.append(x)
+            states[k + 1, :] = self.step(states[k, :], u, k)
         
-        states_array = np.array(states).T
         time_array = np.arange(n_steps + 1) * self.dt
         
         return {
-            "states": states_array,
+            "states": states,  # (n_steps+1, nx)
             "time": time_array,
             "dt": self.dt,
             "metadata": {"n_steps": n_steps}
@@ -127,35 +125,6 @@ class LinearDiscrete(DiscreteSystemBase):
     
     def linearize(self, x_eq, u_eq=None):
         return (self.A, self.B)
-    
-    def rollout(self, x0, policy=None, n_steps=100):
-        """Closed-loop simulation with state feedback policy."""
-        states = [x0]
-        controls = []
-        x = x0.copy()
-        
-        for k in range(n_steps):
-            if policy is None:
-                u = np.zeros(self.nu)
-            else:
-                u = policy(x, k)
-            
-            controls.append(u)
-            x = self.step(x, u, k)
-            states.append(x)
-        
-        states_array = np.array(states).T
-        controls_array = np.array(controls).T
-        time_array = np.arange(n_steps + 1) * self.dt
-        
-        return {
-            "states": states_array,
-            "controls": controls_array,
-            "time": time_array,
-            "dt": self.dt,
-            "closed_loop": policy is not None,
-            "metadata": {"n_steps": n_steps}
-        }
 
 
 class StableMarginallyUnstable(DiscreteSystemBase):
@@ -185,8 +154,8 @@ class StableMarginallyUnstable(DiscreteSystemBase):
         return A @ x + B @ u
     
     def simulate(self, x0, u_sequence=None, n_steps=100):
-        states = [x0]
-        x = x0.copy()
+        states = np.zeros((n_steps + 1, self.nx))  # TIME-MAJOR
+        states[0, :] = x0
         
         for k in range(n_steps):
             if u_sequence is None:
@@ -196,11 +165,10 @@ class StableMarginallyUnstable(DiscreteSystemBase):
             else:
                 u = u_sequence[k] if hasattr(u_sequence, '__getitem__') else u_sequence
             
-            x = self.step(x, u, k)
-            states.append(x)
+            states[k + 1, :] = self.step(states[k, :], u, k)
         
         return {
-            "states": np.array(states).T,
+            "states": states,  # (n_steps+1, nx)
             "time": np.arange(n_steps + 1) * self.dt,
             "dt": self.dt,
             "metadata": {}
@@ -242,8 +210,8 @@ class HighDimensionalLinearDiscrete(DiscreteSystemBase):
         return self.A @ x + self.B @ u
     
     def simulate(self, x0, u_sequence=None, n_steps=100):
-        states = np.zeros((self.nx, n_steps + 1))
-        states[:, 0] = x0
+        states = np.zeros((n_steps + 1, self.nx))  # TIME-MAJOR
+        states[0, :] = x0
         
         for k in range(n_steps):
             if u_sequence is None:
@@ -253,10 +221,10 @@ class HighDimensionalLinearDiscrete(DiscreteSystemBase):
             else:
                 u = u_sequence
             
-            states[:, k+1] = self.step(states[:, k], u, k)
+            states[k + 1, :] = self.step(states[k, :], u, k)
         
         return {
-            "states": states,
+            "states": states,  # (n_steps+1, nx)
             "time": np.arange(n_steps + 1) * self.dt,
             "dt": self.dt,
             "metadata": {"n_steps": n_steps}
@@ -288,8 +256,8 @@ class NonlinearDiscrete(DiscreteSystemBase):
         return np.array([x1_next, x2_next])
     
     def simulate(self, x0, u_sequence=None, n_steps=100):
-        states = [x0]
-        x = x0.copy()
+        states = np.zeros((n_steps + 1, self.nx))  # TIME-MAJOR
+        states[0, :] = x0
         
         for k in range(n_steps):
             if u_sequence is None:
@@ -299,11 +267,10 @@ class NonlinearDiscrete(DiscreteSystemBase):
             else:
                 u = u_sequence
             
-            x = self.step(x, u, k)
-            states.append(x)
+            states[k + 1, :] = self.step(states[k, :], u, k)
         
         return {
-            "states": np.array(states).T,
+            "states": states,  # (n_steps+1, nx)
             "time": np.arange(n_steps + 1) * self.dt,
             "dt": self.dt,
             "metadata": {}
@@ -342,8 +309,8 @@ class TimeVaryingDiscrete(DiscreteSystemBase):
         return A @ x + B @ u
     
     def simulate(self, x0, u_sequence=None, n_steps=100):
-        states = [x0]
-        x = x0.copy()
+        states = np.zeros((n_steps + 1, self.nx))  # TIME-MAJOR
+        states[0, :] = x0
         
         for k in range(n_steps):
             if u_sequence is None:
@@ -353,11 +320,10 @@ class TimeVaryingDiscrete(DiscreteSystemBase):
             else:
                 u = u_sequence
             
-            x = self.step(x, u, k)
-            states.append(x)
+            states[k + 1, :] = self.step(states[k, :], u, k)
         
         return {
-            "states": np.array(states).T,
+            "states": states,  # (n_steps+1, nx)
             "time": np.arange(n_steps + 1) * self.dt,
             "dt": self.dt,
             "metadata": {}
@@ -389,8 +355,8 @@ class TestNumericalStability(unittest.TestCase):
         x0 = np.array([10.0, 10.0])
         result = system.simulate(x0, n_steps=1000)
         
-        # Should decay to zero
-        final_state = result['states'][:, -1]
+        # Should decay to zero (TIME-MAJOR)
+        final_state = result['states'][-1, :]
         self.assertLess(np.linalg.norm(final_state), 1.0)
     
     def test_marginally_stable_bounded(self):
@@ -400,8 +366,8 @@ class TestNumericalStability(unittest.TestCase):
         
         result = system.simulate(x0, n_steps=1000)
         
-        # Should not grow unbounded
-        max_norm = np.max(np.linalg.norm(result['states'], axis=0))
+        # Should not grow unbounded (TIME-MAJOR)
+        max_norm = np.max(np.linalg.norm(result['states'], axis=1))
         self.assertLess(max_norm, 2.0)
     
     def test_slightly_unstable_grows(self):
@@ -411,9 +377,9 @@ class TestNumericalStability(unittest.TestCase):
         
         result = system.simulate(x0, n_steps=500)
         
-        # Should grow
+        # Should grow (TIME-MAJOR)
         initial_norm = np.linalg.norm(x0)
-        final_norm = np.linalg.norm(result['states'][:, -1])
+        final_norm = np.linalg.norm(result['states'][-1, :])
         self.assertGreater(final_norm, initial_norm)
     
     def test_stability_from_linearization(self):
@@ -446,7 +412,8 @@ class TestLongHorizonSimulation(unittest.TestCase):
         x0 = np.array([1.0, 0.0])
         result = system.simulate(x0, n_steps=1000)
         
-        self.assertEqual(result['states'].shape[1], 1001)
+        # TIME-MAJOR: (n_steps+1, nx)
+        self.assertEqual(result['states'].shape, (1001, 2))
         self.assertEqual(len(result['time']), 1001)
     
     def test_simulate_10000_steps(self):
@@ -458,9 +425,10 @@ class TestLongHorizonSimulation(unittest.TestCase):
         x0 = np.array([1.0, 1.0])
         result = system.simulate(x0, n_steps=10000)
         
-        self.assertEqual(result['states'].shape[1], 10001)
+        # TIME-MAJOR
+        self.assertEqual(result['states'].shape, (10001, 2))
         # Should decay slowly
-        final_state = result['states'][:, -1]
+        final_state = result['states'][-1, :]
         self.assertLess(np.linalg.norm(final_state), np.linalg.norm(x0))
     
     @pytest.mark.slow
@@ -473,7 +441,7 @@ class TestLongHorizonSimulation(unittest.TestCase):
         x0 = np.array([1.0, 0.0])
         result = system.simulate(x0, n_steps=100000)
         
-        self.assertEqual(result['states'].shape[1], 100001)
+        self.assertEqual(result['states'].shape, (100001, 2))
 
 
 # =============================================================================
@@ -519,7 +487,7 @@ class TestBatchEvaluation(unittest.TestCase):
         for _ in range(n_batch):
             x0 = np.random.randn(2)
             result = system.simulate(x0, n_steps=50)
-            final_states.append(result['states'][:, -1])
+            final_states.append(result['states'][-1, :])  # TIME-MAJOR
         
         final_states = np.array(final_states)
         self.assertEqual(final_states.shape, (n_batch, 2))
@@ -542,8 +510,8 @@ class TestMemoryManagement(unittest.TestCase):
         x0 = np.array([1.0, 0.0])
         result = system.simulate(x0, n_steps=10000)
         
-        # Should complete without memory error
-        self.assertEqual(result['states'].shape[1], 10001)
+        # Should complete without memory error (TIME-MAJOR)
+        self.assertEqual(result['states'].shape, (10001, 2))
     
     def test_multiple_simulations_no_leak(self):
         """Multiple simulations should not leak memory."""
@@ -626,9 +594,9 @@ class TestPerformanceBenchmarks(unittest.TestCase):
         result = system.simulate(x0, n_steps=100)
         elapsed = time.time() - start_time
         
-        # Should complete quickly
+        # Should complete quickly (TIME-MAJOR)
         self.assertLess(elapsed, 2.0)
-        self.assertEqual(result['states'].shape, (100, 101))
+        self.assertEqual(result['states'].shape, (101, 100))
     
     @pytest.mark.slow
     def test_very_high_dimensional_system(self):
@@ -729,7 +697,8 @@ class TestComplexPolicies(unittest.TestCase):
         
         result = system.rollout(x0, policy=switching_policy, n_steps=100)
         
-        self.assertEqual(result['states'].shape[1], 101)
+        # TIME-MAJOR
+        self.assertEqual(result['states'].shape, (101, 2))
     
     def test_saturating_policy(self):
         """Policy with saturation limits."""
@@ -746,9 +715,9 @@ class TestComplexPolicies(unittest.TestCase):
         
         result = system.rollout(x0, policy=saturating_policy, n_steps=50)
         
-        # Verify rollout completed successfully
+        # Verify rollout completed successfully (TIME-MAJOR)
         self.assertIn('states', result)
-        self.assertEqual(result['states'].shape[1], 51)
+        self.assertEqual(result['states'].shape, (51, 2))
         
         # If controls are tracked, verify saturation
         if 'controls' in result and result['controls'] is not None:
@@ -770,12 +739,12 @@ class TestComplexPolicies(unittest.TestCase):
         
         result = system.rollout(x0, policy=adaptive_policy, n_steps=100)
         
-        # Verify rollout completed successfully
+        # Verify rollout completed successfully (TIME-MAJOR)
         self.assertIn('states', result)
-        self.assertEqual(result['states'].shape[1], 101)
+        self.assertEqual(result['states'].shape, (101, 2))
         
         # System should converge (adaptive gain stabilizes it)
-        final_norm = np.linalg.norm(result['states'][:, -1])
+        final_norm = np.linalg.norm(result['states'][-1, :])
         initial_norm = np.linalg.norm(x0)
         self.assertLess(final_norm, initial_norm)
 
@@ -802,7 +771,7 @@ class TestStatisticalProperties(unittest.TestCase):
         # Compute steady-state (theory: x_ss = inv(I-A)*B*u)
         I = np.eye(2)
         x_ss_theory = np.linalg.inv(I - A) @ B @ u
-        x_ss_sim = result['states'][:, -1]
+        x_ss_sim = result['states'][-1, :]  # TIME-MAJOR
         
         np.testing.assert_allclose(x_ss_sim, x_ss_theory, rtol=1e-3)
     
@@ -822,11 +791,11 @@ class TestStatisticalProperties(unittest.TestCase):
             result = system.simulate(x0, n_steps=100)
             trajectories.append(result['states'])
         
-        trajectories = np.array(trajectories)  # (n_trials, nx, n_steps)
+        trajectories = np.array(trajectories)  # (n_trials, n_steps+1, nx) - TIME-MAJOR
         
         # Variance at each time step
-        var_t0 = np.var(trajectories[:, :, 0])
-        var_tend = np.var(trajectories[:, :, -1])
+        var_t0 = np.var(trajectories[:, 0, :])
+        var_tend = np.var(trajectories[:, -1, :])
         
         # Should decrease for stable system
         self.assertLess(var_tend, var_t0)
@@ -850,8 +819,8 @@ class TestNumericalPrecision(unittest.TestCase):
         x0 = np.array([1.0, 2.0])
         result = system.simulate(x0, n_steps=1000)
         
-        # After 1000 steps of x[k+1] = x[k], should still be close
-        final_state = result['states'][:, -1]
+        # After 1000 steps of x[k+1] = x[k], should still be close (TIME-MAJOR)
+        final_state = result['states'][-1, :]
         np.testing.assert_allclose(final_state, x0, rtol=1e-10)
     
     def test_very_small_timestep(self):
@@ -863,7 +832,7 @@ class TestNumericalPrecision(unittest.TestCase):
         x0 = np.array([1.0, 0.0])
         result = system.simulate(x0, n_steps=100)
         
-        self.assertEqual(result['states'].shape[1], 101)
+        self.assertEqual(result['states'].shape, (101, 2))
 
 
 # =============================================================================
@@ -902,7 +871,8 @@ class TestLargeScaleSystems(unittest.TestCase):
         
         result = system.simulate(x0, n_steps=100)
         
-        self.assertEqual(result['states'].shape, (100, 101))
+        # TIME-MAJOR
+        self.assertEqual(result['states'].shape, (101, 100))
     
     @pytest.mark.slow
     def test_500_state_system(self):
@@ -912,7 +882,7 @@ class TestLargeScaleSystems(unittest.TestCase):
         
         result = system.simulate(x0, n_steps=50)
         
-        self.assertEqual(result['states'].shape, (500, 51))
+        self.assertEqual(result['states'].shape, (51, 500))
 
 
 # =============================================================================
@@ -936,8 +906,8 @@ class TestRecursiveFiltering(unittest.TestCase):
         
         result = system.simulate(x0, u_sequence=u_sequence, n_steps=100)
         
-        # Should converge to 1.0
-        final_state = result['states'][0, -1]
+        # Should converge to 1.0 (TIME-MAJOR)
+        final_state = result['states'][-1, 0]
         self.assertAlmostEqual(final_state, 1.0, places=2)
 
 
@@ -956,8 +926,8 @@ class TestTimeVaryingDynamics(unittest.TestCase):
         x0 = np.array([1.0, 0.0])
         result = system.simulate(x0, n_steps=200)
         
-        # Should complete successfully
-        self.assertEqual(result['states'].shape[1], 201)
+        # Should complete successfully (TIME-MAJOR)
+        self.assertEqual(result['states'].shape, (201, 2))
     
     def test_periodic_time_variation(self):
         """Time-varying system with periodic variation."""
