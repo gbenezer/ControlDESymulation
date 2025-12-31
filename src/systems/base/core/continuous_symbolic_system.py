@@ -648,16 +648,21 @@ class ContinuousSymbolicSystem(SymbolicSystemBase, ContinuousSystemBase):
 
         Notes
         -----
-        This method handles the impedance mismatch between the user-friendly
-        ControlInput API and the integrator's requirement for a specific
-        function signature.
+        For callable inputs, we assume the standard (t, x) parameter order
+        unless the function explicitly fails with that order. This is simpler
+        and more reliable than trying to auto-detect parameter order.
+        
+        **Standard Convention**: All control functions should use (t, x) order.
+        If your controller uses (x, t) order, wrap it:
+            u_func = lambda t, x: controller(x, t)
         """
         if u is None:
             # Autonomous system or zero control
             if self.nu == 0:
+                # Autonomous - return None
                 return lambda t, x: None
             else:
-                # Zero control for non-autonomous system
+                # Non-autonomous but zero control
                 return lambda t, x: np.zeros(self.nu)
 
         elif callable(u):
@@ -668,33 +673,78 @@ class ContinuousSymbolicSystem(SymbolicSystemBase, ContinuousSystemBase):
             if n_params == 1:
                 # u(t) - time-varying only
                 return lambda t, x: u(t)
+            
             elif n_params == 2:
-                # u(t, x) - state feedback (already correct form)
-                # Try to determine parameter order
-                try:
-                    # Test with dummy values to see if (t, x) works
-                    test_x = np.zeros(self.nx)
-                    _ = u(0.0, test_x)
-                    # Success - it's (t, x) order
+                # u(t, x) or u(x, t) - state feedback
+                # 
+                # STRATEGY: Assume standard (t, x) order first.
+                # Only swap if we can definitively detect (x, t) order.
+                
+                # Try to detect parameter order by checking parameter names
+                param_names = list(sig.parameters.keys())
+                
+                # Check for common patterns in parameter names
+                if param_names == ['x', 't'] or param_names == ['state', 'time']:
+                    # Explicitly (x, t) order - need to swap
+                    return lambda t, x: u(x, t)
+                
+                elif param_names == ['t', 'x'] or param_names == ['time', 'state']:
+                    # Explicitly (t, x) order - correct
                     return u
-                except (TypeError, ValueError):
-                    # Try (x, t) order
+                
+                else:
+                    # Parameter names don't tell us - try to test
                     try:
-                        _ = u(test_x, 0.0)
-                        # It's (x, t) order - need to swap
-                        return lambda t, x: u(x, t)
-                    except:
-                        # Can't determine - assume (t, x) and let it fail later
+                        # Try (t, x) order with dummy values
+                        test_x = np.zeros(self.nx)
+                        test_result = u(0.0, test_x)
+                        
+                        # Success - assume (t, x) is correct
                         return u
+                    
+                    except Exception:
+                        # Failed with (t, x) - try (x, t)
+                        try:
+                            test_x = np.zeros(self.nx)
+                            test_result = u(test_x, 0.0)
+                            
+                            # Success with (x, t) - need to swap
+                            return lambda t, x: u(x, t)
+                        
+                        except Exception:
+                            # Can't determine - assume standard (t, x) and let it fail
+                            # with a clear error message during integration
+                            import warnings
+                            warnings.warn(
+                                f"Could not determine parameter order for control function. "
+                                f"Assuming standard (t, x) order. If your function uses (x, t), "
+                                f"wrap it: lambda t, x: controller(x, t)",
+                                UserWarning
+                            )
+                            return u
+            
             else:
+                # Wrong number of parameters
                 raise ValueError(
                     f"Control function must have signature u(t) or u(t, x), "
-                    f"got {n_params} parameters"
+                    f"got {n_params} parameters. Function signature: {sig}"
                 )
 
         else:
             # Constant control - convert array to function
             u_array = np.asarray(u)
+            
+            # Validate dimensions
+            if u_array.ndim == 0:
+                # Scalar - convert to 1D array
+                u_array = np.array([float(u_array)])
+            
+            if u_array.shape[0] != self.nu:
+                raise ValueError(
+                    f"Control array dimension mismatch. Expected (nu={self.nu},), "
+                    f"got shape {u_array.shape}"
+                )
+            
             return lambda t, x: u_array
 
     # ========================================================================
