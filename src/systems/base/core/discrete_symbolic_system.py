@@ -917,6 +917,59 @@ class DiscreteSymbolicSystem(SymbolicSystemBase, DiscreteSystemBase):
         """Reset performance counters."""
         self._dynamics.reset_stats()
         self._linearization.reset_stats()
+        
+    # ========================================================================
+    # Utility Methods
+    # ========================================================================
+        
+    def warmup(
+        self,
+        backend: Optional[Backend] = None,
+        test_point: Optional[Tuple[StateVector, ControlVector]] = None,
+    ) -> bool:
+        """
+        Warm up backend by compiling and running test evaluation.
+
+        Useful for JIT compilation warmup (especially JAX) and validating
+        backend configuration before critical operations.
+
+        Parameters
+        ----------
+        backend : Optional[Backend]
+            Backend to warm up (None = default)
+        test_point : Optional[Tuple[StateVector, ControlVector]]
+            Test (x, u) point (None = use equilibrium)
+
+        Returns
+        -------
+        bool
+            True if warmup successful
+
+        Examples
+        --------
+        >>> system.set_default_backend('jax', device='gpu:0')
+        >>> success = system.warmup()
+        >>> # First call triggers JIT compilation
+        """
+        backend = backend or self._default_backend
+
+        # Generate code
+        self._code_gen.generate_dynamics(backend)
+        if self._h_sym is not None:
+            self._code_gen.generate_output(backend)
+
+        # Test evaluation
+        if test_point is not None:
+            x_test, u_test = test_point
+        else:
+            x_test = self.equilibria.get_x(backend=backend)
+            u_test = self.equilibria.get_u(backend=backend)
+
+        try:
+            x_next = self.step(x_test, u_test, k=0, backend=backend)
+            return True
+        except Exception:
+            return False
 
 
 # ============================================================================
