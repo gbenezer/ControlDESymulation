@@ -250,6 +250,20 @@ class DiffusionHandler:
 
         The underlying generate_function() may return various shapes depending
         on input, so we intelligently reshape based on input characteristics.
+        
+        **Critical Fix for Batched Multiplicative Noise:**
+        
+        When multiplicative noise is evaluated with batched inputs, lambdify
+        can return inhomogeneous nested structures like:
+            [[array([0.2, 0.6]), 0], [0, array([0.3, 0.6])]]
+        
+        This happens because:
+        - Non-zero elements like sigma*x evaluate to arrays (one value per batch)
+        - Zero elements remain as scalar 0
+        
+        These structures cannot be directly converted to regular arrays. We detect
+        this case and manually construct the output array element-by-element,
+        handling both arrays and scalars appropriately.
 
         Parameters
         ----------
@@ -277,7 +291,6 @@ class DiffusionHandler:
 
             def wrapped(*args):
                 result = func(*args)
-                result = np.atleast_2d(result)
 
                 # Detect if batched input (first arg is array with len > 1)
                 is_batched = False
@@ -293,6 +306,7 @@ class DiffusionHandler:
 
                 # For additive noise, result is constant regardless of batch
                 if self.characteristics.is_additive:
+                    result = np.atleast_2d(result)
                     # Force to (nx, nw) even if batched input
                     if result.shape != (self.nx, self.nw):
                         result = result.reshape(self.nx, self.nw)
@@ -300,18 +314,38 @@ class DiffusionHandler:
 
                 # For multiplicative noise with batched input
                 if is_batched:
-                    # Result from lambdify might be:
-                    # - (batch_size,) for scalar output
-                    # - (batch_size, nx*nw) flattened
-                    # - Already correct shape
-
+                    # Handle inhomogeneous nested structure from lambdify
+                    # Result might be: [[array([...]), 0], [0, array([...])]]
+                    # codegen_utils passes this through as-is when it can't flatten
+                    
+                    if isinstance(result, (list, tuple)):
+                        # Manually construct (batch, nx, nw) array
+                        g_batch = np.zeros((batch_size, self.nx, self.nw))
+                        
+                        for i in range(self.nx):
+                            row = result[i]
+                            if not isinstance(row, (list, tuple)):
+                                row = [row]
+                            
+                            for j in range(self.nw):
+                                elem = row[j] if j < len(row) else 0
+                                
+                                if isinstance(elem, np.ndarray) and elem.ndim > 0:
+                                    # Element is array - use directly
+                                    g_batch[:, i, j] = elem
+                                else:
+                                    # Element is scalar - broadcast to batch
+                                    g_batch[:, i, j] = elem
+                        
+                        return g_batch
+                    
+                    # If result is already array, try standard reshaping
+                    result = np.atleast_2d(result)
                     target_shape = (batch_size, self.nx, self.nw)
 
                     if result.shape == target_shape:
-                        # Already correct
                         return result
                     elif result.size == batch_size * self.nx * self.nw:
-                        # Reshape to target
                         return result.reshape(target_shape)
                     elif result.shape == (self.nx, self.nw):
                         # Constant result despite batched input (edge case)
@@ -321,6 +355,7 @@ class DiffusionHandler:
                         return result.reshape(target_shape)
                 else:
                     # Single input: ensure (nx, nw)
+                    result = np.atleast_2d(result)
                     if result.shape != (self.nx, self.nw):
                         result = result.reshape(self.nx, self.nw)
                     return result
@@ -347,32 +382,68 @@ class DiffusionHandler:
 
                 # For additive noise, return (nx, nw) regardless
                 if self.characteristics.is_additive:
-                    if result.dim() == 1:
-                        result = result.reshape(self.nx, self.nw)
-                    elif result.dim() == 0:
-                        result = result.reshape(1, 1)
-                    elif result.shape != torch.Size([self.nx, self.nw]):
+                    if isinstance(result, torch.Tensor):
+                        if result.dim() == 1:
+                            result = result.reshape(self.nx, self.nw)
+                        elif result.dim() == 0:
+                            result = result.reshape(1, 1)
+                        elif result.shape != torch.Size([self.nx, self.nw]):
+                            result = result.reshape(self.nx, self.nw)
+                    else:
+                        # Convert to tensor if not already
+                        result = torch.tensor(result, dtype=torch.float32)
                         result = result.reshape(self.nx, self.nw)
                     return result
 
                 # For multiplicative noise with batched input
                 if is_batched:
-                    target_shape = (batch_size, self.nx, self.nw)
+                    # Handle inhomogeneous structure passed through from codegen_utils
+                    if isinstance(result, (list, tuple)):
+                        g_batch = torch.zeros(batch_size, self.nx, self.nw)
+                        
+                        for i in range(self.nx):
+                            row = result[i]
+                            if not isinstance(row, (list, tuple)):
+                                row = [row]
+                            
+                            for j in range(self.nw):
+                                elem = row[j] if j < len(row) else 0
+                                
+                                if isinstance(elem, torch.Tensor) and elem.numel() > 1:
+                                    g_batch[:, i, j] = elem
+                                elif isinstance(elem, torch.Tensor):
+                                    g_batch[:, i, j] = elem.item()
+                                else:
+                                    g_batch[:, i, j] = float(elem)
+                        
+                        return g_batch
+                    
+                    # Standard reshaping for tensor results
+                    if isinstance(result, torch.Tensor):
+                        target_shape = (batch_size, self.nx, self.nw)
 
-                    if result.shape == target_shape:
-                        return result
-                    elif result.numel() == batch_size * self.nx * self.nw:
-                        return result.reshape(target_shape)
-                    elif result.shape == torch.Size([self.nx, self.nw]):
-                        return result
+                        if result.shape == target_shape:
+                            return result
+                        elif result.numel() == batch_size * self.nx * self.nw:
+                            return result.reshape(target_shape)
+                        elif result.shape == torch.Size([self.nx, self.nw]):
+                            return result
+                        else:
+                            return result.reshape(target_shape)
                     else:
-                        return result.reshape(target_shape)
+                        # Shouldn't reach here, but handle gracefully
+                        result = torch.tensor(result, dtype=torch.float32)
+                        return result.reshape(batch_size, self.nx, self.nw)
                 else:
                     # Single input
-                    if result.dim() == 1:
+                    if isinstance(result, torch.Tensor):
+                        if result.dim() == 1:
+                            result = result.reshape(self.nx, self.nw)
+                        elif result.dim() == 0:
+                            result = result.reshape(1, 1)
+                    else:
+                        result = torch.tensor(result, dtype=torch.float32)
                         result = result.reshape(self.nx, self.nw)
-                    elif result.dim() == 0:
-                        result = result.reshape(1, 1)
                     return result
 
             return wrapped
@@ -397,32 +468,66 @@ class DiffusionHandler:
 
                 # For additive noise, return (nx, nw) regardless
                 if self.characteristics.is_additive:
-                    if result.ndim == 1:
-                        result = result.reshape(self.nx, self.nw)
-                    elif result.ndim == 0:
-                        result = result.reshape(1, 1)
-                    elif result.shape != (self.nx, self.nw):
+                    if isinstance(result, jnp.ndarray):
+                        if result.ndim == 1:
+                            result = result.reshape(self.nx, self.nw)
+                        elif result.ndim == 0:
+                            result = result.reshape(1, 1)
+                        elif result.shape != (self.nx, self.nw):
+                            result = result.reshape(self.nx, self.nw)
+                    else:
+                        # Convert to array if not already
+                        result = jnp.array(result)
                         result = result.reshape(self.nx, self.nw)
                     return result
 
                 # For multiplicative noise with batched input
                 if is_batched:
-                    target_shape = (batch_size, self.nx, self.nw)
+                    # Handle inhomogeneous structure passed through from codegen_utils
+                    if isinstance(result, (list, tuple)):
+                        g_batch = jnp.zeros((batch_size, self.nx, self.nw))
+                        
+                        for i in range(self.nx):
+                            row = result[i]
+                            if not isinstance(row, (list, tuple)):
+                                row = [row]
+                            
+                            for j in range(self.nw):
+                                elem = row[j] if j < len(row) else 0
+                                
+                                if isinstance(elem, jnp.ndarray) and elem.ndim > 0:
+                                    g_batch = g_batch.at[:, i, j].set(elem)
+                                else:
+                                    g_batch = g_batch.at[:, i, j].set(float(elem))
+                        
+                        return g_batch
+                    
+                    # Standard reshaping for array results
+                    if isinstance(result, jnp.ndarray):
+                        target_shape = (batch_size, self.nx, self.nw)
 
-                    if result.shape == target_shape:
-                        return result
-                    elif result.size == batch_size * self.nx * self.nw:
-                        return result.reshape(target_shape)
-                    elif result.shape == (self.nx, self.nw):
-                        return result
+                        if result.shape == target_shape:
+                            return result
+                        elif result.size == batch_size * self.nx * self.nw:
+                            return result.reshape(target_shape)
+                        elif result.shape == (self.nx, self.nw):
+                            return result
+                        else:
+                            return result.reshape(target_shape)
                     else:
-                        return result.reshape(target_shape)
+                        # Shouldn't reach here, but handle gracefully
+                        result = jnp.array(result)
+                        return result.reshape(batch_size, self.nx, self.nw)
                 else:
                     # Single input
-                    if result.ndim == 1:
+                    if isinstance(result, jnp.ndarray):
+                        if result.ndim == 1:
+                            result = result.reshape(self.nx, self.nw)
+                        elif result.ndim == 0:
+                            result = result.reshape(1, 1)
+                    else:
+                        result = jnp.array(result)
                         result = result.reshape(self.nx, self.nw)
-                    elif result.ndim == 0:
-                        result = result.reshape(1, 1)
                     return result
 
             return wrapped
