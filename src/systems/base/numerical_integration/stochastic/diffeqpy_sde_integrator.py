@@ -126,7 +126,7 @@ Examples
 
 import time
 import warnings
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 import numpy as np
 
@@ -136,8 +136,12 @@ from src.systems.base.numerical_integration.stochastic.sde_integrator_base impor
 )
 
 from src.types import ArrayLike
-from src.types.trajectories import SDEIntegrationResult
-from src.types.backends import SDEType, NoiseType, ConvergenceType
+from src.types.core import StateVector, ControlVector, NoiseVector, ScalarLike, DiffusionMatrix
+from src.types.trajectories import SDEIntegrationResult, TimeSpan, TimePoints
+from src.types.backends import SDEType, NoiseType, ConvergenceType, Backend, Device
+
+if TYPE_CHECKING:
+    from src.systems.base.core.continuous_stochastic_system import ContinuousStochasticSystem
 
 class DiffEqPySDEIntegrator(SDEIntegratorBase):
     """
@@ -220,10 +224,10 @@ class DiffEqPySDEIntegrator(SDEIntegratorBase):
 
     def __init__(
         self,
-        sde_system,
+        sde_system: "ContinuousStochasticSystem",
         dt: Optional[float] = 0.01,
         step_mode: StepMode = StepMode.FIXED,  # Changed default to FIXED
-        backend: str = "numpy",
+        backend: Backend = "numpy",
         algorithm: str = "EM",
         sde_type: Optional[SDEType] = None,
         convergence_type: ConvergenceType = ConvergenceType.STRONG,
@@ -492,10 +496,10 @@ class DiffEqPySDEIntegrator(SDEIntegratorBase):
 
     def step(
         self,
-        x: ArrayLike,
-        u: Optional[ArrayLike] = None,
-        dt: Optional[float] = None,
-        dW: Optional[ArrayLike] = None,
+        x: StateVector,
+        u: Optional[ControlVector] = None,
+        dt: Optional[ScalarLike] = None,
+        dW: Optional[NoiseVector] = None,
     ) -> ArrayLike:
         """
         Take one SDE integration step.
@@ -617,10 +621,10 @@ class DiffEqPySDEIntegrator(SDEIntegratorBase):
 
     def integrate(
         self,
-        x0: ArrayLike,
-        u_func: Callable[[float, ArrayLike], Optional[ArrayLike]],
-        t_span: Tuple[float, float],
-        t_eval: Optional[ArrayLike] = None,
+        x0: StateVector,
+        u_func: Callable[[ScalarLike, StateVector], Optional[ControlVector]],
+        t_span: TimeSpan,
+        t_eval: Optional[TimePoints] = None,
         dense_output: bool = False,
     ) -> SDEIntegrationResult:
         """
@@ -1088,7 +1092,7 @@ class DiffEqPySDEIntegrator(SDEIntegratorBase):
 
 
 def create_diffeqpy_sde_integrator(
-    sde_system, algorithm: str = "EM", dt: float = 0.01, **options
+    sde_system: "ContinuousStochasticSystem", algorithm: str = "EM", dt: float = 0.01, **options
 ) -> DiffEqPySDEIntegrator:
     """
     Quick factory for Julia SDE integrators.

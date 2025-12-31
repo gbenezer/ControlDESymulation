@@ -80,7 +80,7 @@ from src.systems.base.numerical_integration.stochastic.sde_integrator_base impor
 )
 
 if TYPE_CHECKING:
-    from src.systems.base.stochastic_dynamical_system import StochasticDynamicalSystem
+    from src.systems.base.core.continuous_stochastic_system import ContinuousStochasticSystem
 
 
 class SDEIntegratorType(Enum):
@@ -210,7 +210,7 @@ class SDEIntegratorFactory:
     @classmethod
     def create(
         cls,
-        sde_system: "StochasticDynamicalSystem",
+        sde_system: "ContinuousStochasticSystem",
         backend: Backend = "numpy",
         method: Optional[SDEIntegrationMethod] = None,
         dt: Optional[ScalarLike] = 0.01,
@@ -225,7 +225,7 @@ class SDEIntegratorFactory:
 
         Parameters
         ----------
-        sde_system : StochasticDynamicalSystem
+        sde_system : ContinuousStochasticSystem
             SDE system to integrate (controlled or autonomous)
         backend : Backend
             Backend: 'numpy', 'torch', 'jax'. Default: 'numpy'
@@ -332,7 +332,7 @@ class SDEIntegratorFactory:
     @classmethod
     def _create_diffeqpy(
         cls,
-        sde_system: "StochasticDynamicalSystem",
+        sde_system: "ContinuousStochasticSystem",
         method: SDEIntegrationMethod,
         dt: Optional[ScalarLike],
         step_mode: StepMode,
@@ -367,7 +367,7 @@ class SDEIntegratorFactory:
     @classmethod
     def _create_torchsde(
         cls,
-        sde_system: "StochasticDynamicalSystem",
+        sde_system: "ContinuousStochasticSystem",
         method: SDEIntegrationMethod,
         dt: Optional[ScalarLike],
         step_mode: StepMode,
@@ -402,7 +402,7 @@ class SDEIntegratorFactory:
     @classmethod
     def _create_diffrax(
         cls,
-        sde_system: "StochasticDynamicalSystem",
+        sde_system: "ContinuousStochasticSystem",
         method: SDEIntegrationMethod,
         dt: Optional[ScalarLike],
         step_mode: StepMode,
@@ -436,7 +436,7 @@ class SDEIntegratorFactory:
 
     @classmethod
     def auto(
-        cls, sde_system: "StochasticDynamicalSystem", seed: Optional[int] = None, **options
+        cls, sde_system: "ContinuousStochasticSystem", seed: Optional[int] = None, **options
     ) -> SDEIntegratorBase:
         """
         Automatically select best available SDE integrator.
@@ -448,7 +448,7 @@ class SDEIntegratorFactory:
 
         Parameters
         ----------
-        sde_system : StochasticDynamicalSystem
+        sde_system : ContinuousStochasticSystem
             SDE system to integrate
         seed : Optional[int]
             Random seed for reproducibility
@@ -486,7 +486,7 @@ class SDEIntegratorFactory:
     @classmethod
     def for_optimization(
         cls,
-        sde_system: "StochasticDynamicalSystem",
+        sde_system: "ContinuousStochasticSystem",
         backend: Optional[Backend] = None,
         **options,
     ) -> SDEIntegratorBase:
@@ -498,7 +498,7 @@ class SDEIntegratorFactory:
 
         Parameters
         ----------
-        sde_system : StochasticDynamicalSystem
+        sde_system : ContinuousStochasticSystem
             SDE system to integrate
         backend : Optional[Backend]
             Preferred backend (None = auto-select)
@@ -539,7 +539,7 @@ class SDEIntegratorFactory:
 
     @classmethod
     def for_neural_sde(
-        cls, sde_system: "StochasticDynamicalSystem", adjoint: bool = True, **options
+        cls, sde_system: "ContinuousStochasticSystem", adjoint: bool = True, **options
     ) -> SDEIntegratorBase:
         """
         Create SDE integrator for neural SDEs.
@@ -548,7 +548,7 @@ class SDEIntegratorFactory:
 
         Parameters
         ----------
-        sde_system : StochasticDynamicalSystem
+        sde_system : ContinuousStochasticSystem
             Neural SDE system to integrate
         adjoint : bool
             Use adjoint method (default: True)
@@ -578,7 +578,7 @@ class SDEIntegratorFactory:
     @classmethod
     def for_julia(
         cls,
-        sde_system: "StochasticDynamicalSystem",
+        sde_system: "ContinuousStochasticSystem",
         algorithm: SDEIntegrationMethod = "SRIW1",
         **options,
     ) -> SDEIntegratorBase:
@@ -589,7 +589,7 @@ class SDEIntegratorFactory:
 
         Parameters
         ----------
-        sde_system : StochasticDynamicalSystem
+        sde_system : ContinuousStochasticSystem
             SDE system to integrate
         algorithm : SDEIntegrationMethod
             Julia algorithm (default: 'SRIW1')
@@ -620,7 +620,7 @@ class SDEIntegratorFactory:
     @classmethod
     def for_monte_carlo(
         cls,
-        sde_system: "StochasticDynamicalSystem",
+        sde_system: "ContinuousStochasticSystem",
         noise_type: str = "general",
         **options,
     ) -> SDEIntegratorBase:
@@ -631,7 +631,7 @@ class SDEIntegratorFactory:
 
         Parameters
         ----------
-        sde_system : StochasticDynamicalSystem
+        sde_system : ContinuousStochasticSystem
             SDE system to integrate
         noise_type : str
             'additive', 'diagonal', or 'general'
@@ -914,7 +914,7 @@ class SDEIntegratorFactory:
 
 
 def create_sde_integrator(
-    sde_system: "StochasticDynamicalSystem",
+    sde_system: "ContinuousStochasticSystem",
     backend: Backend = "numpy",
     method: Optional[SDEIntegrationMethod] = None,
     **options,
@@ -936,7 +936,7 @@ def create_sde_integrator(
     return SDEIntegratorFactory.create(sde_system, backend, method, **options)
 
 
-def auto_sde_integrator(sde_system: "StochasticDynamicalSystem", **options) -> SDEIntegratorBase:
+def auto_sde_integrator(sde_system: "ContinuousStochasticSystem", **options) -> SDEIntegratorBase:
     """
     Automatically select best available SDE integrator.
 

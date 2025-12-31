@@ -121,7 +121,7 @@ Examples
 
 import time
 import warnings
-from typing import Callable, Optional
+from typing import Callable, Optional, TYPE_CHECKING
 
 import torch
 from torch import Tensor
@@ -147,6 +147,9 @@ from src.types.backends import (
     ConvergenceType,
     NoiseType,
 )
+
+if TYPE_CHECKING:
+    from src.systems.base.core.continuous_stochastic_system import ContinuousStochasticSystem
 
 class TorchSDEIntegrator(SDEIntegratorBase):
     """
@@ -247,7 +250,7 @@ class TorchSDEIntegrator(SDEIntegratorBase):
 
     def __init__(
         self,
-        sde_system,
+        sde_system: "ContinuousStochasticSystem",
         dt: Optional[ScalarLike] = None,
         step_mode: StepMode = StepMode.FIXED,
         backend: str = "torch",
@@ -813,7 +816,7 @@ class TorchSDEIntegrator(SDEIntegratorBase):
         return ys[-1]
 
 
-def create_torchsde_integrator(sde_system, method="euler", dt=0.01, **options):
+def create_torchsde_integrator(sde_system: "ContinuousStochasticSystem", method="euler", dt=0.01, **options):
     """Quick factory for TorchSDE integrators."""
     return TorchSDEIntegrator(sde_system, dt=dt, method=method, backend="torch", **options)
 

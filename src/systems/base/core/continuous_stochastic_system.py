@@ -448,23 +448,7 @@ class ContinuousStochasticSystem(ContinuousSymbolicSystem):
         t_span : TimeSpan
             Integration interval (t_start, t_end)
         method : str
-            SDE integration method:
-            
-            **PyTorch backend (torchsde)**:
-            - 'euler_maruyama': Euler-Maruyama (order 0.5)
-            - 'milstein': Milstein (order 1.0, diagonal noise only)
-            - 'sde_solve': Adaptive SDE solver
-            
-            **NumPy backend (diffeqpy)**:
-            - 'EM': Euler-Maruyama
-            - 'SRIW1': Stochastic Runge-Kutta (order 1.5)
-            - 'RI5': Rössler (order 2.0)
-            
-            **JAX backend (diffrax)**:
-            - 'euler_maruyama': Euler-Maruyama
-            - 'heun': Heun (order 1.0)
-            - 'euler_heun': Euler-Heun (additive noise optimized)
-        
+            SDE integration method (default: 'euler_maruyama')
         t_eval : Optional[TimePoints]
             Specific times to return solution
         n_paths : int
@@ -474,8 +458,9 @@ class ContinuousStochasticSystem(ContinuousSymbolicSystem):
             Random seed for reproducibility
         **integrator_kwargs
             Additional options:
-            - dt : float (required for fixed-step methods)
-            - rtol, atol : float (adaptive methods)
+            - dt : float (required for most SDE methods)
+            - rtol, atol : float (adaptive methods only)
+            - convergence_type : ConvergenceType ('strong' or 'weak')
 
         Returns
         -------
@@ -483,13 +468,14 @@ class ContinuousStochasticSystem(ContinuousSymbolicSystem):
             TypedDict containing:
             - t: Time points (T,)
             - x: State trajectories
-              - Single path: (T, nx)
-              - Multiple paths: (n_paths, T, nx)
+            - Single path: (T, nx)
+            - Multiple paths: (n_paths, T, nx)
             - success: Integration success
             - n_paths: Number of paths
             - noise_type: Detected noise type
             - sde_type: Itô or Stratonovich
-            - nfev: Function evaluations
+            - nfev: Drift function evaluations
+            - diffusion_evals: Diffusion evaluations
             - integration_time: Computation time
 
         Examples
@@ -500,34 +486,35 @@ class ContinuousStochasticSystem(ContinuousSymbolicSystem):
         ...     u=None,
         ...     t_span=(0.0, 10.0),
         ...     method='euler_maruyama',
-        ...     dt=0.01
+        ...     dt=0.01,
+        ...     seed=42
         ... )
-        >>> plt.plot(result['t'], result['x'][:, 0])
 
         Monte Carlo simulation:
         >>> result = system.integrate(
         ...     x0=x0,
         ...     t_span=(0, 10),
         ...     n_paths=1000,
+        ...     dt=0.01,
         ...     seed=42
         ... )
-        >>> # result['x'] has shape (1000, n_steps, nx)
         >>> mean_traj = result['x'].mean(axis=0)
-        >>> std_traj = result['x'].std(axis=0)
 
-        State feedback control:
+        State feedback:
         >>> def controller(x, t):
         ...     return -K @ x
-        >>> result = system.integrate(x0, controller, t_span=(0, 10))
+        >>> result = system.integrate(x0, controller, t_span=(0, 10), dt=0.01)
         """
-        # Convert control input to standard form
+        # Convert control input to standard (t, x) -> u form
         u_func = self._prepare_control_input(u)
 
-        # Create SDE integrator via factory (NOT deterministic integrator!)
+        # CRITICAL FIX: Use positional argument for sde_system
+        # The factory signature is: create(sde_system, backend, method, ...)
         integrator = SDEIntegratorFactory.create(
-            system=self,
+            sde_system=self,  # First positional argument
             backend=self._default_backend,
             method=method,
+            seed=seed,
             **integrator_kwargs
         )
 
@@ -538,19 +525,57 @@ class ContinuousStochasticSystem(ContinuousSymbolicSystem):
                 x0=x0,
                 u_func=u_func,
                 t_span=t_span,
-                t_eval=t_eval,
-                seed=seed
+                t_eval=t_eval
             )
         else:
             # Monte Carlo simulation
-            return integrator.integrate_monte_carlo(
-                x0=x0,
-                u_func=u_func,
-                t_span=t_span,
-                n_paths=n_paths,
-                t_eval=t_eval,
-                seed=seed
-            )
+            if hasattr(integrator, 'integrate_monte_carlo'):
+                return integrator.integrate_monte_carlo(
+                    x0=x0,
+                    u_func=u_func,
+                    t_span=t_span,
+                    n_paths=n_paths,
+                    t_eval=t_eval
+                )
+            else:
+                # Manual Monte Carlo (run n_paths separate integrations)
+                import warnings
+                warnings.warn(
+                    f"Integrator '{method}' does not have native Monte Carlo support. "
+                    f"Running {n_paths} separate integrations (may be slow).",
+                    UserWarning
+                )
+                
+                all_paths = []
+                for i in range(n_paths):
+                    # Set different seed for each path
+                    path_seed = seed + i if seed is not None else None
+                    path_integrator = SDEIntegratorFactory.create(
+                        sde_system=self,
+                        backend=self._default_backend,
+                        method=method,
+                        seed=path_seed,
+                        **integrator_kwargs
+                    )
+                    
+                    result = path_integrator.integrate(
+                        x0=x0,
+                        u_func=u_func,
+                        t_span=t_span,
+                        t_eval=t_eval
+                    )
+                    all_paths.append(result['x'])
+                
+                # Stack all paths
+                x_all = np.stack(all_paths, axis=0)  # (n_paths, T, nx)
+                
+                # Return combined result
+                return {
+                    **result,  # Use last result for metadata
+                    'x': x_all,
+                    'n_paths': n_paths,
+                    'message': f'Monte Carlo with {n_paths} paths (manual mode)'
+                }
 
     # ========================================================================
     # Primary Interface - Drift and Diffusion Evaluation

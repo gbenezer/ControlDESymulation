@@ -86,8 +86,8 @@ from src.types.backends import SDEType, NoiseType, ConvergenceType
 if TYPE_CHECKING:
     import jax.numpy as jnp
     import torch
-
-    from src.systems.base.stochastic_dynamical_system import StochasticDynamicalSystem
+    
+    from src.systems.base.core.continuous_stochastic_system import ContinuousStochasticSystem
 
 
 def get_trajectory_statistics(result: SDEIntegrationResult) -> Dict[str, Any]:
@@ -216,7 +216,7 @@ class SDEIntegratorBase(IntegratorBase):
 
     def __init__(
         self,
-        sde_system: "StochasticDynamicalSystem",
+        sde_system: "ContinuousStochasticSystem",
         dt: Optional[ScalarLike] = None,
         step_mode: StepMode = StepMode.FIXED,
         backend: str = "numpy",
@@ -708,7 +708,7 @@ class SDEIntegratorBase(IntegratorBase):
 
     def integrate_monte_carlo(
         self,
-        x0: ArrayLike,
+        x0: StateVector,
         u_func: Callable[[ScalarLike, StateVector], Optional[ControlVector]],
         t_span: TimeSpan,
         n_paths: int,
