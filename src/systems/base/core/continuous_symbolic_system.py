@@ -295,155 +295,326 @@ class ContinuousSymbolicSystem(SymbolicSystemBase, ContinuousSystemBase):
         """
         Integrate continuous system using numerical ODE solver.
 
-        This method creates an appropriate integrator via IntegratorFactory
-        and delegates the integration. Different methods can be used for
-        different calls without storing integrator state.
+        This method creates an appropriate integrator via IntegratorFactory and delegates
+        the integration. Different methods can be used for different calls without storing
+        integrator state, making it flexible and stateless.
+
+        **Control Input Handling**: This method accepts flexible control input formats
+        and automatically converts them to the internal (t, x) → u function signature
+        expected by numerical solvers. The conversion is handled by `_prepare_control_input()`,
+        which intelligently detects function signatures and wraps appropriately.
+
+        **Integration Strategy**: Creates a fresh integrator for each call via the factory
+        pattern. This allows:
+        - Different methods for different integration tasks
+        - No state management overhead
+        - Clean separation between system and integrator
+        - Easy backend/method switching
 
         Parameters
         ----------
         x0 : StateVector
             Initial state (nx,)
         u : Union[ControlVector, Callable, None]
-            Control input:
-            - None: Zero control (autonomous)
-            - Array: Constant control u(t) = u_const
-            - Callable: Time-varying u(t) or state-feedback u(t, x)
+            Control input in flexible formats:
+            
+            - **None**: Zero control or autonomous system
+            - **Array (nu,)**: Constant control u(t) = u_const for all t
+            - **Callable u(t)**: Time-varying control, signature: t → u
+            - **Callable u(t, x)**: State-feedback, scipy convention (time first)
+            - **Callable u(x, t)**: State-feedback, control theory convention (state first)
+            
+            The method automatically detects callable signatures by:
+            1. Checking parameter names ('t', 'x', 'time', 'state')
+            2. Testing with dummy values if names are ambiguous
+            3. Falling back to (t, x) assumption with warning
+            
+            **Recommendation**: For two-parameter callables, use standard (t, x) order
+            to avoid ambiguity. If your controller uses (x, t), the wrapper will
+            attempt detection, but explicit wrapping is safer:
+            ```python
+                u_func = lambda t, x: my_controller(x, t)
+            ```
+            
         t_span : TimeSpan
             Integration interval (t_start, t_end)
         method : IntegrationMethod
             Integration method. Options:
             
-            **NumPy backend (scipy)**:
-            - 'RK45': Explicit Runge-Kutta 4-5 (default, adaptive)
-            - 'RK23': Explicit Runge-Kutta 2-3 (adaptive)
-            - 'DOP853': High-order Dormand-Prince (adaptive)
-            - 'LSODA': Auto stiff/non-stiff switching (adaptive)
-            - 'Radau': Implicit Runge-Kutta (stiff, adaptive)
-            - 'BDF': Backward Differentiation (stiff, adaptive)
-            
-            **NumPy backend (Julia via DiffEqPy)**:
-            - 'Tsit5': Tsitouras 5/4 (excellent general-purpose)
-            - 'Vern9': Verner 9/8 (very high accuracy)
-            - 'Rosenbrock23': Implicit for moderately stiff
-            - 'AutoTsit5(Rosenbrock23())': Auto-switching
-            
-            **PyTorch backend (torchdiffeq)**:
-            - 'dopri5': Dormand-Prince 5 (adaptive)
-            - 'dopri8': Dormand-Prince 8 (high accuracy)
-            
-            **JAX backend (diffrax)**:
-            - 'tsit5': Tsitouras 5/4 (adaptive, JIT-compiled)
-            - 'dopri5': Dormand-Prince 5 (adaptive)
-            - 'dopri8': Dormand-Prince 8 (high accuracy)
-            
-            **All backends (manual)**:
-            - 'rk4': Fixed-step Runge-Kutta 4
-            - 'euler': Forward Euler (fixed-step)
-            - 'midpoint': Midpoint method (fixed-step)
-        
         t_eval : Optional[TimePoints]
-            Specific times to return solution
-            If None, uses solver's internal adaptive points
-        
+            Specific times to return solution. If provided, interpolates/evaluates
+            solution at these times. If None:
+            - Adaptive methods: Returns solver's internal time points
+            - Fixed-step methods: Returns uniform grid with spacing dt
         dense_output : bool
-            If True, return dense interpolated solution (adaptive only)
-        
+            If True, return dense interpolated solution object (adaptive methods only).
+            Allows evaluating solution at arbitrary times post-integration via
+            result['sol'](t). Default: False
         **integrator_kwargs
-            Additional integrator options:
-            - dt : float (required for fixed-step methods)
-            - rtol : float (relative tolerance, default: 1e-6)
-            - atol : float (absolute tolerance, default: 1e-8)
-            - max_steps : int (maximum steps, default: 10000)
+            Additional integrator options passed to the solver:
+            
+            **Required for fixed-step methods**:
+            - **dt** : float - Time step (required for 'euler', 'midpoint', 'rk4')
+            
+            **Tolerance control (adaptive methods)**:
+            - **rtol** : float - Relative tolerance (default: 1e-6)
+            - **atol** : float - Absolute tolerance (default: 1e-8)
+            
+            **Step size control (adaptive methods)**:
+            - **max_step** : float - Maximum step size (default: inf)
+            - **first_step** : float - Initial step size guess (default: auto)
+            - **min_step** : float - Minimum step size (default: 0)
+            
+            **Limits**:
+            - **max_steps** : int - Maximum number of steps (default: 10000)
+            
+            **Backend-specific** (see integrator documentation):
+            - JAX: 'stepsize_controller', 'adjoint'
+            - PyTorch: 'adjoint', 'method_options'
+            - Julia: 'reltol', 'abstol' (note different names)
 
         Returns
         -------
         IntegrationResult
             TypedDict containing:
-            - t: Time points (T,)
-            - x: State trajectory (T, nx) - **time-major ordering**
-            - success: Integration succeeded
-            - message: Status message
-            - nfev: Number of function evaluations
-            - nsteps: Number of steps taken
-            - integration_time: Computation time (seconds)
-            - solver: Integrator name
-            - sol: Dense output object (if dense_output=True)
+            
+            **Always present**:
+            - **t**: Time points (T,) - adaptive or uniform grid
+            - **x**: State trajectory (T, nx) - **time-major ordering**
+            - **success**: bool - Whether integration succeeded
+            - **message**: str - Status message or error description
+            - **solver**: str - Name of integrator used
+            
+            **Performance metrics**:
+            - **nfev**: int - Number of function evaluations (dynamics calls)
+            - **nsteps**: int - Number of integration steps taken
+            - **integration_time**: float - Wall-clock time (seconds)
+            
+            **Optional (method-dependent)**:
+            - **njev**: int - Number of Jacobian evaluations (implicit methods)
+            - **nlu**: int - Number of LU decompositions (implicit methods)
+            - **sol**: Callable - Dense output interpolant (if dense_output=True)
+            - **status**: int - Termination status code
+
+        Raises
+        ------
+        ValueError
+            - If fixed-step method specified without dt
+            - If backend/method combination is invalid
+            - If control dimensions don't match system
+        RuntimeError
+            - If integration fails (convergence, step size issues)
+            - If backend is not available (library not installed)
+        ImportError
+            - If required integrator backend is not installed
+
+        Notes
+        -----
+        **Factory Pattern**: Creates a fresh integrator for each call. Benefits:
+        - No state management between calls
+        - Different methods for different integration tasks
+        - Clean separation of concerns
+        - Easy to switch backends/methods
+
+        **Control Input Processing**: The `_prepare_control_input()` method handles
+        conversion of various control formats to the internal (t, x) → u signature:
+        1. None → returns None (autonomous) or zeros (nu > 0)
+        2. Array → wraps as constant function
+        3. Callable(t) → wraps to (t, x) → u(t)
+        4. Callable(t, x) or (x, t) → detects order, normalizes to (t, x)
+
+        **Autonomous Systems**: For systems with nu=0, control input is ignored.
+        Pass u=None for clarity.
+
+        **Time-Major Ordering**: Unlike `simulate()` which returns (nx, T) for backward
+        compatibility, this method returns (T, nx) time-major ordering, which is:
+        - Standard for numerical solvers
+        - Efficient for time-series operations
+        - Compatible with pandas DataFrames
+
+        **Backend Selection**: Uses system's default backend. Change with:
+            ```python
+            system.set_default_backend('jax')
+            result = system.integrate(...)  # Uses JAX
+            ```
 
         Examples
         --------
-        Basic integration:
-        
+        **Basic integration** - autonomous system:
+
         >>> result = system.integrate(
         ...     x0=np.array([1.0, 0.0]),
+        ...     u=None,  # Autonomous
         ...     t_span=(0.0, 10.0)
         ... )
+        >>> print(f"Success: {result['success']}")
+        >>> print(f"Steps taken: {result['nsteps']}")
         >>> plt.plot(result['t'], result['x'][:, 0])
-        
-        Stiff system with tight tolerances:
-        
+
+        **Constant control**:
+
+        >>> result = system.integrate(
+        ...     x0=np.array([1.0, 0.0]),
+        ...     u=np.array([0.5]),  # Constant
+        ...     t_span=(0.0, 10.0)
+        ... )
+
+        **Time-varying control** - single parameter:
+
+        >>> def u_func(t):
+        ...     return np.array([np.sin(t)])
+        >>> result = system.integrate(x0, u=u_func, t_span=(0, 10))
+
+        **State feedback** - standard (t, x) order:
+
+        >>> def controller(t, x):
+        ...     K = np.array([[-1.0, -2.0]])
+        ...     return -K @ x
+        >>> result = system.integrate(x0, u=controller, t_span=(0, 5))
+
+        **State feedback** - control theory (x, t) order (auto-detected):
+
+        >>> def my_controller(x, t):
+        ...     # State-first convention
+        ...     K = np.array([[-1.0, -2.0]])
+        ...     return -K @ x
+        >>> result = system.integrate(x0, u=my_controller, t_span=(0, 5))
+        >>> # Method detects (x, t) order and adapts automatically
+
+        **Stiff system** with tight tolerances:
+
         >>> result = system.integrate(
         ...     x0=x0,
+        ...     u=None,
         ...     t_span=(0, 100),
         ...     method='Radau',
         ...     rtol=1e-9,
         ...     atol=1e-11
         ... )
-        
-        State feedback control:
-        
-        >>> def controller(t, x):
-        ...     K = np.array([[-1.0, -2.0]])
-        ...     return -K @ x
-        >>> result = system.integrate(x0, u=controller, t_span=(0, 5))
-        
-        Time-varying control:
-        
-        >>> def u_func(t, x):
-        ...     return np.array([np.sin(t)])
-        >>> result = system.integrate(x0, u=u_func, t_span=(0, 10))
-        
-        Constant control:
-        
+        >>> print(f"Stiff solver used {result['nfev']} function evaluations")
+
+        **High-accuracy Julia solver**:
+
         >>> result = system.integrate(
-        ...     x0, 
-        ...     u=np.array([1.0]),  # Constant
-        ...     t_span=(0, 10)
-        ... )
-        
-        Autonomous system:
-        
-        >>> result = autonomous_system.integrate(
-        ...     x0=np.array([1.0, 0.0]),
-        ...     u=None,  # No control
-        ...     t_span=(0, 10)
-        ... )
-        
-        Fixed-step RK4:
-        
-        >>> result = system.integrate(
-        ...     x0, 
+        ...     x0=x0,
+        ...     u=None,
         ...     t_span=(0, 10),
-        ...     method='rk4',
-        ...     dt=0.01
-        ... )
-        
-        High-accuracy Julia solver:
-        
-        >>> result = system.integrate(
-        ...     x0, 
-        ...     t_span=(0, 10),
-        ...     method='Vern9',
+        ...     method='Vern9',  # Julia high-accuracy
         ...     rtol=1e-12
         ... )
-        
-        Notes
-        -----
-        The integrator is created fresh for each call, allowing different
-        methods to be used for different integration tasks without state
-        management overhead. The factory pattern ensures the right integrator
-        is selected based on backend and method.
-        
-        For autonomous systems (nu=0), u can be None or omitted entirely.
+        >>> print(f"Julia solver: {result['solver']}")
+
+        **Auto-switching for unknown stiffness**:
+
+        >>> result = system.integrate(
+        ...     x0=x0,
+        ...     u=None,
+        ...     t_span=(0, 10),
+        ...     method='LSODA'  # scipy auto-switching
+        ... )
+        >>> # Or use Julia:
+        >>> result = system.integrate(
+        ...     x0=x0,
+        ...     u=None,
+        ...     t_span=(0, 10),
+        ...     method='AutoTsit5(Rosenbrock23())'
+        ... )
+
+        **Fixed-step RK4** for predictable behavior:
+
+        >>> result = system.integrate(
+        ...     x0=x0,
+        ...     u=None,
+        ...     t_span=(0, 10),
+        ...     method='rk4',
+        ...     dt=0.01  # Required!
+        ... )
+        >>> assert len(result['t']) == 1001  # 0 to 10 with dt=0.01
+
+        **Specific evaluation times**:
+
+        >>> t_eval = np.array([0.0, 1.0, 2.0, 5.0, 10.0])
+        >>> result = system.integrate(
+        ...     x0=x0,
+        ...     u=None,
+        ...     t_span=(0, 10),
+        ...     t_eval=t_eval
+        ... )
+        >>> assert len(result['t']) == 5
+
+        **Dense output** for post-hoc interpolation:
+
+        >>> result = system.integrate(
+        ...     x0=x0,
+        ...     u=None,
+        ...     t_span=(0, 10),
+        ...     dense_output=True
+        ... )
+        >>> if 'sol' in result:
+        ...     t_fine = np.linspace(0, 10, 10000)
+        ...     x_fine = result['sol'](t_fine)
+        ...     plt.plot(t_fine, x_fine[:, 0])
+
+        **Backend switching**:
+
+        >>> # NumPy (scipy)
+        >>> result_np = system.integrate(x0, u=None, t_span=(0, 10))
+        >>> 
+        >>> # JAX (JIT-compiled)
+        >>> system.set_default_backend('jax')
+        >>> result_jax = system.integrate(x0, u=None, t_span=(0, 10), method='tsit5')
+        >>> 
+        >>> # PyTorch (autodiff)
+        >>> system.set_default_backend('torch')
+        >>> result_torch = system.integrate(x0, u=None, t_span=(0, 10), method='dopri5')
+
+        **Performance monitoring**:
+
+        >>> result = system.integrate(x0, u=None, t_span=(0, 10))
+        >>> print(f"Steps: {result['nsteps']}")
+        >>> print(f"Function evals: {result['nfev']}")
+        >>> print(f"Time: {result['integration_time']:.4f}s")
+        >>> 
+        >>> if result['nfev'] > 10000:
+        ...     print("⚠ Warning: Many function evaluations!")
+        ...     print("Consider: stiff solver, relaxed tolerances, or check dynamics")
+
+        **Error handling**:
+
+        >>> try:
+        ...     result = system.integrate(
+        ...         x0=x0,
+        ...         u=None,
+        ...         t_span=(0, 10),
+        ...         method='Radau',
+        ...         max_steps=10  # Too low!
+        ...     )
+        ...     if not result['success']:
+        ...         print(f"Failed: {result['message']}")
+        ... except RuntimeError as e:
+        ...     print(f"Integration error: {e}")
+
+        **Comparing methods**:
+
+        >>> methods = ['RK45', 'Tsit5', 'Vern9', 'rk4']
+        >>> for method in methods:
+        ...     try:
+        ...         result = system.integrate(
+        ...             x0, u=None, t_span=(0, 10),
+        ...             method=method,
+        ...             dt=0.01 if method == 'rk4' else None
+        ...         )
+        ...         print(f"{method}: {result['nfev']} evals, {result['nsteps']} steps")
+        ...     except ImportError:
+        ...         print(f"{method}: Backend not available")
+
+        See Also
+        --------
+        simulate : High-level simulation with regular time grid (recommended for most users)
+        IntegratorFactory : Create custom integrators with specific methods
+        _prepare_control_input : Internal method for control input conversion
+        linearize : Compute linearized dynamics at equilibrium
+        set_default_backend : Change backend for integration
         """
         # Convert control input to standard function form
         u_func = self._prepare_control_input(u)

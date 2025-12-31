@@ -145,83 +145,231 @@ class ContinuousSystemBase(ABC):
             dx/dt = f(x, u, t)
             x(t0) = x0
 
-        This method exposes the raw solver output including adaptive time points,
-        convergence information, and performance metrics. For typical use cases,
-        consider using simulate() instead, which provides a cleaner interface.
+        **API Level**: This is a **low-level integration method** that exposes raw solver
+        output including adaptive time points, convergence information, and performance
+        metrics. For typical use cases, prefer `simulate()` which provides a cleaner
+        interface with regular time grids and the intuitive (x, t) controller convention.
+
+        **Control Input Handling**: This method accepts flexible control input formats
+        and automatically converts them to the internal (t, x) → u function signature
+        expected by numerical solvers. You can provide:
+        - None for autonomous/zero control
+        - Arrays for constant control
+        - Functions with various signatures (see below)
+
+        The conversion to solver convention is handled internally - you don't need to
+        worry about the (t, x) vs (x, t) distinction at this level.
 
         Parameters
         ----------
         x0 : StateVector
             Initial state (nx,)
         u : Union[ControlVector, Callable[[float], ControlVector], None]
-            Control input, can be:
-            - None: Zero control or autonomous
-            - Array: Constant control u(t) = u for all t
-            - Callable: Time-varying control u(t) = u_func(t)
+            Control input in flexible formats:
+            
+            - **None**: Zero control or autonomous system
+            - **Array (nu,)**: Constant control u(t) = u_const for all t
+            - **Callable u(t)**: Time-varying control, signature: t → u
+            - **Callable u(t, x)**: State-feedback control (auto-detected)
+            - **Callable u(x, t)**: State-feedback control (auto-detected)
+            
+            The method will automatically detect the function signature and convert
+            to the internal (t, x) → u convention used by solvers. For callables with
+            two parameters, it attempts to detect the order by inspecting parameter
+            names or testing with dummy values.
+            
+            **Standard Convention**: Functions with two parameters should use (t, x) order
+            to avoid ambiguity. If using (x, t) order, the wrapper will attempt detection
+            but may fail on edge cases - prefer wrapping explicitly:
+        ```python
+            u_func = lambda t, x: my_controller(x, t)
+        ```
         t_span : tuple[float, float]
             Time interval (t_start, t_end)
         method : str
-            Integration method (e.g., 'RK45', 'RK23', 'LSODA', 'Radau', 'BDF')
+            Integration method. Options:
+            
         **integrator_kwargs
-            Additional arguments passed to the ODE solver
-            Common: rtol, atol, max_step, first_step, dense_output
+            Additional arguments passed to the ODE solver:
+            
+            - **dt** : float (required for fixed-step methods)
+            - **rtol** : float (relative tolerance, default: 1e-6)
+            - **atol** : float (absolute tolerance, default: 1e-8)
+            - **max_steps** : int (maximum steps, default: 10000)
+            - **t_eval** : ArrayLike (specific times to return solution)
+            - **dense_output** : bool (return interpolant, default: False)
+            - **first_step** : float (initial step size guess)
+            - **max_step** : float (maximum step size)
 
         Returns
         -------
         IntegrationResult
-            TypedDict (returns as dict) containing:
-            - t: Time points (n_points,) - adaptive, chosen by solver
-            - y: State trajectory (nx, n_points)
-            - success: bool - whether integration succeeded
-            - message: str - solver status message
-            - nfev: int - number of function evaluations
-            - njev: int - number of Jacobian evaluations (if applicable)
-            - nlu: int - number of LU decompositions (implicit methods)
-            - status: int - termination status code
+            TypedDict containing:
+            
+            - **t**: Time points (T,) - adaptive, chosen by solver
+            - **x** or **y**: State trajectory
+            - scipy returns 'y' with shape (nx, T)
+            - other backends return 'x' with shape (T, nx)
+            - **success**: bool - whether integration succeeded
+            - **message**: str - solver status message
+            - **nfev**: int - number of function evaluations
+            - **nsteps**: int - number of steps taken
+            - **integration_time**: float - computation time (seconds)
+            - **solver**: str - integrator name used
+            - **njev**: int - number of Jacobian evaluations (if applicable)
+            - **nlu**: int - number of LU decompositions (implicit methods)
+            - **status**: int - termination status code
 
         Notes
         -----
-        The time points in the result are chosen adaptively by the solver
-        based on error control, not on a regular grid. For a regular time
-        grid, use simulate() instead.
+        **Adaptive Time Points**: The time points in the result are chosen adaptively
+        by the solver based on error control, NOT on a regular grid. This means:
+        - Solver takes larger steps when dynamics are smooth
+        - Solver takes smaller steps when dynamics change rapidly
+        - Time points are NOT uniformly spaced
 
-        Solver selection guidelines:
-        - 'RK45': Explicit Runge-Kutta (good default for non-stiff)
-        - 'RK23': Faster but less accurate than RK45
-        - 'DOP853': High-accuracy explicit method
-        - 'Radau': Implicit method for stiff systems
-        - 'BDF': Implicit multistep for very stiff systems
-        - 'LSODA': Automatically switches between stiff/non-stiff
+        For a regular time grid suitable for plotting or analysis, use `simulate()`
+        instead, or provide `t_eval` parameter.
+
+        **Backend Differences**:
+        - **scipy**: Returns 'y' with shape (nx, T) - state-major
+        - **torchdiffeq/diffrax**: Return 'x' with shape (T, nx) - time-major
+        - This method handles both conventions automatically in `simulate()`
 
         Examples
         --------
-        Basic integration with default solver:
+        **Basic usage** - autonomous system:
 
         >>> x0 = np.array([1.0, 0.0])
         >>> result = system.integrate(x0, u=None, t_span=(0, 10))
         >>> print(f"Success: {result['success']}")
         >>> print(f"Function evaluations: {result['nfev']}")
-        >>> plt.plot(result['t'], result['y'][0, :])
+        >>> 
+        >>> # Handle both scipy and other backends
+        >>> if 'y' in result:
+        >>>     trajectory = result['y']  # scipy: (nx, T)
+        >>>     plt.plot(result['t'], trajectory[0, :])
+        >>> else:
+        >>>     trajectory = result['x']  # others: (T, nx)
+        >>>     plt.plot(result['t'], trajectory[:, 0])
 
-        Time-varying control:
+        **Constant control**:
+
+        >>> u_const = np.array([0.5])
+        >>> result = system.integrate(x0, u=u_const, t_span=(0, 10))
+
+        **Time-varying control** - single parameter function:
 
         >>> def u_func(t):
         ...     return np.array([np.sin(t)])
-        >>> result = system.integrate(x0, u_func, t_span=(0, 10))
+        >>> result = system.integrate(x0, u=u_func, t_span=(0, 10))
 
-        Stiff system with tight tolerances:
+        **State feedback** - two parameter function (auto-detected):
+
+        >>> def u_func(t, x):
+        ...     K = np.array([[1.0, 2.0]])
+        ...     return -K @ x
+        >>> result = system.integrate(x0, u=u_func, t_span=(0, 10))
+
+        **Stiff system** with tight tolerances:
 
         >>> result = system.integrate(
-        ...     x0, u=None, t_span=(0, 10),
+        ...     x0,
+        ...     u=None,
+        ...     t_span=(0, 10),
         ...     method='Radau',
         ...     rtol=1e-8,
         ...     atol=1e-10
         ... )
+        >>> print(f"Stiff solver steps: {result['nsteps']}")
 
-        Check solver performance:
+        **High-accuracy Julia solver**:
 
+        >>> result = system.integrate(
+        ...     x0,
+        ...     u=None,
+        ...     t_span=(0, 10),
+        ...     method='Vern9',  # Julia high-accuracy
+        ...     rtol=1e-12,
+        ...     atol=1e-14
+        ... )
+
+        **Regular time grid** for plotting:
+
+        >>> t_eval = np.linspace(0, 10, 1001)  # 1001 points
+        >>> result = system.integrate(
+        ...     x0,
+        ...     u=None,
+        ...     t_span=(0, 10),
+        ...     t_eval=t_eval
+        ... )
+        >>> assert len(result['t']) == 1001
+
+        **Fixed-step integration** (RK4):
+
+        >>> result = system.integrate(
+        ...     x0,
+        ...     u=None,
+        ...     t_span=(0, 10),
+        ...     method='rk4',
+        ...     dt=0.01  # Required for fixed-step
+        ... )
+
+        **Check solver performance**:
+
+        >>> result = system.integrate(x0, u=None, t_span=(0, 10))
         >>> if result['nfev'] > 10000:
-        ...     print("Warning: Many function evaluations - try stiff solver")
+        ...     print("⚠ Warning: Many function evaluations!")
+        ...     print("Consider:")
+        ...     print("  - Using stiff solver (Radau, BDF)")
+        ...     print("  - Relaxing tolerances")
+        ...     print("  - Checking for stiffness")
+
+        **Dense output** (interpolation):
+
+        >>> result = system.integrate(
+        ...     x0,
+        ...     u=None,
+        ...     t_span=(0, 10),
+        ...     dense_output=True
+        ... )
+        >>> if 'sol' in result:
+        ...     # Evaluate at arbitrary times
+        ...     t_fine = np.linspace(0, 10, 10000)
+        ...     x_fine = result['sol'](t_fine)
+
+        **Comparing backends**:
+
+        >>> # NumPy (scipy)
+        >>> result_np = system.integrate(x0, u=None, t_span=(0, 10), method='RK45')
+        >>> 
+        >>> # Julia (DiffEqPy)
+        >>> result_jl = system.integrate(x0, u=None, t_span=(0, 10), method='Tsit5')
+        >>> 
+        >>> # JAX (diffrax)
+        >>> system.set_default_backend('jax')
+        >>> result_jax = system.integrate(x0, u=None, t_span=(0, 10), method='tsit5')
+
+        **Error handling**:
+
+        >>> try:
+        ...     result = system.integrate(
+        ...         x0,
+        ...         u=None,
+        ...         t_span=(0, 10),
+        ...         method='RK45',
+        ...         max_steps=100  # Very low limit
+        ...     )
+        ...     if not result['success']:
+        ...         print(f"Integration failed: {result['message']}")
+        ... except RuntimeError as e:
+        ...     print(f"Runtime error: {e}")
+
+        See Also
+        --------
+        simulate : High-level simulation with regular time grid (recommended)
+        IntegratorFactory : Create custom integrators with specific methods
+        linearize : Compute linearized dynamics at equilibrium
         """
         pass
 
@@ -317,9 +465,10 @@ class ContinuousSystemBase(ABC):
         ----------
         x0 : StateVector
             Initial state (nx,)
-        controller : Optional[Callable[[float, StateVector], ControlVector]]
-            Feedback controller u = controller(t, x)
-            Uses (t, x) signature matching scipy/ODE conventions
+        controller : Optional[Callable[[StateVector, float], ControlVector]]
+            Feedback controller u = controller(x, t)
+            **STANDARD CONVENTION**: State is primary argument, time is secondary
+            This aligns with discrete systems' policy(x, k) signature
             If None, uses zero control (open-loop)
         t_span : tuple[float, float]
             Simulation time interval (t_start, t_end)
@@ -353,12 +502,14 @@ class ContinuousSystemBase(ABC):
 
         Controller Signature
         --------------------
-        Controllers must have signature (t, x) -> u:
-        - t: float - current time
-        - x: StateVector - current state
+        Controllers must have signature (x, t) -> u:
+        - x: StateVector - current state (PRIMARY argument)
+        - t: float - current time (secondary argument)
         - Returns: ControlVector - control input
 
-        This matches scipy.integrate conventions where time is the first argument.
+        This matches the discrete systems' policy(x, k) convention where state
+        is the primary argument. An internal adapter converts to scipy's (t, x)
+        convention when calling integrate().
 
         Examples
         --------
@@ -372,38 +523,50 @@ class ContinuousSystemBase(ABC):
         Closed-loop with state feedback:
 
         >>> K = np.array([[-1.0, -2.0]])  # LQR gain
-        >>> def controller(t, x):
+        >>> def controller(x, t):  # Note: (x, t) order
         ...     return -K @ x
         >>> result = system.simulate(x0, controller, t_span=(0, 5))
 
         Time-varying reference tracking:
 
-        >>> def controller(t, x):
+        >>> def controller(x, t):  # Note: (x, t) order
         ...     x_ref = np.array([np.sin(t), np.cos(t)])
         ...     return K @ (x_ref - x)
         >>> result = system.simulate(x0, controller, t_span=(0, 10))
 
         Adaptive gain controller:
 
-        >>> def controller(t, x):
+        >>> def controller(x, t):  # Note: (x, t) order
         ...     K = 1.0 + 0.1 * t  # Gain increases with time
         ...     return np.array([-K * x[0]])
         >>> result = system.simulate(x0, controller, t_span=(0, 10))
 
         Saturated control:
 
-        >>> def controller(t, x):
+        >>> def controller(x, t):  # Note: (x, t) order
         ...     u = -2.0 * x[0] - 0.5 * x[1]
         ...     return np.array([np.clip(u, -1.0, 1.0)])
+        >>> result = system.simulate(x0, controller, t_span=(0, 10))
+
+        Time-only control (uncommon, but supported):
+
+        >>> def controller(x, t):
+        ...     # Ignore state, use only time
+        ...     return np.array([np.sin(t)])
         >>> result = system.simulate(x0, controller, t_span=(0, 10))
         """
         
         # Create regular time grid
         t_regular = np.arange(t_span[0], t_span[1] + dt, dt)
         
-        # Pass controller directly - it already has (t, x) signature
-        # No wrapper needed, integrate() expects control functions as (t, x)
-        u_func = controller
+        # Adapt controller signature from (x, t) to scipy's (t, x) if needed
+        if controller is not None:
+            def u_func_scipy(t, x):
+                """Adapter: converts scipy's (t, x) to our (x, t) convention"""
+                return controller(x, t)
+            u_func = u_func_scipy
+        else:
+            u_func = None
         
         # Call low-level integrate() with regular time grid
         int_result = self.integrate(
@@ -452,8 +615,8 @@ class ContinuousSystemBase(ABC):
                 # Extract state at this time (states_regular is (nx, T))
                 x_t = states_regular[:, i]
                 
-                # Call controller with (t, x) signature
-                u_t = controller(t, x_t)
+                # Call controller with (x, t) signature (our convention)
+                u_t = controller(x_t, t)
                 controls_list.append(u_t)
             
             controls = np.array(controls_list).T  # (nu, T)

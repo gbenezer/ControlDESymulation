@@ -251,16 +251,36 @@ class IntegratorBase(ABC):
         """
         Integrate over time interval with control policy.
 
+        **API Level**: This is a **low-level integration method** that directly interfaces
+        with numerical ODE/SDE solvers. For typical use cases, prefer the high-level
+        `simulate()` method which provides a cleaner interface.
+
+        **Control Function Convention**: This method uses the **scipy/ODE solver convention**
+        where control functions have signature **(t, x) → u**, with time as the FIRST argument.
+        This differs from the high-level `simulate()` API which uses **(x, t) → u** with state
+        as the primary argument. The difference is intentional:
+
+        - **Low-level** `integrate()`: Uses (t, x) for direct solver compatibility
+        - **High-level** `simulate()`: Uses (x, t) for intuitive control-theoretic API
+
+        If you're implementing controllers for `simulate()`, use (x, t) order. If calling
+        `integrate()` directly, use (t, x) order as shown in the examples below.
+
         Parameters
         ----------
         x0 : ArrayLike
             Initial state (nx,)
         u_func : Callable[[float, ArrayLike], ArrayLike]
-            Control policy: (t, x) → u
+            Control policy with **low-level convention**: (t, x) → u
+            - t: float - current time (**FIRST** argument, scipy convention)
+            - x: ArrayLike - current state (**SECOND** argument)
+            - Returns: ArrayLike - control input u
+            
             Can be:
             - Constant control: lambda t, x: u_const
             - State feedback: lambda t, x: -K @ x
             - Time-varying: lambda t, x: u(t)
+            - Autonomous: lambda t, x: None
         t_span : Tuple[float, float]
             Integration interval (t_start, t_end)
         t_eval : Optional[ArrayLike]
@@ -276,7 +296,7 @@ class IntegratorBase(ABC):
         IntegrationResult
             TypedDict containing:
             - t: Time points (T,)
-            - x: State trajectory (T, nx)
+            - x: State trajectory (T, nx) - **time-major ordering**
             - success: Whether integration succeeded
             - message: Status message
             - nfev: Number of function evaluations
@@ -292,28 +312,97 @@ class IntegratorBase(ABC):
 
         Examples
         --------
-        >>> # Zero control
+        **Low-level integrate() usage** (uses (t, x) convention):
+
+        Zero control (autonomous):
+
         >>> result = integrator.integrate(
         ...     x0=np.array([1.0, 0.0]),
-        ...     u_func=lambda t, x: np.zeros(1),
+        ...     u_func=lambda t, x: None,  # Autonomous
         ...     t_span=(0.0, 10.0)
         ... )
         >>> print(f"Final state: {result['x'][-1]}")
-        >>> print(f"Success: {result['success']}")
-        >>>
-        >>> # State feedback controller
+
+        Constant control:
+
+        >>> result = integrator.integrate(
+        ...     x0=np.array([1.0, 0.0]),
+        ...     u_func=lambda t, x: np.array([0.5]),  # Note: (t, x) order
+        ...     t_span=(0.0, 10.0)
+        ... )
+
+        State feedback controller (note time-first order):
+
         >>> K = np.array([[1.0, 2.0]])
         >>> result = integrator.integrate(
-        ...     x0=x0,
-        ...     u_func=lambda t, x: -K @ x,
+        ...     x0=np.array([1.0, 0.0]),
+        ...     u_func=lambda t, x: -K @ x,  # (t, x) order for integrate()
         ...     t_span=(0.0, 10.0)
         ... )
         >>> print(f"Function evaluations: {result['nfev']}")
-        >>>
-        >>> # Evaluate at specific times
+
+        Time-varying control:
+
+        >>> result = integrator.integrate(
+        ...     x0=np.array([1.0, 0.0]),
+        ...     u_func=lambda t, x: np.array([np.sin(t)]),  # Time-dependent
+        ...     t_span=(0.0, 10.0)
+        ... )
+
+        Evaluate at specific times:
+
         >>> t_eval = np.linspace(0, 10, 1001)
-        >>> result = integrator.integrate(x0, u_func, (0, 10), t_eval=t_eval)
+        >>> result = integrator.integrate(
+        ...     x0=np.array([1.0, 0.0]),
+        ...     u_func=lambda t, x: np.zeros(1),
+        ...     t_span=(0, 10),
+        ...     t_eval=t_eval
+        ... )
         >>> assert len(result["t"]) == 1001
+
+        **High-level simulate() usage** (uses (x, t) convention - recommended):
+
+        For typical use cases, prefer `system.simulate()` which uses the more intuitive
+        (x, t) convention:
+
+        >>> # Controller with (x, t) order - state is primary
+        >>> def controller(x, t):  # Note: (x, t) order for simulate()
+        ...     K = np.array([[1.0, 2.0]])
+        ...     return -K @ x
+        >>>
+        >>> result = system.simulate(
+        ...     x0=np.array([1.0, 0.0]),
+        ...     controller=controller,  # Uses (x, t) signature
+        ...     t_span=(0.0, 10.0),
+        ...     dt=0.01
+        ... )
+
+        **Converting between conventions**:
+
+        If you have a controller designed for simulate() and need to use integrate():
+
+        >>> # Controller for simulate() - uses (x, t)
+        >>> def my_controller(x, t):
+        ...     return -K @ x
+        >>>
+        >>> # Wrap for integrate() - convert to (t, x)
+        >>> result = integrator.integrate(
+        ...     x0=x0,
+        ...     u_func=lambda t, x: my_controller(x, t),  # Swap argument order
+        ...     t_span=(0, 10)
+        ... )
+
+        Notes
+        -----
+        - The (t, x) signature matches `scipy.integrate.solve_ivp` convention
+        - This allows direct compatibility with numerical solver libraries
+        - The high-level `simulate()` method handles the conversion automatically
+        - Most users should use `simulate()` instead of calling `integrate()` directly
+
+        See Also
+        --------
+        simulate : High-level simulation with (x, t) controller convention (recommended)
+        step : Single integration step
         """
         pass
 
