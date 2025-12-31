@@ -435,6 +435,8 @@ class SimulationResult(TypedDict, total=False):
         Noise sequence (n_steps, nw) for stochastic systems
     time : Optional[TimePoints]
         Time points (n_steps+1,) if applicable
+    success: bool
+        Whether or not the simulation succeeded
     metadata : Dict[str, Any]
         Additional information (cost, constraints, etc.)
 
@@ -482,6 +484,7 @@ class SimulationResult(TypedDict, total=False):
     outputs: Optional[ArrayLike]
     noise: Optional[ArrayLike]
     time: Optional[ArrayLike]
+    success: bool
     metadata: Dict[str, Any]
 
 class DiscreteSimulationResult(TypedDict, total=False):
@@ -505,8 +508,10 @@ class DiscreteSimulationResult(TypedDict, total=False):
         Time step indices [0, 1, 2, ..., n_steps]
     dt : float
         Time step / sampling period
+    success: bool
+        Whether or not the simulation succeeded
     metadata : Dict[str, Any]
-        Additional information (method, success, closed_loop, etc.)
+        Additional information (method, closed_loop, etc.)
 
     Notes
     -----
@@ -546,6 +551,7 @@ class DiscreteSimulationResult(TypedDict, total=False):
     noise: Optional[ArrayLike]
     time_steps: ArrayLike
     dt: float
+    success: bool
     metadata: Dict[str, Any]
     
 class SDEIntegrationResult(TypedDict, total=False):
