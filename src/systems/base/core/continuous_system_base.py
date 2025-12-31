@@ -678,6 +678,200 @@ class ContinuousSystemBase(ABC):
                 "integration_time": int_result.get("integration_time", None)
             }
         }
+        
+    def rollout(
+        self,
+        x0: StateVector,
+        policy: Optional[FeedbackController] = None,
+        t_span: TimeSpan = (0.0, 10.0),
+        dt: ScalarLike = 0.01,
+        method: IntegrationMethod = "RK45",
+        **kwargs
+    ) -> SimulationResult:
+        """
+        Rollout system trajectory with optional state-feedback policy.
+
+        This is an alias for simulate() that provides API consistency with discrete
+        systems. The name "rollout" is commonly used in reinforcement learning and
+        control theory for executing a policy over time.
+
+        Parameters
+        ----------
+        x0 : StateVector
+            Initial state (nx,)
+        policy : Optional[Callable[[StateVector, float], ControlVector]]
+            State-feedback policy u = policy(x, t)
+            **STANDARD CONVENTION**: State is primary argument, time is secondary
+            If None, uses zero control (open-loop)
+        t_span : tuple[float, float]
+            Simulation time interval (t_start, t_end)
+        dt : float
+            Output time step for regular grid (default: 0.01)
+        method : str
+            Integration method passed to integrate()
+        **kwargs
+            Additional arguments passed to integrate()
+
+        Returns
+        -------
+        SimulationResult
+            TypedDict containing:
+            - **time**: Time points array (T,) with uniform spacing dt
+            - **states**: State trajectory (T, nx) - TIME-MAJOR ordering
+            - **controls**: Control trajectory (T, nu) if policy provided
+            - **metadata**: Additional information with 'closed_loop' flag
+
+        Notes
+        -----
+        **API Consistency**: This method provides the same interface as
+        DiscreteSystemBase.rollout(), making it easier to work with both
+        continuous and discrete systems using identical code patterns.
+
+        The only difference from simulate() is:
+        - Parameter name: "policy" instead of "controller" (same semantics)
+        - Metadata includes 'closed_loop' flag for compatibility
+        - Name emphasizes trajectory generation with state feedback
+
+        **When to Use**:
+        - Use rollout() when emphasizing policy execution (RL/control context)
+        - Use simulate() for general-purpose simulation
+        - Both methods are functionally equivalent for continuous systems
+
+        Policy Signature
+        ----------------
+        Policies must have signature (x, t) -> u:
+        - x: StateVector - current state (PRIMARY argument)
+        - t: float - current time (secondary argument)
+        - Returns: ControlVector - control input
+
+        Examples
+        --------
+        **Open-loop rollout**:
+
+        >>> result = system.rollout(x0, t_span=(0, 10), dt=0.01)
+        >>> plt.plot(result["time"], result["states"][:, 0])
+
+        **State feedback policy** (LQR):
+
+        >>> K = np.array([[-1.0, -2.0]])  # LQR gain
+        >>> def policy(x, t):
+        ...     return -K @ x
+        >>> result = system.rollout(x0, policy, t_span=(0, 10))
+
+        **Time-varying policy with reference**:
+
+        >>> x_ref_func = lambda t: np.array([np.sin(t), np.cos(t)])
+        >>> def policy(x, t):
+        ...     x_ref = x_ref_func(t)
+        ...     K = np.array([[1.0, 0.5]])
+        ...     return K @ (x_ref - x)
+        >>> result = system.rollout(x0, policy, t_span=(0, 10))
+
+        **Nonlinear policy** (e.g., neural network):
+
+        >>> def neural_policy(x, t):
+        ...     # Example: simple nonlinear policy
+        ...     hidden = np.tanh(W1 @ x + b1)
+        ...     u = W2 @ hidden + b2
+        ...     return u
+        >>> result = system.rollout(x0, neural_policy, t_span=(0, 5))
+
+        **MPC-style receding horizon**:
+
+        >>> def mpc_policy(x, t):
+        ...     # Solve optimization at each step
+        ...     u_opt = solve_mpc(x, horizon=10, Q=Q, R=R)
+        ...     return u_opt
+        >>> result = system.rollout(x0, mpc_policy, t_span=(0, 10), dt=0.1)
+
+        **Comparing policies**:
+
+        >>> policies = {
+        ...     "LQR": lqr_policy,
+        ...     "MPC": mpc_policy,
+        ...     "Neural": neural_policy
+        ... }
+        >>> 
+        >>> results = {}
+        >>> for name, policy in policies.items():
+        ...     results[name] = system.rollout(x0, policy, t_span=(0, 10))
+        ...     
+        >>> # Plot comparison
+        >>> for name, result in results.items():
+        ...     plt.plot(result["time"], result["states"][:, 0], label=name)
+        >>> plt.legend()
+
+        **Trajectory optimization context**:
+
+        >>> # Generate initial trajectory
+        >>> result = system.rollout(x0, initial_policy, t_span=(0, 5))
+        >>> 
+        >>> # Extract trajectory for optimization
+        >>> trajectory = result["states"]  # (T, nx)
+        >>> 
+        >>> # Optimize policy
+        >>> optimized_policy = optimize_policy(trajectory)
+        >>> 
+        >>> # Re-rollout with optimized policy
+        >>> final_result = system.rollout(x0, optimized_policy, t_span=(0, 5))
+
+        **Reinforcement learning context**:
+
+        >>> # Collect rollout for policy gradient
+        >>> def stochastic_policy(x, t):
+        ...     mu = policy_network(x)
+        ...     u = mu + np.random.randn(*mu.shape) * sigma
+        ...     return u
+        >>> 
+        >>> rollouts = []
+        >>> for episode in range(num_episodes):
+        ...     result = system.rollout(x0, stochastic_policy, t_span=(0, 10))
+        ...     reward = compute_reward(result["states"], result["controls"])
+        ...     rollouts.append((result, reward))
+
+        **Monte Carlo evaluation**:
+
+        >>> # Evaluate policy robustness
+        >>> results = []
+        >>> for _ in range(100):
+        ...     x0_perturbed = x0 + np.random.randn(len(x0)) * 0.1
+        ...     result = system.rollout(x0_perturbed, policy, t_span=(0, 10))
+        ...     results.append(result)
+        >>> 
+        >>> # Analyze performance distribution
+        >>> final_errors = [np.linalg.norm(r["states"][-1, :]) for r in results]
+        >>> print(f"Mean final error: {np.mean(final_errors):.3f}")
+        >>> print(f"Std final error: {np.std(final_errors):.3f}")
+
+        **Using metadata closed_loop flag**:
+
+        >>> result = system.rollout(x0, policy, t_span=(0, 10))
+        >>> if result["metadata"]["closed_loop"]:
+        ...     print("Closed-loop rollout with state feedback")
+        ... else:
+        ...     print("Open-loop rollout")
+
+        See Also
+        --------
+        simulate : Equivalent method with "controller" parameter name
+        integrate : Low-level integration with solver diagnostics
+        DiscreteSystemBase.rollout : Discrete-time analog
+        """
+        # Call simulate() with same functionality
+        result = self.simulate(
+            x0=x0,
+            controller=policy,
+            t_span=t_span,
+            dt=dt,
+            method=method,
+            **kwargs
+        )
+        
+        # Add closed_loop flag to metadata for consistency with discrete systems
+        result["metadata"]["closed_loop"] = policy is not None
+        result["metadata"]["method_type"] = "rollout"
+        
+        return result
 
     # =========================================================================
     # Properties (Optional, can be overridden by subclasses)
