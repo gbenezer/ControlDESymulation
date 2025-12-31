@@ -482,23 +482,27 @@ class ContinuousSystemBase(ABC):
         Returns
         -------
         SimulationResult
-            TypedDict (returns as dict) containing:
-            - time: Regular time points (n_steps,) with spacing dt
-            - states: State trajectory (nx, n_steps) - **NOTE: (nx, T) for backward compat**
-            - controls: Control trajectory (nu, n_steps) if controller provided
-            - metadata: Additional information (method, dt, success, etc.)
+            TypedDict containing:
+            - **time**: Time points array (T,) with uniform spacing dt
+            - **states**: State trajectory (T, nx) - **TIME-MAJOR ordering**
+            - **controls**: Control trajectory (T, nu) if controller provided
+            - **metadata**: Additional information (method, dt, success, nfev)
 
         Notes
         -----
+        **Time-Major Convention**: This method returns states in (T, nx) shape,
+        which is the modern standard for time series data:
+        - Compatible with pandas DataFrames
+        - Natural for time-series analysis
+        - Consistent with ML/data science conventions
+        - Matches discrete systems' output format
+        
+
         Unlike integrate(), this method:
         - Returns states on a regular time grid (not adaptive)
         - Supports state-feedback controllers
         - Hides solver diagnostics (cleaner output)
         - Is easier to use for plotting and analysis
-
-        **IMPORTANT**: This method returns states in (nx, T) shape for backward
-        compatibility with existing code, even though integrate() returns (T, nx).
-        The transpose happens internally.
 
         Controller Signature
         --------------------
@@ -513,47 +517,86 @@ class ContinuousSystemBase(ABC):
 
         Examples
         --------
-        Open-loop simulation:
+        **Open-loop simulation**:
 
         >>> result = system.simulate(x0, t_span=(0, 5), dt=0.01)
-        >>> plt.plot(result["time"], result["states"][0, :])  # Note: states[0, :]
+        >>> # Time-major indexing
+        >>> plt.plot(result["time"], result["states"][:, 0])  # First state
+        >>> plt.plot(result["time"], result["states"][:, 1])  # Second state
         >>> plt.xlabel("Time (s)")
         >>> plt.ylabel("State")
 
-        Closed-loop with state feedback:
+        **Using with pandas** (natural with time-major):
+
+        >>> import pandas as pd
+        >>> result = system.simulate(x0, controller, t_span=(0, 10))
+        >>> df = pd.DataFrame(
+        ...     result["states"],
+        ...     index=result["time"],
+        ...     columns=[f"x{i}" for i in range(system.nx)]
+        ... )
+        >>> df.plot()
+
+        **Closed-loop with state feedback**:
 
         >>> K = np.array([[-1.0, -2.0]])  # LQR gain
-        >>> def controller(x, t):  # Note: (x, t) order
+        >>> def controller(x, t):
         ...     return -K @ x
         >>> result = system.simulate(x0, controller, t_span=(0, 5))
+        >>> 
+        >>> # Extract trajectory
+        >>> t = result["time"]
+        >>> x = result["states"]  # (T, nx)
+        >>> u = result["controls"]  # (T, nu)
 
-        Time-varying reference tracking:
+        **Time-varying reference tracking**:
 
-        >>> def controller(x, t):  # Note: (x, t) order
+        >>> def controller(x, t):
         ...     x_ref = np.array([np.sin(t), np.cos(t)])
+        ...     K = np.array([[1.0, 0.5]])
         ...     return K @ (x_ref - x)
         >>> result = system.simulate(x0, controller, t_span=(0, 10))
 
-        Adaptive gain controller:
+        **Adaptive gain controller**:
 
-        >>> def controller(x, t):  # Note: (x, t) order
+        >>> def controller(x, t):
         ...     K = 1.0 + 0.1 * t  # Gain increases with time
         ...     return np.array([-K * x[0]])
         >>> result = system.simulate(x0, controller, t_span=(0, 10))
 
-        Saturated control:
-
-        >>> def controller(x, t):  # Note: (x, t) order
-        ...     u = -2.0 * x[0] - 0.5 * x[1]
-        ...     return np.array([np.clip(u, -1.0, 1.0)])
-        >>> result = system.simulate(x0, controller, t_span=(0, 10))
-
-        Time-only control (uncommon, but supported):
+        **Saturated control**:
 
         >>> def controller(x, t):
-        ...     # Ignore state, use only time
-        ...     return np.array([np.sin(t)])
+        ...     u_raw = -2.0 * x[0] - 0.5 * x[1]
+        ...     return np.array([np.clip(u_raw, -1.0, 1.0)])
         >>> result = system.simulate(x0, controller, t_span=(0, 10))
+
+        **Time-only control** (uncommon, but supported):
+
+        >>> def controller(x, t):
+        ...     return np.array([np.sin(2 * np.pi * t)])
+        >>> result = system.simulate(x0, controller, t_span=(0, 10))
+
+        **Batch plotting multiple states**:
+
+        >>> result = system.simulate(x0, controller, t_span=(0, 10))
+        >>> fig, axes = plt.subplots(system.nx, 1, sharex=True)
+        >>> for i, ax in enumerate(axes):
+        ...     ax.plot(result["time"], result["states"][:, i])
+        ...     ax.set_ylabel(f"$x_{i}$")
+        >>> axes[-1].set_xlabel("Time (s)")
+
+        **Phase portrait** (using time-major indexing):
+
+        >>> result = system.simulate(x0, controller, t_span=(0, 10))
+        >>> plt.plot(result["states"][:, 0], result["states"][:, 1])
+        >>> plt.xlabel("$x_0$")
+        >>> plt.ylabel("$x_1$")
+
+        See Also
+        --------
+        integrate : Low-level integration with solver diagnostics
+        rollout : Alternative name for simulation
         """
         
         # Create regular time grid
@@ -580,31 +623,33 @@ class ContinuousSystemBase(ABC):
         
         # Handle both 'x' and 'y' keys (different integrator conventions)
         if "x" in int_result:
-            states_time_major = int_result["x"]  # (T, nx) - our convention
+            states_time_major = int_result["x"]  # (T, nx) - modern convention
         elif "y" in int_result:
             # scipy convention: (nx, T) - transpose to (T, nx)
             states_time_major = int_result["y"].T
         else:
-            raise KeyError("Integration result missing both 'x' and 'y' keys")
-        
-        # Transpose to (nx, T) for backward compatibility
-        states_regular = states_time_major.T  # (nx, T)
+            raise KeyError(
+                "Integration result missing both 'x' and 'y' keys. "
+                "This indicates an issue with the integrator backend."
+            )
         
         # If times don't exactly match requested grid, interpolate
         if not np.allclose(int_result["t"], t_regular, rtol=1e-10):
             # Need to interpolate to exact regular grid
-            nx = states_regular.shape[0]
-            states_interp = np.zeros((nx, len(t_regular)))
+            T, nx = states_time_major.shape
+            states_interp = np.zeros((len(t_regular), nx))
             
             # Interpolate each state dimension
             for i in range(nx):
-                states_interp[i, :] = np.interp(
+                states_interp[:, i] = np.interp(
                     t_regular,
                     int_result["t"],
-                    states_time_major[:, i]  # Use time-major for interpolation
+                    states_time_major[:, i]
                 )
             
-            states_regular = states_interp
+            states_regular = states_interp  # (T, nx)
+        else:
+            states_regular = states_time_major  # (T, nx)
         
         # Reconstruct control trajectory if controller provided
         controls = None
@@ -612,24 +657,25 @@ class ContinuousSystemBase(ABC):
             # Evaluate controller at each time point
             controls_list = []
             for i, t in enumerate(t_regular):
-                # Extract state at this time (states_regular is (nx, T))
-                x_t = states_regular[:, i]
+                # Extract state at this time (states_regular is (T, nx))
+                x_t = states_regular[i, :]
                 
                 # Call controller with (x, t) signature (our convention)
                 u_t = controller(x_t, t)
                 controls_list.append(u_t)
             
-            controls = np.array(controls_list).T  # (nu, T)
+            controls = np.array(controls_list)  # (T, nu) - time-major
         
         return {
             "time": t_regular,
-            "states": states_regular,  # (nx, T) for backward compatibility
-            "controls": controls,
+            "states": states_regular,  # (T, nx) - TIME-MAJOR
+            "controls": controls,  # (T, nu) - TIME-MAJOR
+            "success": int_result.get("success", True),
             "metadata": {
                 "method": method,
                 "dt": dt,
-                "success": int_result.get("success", True),
-                "nfev": int_result.get("nfev", None)
+                "nfev": int_result.get("nfev", None),
+                "integration_time": int_result.get("integration_time", None)
             }
         }
 

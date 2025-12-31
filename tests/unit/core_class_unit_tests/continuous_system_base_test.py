@@ -691,7 +691,8 @@ class TestContinuousSystemBase(unittest.TestCase):
         result = self.system.simulate(x0, t_span=(0.0, 1.0), dt=0.1)
         
         n_points = len(result["time"])
-        self.assertEqual(result["states"].shape, (self.system.nx, n_points))
+        # FIXED: Time-major convention (T, nx) instead of (nx, T)
+        self.assertEqual(result["states"].shape, (n_points, self.system.nx))
 
     # =========================================================================
     # Section 5: linearize() Method - Comprehensive Testing

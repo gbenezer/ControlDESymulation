@@ -543,34 +543,37 @@ class TestComplexControlScenarios(unittest.TestCase):
         system = ControlledOscillator()
         x0 = np.array([2.0, 0.0])
         
-        def state_controller(x, t):  # (x, t) not (t, x)
+        def state_controller(x, t):
             """Simple proportional control: u = -K*x"""
             K = np.array([[1.0, 0.5]])
             return -K @ x
         
         result = system.simulate(x0, controller=state_controller, t_span=(0, 10), dt=0.1)
         
-        self.assertTrue(result['metadata']['success'])
+        self.assertTrue(result['success'])
         self.assertIn('controls', result)
         # Base class should populate controls
         if result['controls'] is not None:
-            self.assertEqual(result['controls'].shape[1], len(result['time']))
+            # FIXED: Time-major convention (T, nu)
+            self.assertEqual(result['controls'].shape[0], len(result['time']))
+            self.assertEqual(result['controls'].shape[1], system.nu)
     
     def test_saturated_control(self):
         """Control with saturation limits."""
         system = ControlledOscillator()
         x0 = np.array([5.0, 0.0])
         
-        def saturated_controller(x, t):  # ← FIXED: (x, t) not (t, x)
+        def saturated_controller(x, t):
             """Saturate control between -1 and 1."""
             u_desired = -2.0 * x[0] - 0.5 * x[1]
             return np.array([np.clip(u_desired, -1.0, 1.0)])
         
         result = system.simulate(x0, controller=saturated_controller, t_span=(0, 10), dt=0.1)
         
-        self.assertTrue(result['metadata']['success'])
+        self.assertTrue(result['success'])
         # Check saturation was applied (if controls are tracked)
         if result['controls'] is not None:
+            # FIXED: Time-major indexing
             self.assertLessEqual(np.max(np.abs(result['controls'])), 1.0 + 1e-6)
     
     def test_adaptive_control(self):
@@ -585,7 +588,7 @@ class TestComplexControlScenarios(unittest.TestCase):
         
         result = system.simulate(x0, controller=adaptive_controller, t_span=(0, 10), dt=0.1)
         
-        self.assertTrue(result['metadata']['success'])
+        self.assertTrue(result['success'])
 
 
 # =============================================================================
@@ -643,7 +646,7 @@ class TestMemoryManagement(unittest.TestCase):
         # Long integration with fine time grid
         result = system.simulate(x0, t_span=(0, 100), dt=0.001, method="RK45")
         
-        self.assertTrue(result['metadata']['success'])
+        self.assertTrue(result['success'])
         # Should have many points
         self.assertGreater(len(result['time']), 10000)
     
@@ -679,7 +682,7 @@ class TestNumericalStability(unittest.TestCase):
         
         result = system.simulate(x0, t_span=(0, 1), dt=1e-6)
         
-        self.assertTrue(result['metadata']['success'])
+        self.assertTrue(result['success'])
         # Many time points
         self.assertGreater(len(result['time']), 100000)
     
@@ -690,7 +693,7 @@ class TestNumericalStability(unittest.TestCase):
         
         result = system.simulate(x0, t_span=(0, 10), dt=1.0)
         
-        self.assertTrue(result['metadata']['success'])
+        self.assertTrue(result['success'])
         # Few time points
         self.assertEqual(len(result['time']), 11)  # 0, 1, 2, ..., 10
     
@@ -827,11 +830,14 @@ class TestInterpolationAccuracy(unittest.TestCase):
         
         # Both should succeed
         self.assertTrue(result_integrate['success'])
-        self.assertTrue(result_simulate['metadata']['success'])
+        self.assertTrue(result_simulate['success'])
         
-        # Final states should be close
+        # FIXED: Time-major indexing for final states
+        # integrate() returns (T, nx) in 'x' key
         final_integrate = result_integrate['x'][-1, :]
-        final_simulate = result_simulate['states'][:, -1]
+        
+        # simulate() returns (T, nx) in 'states' key (NEW convention)
+        final_simulate = result_simulate['states'][-1, :]
         
         np.testing.assert_allclose(final_integrate, final_simulate, rtol=1e-3)
 
@@ -858,7 +864,7 @@ class TestControllerComplexity(unittest.TestCase):
         
         result = system.simulate(x0, controller=nested_controller, t_span=(0, 10), dt=0.1)
         
-        self.assertTrue(result['metadata']['success'])
+        self.assertTrue(result['success'])
     
     def test_stateful_controller(self):
         """Controller with internal state (closure)."""
@@ -877,7 +883,7 @@ class TestControllerComplexity(unittest.TestCase):
         
         result = system.simulate(x0, controller=pi_controller, t_span=(0, 10), dt=0.1)
         
-        self.assertTrue(result['metadata']['success'])
+        self.assertTrue(result['success'])
 
 
 # =============================================================================
