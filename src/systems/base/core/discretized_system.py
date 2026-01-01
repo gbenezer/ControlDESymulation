@@ -1,17 +1,5 @@
 # Copyright (C) 2025 Gil Benezer
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as published
-# by the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+# AGPL-3.0 License
 
 """
 Discretized System - Numerical Discretization of Continuous Systems
@@ -95,7 +83,7 @@ class DiscretizedSystem(DiscreteSystemBase):
     
     def __init__(self, continuous_system: ContinuousSystemBase, dt: float = 0.01,
                  method: str = 'rk4', mode: Optional[DiscretizationMode] = None,
-                 interpolation_kind: str = 'cubic', **integrator_kwargs):
+                 interpolation_kind: str = 'linear', **integrator_kwargs):
         if not isinstance(continuous_system, ContinuousSystemBase):
             raise TypeError(f"Expected ContinuousSystemBase, got {type(continuous_system).__name__}")
         if dt <= 0:
@@ -232,10 +220,15 @@ class DiscretizedSystem(DiscreteSystemBase):
         # Clip t_regular to be within t_adaptive range (avoid extrapolation errors)
         t_regular_clipped = np.clip(t_regular, t_adaptive[0], t_adaptive[-1])
         
+        # Choose interpolation kind based on available points
+        kind = self._interpolation_kind
+        if len(t_adaptive) < 4 and kind == 'cubic':
+            kind = 'linear'  # Fall back to linear if not enough points for cubic
+        
         for i in range(nx):
             interp = interp1d(
                 t_adaptive, y_adaptive[:, i], 
-                kind=self._interpolation_kind,
+                kind=kind,
                 bounds_error=False,  # Don't raise on out-of-bounds
                 fill_value=(y_adaptive[0, i], y_adaptive[-1, i]),  # Extrapolate with endpoints
                 assume_sorted=True
@@ -281,9 +274,14 @@ class DiscretizedSystem(DiscreteSystemBase):
                     return u_sequence
                 except:
                     return lambda x, k: u_sequence(k, x)
+            else:
+                raise TypeError(f"Control function must accept 1 or 2 parameters, got {len(sig.parameters)}")
         
         if isinstance(u_sequence, np.ndarray):
             if u_sequence.ndim == 1:
+                # Constant control - validate dimension
+                if u_sequence.size != self.nu:
+                    raise ValueError(f"Control dimension mismatch: expected {self.nu}, got {u_sequence.size}")
                 return lambda x, k: u_sequence
             if u_sequence.shape[0] == n_steps:
                 return lambda x, k: u_sequence[k, :] if k < n_steps else u_sequence[-1, :]
@@ -405,12 +403,24 @@ def analyze_discretization_error(continuous_system, x0, u_sequence, dt_values,
         t_curr = result['time_steps'] * dt
         t_ref = ref_result['time_steps'] * reference_dt
         
-        states_interp = np.zeros((len(t_compare), continuous_system.nx))
-        ref_interp = np.zeros((len(t_compare), continuous_system.nx))
+        # Ensure comparison times are within both ranges
+        t_min = max(t_curr[0], t_ref[0])
+        t_max = min(t_curr[-1], t_ref[-1])
+        t_compare_valid = t_compare[(t_compare >= t_min) & (t_compare <= t_max)]
         
+        if len(t_compare_valid) == 0:
+            # Fallback: just compare final points
+            error = np.linalg.norm(result['states'][-1, :] - ref_result['states'][-1, :])
+            errors.append(error)
+            continue
+        
+        states_interp = np.zeros((len(t_compare_valid), continuous_system.nx))
+        ref_interp = np.zeros((len(t_compare_valid), continuous_system.nx))
+        
+        # Use linear interpolation to avoid cubic spline issues
         for i in range(continuous_system.nx):
-            states_interp[:, i] = interp1d(t_curr, result['states'][:, i], kind='cubic')(t_compare)
-            ref_interp[:, i] = interp1d(t_ref, ref_result['states'][:, i], kind='cubic')(t_compare)
+            states_interp[:, i] = interp1d(t_curr, result['states'][:, i], kind='linear')(t_compare_valid)
+            ref_interp[:, i] = interp1d(t_ref, ref_result['states'][:, i], kind='linear')(t_compare_valid)
         
         errors.append(np.sqrt(np.mean((states_interp - ref_interp) ** 2)))
     
