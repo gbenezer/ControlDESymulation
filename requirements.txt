@@ -1,70 +1,45 @@
-# ControlDESymulation - Runtime Dependencies
-# Install with: pip install -r requirements.txt
-# torch is currently required but will be converted to
-# an optional library after refactoring technical debt
-# and added to requirements-dev.txt
+# Core numerical and scientific computing
+numpy>=2.0.0,<3.0.0
+scipy>=1.14.0,<2.0.0
+sympy>=1.13.0,<2.0.0
 
-# ============================================================================
-# CORE DEPENDENCIES (Required)
-# ============================================================================
+# Deep learning frameworks
+torch>=2.5.0,<3.0.0
+jax>=0.4.0,<1.0.0
+jaxlib>=0.4.0,<1.0.0
 
-# Numerical computing
-numpy>=2.0,<3.0
+# JAX ecosystem
+jaxtyping>=0.2.0,<1.0.0
+equinox>=0.11.0,<1.0.0
+diffrax>=0.6.0,<1.0.0
+optimistix>=0.0.8,<1.0.0
+lineax>=0.0.5,<1.0.0
 
-# Symbolic mathematics
-sympy>=1.12
+# Differential equations
+torchdiffeq>=0.2.0,<1.0.0
+torchsde>=0.2.0,<1.0.0
+diffeqpy>=2.4.0,<3.0.0
 
-# Scientific computing
-scipy>=1.10
+# Julia integration
+juliacall>=0.9.0,<1.0.0
+juliapkg>=0.1.0,<1.0.0
 
-# PyTorch backend (deep learning, GPU support)
-torch>=2.0
-
-# ============================================================================
-# OPTIONAL DEPENDENCIES
-# ============================================================================
-# These are optional but recommended for full functionality.
-# Install specific groups with: pip install -e ".[jax,viz,control]"
-# Or install everything with: pip install -e ".[all]"
-
-# JAX backend (functional programming, JIT compilation, TPU support)
-# Uncomment to install:
-# jax>=0.4.30
-# jaxlib>=0.4.30
+# Optimization and control
+cvxpy>=1.4.0,<2.0.0
+clarabel>=0.9.0,<1.0.0
+osqp>=0.6.0,<1.0.0
+scs>=3.2.0,<4.0.0
+casadi>=3.6.0,<4.0.0
+control>=0.10.0,<1.0.0
 
 # Visualization
-# Uncomment to install:
-# plotly>=5.0
-# matplotlib>=3.5
+plotly>=5.18.0,<6.0.0
+matplotlib>=3.8.0,<4.0.0
 
-# Classical control theory utilities
-# Uncomment to install:
-# control>=0.10
+# Type checking and validation
+pydantic>=2.5.0,<3.0.0
+typing-extensions>=4.9.0,<5.0.0
 
-# ODE/SDE integration backends
-# Uncomment to install:
-# torchdiffeq>=0.2.3  # PyTorch ODE solver
-# torchsde>=0.2.6     # PyTorch SDE solver
-# diffrax>=0.6.0      # JAX ODE/SDE solver
-# diffeqpy>=2.0       # Julia DifferentialEquations.jl wrapper
-
-# Optimization libraries (for MPC, trajectory optimization)
-# Uncomment to install:
-# cvxpy>=1.4          # Convex optimization
-# casadi>=3.6         # Nonlinear optimization
-
-# ============================================================================
-# INSTALLATION INSTRUCTIONS
-# ============================================================================
-#
-# Standard installation (core only):
-#   pip install -r requirements.txt
-#
-# Development installation with all optional dependencies:
-#   pip install -e ".[all]"
-#
-# Custom installation (pick what you need):
-#   pip install -e ".[jax,viz]"
-#
-# Available optional groups: jax, viz, control, integrators, optimization, dev, all
-#
+# Utilities
+tqdm>=4.66.0,<5.0.0
+pyyaml>=6.0.0,<7.0.0
