@@ -20,6 +20,7 @@ All backends (NumPy, PyTorch, JAX) have equal support for:
 - Matrix handling (ImmutableDenseMatrix conversion)
 - Min/Max functions (variable argument handling)
 - Consistent shape conventions (always return 1D arrays)
+- Inhomogeneous structure handling (for batched multiplicative noise)
 
 Backend-specific features (not technical debt):
 - PyTorch: Gradient preservation via torch.as_tensor()
@@ -29,15 +30,26 @@ Backend-specific features (not technical debt):
 Design Philosophy:
 All backends are equally capable. Differences reflect the backends'
 intrinsic capabilities (gradients, JIT, etc.), not implementation gaps.
+
+Special Handling for Batched Multiplicative Noise:
+When evaluating diffusion matrices with batched inputs and multiplicative
+noise, lambdify returns inhomogeneous nested structures like:
+    [[array([0.2, 0.6]), 0], [0, array([0.3, 0.6])]]
+
+These cannot be directly converted to regular arrays. The code generation
+utilities detect this case and pass the raw structure to higher-level
+wrappers (e.g., DiffusionHandler) for proper handling.
 """
 
-from typing import Callable, Literal, Union
+from typing import Callable
 
 import numpy as np
 import sympy as sp
 import torch
 
-Backend = Literal["numpy", "torch", "jax"]
+# Import from centralized type system
+from src.types.backends import Backend
+from src.types.symbolic import SymbolicExpressionInput
 
 
 # Helper functions
@@ -388,7 +400,7 @@ SYMPY_TO_JAX_LAMBDIFY = {
 
 
 def generate_numpy_function(
-    expr: Union[sp.Expr, list[sp.Expr], sp.Matrix],
+    expr: SymbolicExpressionInput,
     symbols: list[sp.Symbol],
 ) -> Callable:
     """
@@ -410,6 +422,9 @@ def generate_numpy_function(
         - Vector expr: returns shape (n,)
 
         Extract scalar: result[0] or result.item()
+        
+        Special case: Inhomogeneous structures (batched multiplicative noise)
+        are returned as-is for higher-level handlers to process.
     """
     # Convert to matrix for consistent handling
     if isinstance(expr, list):
@@ -426,6 +441,7 @@ def generate_numpy_function(
         # Handle ImmutableDenseMatrix from SymPy
         if hasattr(result, "__class__") and "Matrix" in str(result.__class__):
             result = np.array([result[i] for i in range(len(result))]).flatten()
+            return result
 
         # Handle different return types
         if isinstance(result, np.ndarray):
@@ -441,14 +457,24 @@ def generate_numpy_function(
             # Convert matrix to array and flatten
             return np.asarray(result).flatten()
         elif isinstance(result, (list, tuple)):
-            return np.array(result).flatten()
+            # Try to convert to array - if it fails due to inhomogeneous structure,
+            # return as-is for higher-level handlers (e.g., DiffusionHandler) to process
+            try:
+                return np.array(result).flatten()
+            except (ValueError, TypeError):
+                # Inhomogeneous structure (e.g., [[array([...]), 0], [0, array([...])])
+                # This occurs with batched multiplicative noise - pass through as-is
+                return result
         else:
             return np.array([result])
 
     return wrapped_func
 
 
-def generate_torch_function(expr, symbols):
+def generate_torch_function(
+    expr: SymbolicExpressionInput,
+    symbols: list[sp.Symbol],
+) -> Callable:
     """
     Generate a PyTorch function from SymPy expression(s).
 
@@ -469,6 +495,9 @@ def generate_torch_function(expr, symbols):
         - Vector expr: returns shape (n,)
 
         Extract scalar: result[0] or result.item()
+        
+        Special case: Inhomogeneous structures (batched multiplicative noise)
+        are returned as-is for higher-level handlers to process.
     """
     if isinstance(expr, list):
         expr = sp.Matrix(expr)
@@ -486,21 +515,26 @@ def generate_torch_function(expr, symbols):
             return result.flatten() if result.ndim > 1 else result
 
         elif isinstance(result, (list, tuple)):
-            # Convert list to tensor (like NumPy does to array)
-            tensors = []
-            for item in result:
-                if isinstance(item, torch.Tensor):
-                    t = item if item.ndim > 0 else item.reshape(1)
-                else:
-                    t = torch.as_tensor(item, dtype=torch.float32)
-                    t = t if t.ndim > 0 else t.reshape(1)
-                tensors.append(t)
+            # Try to convert list to tensor (like NumPy does to array)
+            # If it fails due to inhomogeneous structure, return as-is
+            try:
+                tensors = []
+                for item in result:
+                    if isinstance(item, torch.Tensor):
+                        t = item if item.ndim > 0 else item.reshape(1)
+                    else:
+                        t = torch.as_tensor(item, dtype=torch.float32)
+                        t = t if t.ndim > 0 else t.reshape(1)
+                    tensors.append(t)
 
-            if len(tensors) == 1:
-                return tensors[0]
-            else:
-                # Stack and flatten (like NumPy)
-                return torch.stack(tensors).flatten()
+                if len(tensors) == 1:
+                    return tensors[0]
+                else:
+                    # Stack and flatten (like NumPy)
+                    return torch.stack(tensors).flatten()
+            except (ValueError, TypeError, RuntimeError):
+                # Inhomogeneous structure - pass through as-is
+                return result
 
         else:
             return torch.tensor([result], dtype=torch.float32)
@@ -509,7 +543,7 @@ def generate_torch_function(expr, symbols):
 
 
 def generate_jax_function(
-    expr: Union[sp.Expr, list[sp.Expr], sp.Matrix],
+    expr: SymbolicExpressionInput,
     symbols: list[sp.Symbol],
     jit: bool = True,
 ) -> Callable:
@@ -534,6 +568,9 @@ def generate_jax_function(
         - Vector expr: returns shape (n,)
 
         Extract scalar: result[0] or result.item()
+        
+        Special case: Inhomogeneous structures (batched multiplicative noise)
+        are returned as-is for higher-level handlers to process.
     """
     import jax
     import jax.numpy as jnp
@@ -569,19 +606,25 @@ def generate_jax_function(
             else:
                 return result.flatten()
         elif isinstance(result, (list, tuple)):
-            arrays = []
-            for item in result:
-                if isinstance(item, jnp.ndarray):
-                    arrays.append(item)
-                else:
-                    arrays.append(jnp.asarray(item, dtype=jnp.float32))
+            # Try to convert to JAX array - if it fails due to inhomogeneous
+            # structure, return as-is for higher-level handlers
+            try:
+                arrays = []
+                for item in result:
+                    if isinstance(item, jnp.ndarray):
+                        arrays.append(item)
+                    else:
+                        arrays.append(jnp.asarray(item, dtype=jnp.float32))
 
-            if len(arrays) == 0:
-                raise ValueError("Empty result from lambdify")
-            elif len(arrays) == 1:
-                return jnp.atleast_1d(arrays[0])
-            else:
-                return jnp.stack(arrays, axis=0)
+                if len(arrays) == 0:
+                    raise ValueError("Empty result from lambdify")
+                elif len(arrays) == 1:
+                    return jnp.atleast_1d(arrays[0])
+                else:
+                    return jnp.stack(arrays, axis=0)
+            except (ValueError, TypeError):
+                # Inhomogeneous structure - pass through as-is
+                return result
         else:
             return jnp.array([result])
 
@@ -592,7 +635,7 @@ def generate_jax_function(
 
 
 def generate_function(
-    expr: Union[sp.Expr, list[sp.Expr], sp.Matrix],
+    expr: SymbolicExpressionInput,
     symbols: list[sp.Symbol],
     backend: Backend = "numpy",
     **kwargs,
@@ -644,7 +687,7 @@ def generate_function(
 
 
 def generate_jacobian_function(
-    expr: Union[sp.Expr, list[sp.Expr], sp.Matrix],
+    expr: SymbolicExpressionInput,
     symbols: list[sp.Symbol],
     wrt_symbols: list[sp.Symbol],
     backend: Backend = "numpy",

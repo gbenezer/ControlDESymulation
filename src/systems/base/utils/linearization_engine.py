@@ -38,6 +38,13 @@ from typing import TYPE_CHECKING, Dict, Optional, Tuple, Union
 import numpy as np
 import sympy as sp
 
+# Import from centralized type system
+from src.types import ArrayLike
+from src.types.backends import Backend
+from src.types.core import ControlVector, InputMatrix, StateMatrix, StateVector
+from src.types.linearization import DeterministicLinearization
+from src.types.utilities import ExecutionStats
+
 if TYPE_CHECKING:
     import jax.numpy as jnp
     import torch
@@ -45,9 +52,6 @@ if TYPE_CHECKING:
     from src.systems.base.symbolic_dynamical_system import SymbolicDynamicalSystem
     from src.systems.base.utils.backend_manager import BackendManager
     from src.systems.base.utils.code_generator import CodeGenerator
-
-# Type alias
-ArrayLike = Union[np.ndarray, "torch.Tensor", "jnp.ndarray"]
 
 
 class LinearizationEngine:
@@ -65,7 +69,8 @@ class LinearizationEngine:
     Example:
         >>> # Controlled system
         >>> engine = LinearizationEngine(system, code_gen, backend_mgr)
-        >>> A, B = engine.compute_dynamics(x, u, backend='numpy')
+        >>> lin: DeterministicLinearization = engine.compute_dynamics(x, u, backend='numpy')
+        >>> A, B = lin
         >>>
         >>> # Autonomous system
         >>> A, B = engine.compute_dynamics(x, backend='numpy')  # u=None
@@ -107,8 +112,11 @@ class LinearizationEngine:
     # ========================================================================
 
     def compute_dynamics(
-        self, x: ArrayLike, u: Optional[ArrayLike] = None, backend: Optional[str] = None
-    ) -> Tuple[ArrayLike, ArrayLike]:
+        self,
+        x: StateVector,
+        u: Optional[ControlVector] = None,
+        backend: Optional[Backend] = None,
+    ) -> DeterministicLinearization:
         """
         Compute linearized dynamics: A = ∂f/∂x, B = ∂f/∂u.
 
@@ -121,16 +129,18 @@ class LinearizationEngine:
             backend: Backend selection (None = auto-detect)
 
         Returns:
-            Tuple of (A, B) matrices where:
-            - A: (nx, nx) state Jacobian
-            - B: (nx, nu) control Jacobian, or (nx, 0) if autonomous
+            DeterministicLinearization
+                Tuple of (A, B) Jacobian matrices:
+                - A: StateMatrix (nx, nx) - state Jacobian ∂f/∂x
+                - B: InputMatrix (nx, nu) - control Jacobian ∂f/∂u, or (nx, 0) if autonomous
 
         Raises:
             ValueError: If u is None for non-autonomous system
 
         Example:
             >>> # Controlled system
-            >>> A, B = engine.compute_dynamics(x_torch, u_torch)
+            >>> lin: DeterministicLinearization = engine.compute_dynamics(x, u)
+            >>> A, B = lin  # Unpack Jacobians
             >>> A.shape  # (nx, nx)
             >>> B.shape  # (nx, nu)
             >>>
@@ -191,6 +201,7 @@ class LinearizationEngine:
         else:
             raise ValueError(f"Unknown backend: {target_backend}")
 
+    # TODO: Symbolic TypedDict Return-Type?
     def compute_symbolic(
         self, x_eq: Optional[sp.Matrix] = None, u_eq: Optional[sp.Matrix] = None
     ) -> Tuple[sp.Matrix, sp.Matrix]:
@@ -318,7 +329,7 @@ class LinearizationEngine:
 
     def _compute_dynamics_numpy(
         self, x: np.ndarray, u: np.ndarray
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> DeterministicLinearization:
         """
         NumPy implementation using cached functions or symbolic evaluation.
 
@@ -415,7 +426,7 @@ class LinearizationEngine:
 
     def _compute_dynamics_torch(
         self, x: "torch.Tensor", u: "torch.Tensor"
-    ) -> Tuple["torch.Tensor", "torch.Tensor"]:
+    ) -> DeterministicLinearization:
         """
         PyTorch implementation using cached functions or symbolic evaluation.
 
@@ -527,7 +538,7 @@ class LinearizationEngine:
 
     def _compute_dynamics_jax(
         self, x: "jnp.ndarray", u: "jnp.ndarray"
-    ) -> Tuple["jnp.ndarray", "jnp.ndarray"]:
+    ) -> DeterministicLinearization:
         """
         JAX implementation using automatic differentiation.
 
@@ -615,8 +626,13 @@ class LinearizationEngine:
     # Jacobian Verification
     # ========================================================================
 
+    # TODO: TypedDict for JacobianVerification?
     def verify_jacobians(
-        self, x: ArrayLike, u: Optional[ArrayLike] = None, backend: str = "torch", tol: float = 1e-4
+        self,
+        x: StateVector,
+        u: Optional[ControlVector] = None,
+        backend: Backend = "torch",
+        tol: float = 1e-4
     ) -> Dict[str, Union[bool, float]]:
         """
         Verify symbolic Jacobians against automatic differentiation.
@@ -858,7 +874,7 @@ class LinearizationEngine:
     # Performance Tracking
     # ========================================================================
 
-    def get_stats(self) -> dict:
+    def get_stats(self) -> ExecutionStats:
         """
         Get performance statistics.
 

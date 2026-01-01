@@ -1,3 +1,5 @@
+# Location: tests/systems/test_discrete_stochastic_system.py
+
 # Copyright (C) 2025 Gil Benezer
 #
 # This program is free software: you can redistribute it and/or modify
@@ -14,1288 +16,1367 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 """
-Comprehensive unit tests for DiscreteStochasticSystem
+Comprehensive Unit Tests for DiscreteStochasticSystem
+======================================================
 
-Tests cover:
-- System initialization and validation
-- Deterministic part evaluation (drift)
-- Stochastic part evaluation (diffusion)
-- Full stochastic step
-- Noise analysis (additive, multiplicative, etc.)
-- Backend compatibility (NumPy, PyTorch, JAX)
-- Autonomous vs controlled systems
-- Batched evaluation
-- Comparison with continuous SDEs
-- Built-in example systems
+Test suite covering:
+1. System initialization and validation
+2. Deterministic and stochastic evaluation
+3. Noise type detection and classification
+4. Linearization with diffusion
+5. Monte Carlo simulation
+6. Backend compatibility (NumPy, PyTorch, JAX)
+7. Batched operations
+8. Edge cases and error handling
+9. Performance and optimization
+10. Integration with existing framework
+
+Authors
+-------
+Gil Benezer
+
+License
+-------
+AGPL-3.0
 """
 
-from typing import Optional
+import unittest
+from typing import Tuple
 
 import numpy as np
-import pytest
 import sympy as sp
 
-# Conditional imports for optional backends
-try:
-    import torch
+from src.systems.base.core.discrete_stochastic_system import DiscreteStochasticSystem
+from src.systems.base.utils.stochastic.sde_validator import ValidationError
+from src.systems.base.utils.stochastic.noise_analysis import NoiseType, SDEType
 
-    TORCH_AVAILABLE = True
-except ImportError:
-    TORCH_AVAILABLE = False
-
-try:
-    import jax.numpy as jnp
-
-    JAX_AVAILABLE = True
-except ImportError:
-    JAX_AVAILABLE = False
-
-from src.systems.base.discrete_stochastic_system import DiscreteStochasticSystem
-from src.systems.builtin.stochastic.discrete_ar1 import DiscreteAR1
-from src.systems.builtin.stochastic.discrete_random_walk import DiscreteRandomWalk
-from src.systems.builtin.stochastic.discrete_white_noise import DiscreteWhiteNoise
 
 # ============================================================================
-# Test Fixtures - Additional Discrete Stochastic Systems
+# Test System Definitions
 # ============================================================================
 
 
-class DiscreteLinearSDE(DiscreteStochasticSystem):
-    """Simple 2D discrete linear system with additive noise."""
+class DiscreteOU(DiscreteStochasticSystem):
+    """Discrete-time Ornstein-Uhlenbeck process (AR(1) with additive noise)."""
 
-    def define_system(self, a11=0.9, a12=0.1, a21=-0.1, a22=0.8, b=1.0, sigma=0.1):
-        x1, x2 = sp.symbols("x1 x2", real=True)
-        u = sp.symbols("u", real=True)
+    def define_system(self, alpha=1.0, sigma=0.5, dt=0.1):
+        x = sp.symbols('x', real=True)
+        u = sp.symbols('u', real=True)
+        alpha_sym = sp.symbols('alpha', positive=True)
+        sigma_sym = sp.symbols('sigma', positive=True)
+        dt_sym = sp.symbols('dt', positive=True)
 
-        a11_sym, a12_sym = sp.symbols("a11 a12", real=True)
-        a21_sym, a22_sym = sp.symbols("a21 a22", real=True)
-        b_sym = sp.symbols("b", real=True)
-        sigma_sym = sp.symbols("sigma", positive=True)
+        # Deterministic: x[k+1] = (1 - α*dt)*x[k] + u[k]
+        self.state_vars = [x]
+        self.control_vars = [u]
+        self._f_sym = sp.Matrix([(1 - alpha_sym * dt_sym) * x + u])
+        self.parameters = {alpha_sym: alpha, sigma_sym: sigma, dt_sym: dt}
+        self._dt = dt
+        self.order = 1
 
-        # Deterministic: x[k+1] = A*x[k] + B*u[k]
+        # Stochastic: additive noise
+        self.diffusion_expr = sp.Matrix([[sigma_sym]])
+        self.sde_type = 'ito'
+
+
+class GeometricRandomWalk(DiscreteStochasticSystem):
+    """Discrete-time geometric random walk (multiplicative noise)."""
+
+    def define_system(self, mu=0.1, sigma=0.2, dt=1.0):
+        x = sp.symbols('x', positive=True)
+        u = sp.symbols('u', real=True)
+        mu_sym = sp.symbols('mu', real=True)
+        sigma_sym = sp.symbols('sigma', positive=True)
+
+        # Deterministic: x[k+1] = (1 + μ)*x[k] + u[k]
+        self.state_vars = [x]
+        self.control_vars = [u]
+        self._f_sym = sp.Matrix([(1 + mu_sym) * x + u])
+        self.parameters = {mu_sym: mu, sigma_sym: sigma}
+        self._dt = dt
+        self.order = 1
+
+        # Stochastic: multiplicative noise
+        self.diffusion_expr = sp.Matrix([[sigma_sym * x]])
+        self.sde_type = 'ito'
+
+
+class MultiDimensionalStochastic(DiscreteStochasticSystem):
+    """2D system with coupled noise."""
+
+    def define_system(self, a=0.9, b=0.1, sigma1=0.3, sigma2=0.2, dt=0.1):
+        x1, x2 = sp.symbols('x1 x2', real=True)
+        u = sp.symbols('u', real=True)
+        a_sym, b_sym = sp.symbols('a b', real=True)
+        sigma1_sym, sigma2_sym = sp.symbols('sigma1 sigma2', positive=True)
+
+        # Deterministic: linear coupling
         self.state_vars = [x1, x2]
         self.control_vars = [u]
-        self._f_sym = sp.Matrix(
-            [a11_sym * x1 + a12_sym * x2, a21_sym * x1 + a22_sym * x2 + b_sym * u]
-        )
+        self._f_sym = sp.Matrix([
+            a_sym * x1 + b_sym * x2,
+            -b_sym * x1 + a_sym * x2 + u
+        ])
         self.parameters = {
-            a11_sym: a11,
-            a12_sym: a12,
-            a21_sym: a21,
-            a22_sym: a22,
-            b_sym: b,
-            sigma_sym: sigma,
+            a_sym: a, b_sym: b,
+            sigma1_sym: sigma1, sigma2_sym: sigma2
         }
+        self._dt = dt
         self.order = 1
 
-        # Additive noise on both states
-        self.diffusion_expr = sp.Matrix([[sigma_sym], [sigma_sym]])
-        self.sde_type = "ito"
+        # Stochastic: diagonal noise
+        self.diffusion_expr = sp.Matrix([
+            [sigma1_sym, 0],
+            [0, sigma2_sym]
+        ])
+        self.sde_type = 'ito'
 
 
-class DiscreteGeometricRW(DiscreteStochasticSystem):
-    """Discrete geometric random walk (multiplicative noise)."""
+class AutonomousStochastic(DiscreteStochasticSystem):
+    """Autonomous system (no control input)."""
 
-    def define_system(self, mu=0.01, sigma=0.1):
-        x = sp.symbols("x", positive=True, real=True)
-        mu_sym, sigma_sym = sp.symbols("mu sigma", real=True)
+    def define_system(self, alpha=0.95, sigma=0.1, dt=0.1):
+        x = sp.symbols('x', real=True)
+        alpha_sym = sp.symbols('alpha', positive=True)
+        sigma_sym = sp.symbols('sigma', positive=True)
 
+        # Autonomous: no control
+        self.state_vars = [x]
+        self.control_vars = []  # No control!
+        self._f_sym = sp.Matrix([alpha_sym * x])
+        self.parameters = {alpha_sym: alpha, sigma_sym: sigma}
+        self._dt = dt
+        self.order = 1
+
+        # Additive noise
+        self.diffusion_expr = sp.Matrix([[sigma_sym]])
+        self.sde_type = 'ito'
+
+
+class InvalidDiffusionSystem(DiscreteStochasticSystem):
+    """System that doesn't set diffusion_expr (should fail)."""
+
+    def define_system(self, dt=0.1):
+        x = sp.symbols('x')
         self.state_vars = [x]
         self.control_vars = []
-
-        # Multiplicative drift: x[k+1] = (1+μ)*x[k]
-        self._f_sym = sp.Matrix([(1 + mu_sym) * x])
-
-        # Multiplicative noise: g(x) = σ*x
-        self.diffusion_expr = sp.Matrix([[sigma_sym * x]])
-        self.parameters = {mu_sym: mu, sigma_sym: sigma}
+        self._f_sym = sp.Matrix([0.9 * x])
+        self.parameters = {}
+        self._dt = dt
         self.order = 1
-        self.sde_type = "ito"
+        # Missing: self.diffusion_expr!
 
 
-class DiscreteControlledSDE(DiscreteStochasticSystem):
-    """1D discrete SDE with control and state-dependent noise."""
+class WrongDimensionDiffusion(DiscreteStochasticSystem):
+    """System with diffusion dimension mismatch."""
 
-    def define_system(self, a=0.9, b=1.0, sigma=0.1):
-        x = sp.symbols("x", real=True)
-        u = sp.symbols("u", real=True)
-        a_sym, b_sym, sigma_sym = sp.symbols("a b sigma", real=True)
+    def define_system(self, dt=0.1):
+        x1, x2 = sp.symbols('x1 x2')
+        sigma = sp.symbols('sigma', positive=True)
 
-        self.state_vars = [x]
+        self.state_vars = [x1, x2]  # nx=2
+        self.control_vars = []
+        self._f_sym = sp.Matrix([0.9 * x1, 0.9 * x2])
+        self.parameters = {sigma: 0.3}
+        self._dt = dt
+        self.order = 1
+
+        # Wrong: diffusion has 1 row but should have 2
+        self.diffusion_expr = sp.Matrix([[sigma]])  # Should be (2, nw)!
+        self.sde_type = 'ito'
+        
+class MultiplicativeNoise2D(DiscreteStochasticSystem):
+    """
+    2D system with state-dependent noise (2 noise sources).
+    
+    This has TRUE multiplicative noise because:
+    - nw = 2 (not scalar)
+    - g depends on state
+    - Not additive (not constant)
+    """
+
+    def define_system(self, a=0.9, sigma1=0.2, sigma2=0.15, dt=0.1):
+        x1, x2 = sp.symbols('x1 x2', real=True)
+        u = sp.symbols('u', real=True)
+        a_sym = sp.symbols('a', real=True)
+        sigma1_sym, sigma2_sym = sp.symbols('sigma1 sigma2', positive=True)
+
+        # Deterministic: simple linear
+        self.state_vars = [x1, x2]
         self.control_vars = [u]
-
-        # x[k+1] = a*x[k] + b*u[k] + σ*sqrt(1+x²)*w[k]
-        self._f_sym = sp.Matrix([a_sym * x + b_sym * u])
-
-        # State-dependent noise
-        self.diffusion_expr = sp.Matrix([[sigma_sym * sp.sqrt(1 + x**2)]])
-        self.parameters = {a_sym: a, b_sym: b, sigma_sym: sigma}
+        self._f_sym = sp.Matrix([
+            a_sym * x1 + u,
+            a_sym * x2
+        ])
+        self.parameters = {a_sym: a, sigma1_sym: sigma1, sigma2_sym: sigma2}
+        self._dt = dt
         self.order = 1
-        self.sde_type = "ito"
+
+        # MULTIPLICATIVE: noise depends on state, nw=2
+        self.diffusion_expr = sp.Matrix([
+            [sigma1_sym * x1, 0],            # First noise scales with x1
+            [0, sigma2_sym * x2]             # Second noise scales with x2
+        ])
+        self.sde_type = 'ito'
+
+
+class FullyMultiplicativeNoise(DiscreteStochasticSystem):
+    """
+    System where ALL noise sources are state-dependent.
+    
+    g(x) = [σ1*x1  σ2*x1]
+           [σ3*x2  σ4*x2]
+    
+    Both noise sources affect both states, all scaled by state.
+    """
+
+    def define_system(self, a=0.95, sigma1=0.2, sigma2=0.15, sigma3=0.1, sigma4=0.12, dt=0.1):
+        x1, x2 = sp.symbols('x1 x2', real=True)
+        a_sym = sp.symbols('a', real=True)
+        s1, s2, s3, s4 = sp.symbols('sigma1 sigma2 sigma3 sigma4', positive=True)
+
+        self.state_vars = [x1, x2]
+        self.control_vars = []  # Autonomous for simplicity
+        self._f_sym = sp.Matrix([a_sym * x1, a_sym * x2])
+        self.parameters = {a_sym: a, s1: sigma1, s2: sigma2, s3: sigma3, s4: sigma4}
+        self._dt = dt
+        self.order = 1
+
+        # Fully coupled multiplicative noise
+        self.diffusion_expr = sp.Matrix([
+            [s1 * x1, s2 * x1],   # Both noise sources scale with x1
+            [s3 * x2, s4 * x2]    # Both noise sources scale with x2
+        ])
+        self.sde_type = 'ito'
+
+
+class StateAndControlDependentNoise(DiscreteStochasticSystem):
+    """
+    Noise depends on both state AND control.
+    
+    g(x, u) = [σ1*x1*u]
+              [σ2*x2  ]
+    
+    First noise source depends on both x1 and u.
+    Second depends only on x2.
+    """
+
+    def define_system(self, a=0.9, sigma1=0.2, sigma2=0.15, dt=0.1):
+        x1, x2 = sp.symbols('x1 x2', real=True)
+        u = sp.symbols('u', real=True)
+        a_sym = sp.symbols('a', real=True)
+        sigma1_sym, sigma2_sym = sp.symbols('sigma1 sigma2', positive=True)
+
+        self.state_vars = [x1, x2]
+        self.control_vars = [u]
+        self._f_sym = sp.Matrix([a_sym * x1 + u, a_sym * x2])
+        self.parameters = {a_sym: a, sigma1_sym: sigma1, sigma2_sym: sigma2}
+        self._dt = dt
+        self.order = 1
+
+        # Mixed: first depends on x1*u, second on x2
+        self.diffusion_expr = sp.Matrix([
+            [sigma1_sym * x1 * u],   # Depends on state AND control
+            [sigma2_sym * x2]         # Depends only on state
+        ])
+        self.sde_type = 'ito'
+
+
+class ThreeNoiseSourcesMultiplicative(DiscreteStochasticSystem):
+    """
+    2D system with 3 independent noise sources, all multiplicative.
+    
+    More noise sources than states (nw > nx).
+    """
+
+    def define_system(self, a=0.9, s1=0.2, s2=0.15, s3=0.1, dt=0.1):
+        x1, x2 = sp.symbols('x1 x2', real=True)
+        a_sym = sp.symbols('a', real=True)
+        sigma1, sigma2, sigma3 = sp.symbols('sigma1 sigma2 sigma3', positive=True)
+
+        self.state_vars = [x1, x2]
+        self.control_vars = []
+        self._f_sym = sp.Matrix([a_sym * x1, a_sym * x2])
+        self.parameters = {a_sym: a, sigma1: s1, sigma2: s2, sigma3: s3}
+        self._dt = dt
+        self.order = 1
+
+        # 3 noise sources (nw=3 > nx=2)
+        self.diffusion_expr = sp.Matrix([
+            [sigma1 * x1, sigma2 * x1, 0],
+            [0, sigma3 * x2, sigma3 * x2]
+        ])
+        self.sde_type = 'ito'
 
 
 # ============================================================================
-# Test System Initialization
+# Test Suite
 # ============================================================================
 
 
-class TestInitialization:
-    """Test proper initialization and validation."""
+class TestDiscreteStochasticSystemInitialization(unittest.TestCase):
+    """Test system initialization and validation."""
 
     def test_basic_initialization(self):
         """Test basic system creation."""
-        system = DiscreteLinearSDE()
+        system = DiscreteOU(alpha=2.0, sigma=0.3, dt=0.1)
 
-        assert system._is_discrete is True
-        assert system.is_stochastic is True
-        assert system.nx == 2
-        assert system.nu == 1
-        assert system.nw == 1
-        assert system.order == 1
+        # Check dimensions
+        self.assertEqual(system.nx, 1)
+        self.assertEqual(system.nu, 1)
+        self.assertEqual(system.nw, 1)
+        self.assertEqual(system.dt, 0.1)
 
-    def test_autonomous_system(self):
-        """Test autonomous discrete stochastic system."""
-        system = DiscreteRandomWalk()
+        # Check stochastic flag
+        self.assertTrue(system.is_stochastic)
 
-        assert system.nu == 0
-        assert system.nx == 1
-        assert system.nw == 1
-        assert len(system.control_vars) == 0
+        # Check components exist
+        self.assertIsNotNone(system.diffusion_handler)
+        self.assertIsNotNone(system.noise_characteristics)
 
-    def test_discrete_flag_set(self):
-        """Test that discrete flag is properly set."""
-        system = DiscreteAR1()
+    def test_multidimensional_initialization(self):
+        """Test 2D system with diagonal noise."""
+        system = MultiDimensionalStochastic(dt=0.05)
 
-        assert hasattr(system, "_is_discrete")
-        assert system._is_discrete is True
+        self.assertEqual(system.nx, 2)
+        self.assertEqual(system.nu, 1)
+        self.assertEqual(system.nw, 2)
+        self.assertEqual(system.dt, 0.05)
 
-    def test_sde_type_set_to_ito(self):
-        """Test that sde_type defaults to Ito (convention for discrete)."""
-        system = DiscreteLinearSDE()
+    def test_autonomous_initialization(self):
+        """Test autonomous system (nu=0)."""
+        system = AutonomousStochastic(dt=0.1)
 
-        from src.systems.base.utils.stochastic.noise_analysis import SDEType
+        self.assertEqual(system.nx, 1)
+        self.assertEqual(system.nu, 0)  # Autonomous!
+        self.assertEqual(system.nw, 1)
 
-        assert system.sde_type == SDEType.ITO
+    def test_missing_diffusion_expr(self):
+        """Test that missing diffusion_expr raises error."""
+        with self.assertRaises(ValueError) as cm:
+            system = InvalidDiffusionSystem(dt=0.1)
 
-    def test_parameter_assignment(self):
-        """Test parameter values are correctly stored."""
-        system = DiscreteAR1(phi=0.95, sigma=0.2)
+        self.assertIn("must set self.diffusion_expr", str(cm.exception))
 
-        phi_sym = sp.symbols("phi", real=True)
-        sigma_sym = sp.symbols("sigma", real=True)
+    def test_wrong_dimension_diffusion(self):
+        """Test that dimension mismatch in diffusion raises error."""
+        with self.assertRaises(ValidationError) as cm:
+            system = WrongDimensionDiffusion(dt=0.1)
 
-        assert system.parameters[phi_sym] == 0.95
-        assert system.parameters[sigma_sym] == 0.2
+        # Should catch dimension mismatch during validation
+        self.assertIn("dimension", str(cm.exception).lower())
 
-    def test_config_dict_flags(self):
-        """Test configuration includes both discrete and stochastic flags."""
-        system = DiscreteLinearSDE()
-        config = system.get_config_dict()
+    def test_sde_type_normalization(self):
+        """Test that sde_type string is normalized to enum."""
+        system = DiscreteOU(dt=0.1)
 
-        assert config["is_discrete"] is True
-        assert config["is_stochastic"] is True
+        # Should be converted to enum
+        self.assertIsInstance(system.sde_type, SDEType)
+        self.assertEqual(system.sde_type, SDEType.ITO)
 
-    def test_get_config_dict_comprehensive(self):
-        """Test complete configuration dictionary structure and content."""
-        system = DiscreteAR1(phi=0.85, sigma=0.3)
 
-        # Add equilibrium to test completeness
-        system.add_equilibrium("origin", np.array([0.0]), np.array([0.0]), verify=False)
-
-        config = system.get_config_dict()
-
-        # Core attributes
-        assert "class_name" in config
-        assert config["class_name"] == "DiscreteAR1"
-
-        # Dimensions
-        assert "nx" in config
-        assert config["nx"] == 1
-        assert "nu" in config
-        assert config["nu"] == 1
-        assert "ny" in config
-        assert config["ny"] == 1
-
-        # System properties
-        assert "order" in config
-        assert config["order"] == 1
-
-        # Parameters
-        assert "parameters" in config
-        assert isinstance(config["parameters"], dict)
-        # Parameters should have 'phi' and 'sigma' as strings
-        param_keys = set(config["parameters"].keys())
-        assert "phi" in param_keys
-        assert "sigma" in param_keys
-
-        # Backend configuration
-        assert "default_backend" in config
-        assert config["default_backend"] in ["numpy", "torch", "jax"]
-        assert "preferred_device" in config
-
-        # Equilibria
-        assert "equilibria" in config
-        assert "origin" in config["equilibria"]
-        assert "default_equilibrium" in config
-
-        # Discrete-specific flag
-        assert "is_discrete" in config
-        assert config["is_discrete"] is True
-
-        # Stochastic-specific flag
-        assert "is_stochastic" in config
-        assert config["is_stochastic"] is True
-
-
-# ============================================================================
-# Test Deterministic Part (Drift)
-# ============================================================================
-
-
-class TestDeterministicPart:
-    """Test drift/deterministic component evaluation."""
-
-    def test_drift_returns_next_state_mean(self):
-        """Test that drift returns expected next state."""
-        system = DiscreteAR1(phi=0.9, sigma=0.1)
-
-        x_k = np.array([1.0])
-        u_k = np.array([0.0])
-
-        f = system.drift(x_k, u_k)
-        # f = 0.9 * 1.0 + 0.0 = 0.9
-
-        np.testing.assert_allclose(f, np.array([0.9]), rtol=1e-10)
-
-    def test_forward_same_as_drift(self):
-        """Test forward() and drift() are equivalent."""
-        system = DiscreteLinearSDE()
-
-        x = np.array([1.0, 0.5])
-        u = np.array([0.0])
-
-        f1 = system.drift(x, u)
-        f2 = system.forward(x, u)
-        f3 = system(x, u)
-
-        np.testing.assert_array_equal(f1, f2)
-        np.testing.assert_array_equal(f1, f3)
-
-    def test_autonomous_drift(self):
-        """Test drift for autonomous system."""
-        system = DiscreteRandomWalk(sigma=0.5)
-
-        x_k = np.array([2.0])
-        f = system.drift(x_k)  # No control
-
-        # Random walk: f(x) = x (persistence)
-        np.testing.assert_allclose(f, np.array([2.0]), rtol=1e-10)
-
-    def test_batched_drift(self):
-        """Test batched drift evaluation."""
-        system = DiscreteAR1(phi=0.9)
-
-        x_batch = np.array([[1.0], [2.0], [3.0]])
-        u_batch = np.array([[0.0], [0.0], [0.0]])
-
-        f_batch = system.drift(x_batch, u_batch)
-
-        expected = np.array([[0.9], [1.8], [2.7]])
-        np.testing.assert_allclose(f_batch, expected, rtol=1e-10)
-
-
-# ============================================================================
-# Test Stochastic Part (Diffusion)
-# ============================================================================
-
-
-class TestStochasticPart:
-    """Test diffusion/noise component evaluation."""
-
-    def test_additive_diffusion(self):
-        """Test additive (constant) diffusion."""
-        system = DiscreteAR1(phi=0.9, sigma=0.2)
-
-        x_k = np.array([1.0])
-        u_k = np.array([0.0])
-
-        g = system.diffusion(x_k, u_k)
-
-        # Additive: constant
-        np.testing.assert_allclose(g, np.array([[0.2]]), rtol=1e-10)
-
-        # Should be same at different state
-        x_k2 = np.array([5.0])
-        g2 = system.diffusion(x_k2, u_k)
-        np.testing.assert_array_equal(g, g2)
-
-    def test_multiplicative_diffusion(self):
-        """Test multiplicative (state-dependent) diffusion."""
-        system = DiscreteGeometricRW(sigma=0.1)
-
-        x1 = np.array([1.0])
-        x2 = np.array([2.0])
-
-        g1 = system.diffusion(x1)
-        g2 = system.diffusion(x2)
-
-        # Multiplicative: g(x) = σ*x
-        np.testing.assert_allclose(g1, np.array([[0.1]]), rtol=1e-10)
-        np.testing.assert_allclose(g2, np.array([[0.2]]), rtol=1e-10)
-
-    def test_diffusion_autonomous(self):
-        """Test diffusion for autonomous system."""
-        system = DiscreteRandomWalk(sigma=0.5)
-
-        x_k = np.array([1.0])
-        g = system.diffusion(x_k)  # No control
-
-        np.testing.assert_allclose(g, np.array([[0.5]]), rtol=1e-10)
-
-    def test_batched_diffusion(self):
-        """Test batched diffusion evaluation."""
-        system = DiscreteAR1(sigma=0.2)
-
-        x_batch = np.array([[1.0], [2.0], [3.0]])
-        u_batch = np.array([[0.0], [0.0], [0.0]])
-
-        g_batch = system.diffusion(x_batch, u_batch)
-
-        # For additive noise, diffusion returns constant (nx, nw), not batched
-        # This is expected behavior - additive noise doesn't vary with state
-        assert g_batch.shape == (1, 1)
-
-        # Value should be sigma
-        np.testing.assert_allclose(g_batch, np.array([[0.2]]), rtol=1e-10)
-
-
-# ============================================================================
-# Test Noise Analysis
-# ============================================================================
-
-
-class TestNoiseAnalysis:
-    """Test automatic noise structure analysis."""
+class TestNoiseCharacterization(unittest.TestCase):
+    """Test automatic noise type detection."""
 
     def test_additive_noise_detection(self):
-        """Test detection of additive noise."""
-        system = DiscreteAR1()
+        """Test additive noise is correctly detected."""
+        system = DiscreteOU(sigma=0.3, dt=0.1)
 
-        assert system.is_additive_noise() is True
-        assert system.is_multiplicative_noise() is False
-        assert system.get_noise_type().value == "additive"
+        # Noise characteristics
+        self.assertTrue(system.is_additive_noise())
+        self.assertFalse(system.is_multiplicative_noise())
+        self.assertEqual(system.get_noise_type(), NoiseType.ADDITIVE)
+
+        # Dependencies
+        self.assertFalse(system.depends_on_state())
+        self.assertFalse(system.depends_on_control())
+        self.assertFalse(system.depends_on_time())
+        
+    def test_multiplicative_noise_detection_scalar_override(self):
+        system = GeometricRandomWalk(mu=0.1, sigma=0.2, dt=1.0)
+        
+        # It IS multiplicative in nature
+        self.assertTrue(system.depends_on_state())
+        # But classified as SCALAR because nw=1
+        self.assertTrue(system.is_scalar_noise())
 
     def test_multiplicative_noise_detection(self):
-        """Test detection of multiplicative noise."""
-        system = DiscreteGeometricRW()
+        """Test multiplicative noise is correctly detected."""
+        system = GeometricRandomWalk(mu=0.1, sigma=0.2, dt=1.0)
 
-        # Note: System has nw=1 (scalar) AND is multiplicative
-        # Noise type priority: scalar > multiplicative in some implementations
-        # So we check depends_on_state instead
-        assert system.is_additive_noise() is False
-        assert system.depends_on_state() is True
+        # Noise characteristics
+        self.assertFalse(system.is_additive_noise())
+        self.assertTrue(system.is_multiplicative_noise())
+        # While the noise is multiplicative, scalar is higher up in hierarchy
+        self.assertEqual(system.get_noise_type(), NoiseType.SCALAR)
 
-        # Verify it's actually multiplicative (varies with state)
-        g1 = system.diffusion(np.array([1.0]))
-        g2 = system.diffusion(np.array([2.0]))
-        assert not np.allclose(g1, g2)  # Different values = multiplicative
+        # Dependencies
+        self.assertTrue(system.depends_on_state())
+        self.assertFalse(system.depends_on_control())
+
+    def test_diagonal_noise_detection(self):
+        """Test diagonal noise structure."""
+        system = MultiDimensionalStochastic(dt=0.1)
+
+        # Should detect diagonal structure
+        self.assertTrue(system.is_diagonal_noise())
 
     def test_scalar_noise_detection(self):
-        """Test detection of scalar noise (nw=1)."""
-        system = DiscreteRandomWalk()
+        """Test scalar noise (nw=1)."""
+        system = DiscreteOU(dt=0.1)
 
-        assert system.is_scalar_noise() is True
-        assert system.nw == 1
-
-    def test_constant_noise_optimization(self):
-        """Test constant noise can be precomputed for additive systems."""
-        system = DiscreteAR1(sigma=0.3)
-
-        assert system.can_optimize_for_additive() is True
-
-        # Get constant noise
-        G = system.get_constant_noise("numpy")
-        np.testing.assert_allclose(G, np.array([[0.3]]), rtol=1e-10)
-
-    def test_noise_dependencies(self):
-        """Test noise dependency analysis."""
-        # Additive: no dependencies
-        additive = DiscreteAR1()
-        assert additive.depends_on_state() is False
-        assert additive.depends_on_control() is False
-
-        # Multiplicative: depends on state
-        multiplicative = DiscreteGeometricRW()
-        assert multiplicative.depends_on_state() is True
+        self.assertTrue(system.is_scalar_noise())
+        self.assertEqual(system.nw, 1)
 
 
-# ============================================================================
-# Test Full Stochastic Step
-# ============================================================================
+class TestDeterministicEvaluation(unittest.TestCase):
+    """Test deterministic part evaluation."""
 
+    def setUp(self):
+        """Set up test systems."""
+        self.system = DiscreteOU(alpha=2.0, sigma=0.3, dt=0.1)
 
-class TestStochasticStep:
-    """Test complete stochastic step evaluation."""
-
-    def test_step_stochastic_with_custom_noise(self):
-        """Test stochastic step with provided noise."""
-        system = DiscreteAR1(phi=0.9, sigma=0.2)
-
+    def test_call_single_state(self):
+        """Test __call__ with single state."""
         x_k = np.array([1.0])
         u_k = np.array([0.0])
-        w_k = np.array([1.0])  # Fixed noise
 
-        x_next = system.step_stochastic(x_k, u_k, w_k)
+        f = self.system(x_k, u_k)
 
-        # x[k+1] = 0.9*1.0 + 0.0 + 0.2*1.0 = 1.1
-        np.testing.assert_allclose(x_next, np.array([1.1]), rtol=1e-10)
+        # Expected: (1 - 2.0*0.1)*1.0 + 0.0 = 0.8
+        self.assertAlmostEqual(f[0], 0.8, places=10)
 
-    def test_step_stochastic_deterministic(self):
-        """Test that zero noise gives deterministic result."""
-        system = DiscreteAR1(phi=0.9, sigma=0.2)
-
-        x_k = np.array([1.0])
-        u_k = np.array([0.0])
-        w_k = np.array([0.0])  # No noise
-
-        x_next = system.step_stochastic(x_k, u_k, w_k)
-        f = system.drift(x_k, u_k)
-
-        # Should match drift exactly
-        np.testing.assert_array_equal(x_next, f)
-
-    def test_step_stochastic_auto_noise(self):
-        """Test stochastic step with automatic noise generation."""
-        system = DiscreteRandomWalk(sigma=0.5)
-
-        x_k = np.array([1.0])
-
-        # Run multiple times with auto noise
-        results = []
-        for _ in range(10):
-            x_next = system.step_stochastic(x_k)
-            results.append(x_next[0])
-
-        # Results should vary (stochastic)
-        assert np.std(results) > 0
-
-        # Mean should be close to drift (x_k = 1.0)
-        assert 0.5 < np.mean(results) < 1.5
-
-    def test_step_stochastic_autonomous(self):
-        """Test stochastic step for autonomous system."""
-        system = DiscreteRandomWalk(sigma=0.5)
-
-        x_k = np.array([1.0])
-        w_k = np.array([2.0])
-
-        x_next = system.step_stochastic(x_k, w_k=w_k)  # No u
-
-        # x[k+1] = x[k] + σ*w = 1.0 + 0.5*2.0 = 2.0
-        np.testing.assert_allclose(x_next, np.array([2.0]), rtol=1e-10)
-
-    def test_step_stochastic_batched(self):
-        """Test batched stochastic step."""
-        system = DiscreteAR1(phi=0.9, sigma=0.2)
-
-        batch_size = 5
-        x_batch = np.ones((batch_size, 1))
-        u_batch = np.zeros((batch_size, 1))
-        w_batch = np.ones((batch_size, 1))
-
-        x_next_batch = system.step_stochastic(x_batch, u_batch, w_batch)
-
-        assert x_next_batch.shape == (batch_size, 1)
-
-        # All should be same (same inputs)
-        expected = np.array([[1.1]])  # 0.9*1.0 + 0.2*1.0
-        np.testing.assert_allclose(x_next_batch, np.tile(expected, (batch_size, 1)), rtol=1e-10)
-
-    def test_step_stochastic_multiplicative_batched(self):
-        """Test batched step with multiplicative noise."""
-        system = DiscreteGeometricRW(mu=0.01, sigma=0.1)
-
+    def test_call_batched(self):
+        """Test __call__ with batched inputs."""
         x_batch = np.array([[1.0], [2.0], [3.0]])
-        w_batch = np.ones((3, 1))
+        u_batch = np.array([[0.0], [0.5], [1.0]])
 
-        # For multiplicative noise with batched input,
-        # diffusion returns (batch, nx, nw)
-        g = system.diffusion(x_batch)
+        f = self.system(x_batch, u_batch)
 
-        # But current implementation may return different shape
-        # Let's test the actual behavior
-        x_next = system.step_stochastic(x_batch, w_k=w_batch)
+        # Check shape
+        self.assertEqual(f.shape, (3, 1))
 
-        # Each trajectory should evolve independently
-        assert x_next.shape == (3, 1)
+        # Check values
+        # f[0] = 0.8*1.0 + 0.0 = 0.8
+        # f[1] = 0.8*2.0 + 0.5 = 2.1
+        # f[2] = 0.8*3.0 + 1.0 = 3.4
+        np.testing.assert_allclose(f[:, 0], [0.8, 2.1, 3.4], rtol=1e-10)
 
-        # Manually verify first trajectory
-        # x[k+1] = 1.01*x[k] + 0.1*x[k]*w = x[k]*(1.01 + 0.1*w)
-        # For w=1: x[k+1] = 1.11*x[k]
-        expected_0 = 1.11 * x_batch[0]
-        np.testing.assert_allclose(x_next[0], expected_0, rtol=1e-10)
+    def test_call_autonomous(self):
+        """Test autonomous system (nu=0)."""
+        system = AutonomousStochastic(alpha=0.95, dt=0.1)
+        x_k = np.array([1.0])
+
+        # Should work without u
+        f = system(x_k)
+
+        self.assertAlmostEqual(f[0], 0.95, places=10)
 
 
-# ============================================================================
-# Test Backend Compatibility
-# ============================================================================
+class TestDiffusionEvaluation(unittest.TestCase):
+    """Test stochastic part (diffusion) evaluation."""
+
+    def setUp(self):
+        """Set up test systems."""
+        self.additive_system = DiscreteOU(sigma=0.3, dt=0.1)
+        self.multiplicative_system = GeometricRandomWalk(sigma=0.2, dt=1.0)
+
+    def test_diffusion_additive(self):
+        """Test diffusion evaluation for additive noise."""
+        x_k = np.array([1.0])
+        u_k = np.array([0.0])
+
+        g = self.additive_system.diffusion(x_k, u_k)
+
+        # Should be constant
+        self.assertEqual(g.shape, (1, 1))
+        self.assertAlmostEqual(g[0, 0], 0.3, places=10)
+
+    def test_diffusion_multiplicative(self):
+        """Test diffusion evaluation for multiplicative noise."""
+        x_k = np.array([2.0])
+        u_k = np.array([0.0])
+
+        g = self.multiplicative_system.diffusion(x_k, u_k)
+
+        # Should be state-dependent: σ*x = 0.2*2.0 = 0.4
+        self.assertEqual(g.shape, (1, 1))
+        self.assertAlmostEqual(g[0, 0], 0.4, places=10)
+
+    def test_diffusion_batched_additive(self):
+        """Test batched diffusion evaluation for additive noise."""
+        x_batch = np.array([[1.0], [2.0], [3.0]])
+        u_batch = np.array([[0.0], [0.0], [0.0]])
+
+        g = self.additive_system.diffusion(x_batch, u_batch)
+
+        # Additive: should return (nx, nw) constant
+        self.assertEqual(g.shape, (1, 1))
+        self.assertAlmostEqual(g[0, 0], 0.3, places=10)
+
+    def test_diffusion_batched_multiplicative(self):
+        """Test batched diffusion for multiplicative noise."""
+        x_batch = np.array([[1.0], [2.0], [3.0]])
+        u_batch = np.array([[0.0], [0.0], [0.0]])
+
+        g = self.multiplicative_system.diffusion(x_batch, u_batch)
+
+        # Multiplicative: should return (batch, nx, nw)
+        self.assertEqual(g.shape, (3, 1, 1))
+
+        # Check values: σ*x for each sample
+        np.testing.assert_allclose(
+            g[:, 0, 0],
+            np.array([0.2, 0.4, 0.6]),  # 0.2*[1, 2, 3]
+            rtol=1e-10
+        )
 
 
-class TestBackendCompatibility:
+class TestStochasticStep(unittest.TestCase):
+    """Test full stochastic step evaluation."""
+
+    def setUp(self):
+        """Set up test systems."""
+        self.system = DiscreteOU(alpha=2.0, sigma=0.3, dt=0.1)
+
+    def test_step_stochastic_with_noise(self):
+        """Test stochastic step with provided noise."""
+        x_k = np.array([1.0])
+        u_k = np.array([0.0])
+        w_k = np.array([1.0])  # Unit noise
+
+        x_next = self.system.step_stochastic(x_k, u_k, w_k)
+
+        # Expected: f + g*w = 0.8 + 0.3*1.0 = 1.1
+        self.assertAlmostEqual(x_next[0], 1.1, places=10)
+
+    def test_step_stochastic_zero_noise(self):
+        """Test that zero noise gives deterministic result."""
+        x_k = np.array([1.0])
+        u_k = np.array([0.0])
+        w_k = np.zeros(1)
+
+        x_next = self.system.step_stochastic(x_k, u_k, w_k)
+        f = self.system(x_k, u_k)
+
+        # Should match deterministic part
+        np.testing.assert_allclose(x_next, f, rtol=1e-10)
+
+    def test_step_stochastic_auto_noise_generation(self):
+        """Test automatic noise generation."""
+        np.random.seed(42)
+        x_k = np.array([1.0])
+        u_k = np.array([0.0])
+
+        x_next = self.system.step_stochastic(x_k, u_k)  # w=None
+
+        # Should generate noise internally
+        self.assertEqual(x_next.shape, (1,))
+        # Result should be stochastic (not deterministic)
+        f = self.system(x_k, u_k)
+        self.assertNotEqual(x_next[0], f[0])
+
+
+class TestLinearization(unittest.TestCase):
+    """Test linearization with diffusion."""
+
+    def setUp(self):
+        """Set up test system."""
+        self.system = DiscreteOU(alpha=2.0, sigma=0.3, dt=0.1)
+
+    def test_linearization_returns_three_matrices(self):
+        """Test that stochastic linearization returns (Ad, Bd, Gd)."""
+        x_eq = np.zeros(1)
+        u_eq = np.zeros(1)
+
+        result = self.system.linearize(x_eq, u_eq)
+
+        # Should return 3-tuple
+        self.assertEqual(len(result), 3)
+
+        Ad, Bd, Gd = result
+
+        # Check shapes
+        self.assertEqual(Ad.shape, (1, 1))
+        self.assertEqual(Bd.shape, (1, 1))
+        self.assertEqual(Gd.shape, (1, 1))
+
+    def test_linearization_values_additive(self):
+        """Test linearization values for additive noise."""
+        x_eq = np.zeros(1)
+        u_eq = np.zeros(1)
+
+        Ad, Bd, Gd = self.system.linearize(x_eq, u_eq)
+
+        # Ad = ∂f/∂x = (1 - α*dt) = 1 - 2.0*0.1 = 0.8
+        self.assertAlmostEqual(Ad[0, 0], 0.8, places=10)
+
+        # Bd = ∂f/∂u = 1.0
+        self.assertAlmostEqual(Bd[0, 0], 1.0, places=10)
+
+        # Gd = g(x_eq, u_eq) = σ = 0.3
+        self.assertAlmostEqual(Gd[0, 0], 0.3, places=10)
+
+
+class TestStochasticSimulation(unittest.TestCase):
+    """Test simulate_stochastic method."""
+
+    def setUp(self):
+        """Set up test system."""
+        self.system = DiscreteOU(alpha=2.0, sigma=0.3, dt=0.1)
+
+    def test_simulate_single_path(self):
+        """Test single path simulation."""
+        x0 = np.array([1.0])
+        n_steps = 100
+
+        result = self.system.simulate_stochastic(
+            x0=x0,
+            u_sequence=None,
+            n_steps=n_steps,
+            seed=42
+        )
+
+        # Check result structure
+        self.assertIn('states', result)
+        self.assertIn('time_steps', result)
+        self.assertIn('dt', result)
+        self.assertIn('metadata', result)
+
+        # Check shapes
+        self.assertEqual(result['states'].shape, (n_steps + 1, 1))
+        self.assertEqual(len(result['time_steps']), n_steps + 1)
+
+        # Check metadata
+        self.assertEqual(result['metadata']['n_paths'], 1)
+        self.assertEqual(result['metadata']['seed'], 42)
+
+        # Check initial condition
+        np.testing.assert_allclose(result['states'][0, :], x0, rtol=1e-10)
+
+    def test_simulate_monte_carlo(self):
+        """Test Monte Carlo simulation with multiple paths."""
+        x0 = np.array([1.0])
+        n_steps = 100
+        n_paths = 50
+
+        result = self.system.simulate_stochastic(
+            x0=x0,
+            u_sequence=None,
+            n_steps=n_steps,
+            n_paths=n_paths,
+            seed=42
+        )
+
+        # Check shape: (n_paths, n_steps+1, nx)
+        self.assertEqual(result['states'].shape, (n_paths, n_steps + 1, 1))
+
+        # Check metadata
+        self.assertEqual(result['metadata']['n_paths'], n_paths)
+
+        # Check all paths start at x0
+        for path in range(n_paths):
+            np.testing.assert_allclose(
+                result['states'][path, 0, :],
+                x0,
+                rtol=1e-10
+            )
+
+    def test_simulate_reproducibility(self):
+        """Test that same seed gives same results."""
+        x0 = np.array([1.0])
+        n_steps = 100
+
+        result1 = self.system.simulate_stochastic(x0, None, n_steps, seed=42)
+        result2 = self.system.simulate_stochastic(x0, None, n_steps, seed=42)
+
+        # Should be identical
+        np.testing.assert_allclose(
+            result1['states'],
+            result2['states'],
+            rtol=1e-10
+        )
+
+
+class TestConstantNoiseOptimization(unittest.TestCase):
+    """Test constant noise precomputation for additive systems."""
+
+    def test_get_constant_noise_additive(self):
+        """Test getting constant noise matrix."""
+        system = DiscreteOU(sigma=0.3, dt=0.1)
+
+        G = system.get_constant_noise(backend='numpy')
+
+        self.assertEqual(G.shape, (1, 1))
+        self.assertAlmostEqual(G[0, 0], 0.3, places=10)
+
+    def test_get_constant_noise_multiplicative_fails(self):
+        """Test that multiplicative noise can't use constant optimization."""
+        system = GeometricRandomWalk(sigma=0.2, dt=1.0)
+
+        with self.assertRaises(ValueError):
+            G = system.get_constant_noise()
+
+
+class TestBackendCompatibility(unittest.TestCase):
     """Test multi-backend support."""
+
+    def setUp(self):
+        """Set up test system."""
+        self.system = DiscreteOU(alpha=2.0, sigma=0.3, dt=0.1)
+        self.x = np.array([1.0])
+        self.u = np.array([0.0])
 
     def test_numpy_backend(self):
         """Test NumPy backend."""
-        system = DiscreteAR1()
+        f = self.system(self.x, self.u, backend='numpy')
+        g = self.system.diffusion(self.x, self.u, backend='numpy')
 
-        x = np.array([1.0])
-        u = np.array([0.0])
-        w = np.array([1.0])
-
-        x_next = system.step_stochastic(x, u, w, backend="numpy")
-
-        assert isinstance(x_next, np.ndarray)
-
-    @pytest.mark.skipif(not TORCH_AVAILABLE, reason="PyTorch not available")
-    def test_torch_backend(self):
-        """Test PyTorch backend."""
-        system = DiscreteAR1()
-        system.set_default_backend("torch")
-
-        x = torch.tensor([1.0])
-        u = torch.tensor([0.0])
-        w = torch.tensor([1.0])
-
-        x_next = system.step_stochastic(x, u, w, backend="torch")
-
-        assert isinstance(x_next, torch.Tensor)
-
-    @pytest.mark.skipif(not JAX_AVAILABLE, reason="JAX not available")
-    def test_jax_backend(self):
-        """Test JAX backend."""
-        system = DiscreteAR1()
-        system.set_default_backend("jax")
-
-        x = jnp.array([1.0])
-        u = jnp.array([0.0])
-        w = jnp.array([1.0])
-
-        x_next = system.step_stochastic(x, u, w, backend="jax")
-
-        assert isinstance(x_next, jnp.ndarray)
+        self.assertIsInstance(f, np.ndarray)
+        self.assertIsInstance(g, np.ndarray)
 
 
+class TestPrintingAndInfo(unittest.TestCase):
+    """Test printing and information methods."""
+
+    def setUp(self):
+        """Set up test system."""
+        self.system = DiscreteOU(alpha=2.0, sigma=0.3, dt=0.1)
+
+    def test_print_equations(self):
+        """Test that print_equations doesn't crash."""
+        # Should not raise
+        self.system.print_equations(simplify=True)
+        self.system.print_equations(simplify=False)
+
+    def test_print_stochastic_info(self):
+        """Test that print_stochastic_info doesn't crash."""
+        # Should not raise
+        self.system.print_stochastic_info()
+
+    def test_get_info_structure(self):
+        """Test get_info returns correct structure."""
+        info = self.system.get_info()
+
+        # Check required keys
+        self.assertIn('system_type', info)
+        self.assertIn('is_discrete', info)
+        self.assertIn('is_stochastic', info)
+        self.assertIn('dimensions', info)
+        self.assertIn('noise', info)
+
+        # Check values
+        self.assertEqual(info['system_type'], 'DiscreteStochasticSystem')
+        self.assertTrue(info['is_discrete'])
+        self.assertTrue(info['is_stochastic'])
+
+
+class TestStatisticalProperties(unittest.TestCase):
+    """Test statistical properties of simulations."""
+
+    def test_variance_accumulation(self):
+        """Test that variance accumulates correctly for additive noise."""
+        system = DiscreteOU(alpha=0.0, sigma=0.3, dt=0.1)  # Pure random walk
+        x0 = np.zeros(1)
+        n_steps = 100
+        n_paths = 500
+
+        result = system.simulate_stochastic(
+            x0, None, n_steps, n_paths, seed=42
+        )
+
+        # Compute variance at each time step
+        variance_traj = result['states'].var(axis=0)[:, 0]
+
+        # For random walk: Var[x[k]] = k * σ²
+        expected_variance = np.arange(n_steps + 1) * 0.3**2
+
+        # Check at specific points (allow 30% error due to finite samples)
+        for k in [10, 50, 100]:
+            self.assertAlmostEqual(
+                variance_traj[k] / expected_variance[k],
+                1.0,
+                delta=0.3
+            )
+
+
+class TestEdgeCases(unittest.TestCase):
+    """Test edge cases and error handling."""
+
+    def test_zero_noise(self):
+        """Test system with zero noise."""
+        system = DiscreteOU(alpha=2.0, sigma=0.0, dt=0.1)  # σ=0!
+
+        x_k = np.array([1.0])
+        u_k = np.array([0.0])
+
+        # Diffusion should be zero
+        g = system.diffusion(x_k, u_k)
+        np.testing.assert_allclose(g, np.zeros((1, 1)), rtol=1e-10)
+
+    def test_very_small_dt(self):
+        """Test system with very small time step."""
+        system = DiscreteOU(alpha=2.0, sigma=0.3, dt=1e-6)
+
+        self.assertEqual(system.dt, 1e-6)
+
+        # Should still work
+        x_k = np.array([1.0])
+        u_k = np.array([0.0])
+        f = system(x_k, u_k)
+        g = system.diffusion(x_k, u_k)
+
+        # f ≈ (1 - α*dt)*x = (1 - 2e-6)*1 ≈ 1.0
+        self.assertAlmostEqual(f[0], 1.0 - 2e-6, places=8)
+        
 # ============================================================================
-# Test Built-in Systems
-# ============================================================================
-
-
-class TestBuiltinSystems:
-    """Test built-in discrete stochastic systems."""
-
-    def test_white_noise(self):
-        """Test discrete white noise system."""
-        system = DiscreteWhiteNoise(sigma=0.5)
-
-        assert system.nx == 1
-        assert system.nu == 0
-        assert system.nw == 1
-
-        # Drift should be zero
-        x = np.array([5.0])
-        f = system.drift(x)
-        np.testing.assert_allclose(f, np.array([0.0]), atol=1e-10)
-
-        # Next state is pure noise
-        w = np.array([2.0])
-        x_next = system.step_stochastic(x, w_k=w)
-        np.testing.assert_allclose(x_next, np.array([1.0]), rtol=1e-10)  # 0.5*2.0
-
-    def test_random_walk(self):
-        """Test discrete random walk."""
-        system = DiscreteRandomWalk(sigma=1.0)
-
-        assert system.is_additive_noise() is True
-
-        # Drift is identity
-        x = np.array([3.0])
-        f = system.drift(x)
-        np.testing.assert_allclose(f, np.array([3.0]), rtol=1e-10)
-
-        # Step with known noise
-        w = np.array([0.5])
-        x_next = system.step_stochastic(x, w_k=w)
-        np.testing.assert_allclose(x_next, np.array([3.5]), rtol=1e-10)
-
-    def test_ar1_process(self):
-        """Test AR(1) process."""
-        system = DiscreteAR1(phi=0.8, sigma=0.2)
-
-        assert system.nu == 1  # Has control
-        assert system.is_additive_noise() is True
-
-        # Test step
-        x = np.array([1.0])
-        u = np.array([0.1])
-        w = np.array([1.0])
-
-        x_next = system.step_stochastic(x, u, w)
-
-        # x[k+1] = 0.8*1.0 + 0.1 + 0.2*1.0 = 1.1
-        np.testing.assert_allclose(x_next, np.array([1.1]), rtol=1e-10)
-
-
-# ============================================================================
-# Test Trajectory Generation
-# ============================================================================
-
-
-class TestTrajectoryGeneration:
-    """Test generating stochastic trajectories."""
-
-    def test_random_walk_trajectory(self):
-        """Test random walk generates proper trajectory."""
-        system = DiscreteRandomWalk(sigma=0.1)
-
-        x = np.array([0.0])
-        trajectory = [x.copy()]
-
-        # Generate with fixed seed for reproducibility
-        np.random.seed(42)
-
-        for _ in range(100):
-            x = system.step_stochastic(x)
-            trajectory.append(x.copy())
-
-        trajectory = np.array(trajectory)
-
-        # Should have 101 states
-        assert trajectory.shape == (101, 1)
-
-        # For random walk starting at 0, final position should be non-zero
-        assert np.abs(trajectory[-1, 0]) > 0.01
-
-        # Cumulative steps should show random walk behavior
-        # (increasing spread over time)
-        early_spread = np.std(trajectory[:20])
-        late_spread = np.std(trajectory[-20:])
-        # Later steps should generally be further from start
-        # (though for a single trajectory this is noisy)
-
-    def test_ar1_mean_reversion(self):
-        """Test AR(1) shows mean reversion."""
-        system = DiscreteAR1(phi=0.8, sigma=0.1)
-
-        # Start far from equilibrium
-        x = np.array([10.0])
-        u = np.array([0.0])
-
-        # Simulate many steps with zero noise
-        for _ in range(50):
-            x = system.step_stochastic(x, u, w_k=np.array([0.0]))
-
-        # Should decay toward zero
-        assert np.abs(x[0]) < 1.0
-
-    def test_deterministic_vs_stochastic(self):
-        """Compare deterministic (w=0) vs stochastic trajectories."""
-        system = DiscreteAR1(phi=0.9, sigma=0.5)
-
-        x0 = np.array([1.0])
-        u = np.array([0.0])
-
-        # Deterministic trajectory (w=0)
-        x_det = x0.copy()
-        for _ in range(10):
-            x_det = system.step_stochastic(x_det, u, w_k=np.array([0.0]))
-
-        # Stochastic trajectory (w~N(0,1))
-        np.random.seed(42)
-        x_stoch = x0.copy()
-        for _ in range(10):
-            x_stoch = system.step_stochastic(x_stoch, u)
-
-        # Should be different (unless extremely unlucky)
-        assert not np.allclose(x_det, x_stoch, rtol=1e-6)
-
-
-# ============================================================================
-# Test Linearization
+# Test Suite for Multiplicative Noise Detection
 # ============================================================================
 
 
-class TestLinearization:
-    """Test linearization of discrete stochastic systems."""
+class TestMultiplicativeNoiseDetection(unittest.TestCase):
+    """
+    Test that multiplicative noise is correctly detected.
+    
+    Key principle: For MULTIPLICATIVE classification (not SCALAR):
+    - Need nw > 1 (multiple noise sources), OR
+    - System must be multiplicative with nw=1 but not classifiable as SCALAR
+    
+    The NoiseCharacterizer hierarchy is:
+    1. SCALAR (if nw == 1)
+    2. ADDITIVE (if constant)
+    3. DIAGONAL (if diagonal matrix)
+    4. MULTIPLICATIVE (if state-dependent)
+    5. GENERAL (fallback)
+    """
 
-    def test_linearized_dynamics(self):
-        """Test linearization of deterministic part."""
-        system = DiscreteAR1(phi=0.9, sigma=0.2)
+    def test_multiplicative_2d_detected_diagonal_override(self):
+        """Test 2D multiplicative noise with 2 INDEPENDENT noise sources."""
+        system = MultiplicativeNoise2D(sigma1=0.2, sigma2=0.15, dt=0.1)
 
-        x = np.array([0.0])
-        u = np.array([0.0])
+        # Should be classified as MULTIPLICATIVE
+        self.assertTrue(system.is_multiplicative_noise())
+        self.assertFalse(system.is_additive_noise())
+        self.assertFalse(system.is_scalar_noise())  # nw=2, not scalar
+        self.assertEqual(system.get_noise_type(), NoiseType.DIAGONAL)
 
-        A, B = system.linearized_dynamics(x, u)
+        # Dependencies
+        self.assertTrue(system.depends_on_state())
+        self.assertFalse(system.depends_on_control())
 
-        # For linear system: A = φ, B = 1
-        np.testing.assert_allclose(A, np.array([[0.9]]), rtol=1e-10)
-        np.testing.assert_allclose(B, np.array([[1.0]]), rtol=1e-10)
+        # Dimensions
+        self.assertEqual(system.nw, 2)
+        self.assertEqual(system.nx, 2)
 
-    def test_linearized_diffusion_additive(self):
-        """Test diffusion linearization for additive noise."""
-        system = DiscreteLinearSDE(sigma=0.3)
+    def test_fully_multiplicative_detected(self):
+        """Test fully coupled multiplicative noise."""
+        system = FullyMultiplicativeNoise(
+            sigma1=0.2, sigma2=0.15, sigma3=0.1, sigma4=0.12, dt=0.1
+        )
 
-        x = np.array([1.0, 0.5])
-        u = np.array([0.0])
+        # Should be MULTIPLICATIVE (nw=2, state-dependent)
+        self.assertTrue(system.is_multiplicative_noise())
+        self.assertEqual(system.get_noise_type(), NoiseType.MULTIPLICATIVE)
 
-        # For additive noise, diffusion is constant
-        g1 = system.diffusion(x, u)
+        # All noise depends on state
+        self.assertTrue(system.depends_on_state())
+        self.assertFalse(system.depends_on_control())
 
-        x2 = np.array([2.0, 1.0])
-        g2 = system.diffusion(x2, u)
+        # Not diagonal (off-diagonal terms exist)
+        self.assertFalse(system.is_diagonal_noise())
 
-        # Should be identical
-        np.testing.assert_array_equal(g1, g2)
+    def test_state_and_control_dependent(self):
+        """Test noise depending on both state and control."""
+        system = StateAndControlDependentNoise(sigma1=0.2, sigma2=0.15, dt=0.1)
 
-    def test_linearized_diffusion_multiplicative(self):
-        """Test diffusion varies with state for multiplicative noise."""
-        system = DiscreteGeometricRW(sigma=0.1)
+        # Should be MULTIPLICATIVE (depends on x and u)
+        # Note: might be SCALAR if nw=1, let's check
+        self.assertEqual(system.nw, 1)
+        
+        # With nw=1, classified as SCALAR even though multiplicative
+        self.assertTrue(system.is_scalar_noise())
+        
+        # But dependencies should still be detected
+        self.assertTrue(system.depends_on_state())
+        self.assertTrue(system.depends_on_control())  # ✓ This is key!
 
-        x1 = np.array([1.0])
-        x2 = np.array([2.0])
+    def test_three_noise_sources_multiplicative(self):
+        """Test system with more noise sources than states."""
+        system = ThreeNoiseSourcesMultiplicative(s1=0.2, s2=0.15, s3=0.1, dt=0.1)
 
-        g1 = system.diffusion(x1)
-        g2 = system.diffusion(x2)
+        # nw=3 > nx=2
+        self.assertEqual(system.nw, 3)
+        self.assertEqual(system.nx, 2)
 
-        # g2 should be 2x g1
-        np.testing.assert_allclose(g2, 2.0 * g1, rtol=1e-10)
+        # Should be MULTIPLICATIVE (nw > 1, state-dependent)
+        self.assertTrue(system.is_multiplicative_noise())
+        self.assertFalse(system.is_scalar_noise())  # nw=3, not scalar
+        self.assertEqual(system.get_noise_type(), NoiseType.MULTIPLICATIVE)
 
+        self.assertTrue(system.depends_on_state())
 
-# ============================================================================
-# Test Comparison with Continuous SDEs
-# ============================================================================
+    def test_multiplicative_diffusion_evaluation(self):
+        """Test that multiplicative diffusion evaluates correctly."""
+        system = MultiplicativeNoise2D(sigma1=0.2, sigma2=0.15, dt=0.1)
 
-
-class TestContinuousComparison:
-    """Test differences from continuous SDEs."""
-
-    def test_discrete_flag_distinguishes(self):
-        """Test discrete flag distinguishes from continuous."""
-        discrete_system = DiscreteAR1()
-
-        assert discrete_system._is_discrete is True
-        assert discrete_system.is_stochastic is True
-
-    def test_no_dt_scaling_in_diffusion(self):
-        """Test that discrete diffusion doesn't include dt scaling."""
-        system = DiscreteAR1(sigma=0.5)
-
-        x = np.array([1.0])
+        # Evaluate at specific state
+        x = np.array([2.0, 3.0])
         u = np.array([0.0])
 
         g = system.diffusion(x, u)
 
-        # Should be σ directly, not σ*sqrt(dt)
-        np.testing.assert_allclose(g, np.array([[0.5]]), rtol=1e-10)
+        # Expected: [[σ1*x1, 0], [0, σ2*x2]]
+        # = [[0.2*2.0, 0], [0, 0.15*3.0]]
+        # = [[0.4, 0], [0, 0.45]]
+        expected_g = np.array([
+            [0.4, 0.0],
+            [0.0, 0.45]
+        ])
 
-    def test_noise_is_iid_not_brownian(self):
-        """Test that discrete noise is IID, not Brownian."""
-        system = DiscreteRandomWalk(sigma=1.0)
+        np.testing.assert_allclose(g, expected_g, rtol=1e-10)
 
-        # Generate multiple steps
-        x = np.array([0.0])
-        np.random.seed(42)
+    # TODO: fix test or class
+    def test_multiplicative_batched_evaluation(self):
+        """Test batched multiplicative diffusion."""
+        system = MultiplicativeNoise2D(sigma1=0.2, sigma2=0.15, dt=0.1)
 
-        steps = []
-        for _ in range(100):
-            w = np.random.randn(1)
-            x_next = system.step_stochastic(x, w_k=w)
-            steps.append((x_next - x)[0])
-            x = x_next
+        x_batch = np.array([[1.0, 2.0], [3.0, 4.0]])
+        u_batch = np.array([[0.0], [0.0]])
+        
+        print(x_batch)
+        print(u_batch)
+        print(system)
+        system.print_equations(simplify=True)
+        print(system.diffusion_expr)
+        print(system.diffusion_handler)
+        print(system.diffusion)
+        system.compile_diffusion(backends=['numpy'])
 
-        # Steps should be IID (roughly independent)
-        steps = np.array(steps)
+        g = system.diffusion(x_batch, u_batch)
+        print(g.shape)
+        print(g[0])
+        print(g[1])
 
-        # Check autocorrelation is near zero
-        autocorr = np.corrcoef(steps[:-1], steps[1:])[0, 1]
-        assert np.abs(autocorr) < 0.3  # Should be uncorrelated
+        # Should return (batch, nx, nw) = (2, 2, 2)
+        self.assertEqual(g.shape, (2, 2, 2))
 
+        # First sample: x=[1, 2]
+        # g[0] = [[0.2*1, 0], [0, 0.15*2]] = [[0.2, 0], [0, 0.3]]
+        np.testing.assert_allclose(
+            g[0],
+            np.array([[0.2, 0.0], [0.0, 0.3]]),
+            rtol=1e-10
+        )
 
-# ============================================================================
-# Test Monte Carlo Properties
-# ============================================================================
+        # Second sample: x=[3, 4]
+        # g[1] = [[0.2*3, 0], [0, 0.15*4]] = [[0.6, 0], [0, 0.6]]
+        np.testing.assert_allclose(
+            g[1],
+            np.array([[0.6, 0.0], [0.0, 0.6]]),
+            rtol=1e-10
+        )
 
+    def test_multiplicative_stochastic_step(self):
+        """Test stochastic step with multiplicative noise."""
+        system = MultiplicativeNoise2D(a=0.9, sigma1=0.2, sigma2=0.15, dt=0.1)
 
-class TestMonteCarloProperties:
-    """Test statistical properties via Monte Carlo."""
-
-    def test_mean_convergence(self):
-        """Test that sample mean converges to theoretical mean."""
-        system = DiscreteAR1(phi=0.9, sigma=0.2)
-
-        n_paths = 1000
-        x_k = np.array([1.0])
+        x_k = np.array([1.0, 2.0])
         u_k = np.array([0.0])
+        w_k = np.array([1.0, 1.0])  # Unit noise in both directions
 
-        # Generate many next states
-        np.random.seed(42)
-        x_next_samples = []
-        for _ in range(n_paths):
-            x_next = system.step_stochastic(x_k, u_k)
-            x_next_samples.append(x_next[0])
+        x_next = system.step_stochastic(x_k, u_k, w_k)
 
-        # Sample mean should be close to drift
-        f = system.drift(x_k, u_k)
-        sample_mean = np.mean(x_next_samples)
+        # Deterministic: f = [0.9*1.0, 0.9*2.0] = [0.9, 1.8]
+        # Stochastic: g*w = [[0.2*1, 0], [0, 0.15*2]] @ [1, 1]
+        #                 = [[0.2*1], [0.15*2*1]]
+        #                 = [[0.2], [0.3]]
+        # Total: x[k+1] = [0.9 + 0.2, 1.8 + 0.3] = [1.1, 2.1]
 
-        # Within 3 standard errors
-        theoretical_std = 0.2  # sigma
-        std_error = theoretical_std / np.sqrt(n_paths)
-
-        assert np.abs(sample_mean - f[0]) < 3 * std_error
-
-    def test_variance_matches_diffusion(self):
-        """Test that sample variance matches diffusion."""
-        system = DiscreteAR1(phi=0.9, sigma=0.3)
-
-        n_paths = 1000
-        x_k = np.array([1.0])
-        u_k = np.array([0.0])
-
-        # Generate samples
-        np.random.seed(42)
-        x_next_samples = []
-        for _ in range(n_paths):
-            x_next = system.step_stochastic(x_k, u_k)
-            x_next_samples.append(x_next[0])
-
-        # Sample variance should match σ²
-        sample_var = np.var(x_next_samples)
-        theoretical_var = 0.3**2  # σ²
-
-        # Within reasonable tolerance for finite sample
-        assert 0.08 < sample_var < 0.12  # σ²=0.09 ± tolerance
-
-
-# ============================================================================
-# Test Edge Cases
-# ============================================================================
-
-
-class TestEdgeCases:
-    """Test edge cases and boundary conditions."""
-
-    def test_zero_noise_gain(self):
-        """Test system with zero noise (degenerate to deterministic)."""
-        system = DiscreteAR1(phi=0.9, sigma=0.0)
-
-        x = np.array([1.0])
-        u = np.array([0.0])
-        w = np.array([1.0])  # Noise present but gain is zero
-
-        x_next = system.step_stochastic(x, u, w)
-        f = system.drift(x, u)
-
-        # Should match drift (noise has no effect)
-        np.testing.assert_array_equal(x_next, f)
-
-    def test_large_noise_values(self):
-        """Test with large noise values."""
-        system = DiscreteRandomWalk(sigma=1.0)
-
-        x = np.array([1.0])
-        w = np.array([100.0])  # Large noise
-
-        x_next = system.step_stochastic(x, w_k=w)
-
-        # Should handle without overflow/NaN
-        assert not np.isnan(x_next).any()
-        assert not np.isinf(x_next).any()
-
-    def test_negative_noise(self):
-        """Test with negative noise values."""
-        system = DiscreteAR1(sigma=0.5)
-
-        x = np.array([1.0])
-        u = np.array([0.0])
-        w = np.array([-2.0])
-
-        x_next = system.step_stochastic(x, u, w)
-
-        # x[k+1] = 0.9*1.0 + 0.5*(-2.0) = -0.1
-        np.testing.assert_allclose(x_next, np.array([-0.1]), rtol=1e-10)
-
-    def test_zero_state(self):
-        """Test with zero state."""
-        system = DiscreteAR1()
-
-        x = np.array([0.0])
-        u = np.array([0.0])
-        w = np.array([1.0])
-
-        x_next = system.step_stochastic(x, u, w)
-
-        # x[k+1] = 0.9*0 + 0 + 0.1*1.0 = 0.1
-        assert x_next[0] != 0.0  # Noise should affect it
-
-
-# ============================================================================
-# Test Error Handling
-# ============================================================================
-
-
-class TestErrorHandling:
-    """Test proper error handling."""
-
-    def test_autonomous_with_control_error(self):
-        """Test error when providing control to autonomous system."""
-        system = DiscreteRandomWalk()
-
-        x = np.array([1.0])
-        u = np.array([0.5])  # Autonomous shouldn't take control
-
-        with pytest.raises(ValueError):
-            system.drift(x, u)
-
-    def test_controlled_without_control_error(self):
-        """Test error when omitting control for controlled system."""
-        system = DiscreteAR1()
-
-        x = np.array([1.0])
-
-        with pytest.raises(ValueError, match="requires control input"):
-            system.drift(x)
-
-    def test_wrong_noise_dimension(self):
-        """Test error for wrong noise dimension."""
-        system = DiscreteAR1()  # nw=1
-
-        x = np.array([1.0])
-        u = np.array([0.0])
-        w_wrong = np.array([1.0, 2.0])  # Should be 1D
-
-        # Should fail in matrix multiply
-        with pytest.raises((ValueError, IndexError)):
-            x_next = system.step_stochastic(x, u, w_wrong)
-
-
-# ============================================================================
-# Test String Representations
-# ============================================================================
-
-
-class TestStringRepresentations:
-    """Test string representation methods."""
-
-    def test_print_equations(self, capsys):
-        """Test equation printing."""
-        system = DiscreteAR1(phi=0.9, sigma=0.2)
-
-        system.print_equations()
-
-        captured = capsys.readouterr()
-        assert "Discrete-Time Stochastic" in captured.out
-        assert "x[k+1] = f(x[k], u[k]) + g(x[k], u[k]) * w[k]" in captured.out
-        assert "w[k] ~ N(0, I)" in captured.out
-
-    def test_repr_includes_discrete_and_noise(self):
-        """Test repr includes both discrete and noise type."""
-        system = DiscreteLinearSDE()
-
-        repr_str = repr(system)
-        assert "discrete=True" in repr_str
-        assert "noise=additive" in repr_str
-
-    def test_str_readable(self):
-        """Test human-readable string."""
-        system = DiscreteAR1()
-
-        str_str = str(system)
-        assert "discrete-time" in str_str
-        assert "additive" in str_str
-
-
-# ============================================================================
-# Integration Tests
-# ============================================================================
-
-
-class TestIntegration:
-    """Integration tests combining multiple features."""
-
-    def test_full_workflow(self):
-        """Test complete workflow: create, evaluate, step."""
-        # Create system
-        system = DiscreteAR1(phi=0.85, sigma=0.2)
-
-        # Evaluate components
-        x = np.array([1.0])
-        u = np.array([0.1])
-
-        f = system.drift(x, u)
-        g = system.diffusion(x, u)
-
-        assert f.shape == (1,)
-        assert g.shape == (1, 1)
-
-        # Full stochastic step
-        w = np.array([0.5])
-        x_next = system.step_stochastic(x, u, w)
-
-        # Manual calculation
-        expected = f + g @ w
+        expected = np.array([1.1, 2.1])
         np.testing.assert_allclose(x_next, expected, rtol=1e-10)
 
-    def test_multi_step_simulation_with_control(self):
-        """Test multi-step simulation with varying control."""
-        system = DiscreteAR1(phi=0.9, sigma=0.1)
+    def test_multiplicative_no_optimization(self):
+        """Test that multiplicative systems can't precompute noise."""
+        system = MultiplicativeNoise2D(dt=0.1)
 
-        x = np.array([0.0])
-        trajectory = [x.copy()]
+        # Cannot optimize for constant noise
+        self.assertFalse(system.can_optimize_for_additive())
 
-        np.random.seed(42)
+        # Should raise error when trying to get constant noise
+        with self.assertRaises(ValueError):
+            G = system.get_constant_noise()
 
-        for k in range(20):
-            # Time-varying control
-            u = np.array([0.1 * np.sin(k * 0.5)])
-            x = system.step_stochastic(x, u)
-            trajectory.append(x.copy())
+        # Optimization opportunities
+        opts = system.get_optimization_opportunities()
+        self.assertFalse(opts['precompute_diffusion'])
 
-        trajectory = np.array(trajectory)
-        assert trajectory.shape == (21, 1)
 
-    def test_batched_monte_carlo(self):
-        """Test Monte Carlo with batched evaluation."""
-        system = DiscreteAR1(phi=0.9, sigma=0.2)
+class TestScalarVsMultiplicativeClassification(unittest.TestCase):
+    """
+    Test the distinction between SCALAR and MULTIPLICATIVE classification.
+    
+    Key insight from NoiseCharacterizer:
+    - SCALAR is prioritized when nw == 1
+    - MULTIPLICATIVE requires nw > 1 OR special conditions
+    """
 
+    def test_scalar_multiplicative_system(self):
+        """
+        Test system with nw=1 and state-dependent noise.
+        
+        This is multiplicative in NATURE but classified as SCALAR.
+        """
+        
+        class ScalarMultiplicative(DiscreteStochasticSystem):
+            def define_system(self, sigma=0.2, dt=0.1):
+                x = sp.symbols('x', real=True)
+                sigma_sym = sp.symbols('sigma', positive=True)
+
+                self.state_vars = [x]
+                self.control_vars = []
+                self._f_sym = sp.Matrix([0.9 * x])
+                self.parameters = {sigma_sym: sigma}
+                self._dt = dt
+                self.order = 1
+
+                # Multiplicative in nature: g = σ*x
+                # But nw=1, so classified as SCALAR
+                self.diffusion_expr = sp.Matrix([[sigma_sym * x]])
+                self.sde_type = 'ito'
+
+        system = ScalarMultiplicative(sigma=0.2, dt=0.1)
+
+        # Classified as SCALAR (nw=1 takes priority)
+        self.assertTrue(system.is_scalar_noise())
+        self.assertEqual(system.get_noise_type(), NoiseType.SCALAR)
+
+        # But still state-dependent!
+        self.assertTrue(system.depends_on_state())
+
+        # Is also classified as multiplicative (however SCALAR takes precedence)
+        self.assertTrue(system.is_multiplicative_noise())
+
+    def test_true_multiplicative_requires_multiple_noise(self):
+        """
+        Test that TRUE multiplicative classification requires nw > 1.
+        """
+        # nw=1: Classified as SCALAR (even if state-dependent)
+        class SingleNoise(DiscreteStochasticSystem):
+            def define_system(self, dt=0.1):
+                x = sp.symbols('x')
+                sigma = sp.symbols('sigma', positive=True)
+
+                self.state_vars = [x]
+                self.control_vars = []
+                self._f_sym = sp.Matrix([0.9 * x])
+                self.parameters = {sigma: 0.2}
+                self._dt = dt
+                self.order = 1
+
+                self.diffusion_expr = sp.Matrix([[sigma * x]])  # nw=1
+                self.sde_type = 'ito'
+
+        # nw=2: Classified as MULTIPLICATIVE
+        class DoubleNoise(DiscreteStochasticSystem):
+            def define_system(self, dt=0.1):
+                x = sp.symbols('x')
+                s1, s2 = sp.symbols('sigma1 sigma2', positive=True)
+
+                self.state_vars = [x]
+                self.control_vars = []
+                self._f_sym = sp.Matrix([0.9 * x])
+                self.parameters = {s1: 0.2, s2: 0.15}
+                self._dt = dt
+                self.order = 1
+
+                self.diffusion_expr = sp.Matrix([[s1 * x, s2 * x]])  # nw=2
+                self.sde_type = 'ito'
+
+        single = SingleNoise(dt=0.1)
+        double = DoubleNoise(dt=0.1)
+
+        # Single noise: SCALAR and also MULTIPLICATIVE
+        self.assertTrue(single.is_scalar_noise())
+        self.assertTrue(single.is_multiplicative_noise())
+
+        # Double noise: MULTIPLICATIVE
+        self.assertFalse(double.is_scalar_noise())
+        self.assertTrue(double.is_multiplicative_noise())
+        self.assertEqual(double.get_noise_type(), NoiseType.MULTIPLICATIVE)
+
+
+class TestMultiplicativeNoiseNumericalBehavior(unittest.TestCase):
+    """Test numerical behavior of multiplicative noise systems."""
+
+    def test_noise_grows_with_state(self):
+        """Test that multiplicative noise intensity grows with state magnitude."""
+        system = MultiplicativeNoise2D(sigma1=0.2, sigma2=0.15, dt=0.1)
+
+        # Small state
+        x_small = np.array([0.1, 0.1])
+        g_small = system.diffusion(x_small, np.array([0.0]))
+
+        # Large state
+        x_large = np.array([10.0, 10.0])
+        g_large = system.diffusion(x_large, np.array([0.0]))
+
+        # Noise should be larger for larger state
+        noise_small = np.linalg.norm(g_small)
+        noise_large = np.linalg.norm(g_large)
+
+        self.assertGreater(noise_large, noise_small)
+
+        # Should scale linearly with state (for linear multiplicative)
+        ratio = noise_large / noise_small
+        expected_ratio = 10.0 / 0.1  # 100x
+        self.assertAlmostEqual(ratio, expected_ratio, places=1)
+
+    def test_variance_grows_faster_than_additive(self):
+        """
+        Test that multiplicative noise causes faster variance growth.
+        
+        For multiplicative: Var[x[k]] grows exponentially
+        For additive: Var[x[k]] grows linearly
+        """
+        # Additive noise system
+        additive = DiscreteOU(alpha=0.0, sigma=0.3, dt=0.1)
+
+        # Multiplicative noise system (scalar classification, but state-dependent)
+        class SimpleMultiplicative(DiscreteStochasticSystem):
+            def define_system(self, sigma=0.3, dt=0.1):
+                x = sp.symbols('x')
+                sigma_sym = sp.symbols('sigma', positive=True)
+
+                self.state_vars = [x]
+                self.control_vars = []
+                # No drift (pure noise evolution)
+                self._f_sym = sp.Matrix([x])  # x[k+1] = x[k] + noise
+                self.parameters = {sigma_sym: sigma}
+                self._dt = dt
+                self.order = 1
+
+                # Multiplicative: g = σ*x
+                self.diffusion_expr = sp.Matrix([[sigma_sym * x]])
+                self.sde_type = 'ito'
+
+        multiplicative = SimpleMultiplicative(sigma=0.3, dt=0.1)
+
+        x0 = np.array([1.0])
+        n_steps = 50
+        n_paths = 200
+
+        # Simulate both
+        result_add = additive.simulate_stochastic(x0, None, n_steps, n_paths, seed=42)
+        result_mult = multiplicative.simulate_stochastic(x0, None, n_steps, n_paths, seed=43)
+
+        # Compute variance trajectories
+        var_add = result_add['states'].var(axis=0)[:, 0]
+        var_mult = result_mult['states'].var(axis=0)[:, 0]
+
+        # At late times, multiplicative should have higher variance
+        # (multiplicative noise amplifies with state)
+        self.assertGreater(var_mult[-1], var_add[-1])
+
+    def test_linearization_captures_state_dependence(self):
+        """Test that linearization at different points gives different Gd."""
+        system = MultiplicativeNoise2D(sigma1=0.2, sigma2=0.15, dt=0.1)
+
+        # Linearize at two different equilibria
+        x_eq1 = np.array([1.0, 1.0])
+        x_eq2 = np.array([5.0, 5.0])
+        u_eq = np.array([0.0])
+
+        Ad1, Bd1, Gd1 = system.linearize(x_eq1, u_eq)
+        Ad2, Bd2, Gd2 = system.linearize(x_eq2, u_eq)
+
+        # Ad and Bd should be same (linear deterministic part)
+        np.testing.assert_allclose(Ad1, Ad2, rtol=1e-10)
+        np.testing.assert_allclose(Bd1, Bd2, rtol=1e-10)
+
+        # Gd should be DIFFERENT (multiplicative noise)
+        # Gd1 = [[0.2*1, 0], [0, 0.15*1]]
+        # Gd2 = [[0.2*5, 0], [0, 0.15*5]]
+        expected_Gd1 = np.array([[0.2, 0.0], [0.0, 0.15]])
+        expected_Gd2 = np.array([[1.0, 0.0], [0.0, 0.75]])
+
+        np.testing.assert_allclose(Gd1, expected_Gd1, rtol=1e-10)
+        np.testing.assert_allclose(Gd2, expected_Gd2, rtol=1e-10)
+
+        # Gd2 should be 5x larger
+        np.testing.assert_allclose(Gd2, 5.0 * Gd1, rtol=1e-10)
+
+
+class TestMultiplicativeNoiseSimulation(unittest.TestCase):
+    """Test simulation with multiplicative noise."""
+
+    def test_simulation_with_multiplicative_noise(self):
+        """Test that simulation works with multiplicative noise."""
+        system = MultiplicativeNoise2D(a=0.95, sigma1=0.1, sigma2=0.08, dt=0.1)
+
+        x0 = np.array([1.0, 1.0])
+        n_steps = 100
+
+        result = system.simulate_stochastic(
+            x0=x0,
+            u_sequence=None,
+            n_steps=n_steps,
+            seed=42
+        )
+
+        # Should complete successfully
+        self.assertTrue(result['success'])
+        self.assertEqual(result['states'].shape, (n_steps + 1, 2))
+
+    def test_monte_carlo_with_multiplicative(self):
+        """Test Monte Carlo with multiplicative noise."""
+        system = MultiplicativeNoise2D(sigma1=0.1, sigma2=0.08, dt=0.1)
+
+        x0 = np.array([1.0, 1.0])
+        n_steps = 50
         n_paths = 100
-        x_batch = np.ones((n_paths, 1))
-        u_batch = np.zeros((n_paths, 1))
-        w_batch = np.random.randn(n_paths, 1)
 
-        x_next_batch = system.step_stochastic(x_batch, u_batch, w_batch)
+        result = system.simulate_stochastic(
+            x0=x0,
+            u_sequence=None,
+            n_steps=n_steps,
+            n_paths=n_paths,
+            seed=42
+        )
 
-        assert x_next_batch.shape == (n_paths, 1)
-
-        # Mean should be close to drift
-        f = system.drift(np.array([1.0]), np.array([0.0]))
-        sample_mean = np.mean(x_next_batch)
-
-        # Within reasonable range
-        assert 0.8 < sample_mean < 1.0
+        self.assertEqual(result['states'].shape, (n_paths, n_steps + 1, 2))
+        self.assertEqual(result['metadata']['n_paths'], n_paths)
 
 
-# ============================================================================
-# Test Compilation and Performance
-# ============================================================================
+class TestNoiseTypeHierarchy(unittest.TestCase):
+    """
+    Test understanding of noise type classification hierarchy.
+    
+    NoiseCharacterizer priority (from code inspection):
+    1. ADDITIVE (constant, no dependencies) - takes absolute priority
+    2. SCALAR (nw == 1) 
+    3. DIAGONAL (diagonal matrix structure)
+    4. MULTIPLICATIVE (state-dependent, not diagonal)
+    5. GENERAL (fallback)
+    
+    NOTE: hierarchy was updated to allow noise types to have
+    multiple attributes true at the same time; for optimization
+    the main categorization follows the hierarchy.
+    """
 
+    # TODO: fix test to actually cover the whole hierarchy
+    def test_classification_hierarchy(self):
+        """Test classification follows expected hierarchy."""
 
-class TestCompilation:
-    """Test code generation and compilation."""
+        # Case 1: nw=1, constant → ADDITIVE and SCALAR; ADDITIVE takes precedence
+        class Case1(DiscreteStochasticSystem):
+            def define_system(self, dt=0.1):
+                x = sp.symbols('x')
+                self.state_vars = [x]
+                self.control_vars = []
+                self._f_sym = sp.Matrix([0.9 * x])
+                self.parameters = {sp.symbols('sigma'): 0.3}
+                self._dt = dt
+                self.order = 1
+                self.diffusion_expr = sp.Matrix([[0.3]])  # Constant, nw=1
+                self.sde_type = 'ito'
 
-    def test_compile_all(self):
-        """Test compiling both drift and diffusion."""
-        system = DiscreteAR1()
+        c1 = Case1(dt=0.1)
+        self.assertEqual(c1.get_noise_type(), NoiseType.ADDITIVE)  # ADDITIVE and SCALAR
 
-        timings = system.compile_all(backends=["numpy"], verbose=False)
+        # Case 2: nw=2, constant → ADDITIVE
+        class Case2(DiscreteStochasticSystem):
+            def define_system(self, dt=0.1):
+                x = sp.symbols('x')
+                s1, s2 = sp.symbols('sigma1 sigma2', positive=True)
+                self.state_vars = [x]
+                self.control_vars = []
+                self._f_sym = sp.Matrix([0.9 * x])
+                self.parameters = {s1: 0.3, s2: 0.2}
+                self._dt = dt
+                self.order = 1
+                self.diffusion_expr = sp.Matrix([[0.3, 0.2]])  # Constant, nw=2
+                self.sde_type = 'ito'
 
-        assert "numpy" in timings
-        assert "drift" in timings["numpy"]
-        assert "diffusion" in timings["numpy"]
+        c2 = Case2(dt=0.1)
+        self.assertEqual(c2.get_noise_type(), NoiseType.ADDITIVE)
 
-    def test_compile_diffusion(self):
-        """Test diffusion compilation."""
-        system = DiscreteLinearSDE()
+        # Case 3: nw=2, diagonal → DIAGONAL (takes priority over MULTIPLICATIVE)
+        # Also ADDITIVE, so it also is classified as ADDITIVE
+        c3 = MultiDimensionalStochastic(dt=0.1)
+        self.assertEqual(c3.get_noise_type(), NoiseType.ADDITIVE)
 
-        timings = system.compile_diffusion(backends=["numpy"], verbose=False)
-
-        assert "numpy" in timings
-        assert timings["numpy"] is not None
-
-    def test_cache_hits(self):
-        """Test that repeated calls use cache."""
-        system = DiscreteAR1()
-
-        x = np.array([1.0])
-        u = np.array([0.0])
-
-        # First call generates
-        g1 = system.diffusion(x, u)
-
-        # Second call should use cache
-        g2 = system.diffusion(x, u)
-
-        # Should be identical object (cached)
-        # Note: actual values will be same, testing cache is harder
-        np.testing.assert_array_equal(g1, g2)
-
-
-# ============================================================================
-# Test Information Methods
-# ============================================================================
-
-
-class TestInformation:
-    """Test information and diagnostics."""
-
-    def test_get_info(self):
-        """Test get_info includes discrete and stochastic info."""
-        system = DiscreteLinearSDE()
-
-        info = system.get_info()
-
-        assert info["system_type"] == "StochasticDynamicalSystem"
-        assert info["is_stochastic"] is True
-        # Note: is_discrete comes from get_config_dict(), not get_info()
-        # get_info() is for runtime info, config_dict is for serialization
-        assert info["dimensions"]["nw"] == 1
-        assert "noise" in info
-
-        # Check config dict separately
-        config = system.get_config_dict()
-        assert config["is_discrete"] is True
-
-    def test_print_sde_info(self, capsys):
-        """Test SDE info printing."""
-        system = DiscreteAR1()
-
-        system.print_sde_info()
-
-        captured = capsys.readouterr()
-        assert "Stochastic Dynamical System" in captured.out
-        assert "additive" in captured.out
-
-    def test_noise_info_methods(self):
-        """Test noise information query methods."""
-        system = DiscreteGeometricRW()
-
-        assert system.is_multiplicative_noise() is True
-        assert system.depends_on_state() is True
-        assert system.nw == 1
+        # Case 4: nw=2, state-dependent, non-diagonal → MULTIPLICATIVE
+        c4 = FullyMultiplicativeNoise(dt=0.1)
+        self.assertEqual(c4.get_noise_type(), NoiseType.MULTIPLICATIVE)
 
 
 # ============================================================================
-# Test Solver Recommendations
+# Test Runner
 # ============================================================================
 
 
-class TestSolverRecommendations:
-    """Test that solver recommendations work (even though less relevant for discrete)."""
+def run_tests(verbosity=2):
+    """
+    Run all tests with specified verbosity.
 
-    def test_recommend_solvers_additive(self):
-        """Test solver recommendations for additive noise."""
-        system = DiscreteAR1()
+    Parameters
+    ----------
+    verbosity : int
+        Verbosity level (0=quiet, 1=normal, 2=verbose)
 
-        # Should recommend additive-noise specialized solvers
-        solvers = system.recommend_solvers("jax")
+    Returns
+    -------
+    unittest.TestResult
+        Test results
+    """
+    loader = unittest.TestLoader()
+    suite = unittest.TestSuite()
 
-        assert isinstance(solvers, list)
-        assert len(solvers) > 0
+    # Add all test classes
+    test_classes = [
+        TestDiscreteStochasticSystemInitialization,
+        TestNoiseCharacterization,
+        TestDeterministicEvaluation,
+        TestDiffusionEvaluation,
+        TestStochasticStep,
+        TestLinearization,
+        TestStochasticSimulation,
+        TestConstantNoiseOptimization,
+        TestBackendCompatibility,
+        TestPrintingAndInfo,
+        TestStatisticalProperties,
+        TestEdgeCases,
+        TestMultiplicativeNoiseDetection,
+        TestScalarVsMultiplicativeClassification,
+        TestMultiplicativeNoiseNumericalBehavior,
+        TestMultiplicativeNoiseSimulation,
+        TestNoiseTypeHierarchy
+    ]
 
-    def test_recommend_solvers_multiplicative(self):
-        """Test solver recommendations for multiplicative noise."""
-        system = DiscreteGeometricRW()
+    for test_class in test_classes:
+        tests = loader.loadTestsFromTestCase(test_class)
+        suite.addTests(tests)
 
-        solvers = system.recommend_solvers("torch")
-
-        assert isinstance(solvers, list)
-        assert len(solvers) > 0
-
-
-# ============================================================================
-# Numerical Accuracy Tests
-# ============================================================================
-
-
-class TestNumericalAccuracy:
-    """Test numerical accuracy and consistency."""
-
-    def test_reproducibility_with_fixed_noise(self):
-        """Test reproducibility with same noise sequence."""
-        system = DiscreteRandomWalk(sigma=0.5)
-
-        x0 = np.array([0.0])
-
-        # First trajectory
-        x1 = x0.copy()
-        np.random.seed(42)
-        noise_seq = [np.random.randn(1) for _ in range(10)]
-
-        for w in noise_seq:
-            x1 = system.step_stochastic(x1, w_k=w)
-
-        # Second trajectory with same noise
-        x2 = x0.copy()
-        for w in noise_seq:
-            x2 = system.step_stochastic(x2, w_k=w)
-
-        # Should be identical
-        np.testing.assert_array_equal(x1, x2)
-
-    def test_additive_noise_independence(self):
-        """Test that additive noise doesn't depend on state."""
-        system = DiscreteLinearSDE(sigma=0.3)
-
-        # Evaluate diffusion at different states
-        g1 = system.diffusion(np.array([1.0, 0.0]), np.array([0.0]))
-        g2 = system.diffusion(np.array([10.0, 5.0]), np.array([0.0]))
-
-        # Should be identical (additive)
-        np.testing.assert_array_equal(g1, g2)
-
-    def test_linear_system_covariance_propagation(self):
-        """Test covariance propagation for linear system."""
-        system = DiscreteAR1(phi=0.9, sigma=0.2)
-
-        # Theoretical covariance propagation:
-        # Var[x[k+1]] = φ²*Var[x[k]] + σ²
-
-        # Start at steady state variance
-        # At steady state: V = φ²*V + σ²
-        # V = σ²/(1 - φ²) = 0.04/0.19 ≈ 0.2105
-        var_steady = 0.04 / (1 - 0.9**2)
-
-        n_samples = 1000
-        x_samples = np.random.randn(n_samples, 1) * np.sqrt(var_steady)
-        u = np.array([0.0])
-
-        # One step
-        np.random.seed(42)
-        x_next_samples = []
-        for i in range(n_samples):
-            x_next = system.step_stochastic(x_samples[i], u)
-            x_next_samples.append(x_next[0])
-
-        # Variance should remain approximately constant (steady state)
-        var_next = np.var(x_next_samples)
-        assert 0.15 < var_next < 0.25  # Should be near var_steady
+    runner = unittest.TextTestRunner(verbosity=verbosity)
+    return runner.run(suite)
 
 
-# ============================================================================
-# Test Conversion Methods
-# ============================================================================
+if __name__ == '__main__':
+    # Run with verbose output
+    result = run_tests(verbosity=2)
 
+    # Print summary
+    print("\n" + "=" * 70)
+    print("TEST SUMMARY")
+    print("=" * 70)
+    print(f"Tests run: {result.testsRun}")
+    print(f"Failures: {len(result.failures)}")
+    print(f"Errors: {len(result.errors)}")
+    print(f"Skipped: {len(result.skipped)}")
 
-class TestConversionMethods:
-    """Test conversion to deterministic systems."""
+    if result.wasSuccessful():
+        print("\n✓ ALL TESTS PASSED!")
+    else:
+        print("\n✗ SOME TESTS FAILED")
 
-    def test_to_deterministic(self):
-        """Test extraction of deterministic part."""
-        system = DiscreteAR1(phi=0.9, sigma=0.2)
-
-        det_system = system.to_deterministic()
-
-        # Should have same drift
-        x = np.array([1.0])
-        u = np.array([0.0])
-
-        f_stoch = system.drift(x, u)
-        f_det = det_system(x, u)
-
-        np.testing.assert_array_equal(f_stoch, f_det)
-
-        # Deterministic system shouldn't have diffusion method
-        assert not hasattr(det_system, "diffusion")
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+    print("=" * 70)

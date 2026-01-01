@@ -128,14 +128,25 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
 import numpy as np
 
 from src.systems.base.numerical_integration.integrator_base import (
-    ArrayLike,
-    IntegrationResult,
     IntegratorBase,
     StepMode,
 )
 
+from src.types.core import (
+    ControlVector,
+    ScalarLike,
+    StateVector,
+)
+from src.types.trajectories import (
+    IntegrationResult,
+    TimePoints,
+    TimeSpan,
+)
+
+from src.types.backends import Backend
+
 if TYPE_CHECKING:
-    from src.systems.base.symbolic_dynamical_system import SymbolicDynamicalSystem
+    from src.systems.base.core.continuous_system_base import ContinuousSystemBase
 
 
 # Debug flag - set via environment variable
@@ -260,10 +271,10 @@ class DiffEqPyIntegrator(IntegratorBase):
 
     def __init__(
         self,
-        system: "SymbolicDynamicalSystem",
-        dt: Optional[float] = None,
+        system: "ContinuousSystemBase",
+        dt: Optional[ScalarLike] = None,
         step_mode: StepMode = StepMode.ADAPTIVE,
-        backend: str = "numpy",
+        backend: Backend = "numpy",
         algorithm: str = "Tsit5",
         save_everystep: bool = False,
         dense: bool = False,
@@ -440,8 +451,8 @@ class DiffEqPyIntegrator(IntegratorBase):
                 )
 
     def step(
-        self, x: ArrayLike, u: Optional[ArrayLike] = None, dt: Optional[float] = None
-    ) -> ArrayLike:
+        self, x: StateVector, u: Optional[ControlVector] = None, dt: Optional[ScalarLike] = None
+    ) -> StateVector:
         """
         Take one integration step.
 
@@ -478,14 +489,14 @@ class DiffEqPyIntegrator(IntegratorBase):
             x0=x, u_func=u_func, t_span=(0.0, step_size), t_eval=np.array([0.0, step_size])
         )
 
-        return result.x[-1]
+        return result["x"][-1]
 
     def integrate(
         self,
-        x0: ArrayLike,
-        u_func: Callable[[float, ArrayLike], Optional[ArrayLike]],
-        t_span: Tuple[float, float],
-        t_eval: Optional[ArrayLike] = None,
+        x0: StateVector,
+        u_func: Callable[[ScalarLike, StateVector], Optional[ControlVector]],
+        t_span: TimeSpan,
+        t_eval: Optional[TimePoints] = None,
         dense_output: bool = False,
     ) -> IntegrationResult:
         """
@@ -510,11 +521,17 @@ class DiffEqPyIntegrator(IntegratorBase):
         Returns
         -------
         IntegrationResult
-            Integration result with:
-            - t: Time points
-            - x: State trajectory
+            TypedDict containing:
+            - t: Time points (T,)
+            - x: State trajectory (T, nx)
             - success: Whether integration succeeded
+            - message: Status message
+            - nfev: Number of function evaluations
+            - nsteps: Number of steps taken
+            - integration_time: Computation time (seconds)
+            - solver: Integrator name
             - sol: Julia solution object (if dense_output=True)
+            - dense_output: True if dense output enabled
 
         Examples
         --------
@@ -545,7 +562,7 @@ class DiffEqPyIntegrator(IntegratorBase):
         ...     dense_output=True
         ... )
         >>> # Interpolate at arbitrary time
-        >>> x_at_5_5 = result.sol(5.5)
+        >>> x_at_5_5 = result["sol"](5.5)
         """
         start_time = time.time()
 
@@ -554,14 +571,17 @@ class DiffEqPyIntegrator(IntegratorBase):
 
         # Handle edge case
         if t0 == tf:
-            return IntegrationResult(
-                t=np.array([t0]),
-                x=x0[None, :] if x0.ndim == 1 else x0,
-                success=True,
-                message="Zero time span",
-                nfev=0,
-                nsteps=0,
-            )
+            result: IntegrationResult = {
+                "t": np.array([t0]),
+                "x": x0[None, :] if x0.ndim == 1 else x0,
+                "success": True,
+                "message": "Zero time span",
+                "nfev": 0,
+                "nsteps": 0,
+                "integration_time": 0.0,
+                "solver": self.name,
+            }
+            return result
 
         # Track function evaluations for this integration
         fev_count = [0]
@@ -713,17 +733,24 @@ class DiffEqPyIntegrator(IntegratorBase):
             elapsed = time.time() - start_time
             self._stats["total_time"] += elapsed
 
-            return IntegrationResult(
-                t=t_out,
-                x=x_out,
-                success=success,
-                message=message,
-                nfev=nfev,
-                nsteps=nsteps,
-                integration_time=elapsed,
-                algorithm=self.algorithm,
-                sol=sol if (dense_output or self.dense) else None,
-            )
+            # Create result dict with type annotation
+            result: IntegrationResult = {
+                "t": t_out,
+                "x": x_out,
+                "success": success,
+                "message": message,
+                "nfev": nfev,
+                "nsteps": nsteps,
+                "integration_time": elapsed,
+                "solver": self.name,
+            }
+            
+            # Add optional fields conditionally
+            if dense_output or self.dense:
+                result["sol"] = sol
+                result["dense_output"] = True
+            
+            return result
 
         except Exception as e:
             elapsed = time.time() - start_time
@@ -736,15 +763,17 @@ class DiffEqPyIntegrator(IntegratorBase):
 
                 traceback.print_exc()
 
-            return IntegrationResult(
-                t=np.array([t0]),
-                x=x0[None, :] if x0.ndim == 1 else x0,
-                success=False,
-                message=f"Integration failed: {str(e)}",
-                nfev=fev_count[0],
-                nsteps=0,
-                integration_time=elapsed,
-            )
+            result: IntegrationResult = {
+                "t": np.array([t0]),
+                "x": x0[None, :] if x0.ndim == 1 else x0,
+                "success": False,
+                "message": f"Integration failed: {str(e)}",
+                "nfev": fev_count[0],
+                "nsteps": 0,
+                "integration_time": elapsed,
+                "solver": self.name,
+            }
+            return result
 
     def set_callback(self, callback):
         """
@@ -804,15 +833,15 @@ def list_algorithms() -> Dict[str, List[str]]:
     """
     return {
         "nonstiff": [
-            "Tsit5",  # ✅ Works - RECOMMENDED DEFAULT
-            "Vern6",  # ✅ Works
-            "Vern7",  # ✅ Works
-            "Vern8",  # ✅ Works
-            "Vern9",  # ✅ Works - very high accuracy
-            "DP5",  # ✅ Works
-            "DP8",  # ✅ Works
-            "TanYam7",  # ✅ Works
-            "TsitPap8",  # ✅ Works
+            "Tsit5",  # Works - RECOMMENDED DEFAULT
+            "Vern6",  # Works
+            "Vern7",  # Works
+            "Vern8",  # Works
+            "Vern9",  # Works - very high accuracy
+            "DP5",  # Works
+            "DP8",  # Works
+            "TanYam7",  # Works
+            "TsitPap8",  # Works
         ],
         "stiff_rosenbrock": [
             # All fail with Python ODEs - use scipy.BDF instead
@@ -971,7 +1000,7 @@ def print_algorithm_recommendations():
 
 
 def create_diffeqpy_integrator(
-    system: "SymbolicDynamicalSystem",
+    system: "ContinuousSystemBase",
     algorithm: str = "Tsit5",
     dt: Optional[float] = None,
     step_mode: StepMode = StepMode.ADAPTIVE,

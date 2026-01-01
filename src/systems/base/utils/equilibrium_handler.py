@@ -14,9 +14,12 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import warnings
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Callable
 
 import numpy as np
+
+from src.types.backends import Backend
+from src.types.core import EquilibriumState, EquilibriumControl, EquilibriumPoint, EquilibriumName
 
 
 class EquilibriumHandler:
@@ -99,10 +102,10 @@ class EquilibriumHandler:
 
     def add(
         self,
-        name: str,
+        name: EquilibriumName,
         x_eq: np.ndarray,
         u_eq: np.ndarray,
-        verify_fn: Optional[callable] = None,
+        verify_fn: Optional[Callable] = None,
         tol: float = 1e-6,
         **metadata,
     ) -> None:
@@ -150,7 +153,7 @@ class EquilibriumHandler:
 
         self._equilibria[name] = {"x": x_eq, "u": u_eq, "metadata": metadata}
 
-    def get_x(self, name: Optional[str] = None, backend: str = "numpy"):
+    def get_x(self, name: Optional[EquilibriumName] = None, backend: Backend = "numpy") -> EquilibriumState:
         """Get equilibrium state in specified backend"""
         name = name or self._default
 
@@ -161,7 +164,7 @@ class EquilibriumHandler:
         x_eq = self._equilibria[name]["x"]
         return self._convert_to_backend(x_eq, backend)
 
-    def get_u(self, name: Optional[str] = None, backend: str = "numpy"):
+    def get_u(self, name: Optional[EquilibriumName] = None, backend: Backend = "numpy") -> EquilibriumControl:
         """Get equilibrium control in specified backend"""
         name = name or self._default
 
@@ -171,11 +174,13 @@ class EquilibriumHandler:
         u_eq = self._equilibria[name]["u"]
         return self._convert_to_backend(u_eq, backend)
 
-    def get_both(self, name: Optional[str] = None, backend: str = "numpy"):
+    def get_both(
+        self, name: Optional[EquilibriumName] = None, backend: Backend = "numpy"
+    ) -> EquilibriumPoint:
         """Get both state and control equilibria"""
         return self.get_x(name, backend), self.get_u(name, backend)
 
-    def set_default(self, name: str):
+    def set_default(self, name: EquilibriumName):
         """Set default equilibrium"""
         if name not in self._equilibria:
             raise ValueError(f"Unknown equilibrium '{name}'")
@@ -185,14 +190,14 @@ class EquilibriumHandler:
         """List all equilibrium names"""
         return list(self._equilibria.keys())
 
-    def get_metadata(self, name: Optional[str] = None) -> Dict:
+    def get_metadata(self, name: Optional[EquilibriumName] = None) -> Dict:
         """Get metadata for equilibrium"""
         name = name or self._default
         if name not in self._equilibria:
             raise ValueError(f"Unknown equilibrium '{name}'")
         return self._equilibria[name]["metadata"]
 
-    def _convert_to_backend(self, arr: np.ndarray, backend: str):
+    def _convert_to_backend(self, arr: np.ndarray, backend: Backend) -> EquilibriumState:
         """Convert NumPy array to target backend"""
         if backend == "numpy":
             return arr

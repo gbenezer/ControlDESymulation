@@ -32,11 +32,12 @@ symbolic system attributes.
 """
 
 import warnings
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, List
 
 import numpy as np
 import sympy as sp
+
+from src.types.utilities import SymbolicValidationResult
 
 if TYPE_CHECKING:
     from src.systems.base.symbolic_dynamical_system import SymbolicDynamicalSystem
@@ -51,34 +52,6 @@ class ValidationError(ValueError):
     """Raised when system validation fails"""
 
     pass
-
-
-# ============================================================================
-# Validation Result Container
-# ============================================================================
-
-
-@dataclass
-class ValidationResult:
-    """
-    Container for validation results.
-
-    Attributes
-    ----------
-    is_valid : bool
-        True if system passed all validation checks
-    errors : List[str]
-        List of validation errors (empty if valid)
-    warnings : List[str]
-        List of validation warnings (non-fatal issues)
-    info : Dict
-        Additional information about the validated system
-    """
-
-    is_valid: bool
-    errors: List[str]
-    warnings: List[str]
-    info: Dict
 
 
 # ============================================================================
@@ -127,7 +100,7 @@ class SymbolicValidator:
     # Public API
     # ========================================================================
 
-    def validate(self, raise_on_error: bool = True) -> ValidationResult:
+    def validate(self, raise_on_error: bool = True) -> SymbolicValidationResult:
         """
         Validate system definition.
 
@@ -135,11 +108,11 @@ class SymbolicValidator:
         ----------
         raise_on_error : bool
             If True, raise ValidationError on validation failure
-            If False, return ValidationResult with errors
+            If False, return SymbolicValidationResult with errors
 
         Returns
         -------
-        ValidationResult
+        SymbolicValidationResult
             Validation results with errors, warnings, and info
 
         Raises
@@ -183,7 +156,7 @@ class SymbolicValidator:
         is_valid = len(self._errors) == 0
 
         # Build result
-        result = ValidationResult(
+        result = SymbolicValidationResult(
             is_valid=is_valid,
             errors=self._errors.copy(),
             warnings=self._warnings.copy(),
@@ -704,7 +677,7 @@ class SymbolicValidator:
     @staticmethod
     def validate_system(
         system: "SymbolicDynamicalSystem", raise_on_error: bool = True
-    ) -> ValidationResult:
+    ) -> SymbolicValidationResult:
         """
         Static convenience method for one-off validation.
 
@@ -717,7 +690,7 @@ class SymbolicValidator:
 
         Returns
         -------
-        ValidationResult
+        SymbolicValidationResult
             Validation results
 
         Raises

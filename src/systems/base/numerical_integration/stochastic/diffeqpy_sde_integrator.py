@@ -124,20 +124,24 @@ Examples
 ... )
 """
 
+import time
 import warnings
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 import numpy as np
 
 from src.systems.base.numerical_integration.stochastic.sde_integrator_base import (
-    ArrayLike,
-    ConvergenceType,
-    SDEIntegrationResult,
     SDEIntegratorBase,
-    SDEType,
     StepMode,
 )
 
+from src.types import ArrayLike
+from src.types.core import StateVector, ControlVector, NoiseVector, ScalarLike, DiffusionMatrix
+from src.types.trajectories import SDEIntegrationResult, TimeSpan, TimePoints
+from src.types.backends import SDEType, NoiseType, ConvergenceType, Backend, Device
+
+if TYPE_CHECKING:
+    from src.systems.base.core.continuous_stochastic_system import ContinuousStochasticSystem
 
 class DiffEqPySDEIntegrator(SDEIntegratorBase):
     """
@@ -220,10 +224,10 @@ class DiffEqPySDEIntegrator(SDEIntegratorBase):
 
     def __init__(
         self,
-        sde_system,
+        sde_system: "ContinuousStochasticSystem",
         dt: Optional[float] = 0.01,
         step_mode: StepMode = StepMode.FIXED,  # Changed default to FIXED
-        backend: str = "numpy",
+        backend: Backend = "numpy",
         algorithm: str = "EM",
         sde_type: Optional[SDEType] = None,
         convergence_type: ConvergenceType = ConvergenceType.STRONG,
@@ -492,10 +496,10 @@ class DiffEqPySDEIntegrator(SDEIntegratorBase):
 
     def step(
         self,
-        x: ArrayLike,
-        u: Optional[ArrayLike] = None,
-        dt: Optional[float] = None,
-        dW: Optional[ArrayLike] = None,
+        x: StateVector,
+        u: Optional[ControlVector] = None,
+        dt: Optional[ScalarLike] = None,
+        dW: Optional[NoiseVector] = None,
     ) -> ArrayLike:
         """
         Take one SDE integration step.
@@ -617,10 +621,10 @@ class DiffEqPySDEIntegrator(SDEIntegratorBase):
 
     def integrate(
         self,
-        x0: ArrayLike,
-        u_func: Callable[[float, ArrayLike], Optional[ArrayLike]],
-        t_span: Tuple[float, float],
-        t_eval: Optional[ArrayLike] = None,
+        x0: StateVector,
+        u_func: Callable[[ScalarLike, StateVector], Optional[ControlVector]],
+        t_span: TimeSpan,
+        t_eval: Optional[TimePoints] = None,
         dense_output: bool = False,
     ) -> SDEIntegrationResult:
         """
@@ -664,6 +668,9 @@ class DiffEqPySDEIntegrator(SDEIntegratorBase):
         >>> t_eval = np.linspace(0, 10, 1001)
         >>> result = integrator.integrate(x0, u_func, (0, 10), t_eval=t_eval)
         """
+        # Start timing
+        start_time = time.perf_counter()
+        
         x0 = np.asarray(x0, dtype=np.float64)
         t0, tf = t_span
 
@@ -706,6 +713,7 @@ class DiffEqPySDEIntegrator(SDEIntegratorBase):
                 x_out = np.array([np.asarray(u, dtype=np.float64) for u in sol.u])
             else:
                 # Integration failed - no solution
+                integration_time = time.perf_counter() - start_time
                 return SDEIntegrationResult(
                     t=np.array([t0]),
                     x=x0.reshape(1, -1),
@@ -713,11 +721,12 @@ class DiffEqPySDEIntegrator(SDEIntegratorBase):
                     message="Julia SDE integration produced no output",
                     nfev=0,
                     nsteps=0,
+                    solver=self.algorithm,
+                    integration_time=integration_time,
                     diffusion_evals=0,
                     n_paths=1,
-                    convergence_type=self.convergence_type,
-                    solver=self.algorithm,
-                    sde_type=self.sde_type,
+                    convergence_type=self.convergence_type.value,
+                    sde_type=self.sde_type.value if hasattr(self.sde_type, 'value') else str(self.sde_type),
                 )
 
             # Check success
@@ -735,6 +744,9 @@ class DiffEqPySDEIntegrator(SDEIntegratorBase):
             self._stats["diffusion_evals"] += diffusion_evals_estimate
             self._stats["total_steps"] += nsteps
 
+            # Calculate integration time
+            integration_time = time.perf_counter() - start_time
+
             return SDEIntegrationResult(
                 t=t_out,
                 x=x_out,
@@ -746,17 +758,20 @@ class DiffEqPySDEIntegrator(SDEIntegratorBase):
                 ),
                 nfev=self._stats["total_fev"],
                 nsteps=nsteps,
+                solver=self.algorithm,
+                integration_time=integration_time,
                 diffusion_evals=self._stats["diffusion_evals"],
                 noise_samples=None,  # Julia doesn't expose noise samples
                 n_paths=1,
-                convergence_type=self.convergence_type,
-                solver=self.algorithm,
-                sde_type=self.sde_type,
-                dense_solution=sol if dense_output else None,
+                convergence_type=self.convergence_type.value,
+                sde_type=self.sde_type.value if hasattr(self.sde_type, 'value') else str(self.sde_type),
             )
 
         except Exception as e:
             import traceback
+
+            # Calculate integration time even on failure
+            integration_time = time.perf_counter() - start_time
 
             return SDEIntegrationResult(
                 t=np.array([t0]),
@@ -765,11 +780,12 @@ class DiffEqPySDEIntegrator(SDEIntegratorBase):
                 message=f"Julia SDE integration failed: {str(e)}\n{traceback.format_exc()}",
                 nfev=0,
                 nsteps=0,
+                solver=self.algorithm,
+                integration_time=integration_time,
                 diffusion_evals=0,
                 n_paths=1,
-                convergence_type=self.convergence_type,
-                solver=self.algorithm,
-                sde_type=self.sde_type,
+                convergence_type=self.convergence_type.value,
+                sde_type=self.sde_type.value if hasattr(self.sde_type, 'value') else str(self.sde_type),
             )
 
     def validate_julia_setup(self):
@@ -1076,7 +1092,7 @@ class DiffEqPySDEIntegrator(SDEIntegratorBase):
 
 
 def create_diffeqpy_sde_integrator(
-    sde_system, algorithm: str = "EM", dt: float = 0.01, **options
+    sde_system: "ContinuousStochasticSystem", algorithm: str = "EM", dt: float = 0.01, **options
 ) -> DiffEqPySDEIntegrator:
     """
     Quick factory for Julia SDE integrators.

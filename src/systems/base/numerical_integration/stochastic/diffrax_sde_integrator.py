@@ -109,7 +109,7 @@ Examples
 ... )
 """
 
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
 
 import diffrax as dfx
 import jax
@@ -117,14 +117,24 @@ import jax.numpy as jnp
 from jax import Array
 
 from src.systems.base.numerical_integration.stochastic.sde_integrator_base import (
-    ArrayLike,
-    ConvergenceType,
-    SDEIntegrationResult,
     SDEIntegratorBase,
-    SDEType,
     StepMode,
 )
 
+# Import types from centralized type system
+from src.types.core import (
+    ArrayLike,
+    StateVector,
+    ControlVector,
+    NoiseVector,
+    ScalarLike,
+)
+from src.types.trajectories import SDEIntegrationResult, TimePoints, TimeSpan
+from src.types.backends import SDEType, NoiseType, ConvergenceType, Backend, Device
+
+
+if TYPE_CHECKING:
+    from src.systems.base.core.continuous_stochastic_system import ContinuousStochasticSystem
 
 class DiffraxSDEIntegrator(SDEIntegratorBase):
     """
@@ -203,10 +213,10 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
 
     def __init__(
         self,
-        sde_system,
-        dt: Optional[float] = None,
+        sde_system: "ContinuousStochasticSystem",
+        dt: Optional[ScalarLike] = None,
         step_mode: StepMode = StepMode.FIXED,
-        backend: str = "jax",
+        backend: Backend = "jax",
         solver: str = "Euler",
         sde_type: Optional[SDEType] = None,
         convergence_type: ConvergenceType = ConvergenceType.STRONG,
@@ -310,7 +320,14 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
 
         return solver_class()
 
-    def _get_brownian_motion(self, key, t0, t1, shape, dW=None):
+    def _get_brownian_motion(
+        self, 
+        key, 
+        t0: ScalarLike, 
+        t1: ScalarLike, 
+        shape: Tuple[int, ...], 
+        dW: Optional[NoiseVector] = None
+    ):
         """
         Create Brownian motion for the integration interval.
 
@@ -318,13 +335,13 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
         ----------
         key : jax.random.PRNGKey
             Random key for noise generation
-        t0 : float
+        t0 : ScalarLike
             Start time
-        t1 : float
+        t1 : ScalarLike
             End time
         shape : tuple
             Shape of noise (nw,) or similar
-        dW : Optional[Array]
+        dW : Optional[NoiseVector]
             Custom Brownian increment. If provided, uses this instead
             of generating random noise. This enables deterministic testing.
 
@@ -376,11 +393,11 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
 
     def step(
         self,
-        x: ArrayLike,
-        u: Optional[ArrayLike] = None,
-        dt: Optional[float] = None,
-        dW: Optional[ArrayLike] = None,
-    ) -> ArrayLike:
+        x: StateVector,
+        u: Optional[ControlVector] = None,
+        dt: Optional[ScalarLike] = None,
+        dW: Optional[NoiseVector] = None,
+    ) -> StateVector:
         """
         Take one SDE integration step.
 
@@ -388,13 +405,13 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
 
         Parameters
         ----------
-        x : ArrayLike
+        x : StateVector
             Current state (nx,) or (batch, nx)
-        u : Optional[ArrayLike]
+        u : Optional[ControlVector]
             Control input (nu,) or (batch, nu), or None for autonomous
-        dt : Optional[float]
+        dt : Optional[ScalarLike]
             Step size (uses self.dt if None)
-        dW : Optional[ArrayLike]
+        dW : Optional[NoiseVector]
             Brownian increments (nw,)
             If provided, uses this deterministic noise instead of random.
             Shape must match (nw,) where nw is number of Wiener processes.
@@ -407,7 +424,7 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
 
         Returns
         -------
-        ArrayLike
+        StateVector
             Next state x(t + dt)
 
         Notes
@@ -491,10 +508,10 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
 
     def integrate(
         self,
-        x0: ArrayLike,
-        u_func: Callable[[float, ArrayLike], Optional[ArrayLike]],
-        t_span: Tuple[float, float],
-        t_eval: Optional[ArrayLike] = None,
+        x0: StateVector,
+        u_func: Callable[[ScalarLike, StateVector], Optional[ControlVector]],
+        t_span: TimeSpan,
+        t_eval: Optional[TimePoints] = None,
         dense_output: bool = False,
     ) -> SDEIntegrationResult:
         """
@@ -502,13 +519,13 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
 
         Parameters
         ----------
-        x0 : ArrayLike
+        x0 : StateVector
             Initial state (nx,)
         u_func : Callable
             Control policy: (t, x) -> u (or None for autonomous)
-        t_span : Tuple[float, float]
+        t_span : TimeSpan
             Integration interval (t_start, t_end)
-        t_eval : Optional[ArrayLike]
+        t_eval : Optional[TimePoints]
             Specific times at which to save solution
         dense_output : bool
             If True, enable dense output (not supported for SDEs in Diffrax)
@@ -693,11 +710,11 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
 
     def integrate_with_gradient(
         self,
-        x0: ArrayLike,
-        u_func: Callable[[float, ArrayLike], Optional[ArrayLike]],
-        t_span: Tuple[float, float],
+        x0: StateVector,
+        u_func: Callable[[ScalarLike, StateVector], Optional[ControlVector]],
+        t_span: TimeSpan,
         loss_fn: Callable[[SDEIntegrationResult], float],
-        t_eval: Optional[ArrayLike] = None,
+        t_eval: Optional[TimePoints] = None,
     ):
         """
         Integrate and compute gradients w.r.t. initial conditions.
@@ -757,10 +774,10 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
 
     def vectorized_integrate(
         self,
-        x0_batch: ArrayLike,
+        x0_batch: StateVector,
         u_func: Callable,
-        t_span: Tuple[float, float],
-        t_eval: Optional[ArrayLike] = None,
+        t_span: TimeSpan,
+        t_eval: Optional[TimePoints] = None,
     ):
         """
         Vectorized integration over batch of initial conditions.
@@ -798,7 +815,7 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
             results.append(result)
         return results
 
-    def to_device(self, device: str):
+    def to_device(self, device: Device):
         """
         Move computations to specified device.
 
@@ -990,7 +1007,7 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
 
 
 def create_diffrax_sde_integrator(
-    sde_system, solver: str = "Euler", dt: float = 0.01, **options
+    sde_system: "ContinuousStochasticSystem", solver: str = "Euler", dt: float = 0.01, **options
 ) -> DiffraxSDEIntegrator:
     """
     Quick factory for Diffrax SDE integrators.

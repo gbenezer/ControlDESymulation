@@ -119,21 +119,37 @@ Examples
 >>> # x_next = integrator.step(x, u, dW=custom_noise)
 """
 
+import time
 import warnings
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Callable, Optional, TYPE_CHECKING
 
 import torch
 from torch import Tensor
 
 from src.systems.base.numerical_integration.stochastic.sde_integrator_base import (
-    ArrayLike,
-    ConvergenceType,
-    SDEIntegrationResult,
     SDEIntegratorBase,
-    SDEType,
     StepMode,
 )
 
+# Import from centralized type system
+from src.types.core import (
+    StateVector,
+    ControlVector,
+    ScalarLike,
+)
+from src.types.trajectories import (
+    SDEIntegrationResult,
+    TimeSpan,
+    TimePoints,
+)
+from src.types.backends import (
+    SDEType,
+    ConvergenceType,
+    NoiseType,
+)
+
+if TYPE_CHECKING:
+    from src.systems.base.core.continuous_stochastic_system import ContinuousStochasticSystem
 
 class TorchSDEIntegrator(SDEIntegratorBase):
     """
@@ -146,7 +162,7 @@ class TorchSDEIntegrator(SDEIntegratorBase):
     ----------
     sde_system : StochasticDynamicalSystem
         SDE system to integrate (controlled or autonomous)
-    dt : Optional[float]
+    dt : Optional[ScalarLike]
         Time step size
     step_mode : StepMode
         FIXED or ADAPTIVE stepping mode
@@ -164,7 +180,7 @@ class TorchSDEIntegrator(SDEIntegratorBase):
     adjoint : bool
         Use adjoint method for memory-efficient backpropagation
         Recommended for neural SDEs (default: False)
-    noise_type : str
+    noise_type : Optional[str]
         Noise type: 'diagonal', 'additive', 'scalar', 'general'
         Auto-detected from system if not specified
     **options
@@ -234,8 +250,8 @@ class TorchSDEIntegrator(SDEIntegratorBase):
 
     def __init__(
         self,
-        sde_system,
-        dt: Optional[float] = None,
+        sde_system: "ContinuousStochasticSystem",
+        dt: Optional[ScalarLike] = None,
         step_mode: StepMode = StepMode.FIXED,
         backend: str = "torch",
         method: str = "euler",
@@ -351,7 +367,7 @@ class TorchSDEIntegrator(SDEIntegratorBase):
         adjoint_str = " (Adjoint)" if self.use_adjoint else ""
         return f"{self._integrator_name} ({mode_str}){adjoint_str}"
 
-    def _create_sde_wrapper(self, u_func):
+    def _create_sde_wrapper(self, u_func: Callable):
         """Create torchsde-compatible SDE wrapper."""
         sde_system = self.sde_system
         backend = self.backend
@@ -409,11 +425,11 @@ class TorchSDEIntegrator(SDEIntegratorBase):
 
     def step(
         self,
-        x: ArrayLike,
-        u: Optional[ArrayLike] = None,
-        dt: Optional[float] = None,
-        dW: Optional[ArrayLike] = None,
-    ) -> ArrayLike:
+        x: StateVector,
+        u: Optional[ControlVector] = None,
+        dt: Optional[ScalarLike] = None,
+        dW: Optional[StateVector] = None,
+    ) -> StateVector:
         """
         Take one SDE integration step.
 
@@ -423,19 +439,19 @@ class TorchSDEIntegrator(SDEIntegratorBase):
 
         Parameters
         ----------
-        x : ArrayLike
+        x : StateVector
             Current state (nx,) or (batch, nx)
-        u : Optional[ArrayLike]
+        u : Optional[ControlVector]
             Control input (nu,) or (batch, nu), or None for autonomous
-        dt : Optional[float]
+        dt : Optional[ScalarLike]
             Step size (uses self.dt if None)
-        dW : Optional[ArrayLike]
+        dW : Optional[StateVector]
             **NOT SUPPORTED** - TorchSDE does NOT support custom noise.
             This parameter is IGNORED. Use JAX/Diffrax for custom noise.
 
         Returns
         -------
-        ArrayLike
+        StateVector
             Next state x(t + dt)
 
         Examples
@@ -508,9 +524,37 @@ class TorchSDEIntegrator(SDEIntegratorBase):
 
         return x_next
 
-    def integrate(self, x0, u_func, t_span, t_eval=None, dense_output=False):
-        """Integrate SDE over time interval."""
+    def integrate(
+        self,
+        x0: StateVector,
+        u_func: Callable[[ScalarLike, StateVector], Optional[ControlVector]],
+        t_span: TimeSpan,
+        t_eval: Optional[TimePoints] = None,
+        dense_output: bool = False,
+    ) -> SDEIntegrationResult:
+        """
+        Integrate SDE over time interval.
+
+        Parameters
+        ----------
+        x0 : StateVector
+            Initial state (nx,)
+        u_func : Callable[[ScalarLike, StateVector], Optional[ControlVector]]
+            Control policy: (t, x) → u or None
+        t_span : TimeSpan
+            Time interval (t_start, t_end)
+        t_eval : Optional[TimePoints]
+            Specific times to evaluate (uses automatic grid if None)
+        dense_output : bool
+            Not used (TorchSDE doesn't support dense output)
+
+        Returns
+        -------
+        SDEIntegrationResult
+            Integration result with trajectory and diagnostics
+        """
         t0, tf = t_span
+        t_start = time.perf_counter()
 
         # Convert to PyTorch tensor
         if not isinstance(x0, torch.Tensor):
@@ -555,6 +599,7 @@ class TorchSDEIntegrator(SDEIntegratorBase):
 
             # Update statistics
             nsteps = len(ts) - 1
+            integration_time = time.perf_counter() - t_start
 
             self._stats["total_steps"] += nsteps
             self._stats["total_fev"] += nsteps
@@ -572,12 +617,15 @@ class TorchSDEIntegrator(SDEIntegratorBase):
                 diffusion_evals=self._stats["diffusion_evals"],
                 noise_samples=None,
                 n_paths=1,
-                convergence_type=self.convergence_type,
+                convergence_type=self.convergence_type.value,  # Convert enum to string
                 solver=self.method,
-                sde_type=self.sde_type,
+                sde_type=self.sde_type.value,  # Convert enum to string
+                integration_time=integration_time,
             )
         except Exception as e:
             import traceback
+            
+            integration_time = time.perf_counter() - t_start
 
             return SDEIntegrationResult(
                 t=torch.tensor([t0], device=self.device),
@@ -588,13 +636,41 @@ class TorchSDEIntegrator(SDEIntegratorBase):
                 nsteps=0,
                 diffusion_evals=0,
                 n_paths=1,
-                convergence_type=self.convergence_type,
+                convergence_type=self.convergence_type.value,  # Convert enum to string
                 solver=self.method,
-                sde_type=self.sde_type,
+                sde_type=self.sde_type.value,  # Convert enum to string
+                integration_time=integration_time,
             )
 
-    def integrate_with_gradient(self, x0, u_func, t_span, loss_fn, t_eval=None):
-        """Integrate and compute gradients."""
+    def integrate_with_gradient(
+        self,
+        x0: StateVector,
+        u_func: Callable[[ScalarLike, StateVector], Optional[ControlVector]],
+        t_span: TimeSpan,
+        loss_fn: Callable,
+        t_eval: Optional[TimePoints] = None,
+    ):
+        """
+        Integrate and compute gradients.
+
+        Parameters
+        ----------
+        x0 : StateVector
+            Initial state (requires gradient)
+        u_func : Callable
+            Control policy
+        t_span : TimeSpan
+            Time interval
+        loss_fn : Callable
+            Loss function operating on integration result
+        t_eval : Optional[TimePoints]
+            Evaluation times
+
+        Returns
+        -------
+        tuple
+            (loss_value, gradient)
+        """
         if not isinstance(x0, torch.Tensor):
             x0 = torch.tensor(x0, dtype=torch.float32, device=self.device)
         if not x0.requires_grad:
@@ -695,8 +771,29 @@ class TorchSDEIntegrator(SDEIntegratorBase):
         else:
             return "euler"
 
-    def vectorized_step(self, x_batch, u_batch=None, dt=None):
-        """Vectorized step over batch."""
+    def vectorized_step(
+        self,
+        x_batch: StateVector,
+        u_batch: Optional[ControlVector] = None,
+        dt: Optional[ScalarLike] = None,
+    ) -> StateVector:
+        """
+        Vectorized step over batch.
+
+        Parameters
+        ----------
+        x_batch : StateVector
+            Batched states (batch, nx)
+        u_batch : Optional[ControlVector]
+            Batched controls (batch, nu)
+        dt : Optional[ScalarLike]
+            Step size
+
+        Returns
+        -------
+        StateVector
+            Next states (batch, nx)
+        """
         if not isinstance(x_batch, torch.Tensor):
             x_batch = torch.tensor(x_batch, dtype=torch.float32, device=self.device)
         if u_batch is not None and not isinstance(u_batch, torch.Tensor):
@@ -719,7 +816,7 @@ class TorchSDEIntegrator(SDEIntegratorBase):
         return ys[-1]
 
 
-def create_torchsde_integrator(sde_system, method="euler", dt=0.01, **options):
+def create_torchsde_integrator(sde_system: "ContinuousStochasticSystem", method="euler", dt=0.01, **options):
     """Quick factory for TorchSDE integrators."""
     return TorchSDEIntegrator(sde_system, dt=dt, method=method, backend="torch", **options)
 

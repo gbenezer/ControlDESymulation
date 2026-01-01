@@ -17,6 +17,13 @@
 Custom Brownian path wrapper for Diffrax to support user-provided noise.
 
 This allows deterministic testing and custom noise patterns.
+
+Design Note
+-----------
+Uses semantic types from centralized type system for consistency:
+- ScalarLike for time values
+- ArrayLike for noise increments
+- Standard Tuple for shape specifications (metadata, not data)
 """
 
 from typing import Optional, Tuple
@@ -25,6 +32,8 @@ import diffrax as dfx
 import equinox as eqx
 import jax.numpy as jnp
 from jax import Array
+
+from src.types.core import ScalarLike, ArrayLike
 
 
 class CustomBrownianPath(dfx.AbstractPath):
@@ -38,11 +47,11 @@ class CustomBrownianPath(dfx.AbstractPath):
 
     Attributes
     ----------
-    t0 : float
+    t0 : ScalarLike
         Start time
-    t1 : float
+    t1 : ScalarLike
         End time
-    dW : Array
+    dW : ArrayLike
         Brownian increment for interval (t0, t1)
         Shape: (nw,) for the noise dimensions
 
@@ -61,11 +70,11 @@ class CustomBrownianPath(dfx.AbstractPath):
     t1: float
     dW: Array
 
-    def __init__(self, t0: float, t1: float, dW: Array):
+    def __init__(self, t0: ScalarLike, t1: ScalarLike, dW: ArrayLike):
         # Use object.__setattr__ for frozen dataclass
-        object.__setattr__(self, "t0", t0)
-        object.__setattr__(self, "t1", t1)
-        object.__setattr__(self, "dW", dW)
+        object.__setattr__(self, "t0", float(t0))
+        object.__setattr__(self, "t1", float(t1))
+        object.__setattr__(self, "dW", jnp.asarray(dW))
 
     @property
     def dt(self) -> float:
@@ -77,7 +86,7 @@ class CustomBrownianPath(dfx.AbstractPath):
         """Shape of the noise."""
         return self.dW.shape
 
-    def evaluate(self, t0: float, t1: Optional[float] = None, left: bool = True) -> Array:
+    def evaluate(self, t0: ScalarLike, t1: Optional[ScalarLike] = None, left: bool = True) -> Array:
         """
         Evaluate Brownian increment between t0 and t1.
 
@@ -89,9 +98,9 @@ class CustomBrownianPath(dfx.AbstractPath):
 
         Parameters
         ----------
-        t0 : float
+        t0 : ScalarLike
             Start time of query
-        t1 : Optional[float]
+        t1 : Optional[ScalarLike]
             End time of query (if None, return value at t0)
         left : bool
             Whether to use left or right limit
@@ -99,7 +108,7 @@ class CustomBrownianPath(dfx.AbstractPath):
         Returns
         -------
         Array
-            Brownian increment or value
+            Brownian increment or value (JAX array for Diffrax compatibility)
         """
         if t1 is None:
             # Query for B(t0) - return cumulative value
@@ -123,7 +132,7 @@ class CustomBrownianPath(dfx.AbstractPath):
 
 
 def create_custom_or_random_brownian(
-    key, t0: float, t1: float, shape: Tuple[int, ...], dW: Optional[Array] = None
+    key, t0: ScalarLike, t1: ScalarLike, shape: Tuple[int, ...], dW: Optional[ArrayLike] = None
 ):
     """
     Create either custom or random Brownian motion for Diffrax.
@@ -132,13 +141,13 @@ def create_custom_or_random_brownian(
     ----------
     key : jax.random.PRNGKey
         Random key (used if dW is None)
-    t0 : float
+    t0 : ScalarLike
         Start time
-    t1 : float
+    t1 : ScalarLike
         End time
     shape : tuple
         Noise shape (nw,)
-    dW : Optional[Array]
+    dW : Optional[ArrayLike]
         Custom Brownian increment. If None, generates random.
 
     Returns

@@ -13,928 +13,589 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-# from typing import Dict, List, Optional, Any
-
-# """
-# Types Module - Comprehensive Type Definitions for ControlDESymulation
-
-# Central import point for all type definitions across the framework.
-# Organized into domain-specific modules but re-exported here for convenience.
-
-# Usage
-# -----
-# >>> from src.systems.base.types import (
-# ...     StateVector,
-# ...     ControlVector,
-# ...     LQRResult,
-# ...     HankelMatrix,
-# ...     Backend,
-# ... )
-
-# Module Organization
-# ------------------
-# - core: Basic arrays, vectors, matrices
-# - linearization: Linearization results
-# - trajectories: Time series and sequences
-# - symbolic: SymPy type definitions
-# - backends: Backend and device types
-# - control_classical: LQR, LQG, Kalman
-# - control_advanced: MPC, MHE, H∞, Adaptive
-# - estimation: EKF, UKF, Particle, Conformal
-# - identification: Hankel, ERA, DMD, SINDy, N4SID
-# - reachability: HJI, Safety, Contraction, Flatness
-# - robustness: Uncertainty, μ-analysis, Tubes
-# - utilities: Type guards, converters
-
-# Statistics
-# ----------
-# - 170+ type definitions
-# - 40+ TypedDict result types
-# - 15+ utility functions
-# - 8+ Protocol definitions
-# """
-
-# # ============================================================================
-# # Core Types (Basic Building Blocks)
-# # ============================================================================
-
-# from .core import (
-#     # Basic arrays
-#     ArrayLike,
-#     NumpyArray,
-#     TorchTensor,
-#     JaxArray,
-#     ScalarLike,
-#     IntegerLike,
-
-#     # Vectors
-#     StateVector,
-#     ControlVector,
-#     OutputVector,
-#     NoiseVector,
-#     ParameterVector,
-#     ResidualVector,
-
-#     # Matrices
-#     StateMatrix,
-#     InputMatrix,
-#     OutputMatrix,
-#     DiffusionMatrix,
-#     FeedthroughMatrix,
-#     CovarianceMatrix,
-#     GainMatrix,
-#     ControllabilityMatrix,
-#     ObservabilityMatrix,
-#     CostMatrix,
-
-#     # Dimensions
-#     SystemDimensions,
-#     DimensionTuple,
-
-#     # Equilibria
-#     EquilibriumState,
-#     EquilibriumControl,
-#     EquilibriumPoint,
-#     EquilibriumName,
-#     EquilibriumIdentifier,
-# )
-
-
-# # ============================================================================
-# # Linearization Types
-# # ============================================================================
-
-# from .linearization import (
-#     DeterministicLinearization,
-#     StochasticLinearization,
-#     LinearizationResult,
-#     ObservationLinearization,
-# )
-
-
-# # ============================================================================
-# # Trajectory and Sequence Types
-# # ============================================================================
-
-# from .trajectories import (
-#     StateTrajectory,
-#     ControlSequence,
-#     OutputSequence,
-#     NoiseSequence,
-#     TimePoints,
-#     TimeSpan,
-# )
-
-
-# # ============================================================================
-# # Symbolic Types
-# # ============================================================================
-
-# from .symbolic import (
-#     SymbolicExpression,
-#     SymbolicMatrix,
-#     SymbolicSymbol,
-#     SymbolDict,
-#     SymbolicStateEquations,
-#     SymbolicOutputEquations,
-#     SymbolicDiffusionMatrix,
-# )
-
-
-# # ============================================================================
-# # Backend Types
-# # ============================================================================
-
-# from .backends import (
-#     Backend,
-#     Device,
-#     BackendConfig,
-#     IntegrationMethod,
-#     DiscretizationMethod,
-#     SDEIntegrationMethod,
-#     OptimizationMethod,
-#     NoiseType,
-#     SDEType,
-#     ConvergenceType,
-#     VALID_BACKENDS,
-#     VALID_DEVICES,
-#     DEFAULT_BACKEND,
-#     DEFAULT_DEVICE,
-#     DEFAULT_DTYPE,
-# )
-
-
-# # ============================================================================
-# # Classical Control and Estimation
-# # ============================================================================
-
-# from .control_classical import (
-#     LQRResult,
-#     LQGResult,
-#     KalmanFilterResult,
-#     StabilityInfo,
-#     ControllabilityInfo,
-#     ObservabilityInfo,
-# )
-
-
-# # ============================================================================
-# # Advanced Control
-# # ============================================================================
-
-# from .control_advanced import (
-#     MPCResult,
-#     MHEResult,
-#     H2ControlResult,
-#     HInfControlResult,
-#     LMIResult,
-#     AdaptiveControlResult,
-#     SlidingModeResult,
-#     StochasticMPCResult,
-#     RiskSensitiveResult,
-# )
-
-
-# # ============================================================================
-# # State Estimation (Beyond Kalman)
-# # ============================================================================
-
-# from .estimation import (
-#     EKFResult,
-#     UKFResult,
-#     ParticleFilterResult,
-#     ConformalPredictionSet,
-#     NonconformityScore,
-#     ConformalCalibrationResult,
-#     ConformalPredictionResult,
-#     AdaptiveConformalResult,
-# )
-
-
-# # ============================================================================
-# # System Identification
-# # ============================================================================
-
-# from .identification import (
-#     HankelMatrix,
-#     ToeplitzMatrix,
-#     TrajectoryMatrix,
-#     MarkovParameters,
-#     CorrelationMatrix,
-#     SystemIDResult,
-#     SubspaceIDResult,
-#     ERAResult,
-#     DMDResult,
-#     SINDyResult,
-#     KoopmanResult,
-# )
-
-
-# # ============================================================================
-# # Reachability, Safety, and Contraction
-# # ============================================================================
-
-# from .reachability import (
-#     # Sets
-#     ReachableSet,
-#     SafeSet,
-#     ValueFunction,
-#     LevelSet,
-
-#     # Reachability results
-#     ReachabilityResult,
-#     HJIReachabilityResult,
-#     BackwardReachableResult,
-#     ForwardReachableResult,
-#     ViabilityKernelResult,
-#     DifferentialGameResult,
-#     ROAResult,
-
-#     # Safety
-#     VerificationResult,
-#     BarrierCertificateResult,
-#     CBFResult,
-#     CLFResult,
-
-#     # Contraction
-#     ContractionMetric,
-#     ContractionRate,
-#     ContractionAnalysisResult,
-#     CCMResult,
-#     FunnelingResult,
-#     IncrementalStabilityResult,
-
-#     # Flatness
-#     FlatnessOutput,
-#     DifferentialFlatnessResult,
-#     TrajectoryPlanningResult,
-# )
-
-
-# # ============================================================================
-# # Robustness and Uncertainty
-# # ============================================================================
-
-# from .robustness import (
-#     UncertaintySet,
-#     RobustStabilityResult,
-#     StructuredSingularValueResult,
-#     TubeDefinition,
-#     TubeMPCResult,
-#     BalancedRealizationResult,
-#     ReducedOrderModelResult,
-# )
-
-
-# # ============================================================================
-# # Utility Functions and Type Guards
-# # ============================================================================
-
-# from .utilities import (
-#     # Type guards
-#     is_batched,
-#     get_batch_size,
-#     is_numpy,
-#     is_torch,
-#     is_jax,
-#     get_backend,
-
-#     # Converters
-#     ensure_numpy,
-#     ensure_backend,
-#     ArrayConverter,
-
-#     # Validators
-#     check_state_shape,
-#     check_control_shape,
-#     get_array_shape,
-#     extract_dimensions,
-
-#     # Protocols
-#     LinearizableProtocol,
-#     SimulatableProtocol,
-#     StochasticProtocol,
-# )
-
-
-# # ============================================================================
-# # Simulation and Integration Results
-# # ============================================================================
-
-# from .trajectories import (
-#     IntegrationResult,
-#     SimulationResult,
-# )
-
-
-# # ============================================================================
-# # Learning Types
-# # ============================================================================
-
-# from .identification import (
-#     Dataset,
-#     TrainingBatch,
-#     LearningRate,
-#     LossValue,
-#     NeuralNetworkConfig,
-#     TrainingResult,
-#     NeuralNetworkDynamicsResult,
-#     GPDynamicsResult,
-# )
-
-
-# # ============================================================================
-# # Optimization Types
-# # ============================================================================
-
-# from .control_advanced import (
-#     OptimizationBounds,
-#     OptimizationResult,
-# )
-
-
-# # ============================================================================
-# # Cache and Metadata
-# # ============================================================================
-
-# from .utilities import (
-#     CacheKey,
-#     CacheStatistics,
-#     Metadata,
-# )
-
-
-# # ============================================================================
-# # Function Types
-# # ============================================================================
-
-# from .core import (
-#     DynamicsFunction,
-#     OutputFunction,
-#     DiffusionFunction,
-#     ControlPolicy,
-#     StateEstimator,
-#     CostFunction,
-#     Constraint,
-#     IntegrationCallback,
-#     SimulationCallback,
-#     OptimizationCallback,
-# )
-
-
-# # ============================================================================
-# # Configuration Types
-# # ============================================================================
-
-# from .backends import (
-#     SystemConfig,
-#     IntegratorConfig,
-#     DiscretizerConfig,
-# )
-
-
-# # ============================================================================
-# # Performance and Validation
-# # ============================================================================
-
-# from .utilities import (
-#     ValidationResult,
-#     PerformanceMetrics,
-# )
-
-
-# # ============================================================================
-# # Type Variables
-# # ============================================================================
-
-# from .core import (
-#     T,
-#     S,
-#     C,
-#     MatrixT,
-# )
-
-
-# # ============================================================================
-# # Comprehensive Export List
-# # ============================================================================
-
-# __all__ = [
-#     # ========================================================================
-#     # Core Types
-#     # ========================================================================
-
-#     # Basic arrays
-#     'ArrayLike',
-#     'NumpyArray',
-#     'TorchTensor',
-#     'JaxArray',
-#     'ScalarLike',
-#     'IntegerLike',
-
-#     # Vectors
-#     'StateVector',
-#     'ControlVector',
-#     'OutputVector',
-#     'NoiseVector',
-#     'ParameterVector',
-#     'ResidualVector',
-
-#     # Matrices
-#     'StateMatrix',
-#     'InputMatrix',
-#     'OutputMatrix',
-#     'DiffusionMatrix',
-#     'FeedthroughMatrix',
-#     'CovarianceMatrix',
-#     'GainMatrix',
-#     'ControllabilityMatrix',
-#     'ObservabilityMatrix',
-#     'CostMatrix',
-
-#     # Dimensions
-#     'SystemDimensions',
-#     'DimensionTuple',
-
-#     # Equilibria
-#     'EquilibriumState',
-#     'EquilibriumControl',
-#     'EquilibriumPoint',
-#     'EquilibriumName',
-#     'EquilibriumIdentifier',
-
-#     # ========================================================================
-#     # Linearization
-#     # ========================================================================
-
-#     'DeterministicLinearization',
-#     'StochasticLinearization',
-#     'LinearizationResult',
-#     'ObservationLinearization',
-
-#     # ========================================================================
-#     # Trajectories and Sequences
-#     # ========================================================================
-
-#     'StateTrajectory',
-#     'ControlSequence',
-#     'OutputSequence',
-#     'NoiseSequence',
-#     'TimePoints',
-#     'TimeSpan',
-#     'IntegrationResult',
-#     'SimulationResult',
-
-#     # ========================================================================
-#     # Symbolic
-#     # ========================================================================
-
-#     'SymbolicExpression',
-#     'SymbolicMatrix',
-#     'SymbolicSymbol',
-#     'SymbolDict',
-#     'SymbolicStateEquations',
-#     'SymbolicOutputEquations',
-#     'SymbolicDiffusionMatrix',
-
-#     # ========================================================================
-#     # Backend and Methods
-#     # ========================================================================
-
-#     'Backend',
-#     'Device',
-#     'BackendConfig',
-#     'IntegrationMethod',
-#     'DiscretizationMethod',
-#     'SDEIntegrationMethod',
-#     'OptimizationMethod',
-#     'NoiseType',
-#     'SDEType',
-#     'ConvergenceType',
-
-#     # ========================================================================
-#     # Classical Control and Estimation
-#     # ========================================================================
-
-#     'LQRResult',
-#     'LQGResult',
-#     'KalmanFilterResult',
-#     'StabilityInfo',
-#     'ControllabilityInfo',
-#     'ObservabilityInfo',
-
-#     # ========================================================================
-#     # Advanced Control
-#     # ========================================================================
-
-#     'MPCResult',
-#     'MHEResult',
-#     'H2ControlResult',
-#     'HInfControlResult',
-#     'LMIResult',
-#     'AdaptiveControlResult',
-#     'SlidingModeResult',
-#     'StochasticMPCResult',
-#     'RiskSensitiveResult',
-#     'OptimizationBounds',
-#     'OptimizationResult',
-
-#     # ========================================================================
-#     # State Estimation
-#     # ========================================================================
-
-#     'EKFResult',
-#     'UKFResult',
-#     'ParticleFilterResult',
-
-#     # ========================================================================
-#     # Conformal Prediction
-#     # ========================================================================
-
-#     'ConformalPredictionSet',
-#     'NonconformityScore',
-#     'ConformalCalibrationResult',
-#     'ConformalPredictionResult',
-#     'AdaptiveConformalResult',
-
-#     # ========================================================================
-#     # System Identification
-#     # ========================================================================
-
-#     'HankelMatrix',
-#     'ToeplitzMatrix',
-#     'TrajectoryMatrix',
-#     'MarkovParameters',
-#     'CorrelationMatrix',
-#     'SystemIDResult',
-#     'SubspaceIDResult',
-#     'ERAResult',
-#     'DMDResult',
-#     'SINDyResult',
-#     'KoopmanResult',
-#     'Dataset',
-#     'TrainingBatch',
-#     'LearningRate',
-#     'LossValue',
-#     'NeuralNetworkConfig',
-#     'TrainingResult',
-#     'NeuralNetworkDynamicsResult',
-#     'GPDynamicsResult',
-
-#     # ========================================================================
-#     # Reachability and Safety
-#     # ========================================================================
-
-#     'ReachableSet',
-#     'SafeSet',
-#     'ValueFunction',
-#     'LevelSet',
-#     'ReachabilityResult',
-#     'HJIReachabilityResult',
-#     'BackwardReachableResult',
-#     'ForwardReachableResult',
-#     'ViabilityKernelResult',
-#     'DifferentialGameResult',
-#     'ROAResult',
-#     'VerificationResult',
-#     'BarrierCertificateResult',
-#     'CBFResult',
-#     'CLFResult',
-
-#     # ========================================================================
-#     # Contraction Analysis
-#     # ========================================================================
-
-#     'ContractionMetric',
-#     'ContractionRate',
-#     'ContractionAnalysisResult',
-#     'CCMResult',
-#     'FunnelingResult',
-#     'IncrementalStabilityResult',
-
-#     # ========================================================================
-#     # Differential Flatness
-#     # ========================================================================
-
-#     'FlatnessOutput',
-#     'DifferentialFlatnessResult',
-#     'TrajectoryPlanningResult',
-
-#     # ========================================================================
-#     # Robustness and Uncertainty
-#     # ========================================================================
-
-#     'UncertaintySet',
-#     'RobustStabilityResult',
-#     'StructuredSingularValueResult',
-#     'TubeDefinition',
-#     'TubeMPCResult',
-#     'BalancedRealizationResult',
-#     'ReducedOrderModelResult',
-
-#     # ========================================================================
-#     # Function Types
-#     # ========================================================================
-
-#     'DynamicsFunction',
-#     'OutputFunction',
-#     'DiffusionFunction',
-#     'ControlPolicy',
-#     'StateEstimator',
-#     'CostFunction',
-#     'Constraint',
-
-#     # ========================================================================
-#     # Callbacks
-#     # ========================================================================
-
-#     'IntegrationCallback',
-#     'SimulationCallback',
-#     'OptimizationCallback',
-
-#     # ========================================================================
-#     # Protocols
-#     # ========================================================================
-
-#     'LinearizableProtocol',
-#     'SimulatableProtocol',
-#     'StochasticProtocol',
-
-#     # ========================================================================
-#     # Utilities
-#     # ========================================================================
-
-#     'is_batched',
-#     'get_batch_size',
-#     'is_numpy',
-#     'is_torch',
-#     'is_jax',
-#     'get_backend',
-#     'ensure_numpy',
-#     'ensure_backend',
-#     'check_state_shape',
-#     'check_control_shape',
-#     'get_array_shape',
-#     'extract_dimensions',
-#     'ArrayConverter',
-
-#     # ========================================================================
-#     # Cache and Metadata
-#     # ========================================================================
-
-#     'CacheKey',
-#     'CacheStatistics',
-#     'Metadata',
-#     'ValidationResult',
-#     'PerformanceMetrics',
-
-#     # ========================================================================
-#     # Configuration
-#     # ========================================================================
-
-#     'SystemConfig',
-#     'IntegratorConfig',
-#     'DiscretizerConfig',
-
-#     # ========================================================================
-#     # Type Variables
-#     # ========================================================================
-
-#     'T',
-#     'S',
-#     'C',
-#     'MatrixT',
-
-#     # ========================================================================
-#     # Constants
-#     # ========================================================================
-
-#     'VALID_BACKENDS',
-#     'VALID_DEVICES',
-#     'DEFAULT_BACKEND',
-#     'DEFAULT_DEVICE',
-#     'DEFAULT_DTYPE',
-# ]
-
-
-# # ============================================================================
-# # Version Information
-# # ============================================================================
-
-# __version__ = '1.0.0'
-# __author__ = 'Gil Benezer'
-
-
-# # ============================================================================
-# # Convenience Imports for Common Patterns
-# # ============================================================================
-
-# # Most commonly used types (for quick reference)
-# COMMON_TYPES = {
-#     'arrays': (ArrayLike, StateVector, ControlVector),
-#     'matrices': (StateMatrix, InputMatrix, GainMatrix),
-#     'results': (LQRResult, MPCResult, KalmanFilterResult),
-#     'analysis': (StabilityInfo, LinearizationResult),
-# }
-
-
-# def list_all_types() -> List[str]:
-#     """
-#     List all available type names.
-
-#     Returns
-#     -------
-#     List[str]
-#         All exported type names
-
-#     Examples
-#     --------
-#     >>> from src.systems.base.types import list_all_types
-#     >>> types = list_all_types()
-#     >>> print(f"Total types: {len(types)}")
-#     >>> print(f"Control types: {[t for t in types if 'Result' in t]}")
-#     """
-#     return sorted(__all__)
-
-
-# def list_types_by_category() -> Dict[str, List[str]]:
-#     """
-#     List types organized by category.
-
-#     Returns
-#     -------
-#     Dict[str, List[str]]
-#         Types grouped by domain
-
-#     Examples
-#     --------
-#     >>> from src.systems.base.types import list_types_by_category
-#     >>> categories = list_types_by_category()
-#     >>> print(categories['Control'])
-#     ['LQRResult', 'LQGResult', 'MPCResult', ...]
-#     """
-#     categories = {
-#         'Core Arrays': [
-#             'ArrayLike', 'StateVector', 'ControlVector', 'OutputVector',
-#             'NoiseVector', 'ParameterVector',
-#         ],
-#         'Matrices': [
-#             'StateMatrix', 'InputMatrix', 'GainMatrix', 'CovarianceMatrix',
-#             'DiffusionMatrix', 'OutputMatrix',
-#         ],
-#         'Control': [
-#             'LQRResult', 'LQGResult', 'MPCResult', 'MHEResult',
-#             'H2ControlResult', 'HInfControlResult',
-#         ],
-#         'Estimation': [
-#             'KalmanFilterResult', 'EKFResult', 'UKFResult', 'ParticleFilterResult',
-#         ],
-#         'System ID': [
-#             'HankelMatrix', 'ERAResult', 'DMDResult', 'SINDyResult',
-#             'SubspaceIDResult', 'KoopmanResult',
-#         ],
-#         'Reachability': [
-#             'HJIReachabilityResult', 'BackwardReachableResult',
-#             'ForwardReachableResult', 'ViabilityKernelResult',
-#         ],
-#         'Safety': [
-#             'CBFResult', 'CLFResult', 'BarrierCertificateResult',
-#             'VerificationResult',
-#         ],
-#         'Contraction': [
-#             'ContractionAnalysisResult', 'CCMResult', 'FunnelingResult',
-#             'IncrementalStabilityResult',
-#         ],
-#         'Conformal': [
-#             'ConformalPredictionResult', 'ConformalCalibrationResult',
-#             'AdaptiveConformalResult',
-#         ],
-#         'Robustness': [
-#             'RobustStabilityResult', 'TubeMPCResult',
-#             'StructuredSingularValueResult',
-#         ],
-#     }
-#     return categories
-
-
-# def get_type_info(type_name: str) -> Optional[str]:
-#     """
-#     Get documentation for a specific type.
-
-#     Parameters
-#     ----------
-#     type_name : str
-#         Name of the type
-
-#     Returns
-#     -------
-#     Optional[str]
-#         Docstring of the type, or None if not found
-
-#     Examples
-#     --------
-#     >>> from src.systems.base.types import get_type_info
-#     >>> info = get_type_info('StateVector')
-#     >>> print(info)
-#     State vector x ∈ ℝⁿˣ.
-#     Shapes:
-#     - Single: (nx,)
-#     - Batched: (batch, nx)
-#     ...
-#     """
-#     if type_name in globals():
-#         obj = globals()[type_name]
-#         return obj.__doc__ if hasattr(obj, '__doc__') else None
-#     return None
-
-
-# # ============================================================================
-# # Quick Reference Guide
-# # ============================================================================
-
-# QUICK_REFERENCE = """
-# ControlDESymulation Types Quick Reference
-# =========================================
-
-# MOST COMMON TYPES:
-#   Arrays:      ArrayLike, StateVector, ControlVector
-#   Matrices:    StateMatrix, InputMatrix, GainMatrix
-#   Results:     LQRResult, MPCResult, LinearizationResult
-#   Backend:     Backend ('numpy'|'torch'|'jax')
-
-# CONTROL DESIGN:
-#   Classical:   LQRResult, LQGResult, KalmanFilterResult
-#   Advanced:    MPCResult, MHEResult, H2ControlResult, HInfControlResult
-#   Adaptive:    AdaptiveControlResult, SlidingModeResult
-#   Stochastic:  StochasticMPCResult, RiskSensitiveResult
-
-# STATE ESTIMATION:
-#   Linear:      KalmanFilterResult
-#   Nonlinear:   EKFResult, UKFResult, ParticleFilterResult
-#   Predictive:  ConformalPredictionResult, AdaptiveConformalResult
-
-# SYSTEM IDENTIFICATION:
-#   Matrices:    HankelMatrix, ToeplitzMatrix, TrajectoryMatrix
-#   Methods:     ERAResult, DMDResult, SINDyResult, SubspaceIDResult
-#   Data-Driven: KoopmanResult, NeuralNetworkDynamicsResult
-
-# SAFETY & REACHABILITY:
-#   Sets:        ReachableSet, SafeSet, ValueFunction
-#   Analysis:    HJIReachabilityResult, BackwardReachableResult
-#   Synthesis:   CBFResult, CLFResult, BarrierCertificateResult
-
-# CONTRACTION & FLATNESS:
-#   Contraction: ContractionMetric, CCMResult, FunnelingResult
-#   Flatness:    FlatnessOutput, DifferentialFlatnessResult
-
-# ROBUSTNESS:
-#   Analysis:    RobustStabilityResult, StructuredSingularValueResult
-#   Control:     TubeMPCResult, UncertaintySet
-
-# UTILITIES:
-#   Guards:      is_batched(), get_backend(), is_numpy()
-#   Convert:     ensure_numpy(), ensure_backend(), ArrayConverter
-#   Validate:    check_state_shape(), check_control_shape()
-
-# Import everything:
-#   from src.systems.base.types import StateVector, LQRResult, Backend
-# """
-
-
-# def print_quick_reference():
-#     """Print quick reference guide."""
-#     print(QUICK_REFERENCE)
-
-
-# # ============================================================================
-# # Module Information
-# # ============================================================================
-
-# def get_module_info() -> Dict[str, Any]:
-#     """
-#     Get information about types module.
-
-#     Returns
-#     -------
-#     Dict[str, Any]
-#         Module metadata and statistics
-
-#     Examples
-#     --------
-#     >>> from src.systems.base.types import get_module_info
-#     >>> info = get_module_info()
-#     >>> print(f"Total types: {info['total_types']}")
-#     >>> print(f"Version: {info['version']}")
-#     """
-#     return {
-#         'version': __version__,
-#         'author': __author__,
-#         'total_types': len(__all__),
-#         'categories': list(list_types_by_category().keys()),
-#         'submodules': [
-#             'core', 'linearization', 'trajectories', 'symbolic',
-#             'backends', 'control_classical', 'control_advanced',
-#             'estimation', 'identification', 'reachability',
-#             'robustness', 'utilities',
-#         ],
-#     }
+"""
+Type System for Control Differential Equation Simulation Library
+
+This package provides comprehensive type definitions for:
+
+1. Core Types (vectors, matrices, dimensions)
+   - StateVector, ControlVector, OutputVector
+   - StateMatrix, InputMatrix, OutputMatrix, etc.
+   - SystemDimensions, ArrayLike
+
+2. Backend Support (NumPy, PyTorch, JAX)
+   - Backend type literal
+   - BackendConfig TypedDict
+
+3. Trajectories and Simulation
+   - TimePoints, StateTrajectory, ControlSequence
+   - SimulationResult
+
+4. Linearization
+   - LinearizationResult, DeterministicLinearization
+   - StochasticLinearization
+
+5. Control Design
+   - Classical: LQRResult, LQGResult, KalmanFilterResult
+   - Advanced: MPCResult, MHEResult, H2ControlResult, HInfControlResult
+
+6. State Estimation
+   - EKFResult, UKFResult, ParticleFilterResult
+
+7. System Identification
+   - SystemIDResult, SubspaceIDResult
+   - ERAResult, DMDResult, SINDyResult
+
+8. Symbolic Computation
+   - SymbolicExpression, SymbolicMatrix
+   - SymbolicStateEquations, SymbolicJacobian
+
+9. Reachability and Safety
+   - ReachabilityResult, ROAResult
+   - CBFResult, CLFResult, BarrierCertificateResult
+
+10. Robustness Analysis
+    - RobustStabilityResult, TubeMPCResult
+    - StochasticMPCResult, RiskSensitiveResult
+
+11. Optimization
+    - OptimizationResult, TrajectoryOptimizationResult
+    - ConvexOptimizationResult
+
+12. Machine Learning
+    - TrainingResult, RLTrainingResult
+    - ImitationLearningResult
+
+13. Conformal Prediction
+    - ConformalPredictionResult, AdaptiveConformalResult
+
+14. Contraction Theory
+    - ContractionAnalysisResult, CCMResult
+    - FunnelingResult
+
+15. Differential Flatness
+    - DifferentialFlatnessResult, TrajectoryPlanningResult
+
+16. Model Reduction
+    - BalancedRealizationResult, ReducedOrderModelResult
+
+17. Utilities
+    - Type guards, converters, validators
+    - Protocols for structural subtyping
+
+Usage
+-----
+>>> from src.types import (
+...     StateVector, ControlVector, StateMatrix,
+...     LQRResult, MPCResult, SimulationResult,
+... )
+>>>
+>>> # Type-annotated function
+>>> def simulate(x0: StateVector, u: ControlVector) -> SimulationResult:
+...     ...
+
+Import Patterns
+--------------
+# Import specific types
+from src.types import StateVector, LQRResult
+
+# Import from specific modules
+from src.types.core import StateVector, SystemDimensions
+from src.types.control_classical import LQRResult
+
+# Import entire module
+from src.types import core, estimation
+"""
+
+# =============================================================================
+# Core Types - Fundamental vectors and matrices
+# =============================================================================
+from .core import (
+    ArrayLike,
+    ControlVector,
+    CovarianceMatrix,
+    FeedthroughMatrix,
+    GainMatrix,
+    InputMatrix,
+    OutputMatrix,
+    OutputVector,
+    ParameterVector,
+    StateMatrix,
+    StateVector,
+    SystemDimensions,
+)
+
+# =============================================================================
+# Backend Support - Multi-backend array operations
+# =============================================================================
+from .backends import (
+    Backend,
+    BackendConfig,
+    Device,
+    DiscretizationMethod,
+    IntegrationMethod,
+    NoiseType,
+    OptimizationMethod,
+    SDEIntegrationMethod,
+    SDEType,
+)
+
+# =============================================================================
+# Trajectories - Time series and simulation results
+# =============================================================================
+from .trajectories import (
+    ControlSequence,
+    IntegrationResult,
+    NoiseSequence,
+    OutputSequence,
+    SimulationResult,
+    StateTrajectory,
+    TimePoints,
+    TimeSpan,
+    TrajectorySegment,
+    TrajectoryStatistics,
+)
+
+# =============================================================================
+# Linearization - Jacobian computation and linearization results
+# =============================================================================
+from .linearization import (
+    ControlJacobian,
+    ContinuousLinearization,
+    ContinuousStochasticLinearization,
+    DeterministicLinearization,
+    DiffusionJacobian,
+    DiscreteLinearization,
+    DiscreteStochasticLinearization,
+    FullLinearization,
+    FullStochasticLinearization,
+    LinearizationCacheKey,
+    LinearizationResult,
+    ObservationLinearization,
+    OutputJacobian,
+    StateJacobian,
+    StochasticLinearization,
+)
+
+# =============================================================================
+# Classical Control - LQR, LQG, Kalman, pole placement
+# =============================================================================
+from .control_classical import (
+    ControllabilityInfo,
+    KalmanFilterResult,
+    LQGResult,
+    LQRResult,
+    LuenbergerObserverResult,
+    ObservabilityInfo,
+    PolePlacementResult,
+    StabilityInfo,
+)
+
+# =============================================================================
+# Advanced Control - MPC, MHE, H2, H-infinity
+# =============================================================================
+from .control_advanced import (
+    AdaptiveControlResult,
+    H2ControlResult,
+    HInfControlResult,
+    LMIResult,
+    MHEResult,
+    MPCResult,
+    SlidingModeResult,
+)
+
+# =============================================================================
+# State Estimation - EKF, UKF, Particle filters
+# =============================================================================
+from .estimation import (
+    EKFResult,
+    ParticleFilterResult,
+    UKFResult,
+)
+
+# =============================================================================
+# System Identification - Data-driven model estimation
+# =============================================================================
+from .identification import (
+    DMDResult,
+    ERAResult,
+    HankelMatrix,
+    KoopmanResult,
+    MarkovParameters,
+    SINDyResult,
+    SubspaceIDResult,
+    SystemIDResult,
+    ToeplitzMatrix,
+    TrajectoryMatrix,
+)
+
+# =============================================================================
+# Symbolic Computation - Symbolic expressions and systems
+# =============================================================================
+from .symbolic import (
+    ParameterDict,
+    SubstitutionDict,
+    SymbolicDiffusionMatrix,
+    SymbolicExpression,
+    SymbolicGradient,
+    SymbolicHessian,
+    SymbolicJacobian,
+    SymbolicMatrix,
+    SymbolicOutputEquations,
+    SymbolicStateEquations,
+    SymbolicSymbol,
+    SymbolDict,
+)
+
+# =============================================================================
+# Reachability and Safety - Set-based analysis and verification
+# =============================================================================
+from .reachability import (
+    BarrierCertificateResult,
+    CBFResult,
+    CLFResult,
+    ReachabilityResult,
+    ReachableSet,
+    ROAResult,
+    SafeSet,
+    VerificationResult,
+)
+
+# =============================================================================
+# Robustness - Uncertainty handling and robust control
+# =============================================================================
+from .robustness import (
+    RiskSensitiveResult,
+    RobustStabilityResult,
+    StochasticMPCResult,
+    StructuredSingularValueResult,
+    TubeDefinition,
+    TubeMPCResult,
+    UncertaintySet,
+)
+
+# =============================================================================
+# Optimization - General and trajectory optimization
+# =============================================================================
+from .optimization import (
+    ConstrainedOptimizationResult,
+    ConvexOptimizationResult,
+    OptimizationBounds,
+    OptimizationResult,
+    ParameterOptimizationResult,
+    TrajectoryOptimizationResult,
+)
+
+# =============================================================================
+# Learning - Neural networks and reinforcement learning
+# =============================================================================
+from .learning import (
+    Dataset,
+    ImitationLearningResult,
+    LearningRate,
+    LossValue,
+    NeuralDynamicsResult,
+    NeuralNetworkConfig,
+    OnlineAdaptationResult,
+    PolicyEvaluationResult,
+    RLTrainingResult,
+    TrainingBatch,
+    TrainingResult,
+)
+
+# =============================================================================
+# Conformal Prediction - Distribution-free uncertainty quantification
+# =============================================================================
+from .conformal import (
+    AdaptiveConformalResult,
+    ConformalCalibrationResult,
+    ConformalPredictionResult,
+    ConformalPredictionSet,
+    NonconformityScore,
+)
+
+# =============================================================================
+# Contraction Theory - Contraction analysis and CCM
+# =============================================================================
+from .contraction import (
+    CCMResult,
+    ContractionAnalysisResult,
+    ContractionMetric,
+    ContractionRate,
+    FunnelingResult,
+    IncrementalStabilityResult,
+)
+
+# =============================================================================
+# Differential Flatness - Flatness analysis and trajectory planning
+# =============================================================================
+from .flatness import (
+    DifferentialFlatnessResult,
+    FlatnessOutput,
+    TrajectoryPlanningResult,
+)
+
+# =============================================================================
+# Model Reduction - Balanced realization and order reduction
+# =============================================================================
+from .model_reduction import (
+    BalancedRealizationResult,
+    ReducedOrderModelResult,
+)
+
+# =============================================================================
+# Utilities - Type guards, converters, protocols
+# =============================================================================
+from .utilities import (
+    ArrayConverter,
+    CacheKey,
+    CacheStatistics,
+    LinearizableProtocol,
+    Metadata,
+    PerformanceMetrics,
+    SimulatableProtocol,
+    StochasticProtocol,
+    ValidationResult,
+    check_control_shape,
+    check_state_shape,
+    ensure_backend,
+    ensure_numpy,
+    extract_dimensions,
+    get_array_shape,
+    get_backend,
+    get_batch_size,
+    is_batched,
+    is_jax,
+    is_numpy,
+    is_torch,
+)
+
+# =============================================================================
+# Public API - All exported symbols
+# =============================================================================
+__all__ = [
+    # -------------------------------------------------------------------------
+    # Core Types
+    # -------------------------------------------------------------------------
+    "ArrayLike",
+    "StateVector",
+    "ControlVector",
+    "OutputVector",
+    "ParameterVector",
+    "StateMatrix",
+    "InputMatrix",
+    "OutputMatrix",
+    "FeedthroughMatrix",
+    "GainMatrix",
+    "CovarianceMatrix",
+    "SystemDimensions",
+    # -------------------------------------------------------------------------
+    # Backend Support
+    # -------------------------------------------------------------------------
+    "Backend",
+    "Device",
+    "BackendConfig",
+    "IntegrationMethod",
+    "DiscretizationMethod",
+    "SDEIntegrationMethod",
+    "OptimizationMethod",
+    "NoiseType",
+    "SDEType",
+    # -------------------------------------------------------------------------
+    # Trajectories
+    # -------------------------------------------------------------------------
+    "TimePoints",
+    "TimeSpan",
+    "StateTrajectory",
+    "ControlSequence",
+    "OutputSequence",
+    "NoiseSequence",
+    "IntegrationResult",
+    "SimulationResult",
+    "TrajectoryStatistics",
+    "TrajectorySegment",
+    # -------------------------------------------------------------------------
+    # Linearization
+    # -------------------------------------------------------------------------
+    "DeterministicLinearization",
+    "StochasticLinearization",
+    "LinearizationResult",
+    "ObservationLinearization",
+    "ContinuousLinearization",
+    "DiscreteLinearization",
+    "ContinuousStochasticLinearization",
+    "DiscreteStochasticLinearization",
+    "FullLinearization",
+    "FullStochasticLinearization",
+    "StateJacobian",
+    "ControlJacobian",
+    "OutputJacobian",
+    "DiffusionJacobian",
+    "LinearizationCacheKey",
+    # -------------------------------------------------------------------------
+    # Classical Control
+    # -------------------------------------------------------------------------
+    "StabilityInfo",
+    "ControllabilityInfo",
+    "ObservabilityInfo",
+    "LQRResult",
+    "KalmanFilterResult",
+    "LQGResult",
+    "PolePlacementResult",
+    "LuenbergerObserverResult",
+    # -------------------------------------------------------------------------
+    # Advanced Control
+    # -------------------------------------------------------------------------
+    "MPCResult",
+    "MHEResult",
+    "H2ControlResult",
+    "HInfControlResult",
+    "LMIResult",
+    "AdaptiveControlResult",
+    "SlidingModeResult",
+    # -------------------------------------------------------------------------
+    # State Estimation
+    # -------------------------------------------------------------------------
+    "EKFResult",
+    "UKFResult",
+    "ParticleFilterResult",
+    # -------------------------------------------------------------------------
+    # System Identification
+    # -------------------------------------------------------------------------
+    "HankelMatrix",
+    "ToeplitzMatrix",
+    "TrajectoryMatrix",
+    "MarkovParameters",
+    "SystemIDResult",
+    "SubspaceIDResult",
+    "ERAResult",
+    "DMDResult",
+    "SINDyResult",
+    "KoopmanResult",
+    # -------------------------------------------------------------------------
+    # Symbolic Computation
+    # -------------------------------------------------------------------------
+    "SymbolicExpression",
+    "SymbolicMatrix",
+    "SymbolicSymbol",
+    "SymbolDict",
+    "SymbolicStateEquations",
+    "SymbolicOutputEquations",
+    "SymbolicDiffusionMatrix",
+    "ParameterDict",
+    "SubstitutionDict",
+    "SymbolicJacobian",
+    "SymbolicGradient",
+    "SymbolicHessian",
+    # -------------------------------------------------------------------------
+    # Reachability and Safety
+    # -------------------------------------------------------------------------
+    "ReachableSet",
+    "SafeSet",
+    "ReachabilityResult",
+    "ROAResult",
+    "VerificationResult",
+    "BarrierCertificateResult",
+    "CBFResult",
+    "CLFResult",
+    # -------------------------------------------------------------------------
+    # Robustness
+    # -------------------------------------------------------------------------
+    "UncertaintySet",
+    "RobustStabilityResult",
+    "StructuredSingularValueResult",
+    "TubeDefinition",
+    "TubeMPCResult",
+    "StochasticMPCResult",
+    "RiskSensitiveResult",
+    # -------------------------------------------------------------------------
+    # Optimization
+    # -------------------------------------------------------------------------
+    "OptimizationBounds",
+    "OptimizationResult",
+    "ConstrainedOptimizationResult",
+    "TrajectoryOptimizationResult",
+    "ConvexOptimizationResult",
+    "ParameterOptimizationResult",
+    # -------------------------------------------------------------------------
+    # Learning
+    # -------------------------------------------------------------------------
+    "Dataset",
+    "TrainingBatch",
+    "LearningRate",
+    "LossValue",
+    "NeuralNetworkConfig",
+    "TrainingResult",
+    "NeuralDynamicsResult",
+    "RLTrainingResult",
+    "PolicyEvaluationResult",
+    "ImitationLearningResult",
+    "OnlineAdaptationResult",
+    # -------------------------------------------------------------------------
+    # Conformal Prediction
+    # -------------------------------------------------------------------------
+    "ConformalPredictionSet",
+    "NonconformityScore",
+    "ConformalCalibrationResult",
+    "ConformalPredictionResult",
+    "AdaptiveConformalResult",
+    # -------------------------------------------------------------------------
+    # Contraction Theory
+    # -------------------------------------------------------------------------
+    "ContractionMetric",
+    "ContractionRate",
+    "ContractionAnalysisResult",
+    "CCMResult",
+    "FunnelingResult",
+    "IncrementalStabilityResult",
+    # -------------------------------------------------------------------------
+    # Differential Flatness
+    # -------------------------------------------------------------------------
+    "FlatnessOutput",
+    "DifferentialFlatnessResult",
+    "TrajectoryPlanningResult",
+    # -------------------------------------------------------------------------
+    # Model Reduction
+    # -------------------------------------------------------------------------
+    "BalancedRealizationResult",
+    "ReducedOrderModelResult",
+    # -------------------------------------------------------------------------
+    # Utilities - Protocols
+    # -------------------------------------------------------------------------
+    "LinearizableProtocol",
+    "SimulatableProtocol",
+    "StochasticProtocol",
+    # -------------------------------------------------------------------------
+    # Utilities - Type Guards
+    # -------------------------------------------------------------------------
+    "is_batched",
+    "get_batch_size",
+    "is_numpy",
+    "is_torch",
+    "is_jax",
+    "get_backend",
+    # -------------------------------------------------------------------------
+    # Utilities - Converters
+    # -------------------------------------------------------------------------
+    "ensure_numpy",
+    "ensure_backend",
+    "ArrayConverter",
+    # -------------------------------------------------------------------------
+    # Utilities - Validators
+    # -------------------------------------------------------------------------
+    "check_state_shape",
+    "check_control_shape",
+    "get_array_shape",
+    "extract_dimensions",
+    # -------------------------------------------------------------------------
+    # Utilities - Cache and Metadata
+    # -------------------------------------------------------------------------
+    "CacheKey",
+    "CacheStatistics",
+    "Metadata",
+    # -------------------------------------------------------------------------
+    # Utilities - Validation and Performance
+    # -------------------------------------------------------------------------
+    "ValidationResult",
+    "PerformanceMetrics",
+]

@@ -28,8 +28,8 @@ from src.systems.base.utils.stochastic.noise_analysis import NoiseType
 from src.systems.base.utils.stochastic.sde_validator import (
     SDEValidator,
     ValidationError,
-    ValidationResult,
 )
+from src.types.utilities import ValidationResult, SymbolicValidationResult
 
 # ============================================================================
 # Fixtures - Test Systems
@@ -232,7 +232,7 @@ class TestValidationResult:
 
     def test_valid_result_creation(self):
         """Test creating valid ValidationResult."""
-        result = ValidationResult(is_valid=True, errors=[], warnings=[], info={"nx": 2, "nw": 1})
+        result = SymbolicValidationResult(is_valid=True, errors=[], warnings=[], info={"nx": 2, "nw": 1})
 
         assert result.is_valid
         assert len(result.errors) == 0
@@ -241,7 +241,7 @@ class TestValidationResult:
 
     def test_invalid_result_creation(self):
         """Test creating invalid ValidationResult."""
-        result = ValidationResult(
+        result = SymbolicValidationResult(
             is_valid=False,
             errors=["Dimension mismatch"],
             warnings=["Zero diffusion detected"],
@@ -254,7 +254,7 @@ class TestValidationResult:
 
     def test_has_errors(self):
         """Test checking for errors."""
-        result = ValidationResult(
+        result = SymbolicValidationResult(
             is_valid=False, errors=["Error 1", "Error 2"], warnings=[], info={}
         )
 
@@ -263,7 +263,7 @@ class TestValidationResult:
 
     def test_has_warnings(self):
         """Test checking for warnings."""
-        result = ValidationResult(is_valid=True, errors=[], warnings=["Warning 1"], info={})
+        result = SymbolicValidationResult(is_valid=True, errors=[], warnings=["Warning 1"], info={})
 
         assert result.is_valid  # Valid despite warning
         assert len(result.warnings) == 1

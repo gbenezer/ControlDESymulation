@@ -35,6 +35,12 @@ import time
 from typing import TYPE_CHECKING, Optional
 
 import numpy as np
+from typing_extensions import TypedDict
+
+# Import from centralized type system
+from src.types.backends import Backend
+from src.types.core import ArrayLike, ControlVector, StateVector
+from src.types.utilities import get_batch_size, is_batched, ExecutionStats
 
 if TYPE_CHECKING:
     import jax.numpy as jnp
@@ -43,11 +49,6 @@ if TYPE_CHECKING:
     from src.systems.base.symbolic_dynamical_system import SymbolicDynamicalSystem
     from src.systems.base.utils.backend_manager import BackendManager
     from src.systems.base.utils.code_generator import CodeGenerator
-
-# Type alias
-from typing import Union
-
-ArrayLike = Union[np.ndarray, "torch.Tensor", "jnp.ndarray"]
 
 
 class DynamicsEvaluator:
@@ -58,16 +59,26 @@ class DynamicsEvaluator:
     dx/dt = f(x) for autonomous systems. Supports NumPy, PyTorch, and JAX
     backends with proper shape handling, batching, and performance tracking.
 
+    Type System Integration:
+        - StateVector: Input state and output derivative
+        - ControlVector: Input control (Optional for autonomous)
+        - Backend: Type-safe backend selection
+        - ExecutionStats: Structured performance metrics
+
+    Batching:
+        Supports both single and batched evaluation using centralized
+        utilities from the type framework (is_batched, get_batch_size).
+
     Example:
         >>> # Controlled system
         >>> evaluator = DynamicsEvaluator(system, code_gen, backend_mgr)
-        >>> dx = evaluator.evaluate(x, u, backend='numpy')
+        >>> dx: StateVector = evaluator.evaluate(x, u, backend='numpy')
         >>>
         >>> # Autonomous system (u=None)
-        >>> dx = evaluator.evaluate(x, backend='numpy')
+        >>> dx: StateVector = evaluator.evaluate(x, backend='numpy')
         >>>
         >>> # Get performance stats
-        >>> stats = evaluator.get_stats()
+        >>> stats: ExecutionStats = evaluator.get_stats()
         >>> print(f"Average time: {stats['avg_time']:.6f}s")
     """
 
@@ -100,24 +111,27 @@ class DynamicsEvaluator:
     # ========================================================================
 
     def evaluate(
-        self, x: ArrayLike, u: Optional[ArrayLike] = None, backend: Optional[str] = None
-    ) -> ArrayLike:
+        self,
+        x: StateVector,
+        u: Optional[ControlVector] = None,
+        backend: Optional[Backend] = None,
+    ) -> StateVector:
         """
         Evaluate forward dynamics: dx/dt = f(x, u) or dx/dt = f(x).
 
         Args:
-            x: State (array/tensor)
-            u: Control (array/tensor), None for autonomous systems
+            x: State vector
+            u: Control vector (None for autonomous systems)
             backend: Backend selection:
                 - None: Auto-detect from input type (default)
                 - 'numpy', 'torch', 'jax': Force specific backend
                 - 'default': Use system's default backend
 
         Returns:
-            State derivative (type matches backend)
+            State derivative vector (type matches backend)
 
         Raises:
-            ValueError: If u is None for non-autonomous system or provided for autonomous
+            ValueError: If u is None for non-autonomous system
 
         Example:
             >>> # Controlled system - auto-detect backend
@@ -189,7 +203,7 @@ class DynamicsEvaluator:
         """
         NumPy backend implementation.
 
-        Handles both single and batched evaluation.
+        Uses centralized batching utilities for consistent shape handling.
         Supports both controlled (nu > 0) and autonomous (nu = 0) systems.
 
         Raises:
@@ -204,9 +218,9 @@ class DynamicsEvaluator:
         if x.ndim >= 1 and x.shape[-1] != self.system.nx:
             raise ValueError(f"Expected state dimension {self.system.nx}, got {x.shape[-1]}")
 
-        # Check for empty batch BEFORE processing
-        if x.ndim > 1:
-            batch_size = x.shape[0]
+        # Check for empty batch using batching utilities
+        if is_batched(x):
+            batch_size = get_batch_size(x)
             if batch_size == 0:
                 u_shape_str = f"{u.shape}" if u is not None and u.size > 0 else "None"
                 raise ValueError(
@@ -228,19 +242,21 @@ class DynamicsEvaluator:
             if u.ndim >= 1 and u.shape[-1] != self.system.nu:
                 raise ValueError(f"Expected control dimension {self.system.nu}, got {u.shape[-1]}")
 
-            # Check for mismatched batch sizes
-            if x.ndim > 1 and u.ndim > 1:
-                if x.shape[0] != u.shape[0]:
+            # Check for mismatched batch sizes using batching utilities
+            if is_batched(x) and is_batched(u):
+                batch_size_x = get_batch_size(x)
+                batch_size_u = get_batch_size(u)
+                if batch_size_x != batch_size_u:
                     raise ValueError(
-                        f"Batch size mismatch: x has {x.shape[0]} samples, "
-                        f"u has {u.shape[0]} samples"
+                        f"Batch size mismatch: x has {batch_size_x} samples, "
+                        f"u has {batch_size_u} samples"
                     )
 
         # Generate function (uses cache if available)
         f_numpy = self.code_gen.generate_dynamics("numpy")
 
-        # Handle batched vs single evaluation
-        if x.ndim == 1:
+        # Handle batched vs single evaluation using batching utilities
+        if not is_batched(x):
             # Single evaluation
             x_list = [x[i] for i in range(self.system.nx)]
 
@@ -254,8 +270,9 @@ class DynamicsEvaluator:
             result = np.array(result).flatten()
         else:
             # Batched evaluation
+            batch_size = get_batch_size(x)
             results = []
-            for i in range(x.shape[0]):
+            for i in range(batch_size):
                 x_list = [x[i, j] for j in range(self.system.nx)]
 
                 if self.system.nu > 0:
@@ -306,9 +323,9 @@ class DynamicsEvaluator:
         if len(x.shape) >= 1 and x.shape[-1] != self.system.nx:
             raise ValueError(f"Expected state dimension {self.system.nx}, got {x.shape[-1]}")
 
-        # Check for empty batch BEFORE processing
-        if len(x.shape) > 1:
-            batch_size = x.shape[0]
+        # Check for empty batch using batching utilities
+        if is_batched(x):
+            batch_size = get_batch_size(x)
             if batch_size == 0:
                 u_shape_str = f"{tuple(u.shape)}" if u is not None and u.numel() > 0 else "None"
                 raise ValueError(
@@ -330,19 +347,21 @@ class DynamicsEvaluator:
             if len(u.shape) >= 1 and u.shape[-1] != self.system.nu:
                 raise ValueError(f"Expected control dimension {self.system.nu}, got {u.shape[-1]}")
 
-            # Check for mismatched batch sizes
-            if len(x.shape) > 1 and len(u.shape) > 1:
-                if x.shape[0] != u.shape[0]:
+            # Check for mismatched batch sizes using batching utilities
+            if is_batched(x) and is_batched(u):
+                batch_size_x = get_batch_size(x)
+                batch_size_u = get_batch_size(u)
+                if batch_size_x != batch_size_u:
                     raise ValueError(
-                        f"Batch size mismatch: x has {x.shape[0]} samples, "
-                        f"u has {u.shape[0]} samples"
+                        f"Batch size mismatch: x has {batch_size_x} samples, "
+                        f"u has {batch_size_u} samples"
                     )
 
         # Generate function (uses cache if available)
         f_torch = self.code_gen.generate_dynamics("torch")
 
-        # Handle batched vs single evaluation
-        if len(x.shape) == 1:
+        # Handle batched vs single evaluation using batching utilities
+        if not is_batched(x):
             x = x.unsqueeze(0)
             if self.system.nu > 0:
                 u = u.unsqueeze(0)
@@ -413,9 +432,9 @@ class DynamicsEvaluator:
         if x.ndim >= 1 and x.shape[-1] != self.system.nx:
             raise ValueError(f"Expected state dimension {self.system.nx}, got {x.shape[-1]}")
 
-        # Check for empty batch BEFORE processing
-        if x.ndim > 1:
-            batch_size = x.shape[0]
+        # Check for empty batch using batching utilities
+        if is_batched(x):
+            batch_size = get_batch_size(x)
             if batch_size == 0:
                 u_shape_str = f"{u.shape}" if u is not None and u.size > 0 else "None"
                 raise ValueError(
@@ -437,19 +456,21 @@ class DynamicsEvaluator:
             if u.ndim >= 1 and u.shape[-1] != self.system.nu:
                 raise ValueError(f"Expected control dimension {self.system.nu}, got {u.shape[-1]}")
 
-            # Check for mismatched batch sizes
-            if x.ndim > 1 and u.ndim > 1:
-                if x.shape[0] != u.shape[0]:
+            # Check for mismatched batch sizes using batching utilities
+            if is_batched(x) and is_batched(u):
+                batch_size_x = get_batch_size(x)
+                batch_size_u = get_batch_size(u)
+                if batch_size_x != batch_size_u:
                     raise ValueError(
-                        f"Batch size mismatch: x has {x.shape[0]} samples, "
-                        f"u has {u.shape[0]} samples"
+                        f"Batch size mismatch: x has {batch_size_x} samples, "
+                        f"u has {batch_size_u} samples"
                     )
 
         # Generate function (uses cache if available)
         f_jax = self.code_gen.generate_dynamics("jax", jit=True)
 
-        # Handle batched vs single evaluation
-        if x.ndim == 1:
+        # Handle batched vs single evaluation using batching utilities
+        if not is_batched(x):
             x = jnp.expand_dims(x, 0)
             if self.system.nu > 0:
                 u = jnp.expand_dims(u, 0)
@@ -458,7 +479,8 @@ class DynamicsEvaluator:
             squeeze_output = False
 
         # For batched computation, use vmap
-        if x.shape[0] > 1:
+        batch_size = get_batch_size(x) if is_batched(x) else 1
+        if batch_size > 1:
             if self.system.nu > 0:
 
                 @jax.vmap
@@ -515,15 +537,16 @@ class DynamicsEvaluator:
     # Performance Tracking
     # ========================================================================
 
-    def get_stats(self) -> dict:
+    def get_stats(self) -> ExecutionStats:
         """
         Get performance statistics.
 
         Returns:
-            Dict with call count, total time, and average time
+            ExecutionStats
+                Structured performance metrics with call count and timing
 
         Example:
-            >>> stats = evaluator.get_stats()
+            >>> stats: ExecutionStats = evaluator.get_stats()
             >>> print(f"Calls: {stats['calls']}")
             >>> print(f"Avg time: {stats['avg_time']:.6f}s")
         """

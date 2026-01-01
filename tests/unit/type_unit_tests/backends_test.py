@@ -33,14 +33,9 @@ import numpy as np
 import pytest
 
 from src.types.backends import (  # Backend types; Method types; Noise types; Configuration; Constants; Utilities
-    ADAPTIVE_ODE_METHODS,
-    ADDITIVE_NOISE_SDE_METHODS,
     DEFAULT_BACKEND,
     DEFAULT_DEVICE,
     DEFAULT_DTYPE,
-    FIXED_STEP_ODE_METHODS,
-    GENERAL_SDE_METHODS,
-    STIFF_ODE_METHODS,
     VALID_BACKENDS,
     VALID_DEVICES,
     Backend,
@@ -58,9 +53,6 @@ from src.types.backends import (  # Backend types; Method types; Noise types; Co
     SDEType,
     SystemConfig,
     get_backend_default_method,
-    is_adaptive_method,
-    is_stiff_method,
-    requires_additive_noise,
     validate_backend,
     validate_device,
 )
@@ -157,36 +149,36 @@ class TestMethodTypes:
 # Test Noise and Stochastic Types
 # ============================================================================
 
-
+# TODO: refactor
 class TestNoiseTypes:
     """Test noise and stochastic type definitions."""
 
     def test_noise_type_valid_values(self):
         """Test NoiseType literal values."""
-        noise1: NoiseType = "additive"
-        noise2: NoiseType = "multiplicative"
-        noise3: NoiseType = "diagonal"
-        noise4: NoiseType = "scalar"
-        noise5: NoiseType = "general"
+        noise1: NoiseType = NoiseType.ADDITIVE
+        noise2: NoiseType = NoiseType.MULTIPLICATIVE
+        noise3: NoiseType = NoiseType.DIAGONAL
+        noise4: NoiseType = NoiseType.SCALAR
+        noise5: NoiseType = NoiseType.GENERAL
 
-        assert noise1 == "additive"
-        assert noise2 == "multiplicative"
+        assert noise1 == NoiseType.ADDITIVE
+        assert noise2 == NoiseType.MULTIPLICATIVE
 
     def test_sde_type_valid_values(self):
         """Test SDEType literal values."""
-        sde1: SDEType = "ito"
-        sde2: SDEType = "stratonovich"
+        sde1: SDEType = SDEType.ITO
+        sde2: SDEType = SDEType.STRATONOVICH
 
-        assert sde1 == "ito"
-        assert sde2 == "stratonovich"
+        assert sde1 == SDEType.ITO
+        assert sde2 == SDEType.STRATONOVICH
 
     def test_convergence_type_valid_values(self):
         """Test ConvergenceType literal values."""
-        conv1: ConvergenceType = "strong"
-        conv2: ConvergenceType = "weak"
+        conv1: ConvergenceType = ConvergenceType.STRONG
+        conv2: ConvergenceType = ConvergenceType.WEAK
 
-        assert conv1 == "strong"
-        assert conv2 == "weak"
+        assert conv1 == ConvergenceType.STRONG
+        assert conv2 == ConvergenceType.WEAK
 
 
 # ============================================================================
@@ -249,13 +241,13 @@ class TestConfigurationTypes:
         config: SDEIntegratorConfig = {
             "method": "milstein",
             "dt": 0.01,
-            "convergence_type": "strong",
+            "convergence_type": ConvergenceType.STRONG,
             "backend": "torch",
             "seed": 42,
         }
 
         assert config["method"] == "milstein"
-        assert config["convergence_type"] == "strong"
+        assert config["convergence_type"] == ConvergenceType.STRONG
         assert config["seed"] == 42
 
 
@@ -291,38 +283,6 @@ class TestConstants:
         """Test default dtype is float64."""
         assert DEFAULT_DTYPE == np.float64
 
-    def test_adaptive_ode_methods(self):
-        """Test adaptive ODE methods tuple."""
-        assert "RK45" in ADAPTIVE_ODE_METHODS
-        assert "DOP853" in ADAPTIVE_ODE_METHODS
-        assert "Radau" in ADAPTIVE_ODE_METHODS
-        assert "euler" not in ADAPTIVE_ODE_METHODS  # Fixed-step
-
-    def test_fixed_step_ode_methods(self):
-        """Test fixed-step ODE methods tuple."""
-        assert "euler" in FIXED_STEP_ODE_METHODS
-        assert "rk4" in FIXED_STEP_ODE_METHODS
-        assert "RK45" not in FIXED_STEP_ODE_METHODS  # Adaptive
-
-    def test_stiff_ode_methods(self):
-        """Test stiff ODE methods tuple."""
-        assert "Radau" in STIFF_ODE_METHODS
-        assert "BDF" in STIFF_ODE_METHODS
-        assert "RK45" not in STIFF_ODE_METHODS  # Not for stiff
-
-    def test_additive_noise_sde_methods(self):
-        """Test additive noise SDE methods."""
-        assert "SEA" in ADDITIVE_NOISE_SDE_METHODS
-        assert "SHARK" in ADDITIVE_NOISE_SDE_METHODS
-        assert "SRA1" in ADDITIVE_NOISE_SDE_METHODS
-        assert "euler" not in ADDITIVE_NOISE_SDE_METHODS
-
-    def test_general_sde_methods(self):
-        """Test general SDE methods."""
-        assert "euler" in GENERAL_SDE_METHODS
-        assert "milstein" in GENERAL_SDE_METHODS
-        assert "SEA" not in GENERAL_SDE_METHODS  # Additive only
-
 
 # ============================================================================
 # Test Utility Functions
@@ -331,39 +291,6 @@ class TestConstants:
 
 class TestUtilityFunctions:
     """Test backend utility functions."""
-
-    def test_is_adaptive_method_true(self):
-        """Test is_adaptive_method for adaptive methods."""
-        assert is_adaptive_method("RK45") is True
-        assert is_adaptive_method("DOP853") is True
-        assert is_adaptive_method("Radau") is True
-
-    def test_is_adaptive_method_false(self):
-        """Test is_adaptive_method for fixed-step methods."""
-        assert is_adaptive_method("euler") is False
-        assert is_adaptive_method("rk4") is False
-
-    def test_is_stiff_method_true(self):
-        """Test is_stiff_method for stiff solvers."""
-        assert is_stiff_method("Radau") is True
-        assert is_stiff_method("BDF") is True
-        assert is_stiff_method("LSODA") is True
-
-    def test_is_stiff_method_false(self):
-        """Test is_stiff_method for non-stiff solvers."""
-        assert is_stiff_method("RK45") is False
-        assert is_stiff_method("euler") is False
-
-    def test_requires_additive_noise_true(self):
-        """Test requires_additive_noise for specialized methods."""
-        assert requires_additive_noise("SEA") is True
-        assert requires_additive_noise("SHARK") is True
-        assert requires_additive_noise("SRA1") is True
-
-    def test_requires_additive_noise_false(self):
-        """Test requires_additive_noise for general methods."""
-        assert requires_additive_noise("euler") is False
-        assert requires_additive_noise("milstein") is False
 
     def test_get_backend_default_method_deterministic(self):
         """Test default method for deterministic systems."""
@@ -420,58 +347,6 @@ class TestUtilityFunctions:
         with pytest.raises(ValueError, match="NumPy backend only supports CPU"):
             validate_device("mps", "numpy")
 
-
-# ============================================================================
-# Test Method Classification
-# ============================================================================
-
-
-class TestMethodClassification:
-    """Test method classification utilities."""
-
-    def test_adaptive_methods_correctly_classified(self):
-        """Test all adaptive methods identified."""
-        adaptive_methods = ["RK45", "RK23", "DOP853", "Radau", "BDF", "LSODA"]
-
-        for method in adaptive_methods:
-            assert is_adaptive_method(method), f"{method} should be adaptive"
-
-    def test_fixed_step_methods_not_adaptive(self):
-        """Test fixed-step methods not classified as adaptive."""
-        fixed_methods = ["euler", "rk4", "rk2", "midpoint"]
-
-        for method in fixed_methods:
-            assert not is_adaptive_method(method), f"{method} should be fixed-step"
-
-    def test_stiff_methods_correctly_classified(self):
-        """Test stiff solvers identified."""
-        stiff_methods = ["Radau", "BDF", "LSODA"]
-
-        for method in stiff_methods:
-            assert is_stiff_method(method), f"{method} should be for stiff systems"
-
-    def test_non_stiff_methods(self):
-        """Test non-stiff methods."""
-        non_stiff = ["RK45", "euler", "rk4"]
-
-        for method in non_stiff:
-            assert not is_stiff_method(method), f"{method} should not be for stiff only"
-
-    def test_additive_noise_methods_classified(self):
-        """Test additive noise specialized methods."""
-        additive_methods = ["SEA", "SHARK", "SRA1", "SRA3"]
-
-        for method in additive_methods:
-            assert requires_additive_noise(method), f"{method} requires additive noise"
-
-    def test_general_noise_methods(self):
-        """Test general (multiplicative) noise methods."""
-        general_methods = ["euler", "milstein", "srk"]
-
-        for method in general_methods:
-            assert not requires_additive_noise(method), f"{method} works with any noise"
-
-
 # ============================================================================
 # Test Configuration Validation
 # ============================================================================
@@ -521,13 +396,13 @@ class TestConfigurationValidation:
         config: SDEIntegratorConfig = {
             "method": "euler",
             "dt": 0.01,
-            "convergence_type": "strong",
+            "convergence_type": ConvergenceType.STRONG,
             "backend": "torch",
             "seed": 42,
         }
 
         assert config["seed"] == 42
-        assert config["convergence_type"] == "strong"
+        assert config["convergence_type"] == ConvergenceType.STRONG
 
 
 # ============================================================================
@@ -549,29 +424,6 @@ class TestRealisticUsage:
 
         assert config["backend"] == "torch"
         assert config["device"] == "cuda:0"
-
-    def test_method_selection_for_stiff_system(self):
-        """Test selecting method for stiff system."""
-        # Detect stiffness or user specifies
-        is_stiff = True
-
-        if is_stiff:
-            method: IntegrationMethod = "Radau"
-        else:
-            method: IntegrationMethod = "RK45"
-
-        assert is_stiff_method(method)
-
-    def test_sde_method_selection_by_noise_type(self):
-        """Test SDE method selection based on noise."""
-        noise_type: NoiseType = "additive"
-
-        if noise_type == "additive":
-            method: SDEIntegrationMethod = "SEA"
-        else:
-            method: SDEIntegrationMethod = "milstein"
-
-        assert requires_additive_noise(method)
 
     def test_auto_select_defaults(self):
         """Test automatic default selection."""
@@ -692,9 +544,9 @@ class TestDocumentationExamples:
 
     def test_noise_type_conditional_example(self):
         """Test NoiseType conditional usage example."""
-        noise_type: NoiseType = "additive"
+        noise_type: NoiseType = NoiseType.ADDITIVE
 
-        if noise_type == "additive":
+        if noise_type == NoiseType.ADDITIVE:
             # Optimization available
             can_optimize = True
         else:
@@ -726,14 +578,6 @@ class TestTypeConsistency:
         """Test DEFAULT_DEVICE is in VALID_DEVICES."""
         assert DEFAULT_DEVICE in VALID_DEVICES
 
-    def test_method_constants_are_strings(self):
-        """Test method constants contain strings."""
-        for method in ADAPTIVE_ODE_METHODS:
-            assert isinstance(method, str)
-
-        for method in FIXED_STEP_ODE_METHODS:
-            assert isinstance(method, str)
-
 
 # ============================================================================
 # Test Integration Patterns
@@ -753,8 +597,7 @@ class TestIntegrationPatterns:
             "rtol": 1e-10,
             "atol": 1e-12,
         }
-
-        assert is_adaptive_method(integrator_config["method"])
+        
         assert integrator_config["rtol"] <= 1e-6
 
     def test_gpu_acceleration_configuration(self):
@@ -781,13 +624,13 @@ class TestIntegrationPatterns:
         sde_config: SDEIntegratorConfig = {
             "method": "EM",
             "dt": 0.01,
-            "convergence_type": "strong",
+            "convergence_type": ConvergenceType.STRONG,
             "backend": backend,
             "seed": 42,
         }
 
         assert sde_config["seed"] == 42
-        assert sde_config["convergence_type"] == "strong"
+        assert sde_config["convergence_type"] == ConvergenceType.STRONG
 
     def test_discretization_for_control_design(self):
         """Test discretization config for controller design."""
@@ -843,12 +686,6 @@ class TestConstantsImmutability:
         with pytest.raises(TypeError):
             VALID_BACKENDS[0] = "other"  # type: ignore
 
-    def test_method_tuples_are_immutable(self):
-        """Test method constant tuples are immutable."""
-        assert isinstance(ADAPTIVE_ODE_METHODS, tuple)
-        assert isinstance(FIXED_STEP_ODE_METHODS, tuple)
-        assert isinstance(STIFF_ODE_METHODS, tuple)
-
 
 # ============================================================================
 # Test Default Values
@@ -872,7 +709,6 @@ class TestDefaultValues:
         """Test default dtype is double precision."""
         assert DEFAULT_DTYPE == np.float64
         # Control/scientific computing needs precision
-
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

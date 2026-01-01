@@ -31,9 +31,13 @@ the low-level SymPy → executable code conversion.
 """
 
 import time
-from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Tuple, Any
 
 import sympy as sp
+
+# Import from centralized type system
+from src.types.backends import Backend
+from src.types.core import DynamicsFunction, OutputFunction
 
 if TYPE_CHECKING:
     from src.systems.base.symbolic_dynamical_system import SymbolicDynamicalSystem
@@ -68,9 +72,9 @@ class CodeGenerator:
         self.system = system
 
         # Cache for generated functions (backend → function)
-        self._f_funcs: Dict[str, Optional[Callable]] = {"numpy": None, "torch": None, "jax": None}
+        self._f_funcs: Dict[str, Optional[DynamicsFunction]] = {"numpy": None, "torch": None, "jax": None}
 
-        self._h_funcs: Dict[str, Optional[Callable]] = {"numpy": None, "torch": None, "jax": None}
+        self._h_funcs: Dict[str, Optional[OutputFunction]] = {"numpy": None, "torch": None, "jax": None}
 
         # Cache for Jacobian functions
         self._A_funcs: Dict[str, Optional[Callable]] = {"numpy": None, "torch": None, "jax": None}
@@ -88,7 +92,7 @@ class CodeGenerator:
     # Dynamics Function Generation
     # ========================================================================
 
-    def generate_dynamics(self, backend: str, **kwargs) -> Callable:
+    def generate_dynamics(self, backend: Backend, **kwargs) -> DynamicsFunction:
         """
         Generate f(x, u) function for specified backend.
 
@@ -99,7 +103,7 @@ class CodeGenerator:
             **kwargs: Backend-specific options (e.g., jit=True for JAX)
 
         Returns:
-            Callable function: (x, u) → dx/dt
+            DynamicsFunction: (x, u) → dx/dt
 
         Example:
             >>> f_numpy = code_gen.generate_dynamics('numpy')
@@ -135,7 +139,7 @@ class CodeGenerator:
 
         return func
 
-    def get_dynamics(self, backend: str) -> Optional[Callable]:
+    def get_dynamics(self, backend: Backend) -> Optional[DynamicsFunction]:
         """
         Get cached dynamics function without generating.
 
@@ -151,7 +155,7 @@ class CodeGenerator:
     # Output Function Generation
     # ========================================================================
 
-    def generate_output(self, backend: str, **kwargs) -> Optional[Callable]:
+    def generate_output(self, backend: Backend, **kwargs) -> Optional[OutputFunction]:
         """
         Generate h(x) function for specified backend.
 
@@ -162,7 +166,7 @@ class CodeGenerator:
             **kwargs: Backend-specific options
 
         Returns:
-            Callable function: (x) → y, or None if no custom output
+            OutputFunction: (x) → y, or None if no custom output
 
         Example:
             >>> h_numpy = code_gen.generate_output('numpy')
@@ -195,7 +199,7 @@ class CodeGenerator:
 
         return func
 
-    def get_output(self, backend: str) -> Optional[Callable]:
+    def get_output(self, backend: Backend) -> Optional[OutputFunction]:
         """
         Get cached output function without generating.
 
@@ -246,7 +250,8 @@ class CodeGenerator:
         if self._C_sym_cache is None and self.system._h_sym is not None:
             self._C_sym_cache = self.system._h_sym.jacobian(self.system.state_vars)
 
-    def generate_dynamics_jacobians(self, backend: str, **kwargs) -> Tuple[Callable, Callable]:
+    # TODO: Change to a TypedDict-based return?
+    def generate_dynamics_jacobians(self, backend: Backend, **kwargs) -> Tuple[Callable, Callable]:
         """
         Generate A and B Jacobian functions.
 
@@ -291,7 +296,8 @@ class CodeGenerator:
 
         return A_func, B_func
 
-    def generate_observation_jacobian(self, backend: str, **kwargs) -> Optional[Callable]:
+    # TODO: Change to a TypedDict-based return?
+    def generate_observation_jacobian(self, backend: Backend, **kwargs) -> Optional[Callable]:
         """
         Generate C Jacobian function (∂h/∂x).
 
@@ -329,8 +335,9 @@ class CodeGenerator:
 
         return C_func
 
+    # TODO: Change to a TypedDict-based return?
     def get_jacobians(
-        self, backend: str
+        self, backend: Backend
     ) -> Tuple[Optional[Callable], Optional[Callable], Optional[Callable]]:
         """
         Get cached Jacobian functions without generating.
@@ -347,9 +354,10 @@ class CodeGenerator:
     # Compilation and Warmup
     # ========================================================================
 
+    # TODO: Change to a TypedDict-based return?
     def compile_all(
         self,
-        backends: Optional[List[str]] = None,
+        backends: Optional[List[Backend]] = None,
         include_jacobians: bool = False,
         verbose: bool = False,
         **kwargs,
@@ -458,7 +466,7 @@ class CodeGenerator:
     # Cache Management
     # ========================================================================
 
-    def reset_cache(self, backends: Optional[List[str]] = None):
+    def reset_cache(self, backends: Optional[List[Backend]] = None):
         """
         Clear cached functions for specified backends.
 
@@ -487,7 +495,8 @@ class CodeGenerator:
             self._B_funcs[backend] = None
             self._C_funcs[backend] = None
 
-    def is_compiled(self, backend: str) -> Dict[str, bool]:
+    # TODO: Change to a TypedDict-based return?
+    def is_compiled(self, backend: Backend) -> Dict[str, bool]:
         """
         Check which functions are compiled for a backend.
 
@@ -510,7 +519,8 @@ class CodeGenerator:
             "C": self._C_funcs[backend] is not None,
         }
 
-    def get_info(self) -> Dict[str, any]:
+    # TODO: Change to a TypedDict-based return?
+    def get_info(self) -> Dict[str, Any]:
         """
         Get comprehensive information about code generation status.
 

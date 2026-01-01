@@ -41,6 +41,7 @@ from src.systems.base.numerical_integration.stochastic.sde_integrator_base impor
     SDEIntegratorBase,
     SDEType,
     StepMode,
+    get_trajectory_statistics,
 )
 from src.systems.base.stochastic_dynamical_system import StochasticDynamicalSystem
 
@@ -100,6 +101,17 @@ class MockSDESystem(StochasticDynamicalSystem):
 
         self.diffusion_expr = sp.Matrix([[sigma_sym]])
         self.sde_type = "ito"
+    
+    def get_sde_type(self):
+        """Return SDE type as enum."""
+        return SDEType.ITO
+    
+    def get_diffusion_matrix(self, x, u=None, backend="numpy"):
+        """Return diffusion matrix."""
+        import numpy as np
+        # Additive noise: constant diffusion
+        sigma = list(self.parameters.values())[1]  # Second parameter is sigma
+        return np.array([[sigma]])
 
 
 class MockSDESystemMultiplicative(StochasticDynamicalSystem):
@@ -124,6 +136,17 @@ class MockSDESystemMultiplicative(StochasticDynamicalSystem):
 
         self.diffusion_expr = sp.Matrix([[sigma_sym * x]])
         self.sde_type = "ito"
+    
+    def get_sde_type(self):
+        """Return SDE type as enum."""
+        return SDEType.ITO
+    
+    def get_diffusion_matrix(self, x, u=None, backend="numpy"):
+        """Return diffusion matrix (multiplicative)."""
+        import numpy as np
+        sigma = list(self.parameters.values())[1]  # Second parameter is sigma
+        x_val = np.atleast_1d(x)[0]
+        return np.array([[sigma * x_val]])
 
 
 class MockSDESystemControlled(StochasticDynamicalSystem):
@@ -149,6 +172,16 @@ class MockSDESystemControlled(StochasticDynamicalSystem):
 
         self.diffusion_expr = sp.Matrix([[sigma_sym]])
         self.sde_type = "ito"
+    
+    def get_sde_type(self):
+        """Return SDE type as enum."""
+        return SDEType.ITO
+    
+    def get_diffusion_matrix(self, x, u=None, backend="numpy"):
+        """Return diffusion matrix."""
+        import numpy as np
+        sigma = list(self.parameters.values())[1]  # Second parameter is sigma
+        return np.array([[sigma]])
 
 
 class MockSDESystemPureDiffusion(StochasticDynamicalSystem):
@@ -172,6 +205,16 @@ class MockSDESystemPureDiffusion(StochasticDynamicalSystem):
 
         self.diffusion_expr = sp.Matrix([[sigma_sym]])
         self.sde_type = "ito"
+    
+    def get_sde_type(self):
+        """Return SDE type as enum."""
+        return SDEType.ITO
+    
+    def get_diffusion_matrix(self, x, u=None, backend="numpy"):
+        """Return diffusion matrix."""
+        import numpy as np
+        sigma = list(self.parameters.values())[0]  # First parameter is sigma
+        return np.array([[sigma]])
 
 
 class MockSDESystem2D(StochasticDynamicalSystem):
@@ -198,6 +241,18 @@ class MockSDESystem2D(StochasticDynamicalSystem):
 
         self.diffusion_expr = sp.Matrix([[sigma1_sym, 0], [0, sigma2_sym]])
         self.sde_type = "ito"
+    
+    def get_sde_type(self):
+        """Return SDE type as enum."""
+        return SDEType.ITO
+    
+    def get_diffusion_matrix(self, x, u=None, backend="numpy"):
+        """Return diffusion matrix (2x2 diagonal)."""
+        import numpy as np
+        params = list(self.parameters.values())
+        sigma1 = params[1]  # Second parameter
+        sigma2 = params[2]  # Third parameter
+        return np.array([[sigma1, 0], [0, sigma2]])
 
 
 # ============================================================================
@@ -213,14 +268,19 @@ class ConcreteSDEIntegrator(SDEIntegratorBase):
         return "Test Euler-Maruyama"
 
     def step(self, x, u=None, dt=None, dW=None):
-        """Simple Euler-Maruyama step."""
+        """Simple Euler-Maruyama step with Stratonovich correction if needed."""
         dt = dt if dt is not None else self.dt
 
         if dW is None:
-            dW = self._generate_noise((self.nw,), dt)
+            dW = self._generate_noise((self.nw,))
 
         f = self._evaluate_drift(x, u)
         g = self._evaluate_diffusion(x, u)
+        
+        # Apply Stratonovich correction if using Stratonovich interpretation
+        if self.sde_type == SDEType.STRATONOVICH:
+            stratonovich_correction = self._apply_stratonovich_correction(x, u, g, dt)
+            f = f + stratonovich_correction
 
         if self.backend == "numpy":
             x_next = x + f * dt + g @ dW
@@ -261,7 +321,7 @@ class ConcreteSDEIntegrator(SDEIntegratorBase):
             dt_step = float(t_eval[i + 1] - t_eval[i])
 
             u = u_func(t, x)
-            dW = self._generate_noise((self.nw,), dt_step)
+            dW = self._generate_noise((self.nw,))
 
             x = self.step(x, u, dt_step, dW)
             trajectory.append(x)
@@ -283,19 +343,20 @@ class ConcreteSDEIntegrator(SDEIntegratorBase):
             x_traj = jnp.stack(trajectory)
             noise_traj = jnp.stack(noise_samples)
 
-        return SDEIntegrationResult(
-            t=t_eval,
-            x=x_traj,
-            success=True,
-            nfev=self._stats["total_fev"],
-            nsteps=self._stats["total_steps"],
-            diffusion_evals=self._stats["diffusion_evals"],
-            noise_samples=noise_traj,
-            n_paths=1,
-            convergence_type=self.convergence_type,
-            solver=self.name,
-            sde_type=self.sde_type,
-        )
+        result: SDEIntegrationResult = {
+            "t": t_eval,
+            "x": x_traj,
+            "success": True,
+            "nfev": self._stats["total_fev"],
+            "nsteps": self._stats["total_steps"],
+            "diffusion_evals": self._stats["diffusion_evals"],
+            "noise_samples": noise_traj,
+            "n_paths": 1,
+            "convergence_type": self.convergence_type.value,
+            "solver": self.name,
+            "sde_type": self.sde_type.value,
+        }
+        return result
 
 
 # ============================================================================
@@ -649,10 +710,10 @@ class TestIntegration:
 
         result = integrator_numpy.integrate(x0, u_func, t_span)
 
-        assert result.success
-        assert result.t.shape[0] > 1
-        assert result.x.shape[0] == result.t.shape[0]
-        assert result.x.shape[1] == 1
+        assert result["success"]
+        assert result["t"].shape[0] > 1
+        assert result["x"].shape[0] == result["t"].shape[0]
+        assert result["x"].shape[1] == 1
 
     def test_integrate_with_control(self, mock_sde_controlled):
         """Test integration with control input."""
@@ -664,8 +725,8 @@ class TestIntegration:
 
         result = integrator.integrate(x0, u_func, t_span)
 
-        assert result.success
-        assert result.x.shape[0] > 1
+        assert result["success"]
+        assert result["x"].shape[0] > 1
 
     def test_integrate_statistics(self, integrator_numpy):
         """Test that integration updates statistics."""
@@ -675,9 +736,9 @@ class TestIntegration:
 
         result = integrator_numpy.integrate(x0, u_func, t_span)
 
-        assert result.nfev > 0
-        assert result.nsteps > 0
-        assert result.diffusion_evals >= 0
+        assert result["nfev"] > 0
+        assert result["nsteps"] > 0
+        assert result["diffusion_evals"] >= 0
 
     def test_integrate_returns_noise_samples(self, integrator_numpy):
         """Test that integration returns noise samples."""
@@ -687,8 +748,8 @@ class TestIntegration:
 
         result = integrator_numpy.integrate(x0, u_func, t_span)
 
-        assert result.noise_samples is not None
-        assert result.noise_samples.shape[0] > 0
+        assert result["noise_samples"] is not None
+        assert result["noise_samples"].shape[0] > 0
 
 
 # ============================================================================
@@ -710,9 +771,9 @@ class TestMonteCarloSimulation:
             x0, u_func, t_span, n_paths, store_paths=True
         )
 
-        assert result.success
-        assert result.n_paths == n_paths
-        assert result.x.shape[0] == n_paths
+        assert result["success"]
+        assert result["n_paths"] == n_paths
+        assert result["x"].shape[0] == n_paths
 
     def test_monte_carlo_statistics(self, integrator_numpy):
         """Test Monte Carlo statistics computation."""
@@ -723,7 +784,7 @@ class TestMonteCarloSimulation:
 
         result = integrator_numpy.integrate_monte_carlo(x0, u_func, t_span, n_paths)
 
-        stats = result.get_statistics()
+        stats = get_trajectory_statistics(result)
 
         assert "mean" in stats
         assert "std" in stats
@@ -739,7 +800,7 @@ class TestMonteCarloSimulation:
 
         result = integrator_numpy.integrate_monte_carlo(x0, u_func, t_span, n_paths)
 
-        stats = result.get_statistics()
+        stats = get_trajectory_statistics(result)
 
         var_start = stats["std"][1] ** 2
         var_end = stats["std"][-1] ** 2
@@ -803,19 +864,35 @@ class TestSDEIntegrationResult:
         t = np.linspace(0, 1, 11)
         x = np.random.randn(11, 2)
 
-        result = SDEIntegrationResult(t=t, x=x, success=True, nsteps=10)
+        result: SDEIntegrationResult = {
+            "t": t, 
+            "x": x, 
+            "success": True, 
+            "nsteps": 10,
+            "nfev": 10,
+            "solver": "Test",
+            "n_paths": 1,
+        }
 
-        assert result.success
-        assert result.nsteps == 10
-        assert result.n_paths == 1
+        assert result["success"]
+        assert result["nsteps"] == 10
+        assert result["n_paths"] == 1
 
     def test_result_statistics_single_path(self):
         """Test statistics for single trajectory."""
         t = np.linspace(0, 1, 11)
         x = np.random.randn(11, 2)
 
-        result = SDEIntegrationResult(t=t, x=x, n_paths=1)
-        stats = result.get_statistics()
+        result: SDEIntegrationResult = {
+            "t": t, 
+            "x": x, 
+            "n_paths": 1,
+            "success": True,
+            "nfev": 10,
+            "nsteps": 10,
+            "solver": "Test",
+        }
+        stats = get_trajectory_statistics(result)
 
         assert stats["n_paths"] == 1
         assert "note" in stats
@@ -826,8 +903,16 @@ class TestSDEIntegrationResult:
         t = np.linspace(0, 1, 11)
         x = np.random.randn(100, 11, 2)
 
-        result = SDEIntegrationResult(t=t, x=x, n_paths=100)
-        stats = result.get_statistics()
+        result: SDEIntegrationResult = {
+            "t": t, 
+            "x": x, 
+            "n_paths": 100,
+            "success": True,
+            "nfev": 100,
+            "nsteps": 10,
+            "solver": "Test",
+        }
+        stats = get_trajectory_statistics(result)
 
         assert stats["n_paths"] == 100
         assert stats["mean"].shape == (11, 2)
@@ -863,21 +948,24 @@ class TestStringRepresentations:
         assert "numpy" in str_str
 
     def test_result_repr(self):
-        """Test SDEIntegrationResult __repr__."""
-        result = SDEIntegrationResult(
-            t=np.array([0, 1]),
-            x=np.array([[1], [2]]),
-            nsteps=1,
-            nfev=5,
-            diffusion_evals=3,
-            n_paths=10,
-        )
+        """Test SDEIntegrationResult as TypedDict."""
+        result: SDEIntegrationResult = {
+            "t": np.array([0, 1]),
+            "x": np.array([[1], [2]]),
+            "nsteps": 1,
+            "nfev": 5,
+            "diffusion_evals": 3,
+            "n_paths": 10,
+            "success": True,
+            "solver": "Test",
+        }
 
-        repr_str = repr(result)
-
-        assert "SDEIntegrationResult" in repr_str
-        assert "nsteps=1" in repr_str
-        assert "n_paths=10" in repr_str
+        # TypedDict is a dict
+        assert isinstance(result, dict)
+        assert "t" in result
+        assert "x" in result
+        assert result["nsteps"] == 1
+        assert result["n_paths"] == 10
 
 
 # ============================================================================
@@ -888,17 +976,43 @@ class TestStringRepresentations:
 class TestErrorHandling:
     """Test error handling and validation."""
 
-    def test_stratonovich_correction_not_implemented(self, mock_sde_system):
-        """Test that Stratonovich correction raises NotImplementedError."""
+    def test_stratonovich_correction_additive_is_zero(self, mock_sde_system):
+        """Test that Stratonovich correction is zero for additive noise."""
         integrator = ConcreteSDEIntegrator(
             mock_sde_system, dt=0.01, backend="numpy", sde_type=SDEType.STRATONOVICH
         )
 
         x = np.array([1.0])
-        g = np.array([[0.5]])
+        g = np.array([[0.5]])  # Additive (constant)
+        
+        correction = integrator._apply_stratonovich_correction(x, None, g, 0.01)
+        
+        # Additive noise has zero correction
+        np.testing.assert_array_almost_equal(correction, np.zeros(1))
 
-        with pytest.raises(NotImplementedError, match="Stratonovich correction"):
-            integrator._apply_stratonovich_correction(x, None, g, 0.01)
+    def test_stratonovich_correction_multiplicative(self, mock_sde_multiplicative):
+        """Test Stratonovich correction for multiplicative noise (GBM)."""
+        # Geometric Brownian Motion: dx = μx dt + σx dW (Stratonovich)
+        # Itô form: dx = (μ + 0.5*σ²)x dt + σx dW
+        # So correction should be 0.5*σ²*x
+        
+        integrator = ConcreteSDEIntegrator(
+            mock_sde_multiplicative, dt=0.01, backend="numpy", sde_type=SDEType.STRATONOVICH
+        )
+        
+        x = np.array([2.0])  # State value
+        sigma = 0.2  # From MockSDESystemMultiplicative default
+        
+        # Get diffusion matrix
+        g = integrator._evaluate_diffusion(x, None)
+        
+        # Compute correction
+        correction = integrator._apply_stratonovich_correction(x, None, g, 0.01)
+        
+        # Expected: 0.5 * σ² * x
+        expected = 0.5 * sigma**2 * x
+        
+        np.testing.assert_array_almost_equal(correction, expected, decimal=5)
 
     def test_invalid_backend_raises(self, mock_sde_system):
         """Test that invalid backend raises ValueError."""
@@ -955,9 +1069,9 @@ class TestAutonomousSystems:
 
         result = integrator_numpy.integrate(x0, u_func, t_span)
 
-        assert result.success
-        assert result.x.shape[0] > 1
-        assert result.x.shape[1] == 1
+        assert result["success"]
+        assert result["x"].shape[0] > 1
+        assert result["x"].shape[1] == 1
 
     def test_autonomous_monte_carlo(self, integrator_numpy):
         """Test Monte Carlo for autonomous system."""
@@ -968,9 +1082,9 @@ class TestAutonomousSystems:
 
         result = integrator_numpy.integrate_monte_carlo(x0, u_func, t_span, n_paths)
 
-        assert result.success
-        assert result.n_paths == n_paths
-        assert result.x.shape[0] == n_paths
+        assert result["success"]
+        assert result["n_paths"] == n_paths
+        assert result["x"].shape[0] == n_paths
 
     def test_2d_autonomous_system(self, integrator_2d):
         """Test 2D autonomous system integration."""
@@ -980,9 +1094,9 @@ class TestAutonomousSystems:
 
         result = integrator_2d.integrate(x0, u_func, t_span)
 
-        assert result.success
-        assert result.x.shape[1] == 2
-        assert result.x.shape[0] > 1
+        assert result["success"]
+        assert result["x"].shape[1] == 2
+        assert result["x"].shape[0] > 1
 
     def test_2d_autonomous_noise_independence(self, integrator_2d):
         """Test that 2D noise sources are independent."""
@@ -993,8 +1107,8 @@ class TestAutonomousSystems:
 
         result = integrator_2d.integrate_monte_carlo(x0, u_func, t_span, n_paths)
 
-        x1_final = result.x[:, -1, 0]
-        x2_final = result.x[:, -1, 1]
+        x1_final = result["x"][:, -1, 0]
+        x2_final = result["x"][:, -1, 1]
 
         correlation = np.corrcoef(x1_final, x2_final)[0, 1]
 
@@ -1050,8 +1164,8 @@ class TestPureDiffusionSystems:
 
         result = integrator_pure_diffusion.integrate(x0, u_func, t_span)
 
-        assert result.success
-        assert result.x.shape[0] > 1
+        assert result["success"]
+        assert result["x"].shape[0] > 1
 
     def test_pure_diffusion_zero_mean(self, integrator_pure_diffusion):
         """Test that pure diffusion starting at zero has zero mean."""
@@ -1062,7 +1176,7 @@ class TestPureDiffusionSystems:
 
         result = integrator_pure_diffusion.integrate_monte_carlo(x0, u_func, t_span, n_paths)
 
-        stats = result.get_statistics()
+        stats = get_trajectory_statistics(result)
         final_mean = stats["mean"][-1, 0]
 
         assert abs(final_mean) < 0.1
@@ -1076,9 +1190,9 @@ class TestPureDiffusionSystems:
 
         result = integrator_pure_diffusion.integrate_monte_carlo(x0, u_func, t_span, n_paths)
 
-        stats = result.get_statistics()
+        stats = get_trajectory_statistics(result)
 
-        t_array = result.t
+        t_array = result["t"]
         var_array = stats["std"][:, 0] ** 2
 
         idx_half = len(t_array) // 4
@@ -1116,8 +1230,8 @@ class TestSDEEquilibriumIntegration:
         u_func = lambda t, x: u_eq
         result = integrator.integrate(x_eq, u_func, t_span=(0, 1))
 
-        assert result.success
-        assert result.x.shape[0] > 1
+        assert result["success"]
+        assert result["x"].shape[0] > 1
 
     def test_integrate_from_custom_equilibrium(self, mock_sde_controlled):
         """Test integration from non-origin equilibrium."""
@@ -1132,7 +1246,7 @@ class TestSDEEquilibriumIntegration:
         u_func = lambda t, x: u_eq
         result = integrator.integrate(x_eq, u_func, t_span=(0, 1))
 
-        assert result.success
+        assert result["success"]
 
 
 # ============================================================================
@@ -1153,8 +1267,8 @@ class TestIntegrationEndToEnd:
 
         result = integrator_numpy.integrate(x0, u_func, t_span)
 
-        assert result.success
-        assert result.x.shape[0] > 10
+        assert result["success"]
+        assert result["x"].shape[0] > 10
 
         stats = integrator_numpy.get_sde_stats()
         assert stats["total_steps"] > 0
@@ -1172,7 +1286,7 @@ class TestIntegrationEndToEnd:
         integrator2 = ConcreteSDEIntegrator(mock_sde_system, dt=0.01, backend="numpy", seed=42)
         result2 = integrator2.integrate(x0, u_func, t_span)
 
-        np.testing.assert_array_almost_equal(result1.x, result2.x)
+        np.testing.assert_array_almost_equal(result1["x"], result2["x"])
 
     def test_monte_carlo_convergence(self, integrator_numpy):
         """Test that Monte Carlo estimates converge with more paths."""
@@ -1181,11 +1295,11 @@ class TestIntegrationEndToEnd:
         t_span = (0.0, 1.0)
 
         result_small = integrator_numpy.integrate_monte_carlo(x0, u_func, t_span, n_paths=50)
-        stats_small = result_small.get_statistics()
+        stats_small = get_trajectory_statistics(result_small)
 
         integrator_numpy.set_seed(42)
         result_large = integrator_numpy.integrate_monte_carlo(x0, u_func, t_span, n_paths=500)
-        stats_large = result_large.get_statistics()
+        stats_large = get_trajectory_statistics(result_large)
 
         se_small = stats_small["std"][-1] / np.sqrt(50)
         se_large = stats_large["std"][-1] / np.sqrt(500)

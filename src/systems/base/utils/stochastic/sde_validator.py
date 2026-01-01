@@ -32,10 +32,13 @@ Reuses:
 
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Set
+from typing_extensions import TypedDict
 
 import sympy as sp
 
+from src.types.symbolic import ParameterDict, SymbolicDiffusionMatrix, SymbolicMatrix
 from src.systems.base.utils.stochastic.noise_analysis import NoiseCharacterizer
+from src.types.utilities import SymbolicValidationResult
 from src.systems.base.utils.symbolic_validator import SymbolicValidator
 
 # ============================================================================
@@ -48,33 +51,29 @@ class ValidationError(Exception):
 
     pass
 
-
-# ============================================================================
-# Validation Result Container
-# ============================================================================
-
-
-@dataclass
-class ValidationResult:
+class SDEValidationInfo(TypedDict):
     """
-    Container for validation results.
-
-    Attributes
-    ----------
-    is_valid : bool
-        True if system passed all validation checks
-    errors : List[str]
-        List of validation errors (empty if valid)
-    warnings : List[str]
-        List of validation warnings (non-fatal issues)
-    info : Dict
-        Additional information about the validated system
+    Type-safe info dictionary for SDE validation results.
+    
+    Contains system dimensions and noise characteristics.
     """
-
-    is_valid: bool
-    errors: List[str]
-    warnings: List[str]
-    info: Dict
+    
+    # System dimensions
+    nx: int
+    nw: int
+    num_states: int
+    num_controls: int
+    num_parameters: int
+    has_time_var: bool
+    # Noise characteristics
+    noise_type: str
+    is_additive: bool
+    is_multiplicative: bool
+    is_diagonal: bool
+    is_scalar: bool
+    depends_on_state: bool
+    depends_on_control: bool
+    depends_on_time: bool
 
 
 # ============================================================================
@@ -116,21 +115,21 @@ class SDEValidator:
 
     def __init__(
         self,
-        drift_expr: sp.Matrix,
-        diffusion_expr: sp.Matrix,
+        drift_expr: SymbolicMatrix,
+        diffusion_expr: SymbolicDiffusionMatrix,
         state_vars: List[sp.Symbol],
         control_vars: List[sp.Symbol],
         time_var: Optional[sp.Symbol] = None,
-        parameters: Optional[Dict[sp.Symbol, float]] = None,
+        parameters: Optional[ParameterDict] = None,
     ):
         """
         Initialize SDE validator.
 
         Parameters
         ----------
-        drift_expr : sp.Matrix
+        drift_expr : SymbolicMatrix
             Drift vector f(x, u), shape (nx, 1)
-        diffusion_expr : sp.Matrix
+        diffusion_expr : SymbolicDiffusionMatrix
             Diffusion matrix g(x, u), shape (nx, nw)
         state_vars : List[sp.Symbol]
             State variable symbols
@@ -138,7 +137,7 @@ class SDEValidator:
             Control variable symbols
         time_var : sp.Symbol, optional
             Time variable symbol (if time-varying)
-        parameters : Dict[sp.Symbol, float], optional
+        parameters : ParameterDict, optional
             System parameters
 
         Raises
@@ -199,7 +198,7 @@ class SDEValidator:
         self,
         claimed_noise_type: Optional[str] = None,
         raise_on_error: bool = False,
-    ) -> ValidationResult:
+    ) -> SymbolicValidationResult:
         """
         Perform comprehensive SDE validation.
 
@@ -213,7 +212,7 @@ class SDEValidator:
 
         Returns
         -------
-        ValidationResult
+        SymbolicValidationResult
             Validation results with errors, warnings, and info
 
         Raises
@@ -256,7 +255,7 @@ class SDEValidator:
         is_valid = len(self._errors) == 0
 
         # Build result
-        result = ValidationResult(
+        result = SymbolicValidationResult(
             is_valid=is_valid,
             errors=self._errors.copy(),
             warnings=self._warnings.copy(),
@@ -397,7 +396,7 @@ class SDEValidator:
         if is_all_zero:
             self._warnings.append(
                 "Diffusion matrix is all zeros - this is an ODE, not an SDE. "
-                "Consider using DeterministicDynamicalSystem instead."
+                "Consider using a deterministic system type instead."
             )
 
     def _validate_noise_type_claim(self, claimed_type: str):
@@ -424,7 +423,7 @@ class SDEValidator:
     # Info Building
     # ========================================================================
 
-    def _build_info(self) -> Dict:
+    def _build_info(self) -> SDEValidationInfo:
         """Build info dictionary with system characteristics."""
         # ✅ REUSE: NoiseCharacterizer for analysis
         characterizer = NoiseCharacterizer(
@@ -498,20 +497,20 @@ class SDEValidator:
 
 
 def validate_sde_system(
-    drift_expr: sp.Matrix,
-    diffusion_expr: sp.Matrix,
+    drift_expr: SymbolicMatrix,
+    diffusion_expr: SymbolicDiffusionMatrix,
     state_vars: List[sp.Symbol],
     control_vars: List[sp.Symbol],
     **kwargs,
-) -> ValidationResult:
+) -> SymbolicValidationResult:
     """
     Convenience function for validating SDE systems.
 
     Parameters
     ----------
-    drift_expr : sp.Matrix
+    drift_expr : SymbolicMatrix
         Drift vector
-    diffusion_expr : sp.Matrix
+    diffusion_expr : SymbolicDiffusionMatrix
         Diffusion matrix
     state_vars : List[sp.Symbol]
         State variables
@@ -522,7 +521,7 @@ def validate_sde_system(
 
     Returns
     -------
-    ValidationResult
+    SymbolicValidationResult
         Validation results
 
     Examples
