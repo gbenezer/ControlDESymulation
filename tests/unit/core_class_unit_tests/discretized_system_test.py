@@ -71,6 +71,16 @@ try:
     import jax.numpy as jnp
 except ImportError:
     jax_available = False
+    
+def _has_full_sde_support():
+    """Check if full SDE support is available."""
+    try:
+        from src.systems.base.numerical_integration.stochastic.sde_integrator_factory import SDEIntegratorFactory
+        from src.systems.base.core.continuous_stochastic_system import ContinuousStochasticSystem
+        import sympy
+        return True
+    except ImportError:
+        return False
 
 # ============================================================================
 # Mock Continuous Systems for Testing
@@ -277,6 +287,22 @@ class TestDiscretizedSystemInit:
         
         assert discrete._integrator_kwargs['rtol'] == 1e-9
         assert discrete._integrator_kwargs['atol'] == 1e-11
+        
+    def test_method_classification_constants_exist(self):
+        """Method classification constants are properly defined."""
+        assert hasattr(DiscretizedSystem, '_DETERMINISTIC_FIXED_STEP')
+        assert hasattr(DiscretizedSystem, '_DETERMINISTIC_ADAPTIVE')
+        assert hasattr(DiscretizedSystem, '_SDE_METHODS')
+        assert hasattr(DiscretizedSystem, '_SDE_ADAPTIVE')
+        
+        # Check they're frozensets
+        assert isinstance(DiscretizedSystem._DETERMINISTIC_FIXED_STEP, frozenset)
+        assert isinstance(DiscretizedSystem._SDE_METHODS, frozenset)
+        
+        # Check they contain expected methods
+        assert 'rk4' in DiscretizedSystem._DETERMINISTIC_FIXED_STEP
+        assert 'RK45' in DiscretizedSystem._DETERMINISTIC_ADAPTIVE
+        assert 'euler_maruyama' in DiscretizedSystem._SDE_METHODS
 
 
 # ============================================================================
@@ -840,6 +866,37 @@ class TestUtilityMethods:
         
         # Should not raise
         discrete.print_info()
+        
+    def test_get_info_has_method_selection_info(self):
+        """get_info() includes method selection information."""
+        continuous = MockContinuousSystem()
+        discrete = DiscretizedSystem(continuous, dt=0.01, method='rk4')
+        
+        info = discrete.get_info()
+        
+        assert 'method_selection' in info
+        assert info['method_selection']['source'] == 'deterministic_system'
+        assert info['method_selection']['original_method'] == 'rk4'
+        assert info['method_selection']['final_method'] == 'rk4'
+
+    def test_get_info_stochastic_shows_sde_info(self):
+        """get_info() shows stochastic info for stochastic systems."""
+        stochastic = MockStochasticSystem()
+        
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            discrete = DiscretizedSystem(
+                stochastic, dt=0.01, method='rk4',
+                auto_detect_sde=False
+            )
+        
+        info = discrete.get_info()
+        
+        assert 'stochastic_info' in info
+        assert info['stochastic_info']['is_stochastic'] == True
+        assert info['stochastic_info']['recommended_method'] in ['euler_maruyama', 'milstein']
+        assert info['stochastic_info']['has_sde_integrator'] in [True, False]
 
 
 # ============================================================================
@@ -1044,7 +1101,15 @@ class TestStochasticDiscretization:
     def test_stochastic_system_detection(self):
         """DiscretizedSystem detects wrapped system is stochastic."""
         stochastic = MockStochasticSystem(nx=2, nu=1)
-        discrete = DiscretizedSystem(stochastic, dt=0.01, method='euler')
+        
+        # Suppress warning about deterministic method on stochastic system
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            discrete = DiscretizedSystem(
+                stochastic, dt=0.01, method='rk4',  # Use unambiguous method
+                auto_detect_sde=False
+            )
         
         assert discrete.is_stochastic is True
     
@@ -1057,20 +1122,47 @@ class TestStochasticDiscretization:
         assert method in ['euler_maruyama', 'milstein']
     
     def test_stochastic_step_with_mock(self):
-        """Can step stochastic system (if integrator supports it)."""
-        # This test is limited because MockStochasticSystem doesn't
-        # actually implement SDE dynamics (no diffusion_expr)
-        # Real test requires actual ContinuousStochasticSystem
+        """Can step stochastic system with deterministic integrator."""
         stochastic = MockStochasticSystem(nx=2, nu=1)
         
-        # For now, just verify it doesn't crash with deterministic integrator
-        discrete = DiscretizedSystem(stochastic, dt=0.01, method='rk4')
+        # Disable auto-detection to use deterministic method
+        # (SDE integrator not available yet)
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")  # Suppress expected warning
+            discrete = DiscretizedSystem(
+                stochastic, dt=0.01, method='rk4',
+                auto_detect_sde=False  # Key change: disable auto-detection
+            )
         
         x = np.array([1.0, 0.0])
         x_next = discrete.step(x, None)
         
-        # Should work (treats as deterministic since integrator is RK4)
+        # Should work (treats as deterministic)
         assert x_next.shape == (2,)
+        assert discrete._method == 'rk4'  # Verify method stayed as rk4
+        
+    def test_stochastic_auto_detect_warns_without_sde_integrator(self):
+        """Auto-detection warns when SDE integrator unavailable."""
+        stochastic = MockStochasticSystem(nx=2, nu=1)
+        
+        # Should warn about missing SDE integrator
+        import warnings
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            discrete = DiscretizedSystem(stochastic, dt=0.01, method='rk4')
+            
+            # Should have warning about SDE not available
+            assert len(w) > 0
+            warning_text = str(w[0].message)
+            
+            # Check for key phrases in the warning
+            assert "noise will be IGNORED" in warning_text or \
+                "deterministic" in warning_text.lower()
+        
+        # Method should stay as rk4 (deterministic fallback)
+        assert discrete._method == 'rk4'
+        assert discrete._method_source == 'deterministic_fallback'
 
 
 class TestRealSystemIntegration:
@@ -1127,9 +1219,17 @@ class TestRealSystemIntegration:
             stochastic = SimpleStochastic(alpha=2.0, sigma=0.3)
             
             # Use deterministic integrator (ignores noise)
-            discrete = DiscretizedSystem(stochastic, dt=0.01, method='rk4')
+            # Disable auto-detection to prevent switching to euler_maruyama
+            import warnings
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")  # Suppress expected warning
+                discrete = DiscretizedSystem(
+                    stochastic, dt=0.01, method='rk4',
+                    auto_detect_sde=False  # Key change: disable auto-detection
+                )
             
             assert discrete.is_stochastic  # Detects stochastic
+            assert discrete._method == 'rk4'  # Method stayed as rk4
             
             # Simulate (deterministic - ignores diffusion)
             result = discrete.simulate(np.array([1.0]), None, n_steps=20)
@@ -1138,7 +1238,6 @@ class TestRealSystemIntegration:
         except ImportError:
             pytest.skip("ContinuousStochasticSystem not available")
     
-    @pytest.mark.skip(reason="Requires SDEIntegratorFactory integration - implement separately")
     def test_with_sde_integrator(self):
         """
         Full stochastic discretization with SDE integrator.
@@ -1703,6 +1802,204 @@ class TestInterpolation:
         # Either we have enough points for cubic, or it fell back to linear gracefully
         assert result['success']
         # Don't assert on adaptive_points - the fallback mechanism handles this
+        
+# ============================================================================
+# Test Suite: Method Classification
+# ============================================================================
+
+class TestMethodClassification:
+    """Test method classification helpers."""
+    
+    def test_is_method_sde_deterministic(self):
+        """Deterministic-only methods are correctly identified as non-SDE."""
+        # These methods only appear in deterministic sets, not SDE sets
+        assert not DiscretizedSystem._is_method_sde('rk4')
+        assert not DiscretizedSystem._is_method_sde('RK45')
+        assert not DiscretizedSystem._is_method_sde('LSODA')
+        assert not DiscretizedSystem._is_method_sde('Tsit5')
+        assert not DiscretizedSystem._is_method_sde('dopri5')
+        
+        # Note: 'euler', 'midpoint', 'heun' appear in BOTH sets
+        # (deterministic manual implementations AND SDE backend methods)
+        # So _is_method_sde('euler') returns True, which is correct
+        # because in the context of a stochastic system, 'euler' refers to SDE
+    
+    def test_is_method_sde_stochastic(self):
+        """SDE methods are correctly identified."""
+        # Canonical SDE names
+        assert DiscretizedSystem._is_method_sde('euler_maruyama')
+        assert DiscretizedSystem._is_method_sde('milstein')
+        
+        # Backend variants - Julia/NumPy
+        assert DiscretizedSystem._is_method_sde('EM')
+        assert DiscretizedSystem._is_method_sde('SRIW1')
+        assert DiscretizedSystem._is_method_sde('SRA3')
+        
+        # Backend variants - PyTorch
+        assert DiscretizedSystem._is_method_sde('srk')
+        
+        # Backend variants - JAX (capitalized)
+        assert DiscretizedSystem._is_method_sde('Euler')  # JAX Euler
+        assert DiscretizedSystem._is_method_sde('SEA')
+        assert DiscretizedSystem._is_method_sde('SHARK')
+        assert DiscretizedSystem._is_method_sde('ItoMilstein')
+    
+    def test_is_method_sde_overlapping_names(self):
+        """Methods that appear in both sets are marked as SDE."""
+        # These names are used by both deterministic and SDE integrators
+        # When they appear in _SDE_METHODS, _is_method_sde returns True
+        # This is correct because the method is only called in stochastic context
+        assert DiscretizedSystem._is_method_sde('euler')  # TorchSDE
+        assert DiscretizedSystem._is_method_sde('midpoint')  # TorchSDE
+        assert DiscretizedSystem._is_method_sde('Heun')  # Diffrax SDE
+    
+    def test_is_method_fixed_step_deterministic(self):
+        """Fixed-step deterministic methods identified correctly."""
+        assert DiscretizedSystem._is_method_fixed_step('euler')
+        assert DiscretizedSystem._is_method_fixed_step('rk4')
+        assert DiscretizedSystem._is_method_fixed_step('midpoint')
+        assert DiscretizedSystem._is_method_fixed_step('heun')
+    
+    def test_is_method_fixed_step_adaptive_deterministic(self):
+        """Adaptive deterministic methods identified correctly."""
+        assert not DiscretizedSystem._is_method_fixed_step('RK45')
+        assert not DiscretizedSystem._is_method_fixed_step('LSODA')
+        assert not DiscretizedSystem._is_method_fixed_step('dopri5')
+        assert not DiscretizedSystem._is_method_fixed_step('Tsit5')
+        assert not DiscretizedSystem._is_method_fixed_step('bosh3')
+    
+    def test_is_method_fixed_step_sde(self):
+        """SDE methods are mostly fixed-step."""
+        # Fixed-step SDE methods
+        assert DiscretizedSystem._is_method_fixed_step('euler_maruyama')
+        assert DiscretizedSystem._is_method_fixed_step('milstein')
+        assert DiscretizedSystem._is_method_fixed_step('EM')
+        assert DiscretizedSystem._is_method_fixed_step('SRIW1')
+        
+        # Adaptive SDE methods (rare)
+        assert not DiscretizedSystem._is_method_fixed_step('AutoEM')
+        assert not DiscretizedSystem._is_method_fixed_step('adaptive_heun')
+        assert not DiscretizedSystem._is_method_fixed_step('LambaEM')
+    
+    def test_normalize_method_name_euler_maruyama(self):
+        """Euler-Maruyama normalizes correctly across backends."""
+        assert DiscretizedSystem._normalize_method_name('euler_maruyama', 'numpy') == 'EM'
+        assert DiscretizedSystem._normalize_method_name('euler_maruyama', 'torch') == 'euler'
+        assert DiscretizedSystem._normalize_method_name('euler_maruyama', 'jax') == 'Euler'
+    
+    def test_normalize_method_name_milstein(self):
+        """Milstein normalizes correctly across backends."""
+        assert DiscretizedSystem._normalize_method_name('milstein', 'numpy') == 'RKMil'
+        assert DiscretizedSystem._normalize_method_name('milstein', 'torch') == 'milstein'
+        assert DiscretizedSystem._normalize_method_name('milstein', 'jax') == 'ItoMilstein'
+    
+    def test_normalize_method_name_no_mapping(self):
+        """Methods without normalization map return as-is."""
+        assert DiscretizedSystem._normalize_method_name('rk4', 'numpy') == 'rk4'
+        assert DiscretizedSystem._normalize_method_name('SRIW1', 'numpy') == 'SRIW1'
+        assert DiscretizedSystem._normalize_method_name('SEA', 'jax') == 'SEA'
+        
+# ============================================================================
+# Test Suite: Stochastic Simulation (Monte Carlo)
+# ============================================================================
+
+class TestStochasticSimulation:
+    """Test simulate_stochastic() for Monte Carlo analysis."""
+    
+    def test_simulate_stochastic_requires_stochastic_system(self):
+        """simulate_stochastic() raises for deterministic system."""
+        deterministic = MockContinuousSystem()
+        discrete = DiscretizedSystem(deterministic, dt=0.01, method='rk4')
+        
+        with pytest.raises(ValueError, match="only available for stochastic"):
+            discrete.simulate_stochastic(
+                x0=np.array([1.0, 0.0]),
+                n_steps=10,
+                n_trajectories=10
+            )
+    
+    def test_simulate_stochastic_requires_sde_method(self):
+        """simulate_stochastic() raises if not using SDE method."""
+        stochastic = MockStochasticSystem()
+        
+        # Use deterministic method
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            discrete = DiscretizedSystem(
+                stochastic, dt=0.01, method='rk4',
+                auto_detect_sde=False
+            )
+        
+        with pytest.raises(ValueError, match="requires SDE method"):
+            discrete.simulate_stochastic(
+                x0=np.array([1.0, 0.0]),
+                n_steps=10,
+                n_trajectories=10
+            )
+    
+    def test_simulate_stochastic_requires_sde_integrator(self):
+        """simulate_stochastic() raises if SDE integrator not available."""
+        stochastic = MockStochasticSystem()
+        
+        # Even with SDE method, if integrator not available, should raise
+        # This tests the case where method is in _SDE_METHODS but integrator fails
+        discrete = DiscretizedSystem(
+            stochastic, dt=0.01, 
+            sde_method='euler_maruyama',
+            auto_detect_sde=False
+        )
+        
+        # If SDE integrator is actually available, skip this test
+        if discrete._has_sde_integrator:
+            pytest.skip("SDE integrator is available - cannot test unavailability")
+        
+        with pytest.raises(ValueError, match="SDE integrator not available"):
+            discrete.simulate_stochastic(
+                x0=np.array([1.0, 0.0]),
+                n_steps=10,
+                n_trajectories=10
+            )
+    
+    @pytest.mark.skipif(
+        not _has_full_sde_support(),
+        reason="Requires sympy and ContinuousStochasticSystem"
+    )
+    def test_simulate_stochastic_returns_correct_structure(self):
+        """simulate_stochastic() returns proper Monte Carlo structure."""
+        import sympy as sp
+        
+        class SimpleStochastic(ContinuousStochasticSystem):
+            def define_system(self, alpha=1.0, sigma=0.1):
+                x = sp.symbols('x')
+                alpha_sym = sp.symbols('alpha')
+                sigma_sym = sp.symbols('sigma')
+                
+                self.state_vars = [x]
+                self.control_vars = []
+                self._f_sym = sp.Matrix([-alpha_sym * x])
+                self.diffusion_expr = sp.Matrix([[sigma_sym]])
+                self.sde_type = 'ito'
+                self.parameters = {alpha_sym: alpha, sigma_sym: sigma}
+                self.order = 1
+        
+        stochastic = SimpleStochastic(alpha=2.0, sigma=0.1)
+        discrete = DiscretizedSystem(
+            stochastic, dt=0.01,
+            sde_method='euler_maruyama'
+        )
+        
+        # Run Monte Carlo
+        result = discrete.simulate_stochastic(
+            x0=np.array([1.0]),
+            n_steps=50,  # Shorter for speed
+            n_trajectories=10  # Fewer for speed
+        )
+        
+        # Verify structure
+        assert result['states'].shape == (10, 51, 1)
+        assert result['mean_trajectory'].shape == (51, 1)
+        assert result['std_trajectory'].shape == (51, 1)
 
 # ============================================================================
 # Run Tests
