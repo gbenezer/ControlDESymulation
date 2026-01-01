@@ -222,16 +222,25 @@ class DiscretizedSystem(DiscreteSystemBase):
         }
     
     def _interpolate_trajectory(self, t_adaptive, y_adaptive, t_regular):
+        """Interpolate from adaptive to regular grid."""
         if y_adaptive.shape[0] != len(t_adaptive):
             y_adaptive = y_adaptive.T
         
         nx = y_adaptive.shape[1]
         y_regular = np.zeros((len(t_regular), nx))
         
+        # Clip t_regular to be within t_adaptive range (avoid extrapolation errors)
+        t_regular_clipped = np.clip(t_regular, t_adaptive[0], t_adaptive[-1])
+        
         for i in range(nx):
-            interp = interp1d(t_adaptive, y_adaptive[:, i], kind=self._interpolation_kind,
-                            fill_value="extrapolate", assume_sorted=True)
-            y_regular[:, i] = interp(t_regular)
+            interp = interp1d(
+                t_adaptive, y_adaptive[:, i], 
+                kind=self._interpolation_kind,
+                bounds_error=False,  # Don't raise on out-of-bounds
+                fill_value=(y_adaptive[0, i], y_adaptive[-1, i]),  # Extrapolate with endpoints
+                assume_sorted=True
+            )
+            y_regular[:, i] = interp(t_regular_clipped)
         
         return y_regular
     
