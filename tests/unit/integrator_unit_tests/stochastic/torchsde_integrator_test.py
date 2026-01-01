@@ -55,7 +55,7 @@ from src.systems.base.numerical_integration.stochastic.torchsde_integrator impor
     create_torchsde_integrator,
     list_torchsde_methods,
 )
-from src.systems.base.stochastic_dynamical_system import StochasticDynamicalSystem
+from src.systems.base.core.continuous_stochastic_system import StochasticDynamicalSystem
 
 # ============================================================================
 # Skip Tests if PyTorch/torchsde Not Available

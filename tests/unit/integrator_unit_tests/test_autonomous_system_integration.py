@@ -47,7 +47,7 @@ import sympy as sp
 
 from src.systems.base.numerical_integration.integrator_base import StepMode
 from src.systems.base.numerical_integration.integrator_factory import IntegratorFactory
-from src.systems.base.symbolic_dynamical_system import SymbolicDynamicalSystem
+from src.systems.base.core.continuous_symbolic_system import SymbolicDynamicalSystem
 
 # Check optional dependencies
 try:

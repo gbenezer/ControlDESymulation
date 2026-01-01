@@ -62,7 +62,7 @@ from src.systems.base.numerical_integration.stochastic.sde_integrator_factory im
     auto_sde_integrator,
     create_sde_integrator,
 )
-from src.systems.base.stochastic_dynamical_system import StochasticDynamicalSystem
+from src.systems.base.core.continuous_stochastic_system import StochasticDynamicalSystem
 
 # ============================================================================
 # Mock SDE Systems for Testing

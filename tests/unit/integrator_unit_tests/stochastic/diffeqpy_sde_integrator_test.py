@@ -62,7 +62,7 @@ from src.systems.base.numerical_integration.stochastic.sde_integrator_base impor
     SDEType,
     StepMode,
 )
-from src.systems.base.stochastic_dynamical_system import StochasticDynamicalSystem
+from src.systems.base.core.continuous_stochastic_system import StochasticDynamicalSystem
 
 # ============================================================================
 # Skip Tests if DiffEqPy Not Available

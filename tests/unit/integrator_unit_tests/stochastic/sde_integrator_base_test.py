@@ -43,7 +43,7 @@ from src.systems.base.numerical_integration.stochastic.sde_integrator_base impor
     StepMode,
     get_trajectory_statistics,
 )
-from src.systems.base.stochastic_dynamical_system import StochasticDynamicalSystem
+from src.systems.base.core.continuous_stochastic_system import StochasticDynamicalSystem
 
 # ============================================================================
 # Helper Functions
