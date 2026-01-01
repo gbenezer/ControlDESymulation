@@ -49,29 +49,14 @@ pip install -e ".[jax,viz]"     # JAX + visualization
 pip install -e ".[all]"         # Everything
 ```
 
-### 30-Second Example (TODO: update after full refactor)
+### 30-Second Example
 
 ```python
-import sympy as sp
 import numpy as np
-from src.systems.base import SymbolicDynamicalSystem
+from src.systems.builtin.deterministic.continuous.mechanical_systems import SymbolicPendulum
 
-class Pendulum(SymbolicDynamicalSystem):
-    def define_system(self, m=0.15, l=0.5, beta=0.1, g=9.81):
-        # Symbolic variables
-        theta, theta_dot = sp.symbols('theta theta_dot', real=True)
-        u = sp.symbols('u', real=True)
-        
-        # Equation of motion
-        theta_ddot = -(g/l)*sp.sin(theta) - (beta/m)*theta_dot + u/(m*l**2)
-        
-        # Define system
-        self.state_vars = [theta, theta_dot]
-        self.control_vars = [u]
-        self._f_sym = sp.Matrix([theta_dot, theta_ddot])
-
-# Create pendulum
-pendulum = Pendulum()
+# Create pendulum with physical parameters
+pendulum = SymbolicPendulum(m_val=1.0, l_val=0.5, beta_val=0.1, g_val=9.81)
 
 # Evaluate dynamics (automatically uses NumPy)
 x = np.array([0.1, 0.0])  # [angle, angular_velocity]
@@ -79,6 +64,32 @@ u = np.array([0.0])       # [torque]
 dx = pendulum(x, u)       # Returns dx/dt
 
 print(f"State derivative: {dx}")  # [angular_vel, angular_accel]
+```
+
+### Custom System Definition
+
+```python
+import sympy as sp
+import numpy as np
+from src.systems.base.core import ContinuousSymbolicSystem
+
+class MyPendulum(ContinuousSymbolicSystem):
+    def define_system(self, m=0.15, l=0.5, beta=0.1, g=9.81):
+        # Symbolic variables
+        theta, theta_dot = sp.symbols('theta theta_dot', real=True)
+        u = sp.symbols('u', real=True)
+
+        # Equation of motion
+        theta_ddot = -(g/l)*sp.sin(theta) - (beta/m)*theta_dot + u/(m*l**2)
+
+        # Define system
+        self.state_vars = [theta, theta_dot]
+        self.control_vars = [u]
+        self._f_sym = sp.Matrix([theta_dot, theta_ddot])
+
+# Create and use
+pendulum = MyPendulum()
+dx = pendulum(np.array([0.1, 0.0]), np.array([0.0]))
 ```
 
 ### Multi-Backend Execution
@@ -120,26 +131,28 @@ dx_jax = pendulum(x_jax, jnp.array([0.0]))
 ### Control & Analysis
 
 - **Linearization**: Symbolic and numerical linearization around equilibria
-- **LQR/LQG**: Linear-Quadratic Regulator and Gaussian control
-- **State Estimation**: Kalman Filter, Extended Kalman Filter, observers (Under Construction)
-- **Discretization**: Multiple methods (Euler, RK4, zero-order hold, etc.) (Under Construction)
-- **Trajectory Simulation**: Forward simulation with visualization (Under Construction)
+- **Discretization**: Multiple methods (Euler, RK4, zero-order hold, etc.)
+- 🚧 **LQR/LQG**: Linear-Quadratic Regulator and Gaussian control *(not yet implemented)*
+- 🚧 **State Estimation**: Kalman Filter, Extended Kalman Filter, observers *(not yet implemented)*
+- 🚧 **Trajectory Visualization**: Forward simulation with visualization *(not yet implemented)*
 
 ### Advanced Features
 
-- **Type System**: Comprehensive type definitions for better IDE support (Upcoming Refactor)
-- **Structured Results**: Named tuples instead of raw arrays (e.g., `LinearizationResult`, `SimulationResult`) (Upcoming Refactor)
+- **Type System**: Comprehensive type definitions (17 modules) for better IDE support
+- **Structured Results**: Named tuples instead of raw arrays (e.g., `LinearizationResult`, `SimulationResult`)
 - **GPU Acceleration**: Seamless GPU support via PyTorch and JAX
 - **Stochastic Systems**: SDEs with Brownian motion and custom noise
 - **Modular Design**: Easy to extend and customize
 
 ---
 
-## Example: LQR Control of Pendulum (Under Construction)
+## Example: LQR Control of Pendulum *(Planned API)*
+
+> **Note**: The `src/control/`, `src/observers/`, and `src/visualization/` modules are not yet implemented. The example below shows the planned API.
 
 ```python
 import numpy as np
-from src.systems.builtin import SymbolicPendulum
+from src.systems.builtin.deterministic.continuous.mechanical_systems import SymbolicPendulum
 from src.control import ControlDesigner
 from src.visualization import TrajectoryPlotter
 
@@ -184,6 +197,8 @@ plotter.plot_trajectory(
 ### Continuous-Time Systems
 
 ```python
+from src.systems.base.core import ContinuousSymbolicSystem, ContinuousStochasticSystem
+
 # Deterministic ODE: dx/dt = f(x, u, t)
 class MyContinuousSystem(ContinuousSymbolicSystem):
     def define_system(self):
@@ -200,14 +215,16 @@ class MyStochasticSystem(ContinuousStochasticSystem):
 ### Discrete-Time Systems
 
 ```python
+from src.systems.base.core import DiscreteSymbolicSystem, DiscreteStochasticSystem
+
 # Discrete deterministic: x[k+1] = f(x[k], u[k])
 class MyDiscreteSystem(DiscreteSymbolicSystem):
     def define_system(self):
         # Define difference equation
         pass
 
-# Discrete stochastic x[k+1] = f(x[k], u[k]) + g(x[k], u[k]) * w[k]
-class MyDiscreteSystem(DiscreteStochasticSystem):
+# Discrete stochastic: x[k+1] = f(x[k], u[k]) + g(x[k], u[k]) * w[k]
+class MyDiscreteStochasticSystem(DiscreteStochasticSystem):
     def define_system(self):
         # Define difference equation
         pass
@@ -225,32 +242,39 @@ discrete_sys = continuous_sys.discretize(dt=0.01, method='rk4')
 ```
 src/
 ├── systems/
-│   ├── base/               # Core system classes
-│   │   ├── continuous_symbolic_system.py
-│   │   ├── continuous_stochastic_system.py
-│   │   ├── discrete_symbolic_system.py
-│   │   ├── discrete_stochastic_system.py
-│   │   ├── discretization/      # Discretization methods
-│   │   ├── numerical_integration/  # ODE/SDE solvers
-│   │   └── utils/              # Backend management, code generation
-│   └── builtin/            # Pre-defined systems
-│       ├── mechanical_systems.py  # Pendulum, cart-pole, etc.
-│       ├── aerial_systems.py      # Quadrotor, fixed-wing
-│       └── stochastic/            # Brownian motion, OU process
-├── types/                  # Type definitions (17 modules!)
-│   ├── core.py            # StateVector, ControlVector, etc.
-│   ├── linearization.py   # LinearizationResult, etc.
-│   ├── trajectories.py    # SimulationResult, etc.
+│   ├── base/                        # Core system framework
+│   │   ├── core/                    # System class hierarchy
+│   │   │   ├── symbolic_system_base.py       # Time-domain agnostic symbolic machinery
+│   │   │   ├── continuous_system_base.py     # Continuous-time interface
+│   │   │   ├── discrete_system_base.py       # Discrete-time interface
+│   │   │   ├── continuous_symbolic_system.py # ODE systems
+│   │   │   ├── continuous_stochastic_system.py # SDE systems
+│   │   │   ├── discrete_symbolic_system.py   # Discrete deterministic
+│   │   │   ├── discrete_stochastic_system.py # Discrete stochastic
+│   │   │   └── discretized_system.py         # Discretization wrapper
+│   │   ├── numerical_integration/   # ODE/SDE solver backends
+│   │   └── utils/                   # Backend management, code generation
+│   └── builtin/                     # Pre-defined systems
+│       ├── deterministic/
+│       │   ├── continuous/          # Pendulum, CartPole, Quadrotor, etc.
+│       │   └── discrete/            # Discrete-time systems
+│       └── stochastic/              # Brownian motion, OU process, etc.
+├── types/                           # Type definitions (17 modules)
+│   ├── core.py                      # StateVector, ControlVector, etc.
+│   ├── protocols.py                 # Interface definitions
+│   ├── linearization.py             # LinearizationResult, etc.
+│   ├── trajectories.py              # SimulationResult, etc.
 │   └── ...
-├── control/               # Control design utilities
-├── observers/             # State estimation
-└── visualization/         # Plotting tools
+├── control/                         # Control design utilities (not yet implemented)
+├── observers/                       # State estimation (not yet implemented)
+└── visualization/                   # Plotting tools (not yet implemented)
 ```
 
-### Abstract Base Classes (Upcoming Refactor)
+### Abstract Base Classes
 
-All systems inherit from clean base classes:
+All systems inherit from clean base classes with multiple inheritance:
 
+- `SymbolicSystemBase`: Time-domain agnostic symbolic machinery
 - `ContinuousSystemBase`: Abstract interface for continuous-time systems
 - `DiscreteSystemBase`: Abstract interface for discrete-time systems
 - Type-safe with comprehensive type hints
@@ -259,20 +283,23 @@ All systems inherit from clean base classes:
 
 ## Built-in Systems
 
-### Mechanical Systems
-- **Pendulum**: Simple pendulum with damping
-- **Cart-Pole**: Inverted pendulum on cart
-- **Mass-Spring-Damper**: Linear oscillator
+Ready-to-use systems in `src/systems/builtin/`:
 
-### Aerial Systems
-- **Quadrotor**: 6-DOF quadrotor dynamics
-- **PVTOL**: 6-DOF quadrotor dynamics, body-centered velocity coordinates
+### Mechanical Systems (`deterministic/continuous/mechanical_systems.py`)
+- **SymbolicPendulum**: Simple pendulum with damping
+- **SymbolicCartPole**: Inverted pendulum on cart
+- **SymbolicMassSpringDamper**: Linear oscillator
+- **SymbolicDoublePendulum**: Double pendulum system
 
-### Stochastic Processes
-- **Brownian Motion**: Standard Wiener process
-- **Geometric Brownian Motion**: Stock price model
-- **Ornstein-Uhlenbeck**: Mean-reverting process
-- **Discrete Random Walk**: Discrete-time stochastic
+### Aerial Systems (`deterministic/continuous/aerial_systems.py`)
+- **SymbolicQuadrotor**: 6-DOF quadrotor dynamics
+- **SymbolicPVTOL**: Planar vertical takeoff and landing
+
+### Stochastic Processes (`stochastic/`)
+- **BrownianMotion**: Standard Wiener process
+- **GeometricBrownianMotion**: Stock price model
+- **OrnsteinUhlenbeck**: Mean-reverting process
+- **DiscreteRandomWalk**: Discrete-time stochastic
 
 ---
 
@@ -339,27 +366,27 @@ pip install -e ".[all]"
 
 ## Documentation
 
-### Quick Links (Upcoming)
-- [Installation Guide](INSTALLATION.md)
-- [Migration Guide](MIGRATION_GUIDE.md)
-- [Changelog](CHANGELOG.md)
-- [Contributing](CONTRIBUTING.md)
-- [Examples](example_notebooks/)
+### Quick Links
+- [Changelog](docs/CHANGELOG.md)
+- [Type System Reference](docs/type_system_reference.md)
 
 ### API Reference
-Full API documentation coming soon. For now, see docstrings and type hints in source code.
+See docstrings and type hints in source code. Full API documentation coming soon.
 
 ---
 
 ## Roadmap
 
-### Current: v0.1.0 (In Development)
+### Current: v0.1.0
 - ✅ Refactored architecture with abstract base classes
-- ✅ Comprehensive type system
+- ✅ Comprehensive type system (17 modules)
 - ✅ Structured return types
-- ✅ Backward compatibility with v0.1.0
+- ✅ Multi-backend execution
+- ✅ ODE/SDE integration support
+- 🚧 Control design utilities (`src/control/`)
+- 🚧 State estimation (`src/observers/`)
+- 🚧 Visualization (`src/visualization/`)
 - 🚧 Complete documentation
-- 🚧 Extended examples
 
 ### Future: v0.2.0+
 - 🔮 **RL Environment Integration**: Automatic Gymnasium/PyBullet wrappers
@@ -371,29 +398,26 @@ Full API documentation coming soon. For now, see docstrings and type hints in so
 - 🔮 **Composite Systems**: Connect multiple systems together
 - 🔮 **Stochastic Observations**: Noisy measurement models
 
-See [Phase 17 in refactoring plan](docs/refactoring_checklist.md#phase-17-future-extensions-post-refactoring-roadmap) for details.
-
 ---
 
 ## Project Status
 
-**Current Version**: 0.1.0 (refactoring to 0.2.0 in progress)  
-**Status**: 🟡 Alpha - Active development  
-**Test Coverage**: ~85% (140+ test files)  
-**Type Coverage**: Partial (improving to 100%)
+**Current Version**: 0.1.0
+**Status**: 🟡 Alpha - Active development
+**Test Coverage**: 76 test modules
+**Source Code**: ~13,400 lines of Python
 
 ### What Works
 - ✅ Symbolic system definition
 - ✅ Multi-backend execution (NumPy, PyTorch, JAX)
 - ✅ ODE/SDE simulation
-- ✅ Discretization
-- ✅ Basic control (LQR, linearization)
-- ✅ State estimation (Kalman filters)
-- ✅ Visualization
+- ✅ Discretization (Euler, RK4, zero-order hold, etc.)
+- ✅ Comprehensive type system (17 modules)
 
 ### In Progress
-- 🚧 Architecture refactoring (see [refactoring plan](docs/refactoring_checklist.md))
-- 🚧 Complete type coverage
+- 🚧 Control design utilities (`src/control/`)
+- 🚧 State estimation (`src/observers/`)
+- 🚧 Visualization (`src/visualization/`)
 - 🚧 Extended documentation
 - 🚧 More examples
 
@@ -510,8 +534,7 @@ Original project: [Lyapunov-Stable Neural Controllers](https://github.com/gbenez
 
 - **GitHub**: [github.com/gbenezer/ControlDESymulation](https://github.com/gbenezer/ControlDESymulation)
 - **Issues**: [Report bugs or request features](https://github.com/gbenezer/ControlDESymulation/issues)
-- **Examples**: [Jupyter notebooks](example_notebooks/)
-- **Documentation**: Coming soon
+- **Documentation**: [docs/](docs/)
 
 ---
 
