@@ -377,6 +377,9 @@ cython_debug/
 # Pre-commit
 .pre-commit-config.yaml.bak
 
+# test virtual environments created when running test_pyproject.sh
+test_venv*/
+
 # ============================================================================
 # Keep These (Negations)
 # ============================================================================
