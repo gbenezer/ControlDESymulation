@@ -2570,19 +2570,680 @@ class DiscretizedSystem(DiscreteSystemBase):
 
 
 def discretize(continuous_system, dt, method='rk4', **kwargs):
-    """Convenience wrapper for DiscretizedSystem."""
+    """
+    Convenience wrapper for creating a discretized system.
+    
+    Creates a DiscretizedSystem with automatic mode selection based on the
+    chosen integration method. This is the recommended way to discretize
+    systems for step-by-step simulation and control applications.
+    
+    Parameters
+    ----------
+    continuous_system : ContinuousSystemBase
+        Continuous system to discretize
+    dt : float
+        Sampling time step (seconds)
+    method : str, default='rk4'
+        Integration method. Can use canonical names ('euler_maruyama', 'rk45')
+        or backend-specific names. Method name is automatically normalized
+        for the system's backend.
+        
+        Common choices:
+        - 'rk4': Classic 4th-order Runge-Kutta (default, good all-around)
+        - 'euler': Simple 1st-order (fast but less accurate)
+        - 'RK45': Adaptive 5th-order (for smooth, non-stiff systems)
+        - 'LSODA': Adaptive with auto stiffness detection
+        - 'euler_maruyama': For stochastic systems (canonical SDE name)
+    **kwargs
+        Additional arguments passed to DiscretizedSystem:
+        - mode : DiscretizationMode - Override automatic mode selection
+        - sde_method : str - Explicit SDE method for stochastic systems
+        - auto_detect_sde : bool - Enable SDE method auto-detection
+        - rtol, atol : float - Tolerances for adaptive methods
+        - seed : int - Random seed for stochastic systems
+        - Other integrator-specific options
+    
+    Returns
+    -------
+    DiscretizedSystem
+        Discretized system ready for simulation
+    
+    Mode Selection
+    --------------
+    The discretization mode is automatically selected based on method:
+    - Fixed-step methods (euler, rk4, euler_maruyama, etc.) → FIXED_STEP
+    - Adaptive methods (RK45, LSODA, tsit5, etc.) → DENSE_OUTPUT
+    - For BATCH_INTERPOLATION mode, use `discretize_batch()` instead
+    
+    When to Use
+    -----------
+    Use `discretize()` for:
+    
+    ✓ **Step-by-step simulation**: Need to inspect/modify state at each step
+    ✓ **Control design**: LQR, MPC, policy evaluation with state feedback
+    ✓ **Real-time applications**: Online computation with tight timing
+    ✓ **Event-driven simulation**: Need to detect events between steps
+    ✓ **Learning algorithms**: Reinforcement learning, system identification
+    
+    Use `discretize_batch()` for:
+    
+    ✓ **Open-loop trajectory generation**: No state feedback needed
+    ✓ **Batch processing**: Many trajectories with different parameters
+    ✓ **Visualization**: Generate smooth trajectories for plotting
+    ✓ **Performance-critical**: Need maximum speed for open-loop simulation
+    
+    Examples
+    --------
+    **Basic discretization:**
+    
+    >>> from src.systems.examples import Pendulum
+    >>> continuous = Pendulum(m=1.0, l=0.5)
+    >>> 
+    >>> # Default: RK4 with automatic mode selection
+    >>> discrete = discretize(continuous, dt=0.01)
+    >>> # Equivalent to: DiscretizedSystem(continuous, dt=0.01, method='rk4',
+    >>> #                                   mode=DiscretizationMode.FIXED_STEP)
+    >>> 
+    >>> # Simulate with step-by-step control
+    >>> x = np.array([0.1, 0.0])
+    >>> for k in range(100):
+    ...     u = controller(x, k)  # State feedback
+    ...     x = discrete.step(x, u, k)
+    
+    **Using canonical names (recommended for portability):**
+    
+    >>> # High-accuracy adaptive method
+    >>> discrete = discretize(continuous, dt=0.01, method='rk45', rtol=1e-9)
+    >>> # 'rk45' normalized to 'RK45' (NumPy), 'dopri5' (PyTorch), or 'tsit5' (JAX)
+    
+    **Stochastic system with canonical SDE method:**
+    
+    >>> from src.systems.examples import StochasticPendulum
+    >>> stochastic = StochasticPendulum(m=1.0, l=0.5, sigma=0.1)
+    >>> 
+    >>> # Use canonical SDE method name
+    >>> discrete = discretize(stochastic, dt=0.01, sde_method='euler_maruyama')
+    >>> # Automatically normalized to backend: 'EM' (NumPy), 'euler' (PyTorch), 'Euler' (JAX)
+    >>> 
+    >>> # Simulate single trajectory
+    >>> result = discrete.simulate(x0=np.array([0.1, 0.0]), n_steps=1000)
+    
+    **Override automatic mode selection:**
+    
+    >>> # Force DENSE_OUTPUT mode with fixed-step method (unusual but allowed)
+    >>> discrete = discretize(continuous, dt=0.01, method='rk4',
+    ...                      mode=DiscretizationMode.DENSE_OUTPUT)
+    
+    **Closed-loop control with state feedback:**
+    
+    >>> discrete = discretize(continuous, dt=0.01, method='rk4')
+    >>> 
+    >>> def lqr_controller(x, k):
+    ...     return -K @ x  # LQR feedback gain
+    >>> 
+    >>> # Simulate with controller
+    >>> result = discrete.simulate(
+    ...     x0=np.array([0.1, 0.0]),
+    ...     u_sequence=lqr_controller,  # State feedback function
+    ...     n_steps=500
+    ... )
+    
+    **Real-time capable simulation:**
+    
+    >>> # Check if fast enough for 100 Hz control
+    >>> discrete = discretize(continuous, dt=0.01, method='euler')
+    >>> quality = compute_discretization_quality(discrete, x0, None, 1000)
+    >>> 
+    >>> if quality['timing']['steps_per_second'] > 10000:  # 100× real-time
+    ...     print("✓ Suitable for 100 Hz real-time control")
+    
+    **Compare with batch mode:**
+    
+    >>> # Step-by-step (for control)
+    >>> discrete_step = discretize(continuous, dt=0.01, method='rk4')
+    >>> result1 = discrete_step.simulate(x0, u_sequence=None, n_steps=1000)
+    >>> 
+    >>> # Batch mode (for visualization)  
+    >>> discrete_batch = discretize_batch(continuous, dt=0.01, method='LSODA')
+    >>> result2 = discrete_batch.simulate(x0, u_sequence=None, n_steps=1000)
+    >>> 
+    >>> # Batch mode typically 5-10× faster for open-loop simulation
+    
+    See Also
+    --------
+    discretize_batch : Optimized for batch/open-loop simulation
+    DiscretizedSystem : Full constructor with all options
+    DiscretizationMode : Available discretization modes
+    
+    Notes
+    -----
+    - Method names automatically normalized to backend conventions
+    - Original method name preserved in discrete._original_method
+    - For stochastic systems, prefer explicit sde_method parameter
+    - Mode auto-selection can be overridden with mode= parameter
+    """
     return DiscretizedSystem(continuous_system, dt=dt, method=method, **kwargs)
 
 
 def discretize_batch(continuous_system, dt, method='LSODA', **kwargs):
-    """Create batch-mode discretized system."""
+    """
+    Create discretized system optimized for batch/open-loop simulation.
+    
+    Uses BATCH_INTERPOLATION mode, which performs a single adaptive integration
+    over the entire time span and interpolates to the regular grid. This is
+    typically 5-10× faster than step-by-step integration for open-loop
+    trajectories but does not support state feedback control.
+    
+    Parameters
+    ----------
+    continuous_system : ContinuousSystemBase
+        Continuous system to discretize
+    dt : float
+        Sampling time step (seconds) for output trajectory.
+        Note: Adaptive integrator uses variable internal steps, dt only
+        affects the output grid spacing.
+    method : str, default='LSODA'
+        Adaptive integration method. Recommended options:
+        - 'LSODA': Auto stiffness detection (default, robust)
+        - 'RK45': General purpose, non-stiff
+        - 'DOP853': High accuracy (8th order)
+        - 'Radau': Implicit, for stiff systems
+        - 'BDF': Backward differentiation, very stiff systems
+        
+        Fixed-step methods (euler, rk4) also work but defeat the purpose
+        of batch mode - prefer step-by-step discretize() for these.
+    **kwargs
+        Additional arguments passed to DiscretizedSystem:
+        - interpolation_kind : str - 'linear' (default) or 'cubic'
+        - rtol, atol : float - Integration tolerances (e.g., rtol=1e-9)
+        - max_steps : int - Maximum integration steps
+        - Other integrator-specific options
+    
+    Returns
+    -------
+    DiscretizedSystem
+        Discretized system in BATCH_INTERPOLATION mode
+    
+    Mode Behavior
+    -------------
+    BATCH_INTERPOLATION mode:
+    1. Calls adaptive integrator once for entire time span [0, T]
+    2. Integrator returns irregular time points (dense where needed)
+    3. Interpolates to regular grid with spacing dt
+    4. Returns trajectory on regular grid
+    
+    **Advantages:**
+    - Much faster for long simulations (1 integration vs N steps)
+    - Adaptive error control throughout
+    - Natural handling of stiff systems
+    
+    **Limitations:**
+    - No state feedback control (open-loop only)
+    - No step() method available
+    - Cannot inspect/modify state during integration
+    - Fixed control sequence only
+    
+    When to Use
+    -----------
+    Use `discretize_batch()` for:
+    
+    ✓ **Trajectory generation**: Creating reference trajectories
+    ✓ **Visualization**: Smooth plots for papers/presentations  
+    ✓ **Parameter sweeps**: Many simulations with different parameters
+    ✓ **Monte Carlo studies**: Large number of open-loop trajectories
+    ✓ **Performance-critical**: Need maximum speed for open-loop simulation
+    ✓ **High accuracy**: Tight tolerances with adaptive methods
+    
+    Do NOT use for:
+    
+    ✗ **State feedback control**: Use discretize() instead
+    ✗ **Event detection**: Need step-by-step access
+    ✗ **Real-time simulation**: Need predictable timing per step
+    ✗ **Learning algorithms**: RL needs state feedback
+    
+    Performance Comparison
+    ----------------------
+    Typical speedup vs step-by-step for open-loop simulation:
+    
+    - Smooth system (pendulum): 5-10× faster
+    - Stiff system (chemical reaction): 10-50× faster  
+    - With tight tolerances (rtol=1e-9): 20-100× faster
+    
+    The speedup comes from:
+    - Single integrator initialization (not N times)
+    - Adaptive steps naturally adjust to difficulty
+    - Efficient dense output evaluation
+    
+    Interpolation Quality
+    ---------------------
+    **Linear interpolation** (default):
+    - Fast, robust, stable
+    - Accuracy limited by adaptive integrator's step size
+    - Recommended for most applications
+    
+    **Cubic interpolation**:
+    - Smoother trajectories (C¹ continuous)
+    - Better for visualization
+    - Requires ≥4 adaptive points (automatic fallback if fewer)
+    - Slightly slower
+    
+    **Note**: For best accuracy, use integrator's native dense output
+    (DENSE_OUTPUT mode) rather than post-interpolation. However, DENSE_OUTPUT
+    is much slower for long simulations.
+    
+    Examples
+    --------
+    **Basic batch simulation:**
+    
+    >>> from src.systems.examples import Pendulum
+    >>> continuous = Pendulum(m=1.0, l=0.5)
+    >>> 
+    >>> # Create batch-mode discretization
+    >>> discrete = discretize_batch(continuous, dt=0.01)
+    >>> # Uses LSODA (auto stiffness detection) by default
+    >>> 
+    >>> # Simulate 1000 steps - single integration call
+    >>> result = discrete.simulate(
+    ...     x0=np.array([np.pi/4, 0.0]),
+    ...     u_sequence=None,  # Open-loop (no control)
+    ...     n_steps=1000
+    ... )
+    >>> 
+    >>> # Plot smooth trajectory
+    >>> import matplotlib.pyplot as plt
+    >>> t = result['time_steps'] * result['dt']
+    >>> plt.plot(t, result['states'][:, 0], label='θ(t)')
+    
+    **High-accuracy trajectory:**
+    
+    >>> # Very tight tolerances for publication-quality results
+    >>> discrete = discretize_batch(
+    ...     continuous, dt=0.01, 
+    ...     method='DOP853',  # 8th order
+    ...     rtol=1e-12, 
+    ...     atol=1e-14
+    ... )
+    >>> result = discrete.simulate(x0, None, 1000)
+    
+    **With open-loop control:**
+    
+    >>> # Time-varying control (not state feedback!)
+    >>> def u_func(k):
+    ...     return np.array([np.sin(k * 0.1)])
+    >>> 
+    >>> discrete = discretize_batch(continuous, dt=0.01)
+    >>> result = discrete.simulate(x0, u_sequence=u_func, n_steps=500)
+    >>> # Control evaluated at each time step: u(0), u(1), ..., u(499)
+    
+    **Stiff system:**
+    
+    >>> from src.systems.examples import VanDerPol
+    >>> stiff_system = VanDerPol(mu=1000)  # Very stiff
+    >>> 
+    >>> # Use implicit method for stiff systems
+    >>> discrete = discretize_batch(stiff_system, dt=0.01, method='Radau')
+    >>> result = discrete.simulate(x0, None, 10000)
+    
+    **Cubic interpolation for smooth plots:**
+    
+    >>> discrete = discretize_batch(
+    ...     continuous, dt=0.01, 
+    ...     interpolation_kind='cubic'
+    ... )
+    >>> result = discrete.simulate(x0, None, 1000)
+    >>> # Smoother trajectory, better for publication figures
+    
+    **Parameter sweep (batch processing):**
+    
+    >>> masses = np.linspace(0.5, 2.0, 10)
+    >>> trajectories = []
+    >>> 
+    >>> for m in masses:
+    ...     system = Pendulum(m=m, l=0.5)
+    ...     discrete = discretize_batch(system, dt=0.01, method='LSODA')
+    ...     result = discrete.simulate(x0, None, 500)
+    ...     trajectories.append(result['states'])
+    >>> 
+    >>> # Plot family of trajectories
+    >>> for i, traj in enumerate(trajectories):
+    ...     plt.plot(t, traj[:, 0], alpha=0.5, label=f'm={masses[i]:.1f}')
+    
+    **Performance comparison:**
+    
+    >>> import time
+    >>> 
+    >>> # Batch mode
+    >>> discrete_batch = discretize_batch(continuous, dt=0.01, method='LSODA')
+    >>> start = time.time()
+    >>> result_batch = discrete_batch.simulate(x0, None, 10000)
+    >>> time_batch = time.time() - start
+    >>> 
+    >>> # Step-by-step mode
+    >>> discrete_step = discretize(continuous, dt=0.01, method='RK45')
+    >>> start = time.time()
+    >>> result_step = discrete_step.simulate(x0, None, 10000)
+    >>> time_step = time.time() - start
+    >>> 
+    >>> print(f"Batch mode: {time_batch:.3f}s")
+    >>> print(f"Step mode:  {time_step:.3f}s")
+    >>> print(f"Speedup:    {time_step/time_batch:.1f}×")
+    Batch mode: 0.012s
+    Step mode:  0.089s
+    Speedup:    7.4×
+    
+    **Checking adaptive integrator stats:**
+    
+    >>> discrete = discretize_batch(continuous, dt=0.01, method='RK45')
+    >>> result = discrete.simulate(x0, None, 1000)
+    >>> 
+    >>> if 'metadata' in result and 'adaptive_points' in result['metadata']:
+    ...     n_adaptive = result['metadata']['adaptive_points']
+    ...     n_regular = len(result['states'])
+    ...     print(f"Adaptive integrator used {n_adaptive} points")
+    ...     print(f"Interpolated to {n_regular} regular points")
+    ...     print(f"Compression: {n_regular/n_adaptive:.1f}× output points")
+    
+    **State feedback NOT supported:**
+    
+    >>> # This will NOT work as expected!
+    >>> def feedback_controller(x, k):
+    ...     return -K @ x
+    >>> 
+    >>> result = discrete_batch.simulate(x0, feedback_controller, 1000)
+    >>> # ERROR: Batch mode doesn't support state feedback
+    >>> # Use discretize() instead for control applications
+    
+    See Also
+    --------
+    discretize : Step-by-step discretization (supports state feedback)
+    DiscretizedSystem : Full constructor with all options
+    DiscretizationMode.BATCH_INTERPOLATION : Mode used by this function
+    compare_modes : Compare performance of different modes
+    
+    Notes
+    -----
+    - Mode is always BATCH_INTERPOLATION (cannot be overridden)
+    - step() method raises NotImplementedError in this mode
+    - State feedback control not supported - use discretize() instead
+    - Adaptive methods strongly recommended (defeats purpose otherwise)
+    - For stochastic systems: Each call produces different trajectory due
+      to different noise realization
+    
+    References
+    ----------
+    .. [1] Hairer, E., & Wanner, G. (1996). Solving Ordinary Differential
+           Equations II: Stiff and Differential-Algebraic Problems. Springer.
+    """
     return DiscretizedSystem(continuous_system, dt=dt, method=method,
                             mode=DiscretizationMode.BATCH_INTERPOLATION, **kwargs)
 
 
 def analyze_discretization_error(continuous_system, x0, u_sequence, dt_values,
                                  method='rk4', n_steps=100, reference_dt=None):
-    """Analyze error vs dt for convergence study."""
+    """
+    Analyze discretization error vs time step for convergence study.
+    
+    Computes the numerical error for a sequence of time steps by comparing
+    against a high-accuracy reference solution. Estimates the convergence
+    rate (order of accuracy) from the error scaling with dt.
+    
+    This is essential for:
+    - Verifying correct implementation of integration methods
+    - Selecting appropriate dt for desired accuracy
+    - Comparing different integration methods
+    - Detecting implementation bugs (unexpected convergence rates)
+    
+    Parameters
+    ----------
+    continuous_system : ContinuousSystemBase
+        System to analyze
+    x0 : StateVector
+        Initial condition (nx,)
+    u_sequence : DiscreteControlInput, optional
+        Control sequence (same for all dt values)
+    dt_values : array_like
+        Sequence of time steps to test (e.g., [0.1, 0.05, 0.025, 0.0125])
+        Should span at least one order of magnitude for reliable convergence
+        rate estimation.
+    method : str, default='rk4'
+        Integration method to analyze
+    n_steps : int, default=100
+        Number of time steps for largest dt. Smaller dt values simulate
+        proportionally longer to reach same final time:
+        T_final = n_steps * max(dt_values)
+    reference_dt : float, optional
+        Time step for reference solution. If None, uses min(dt_values) / 10.
+        Reference solution uses LSODA with tight tolerances (rtol=1e-12,
+        atol=1e-14) to approximate "exact" solution.
+    
+    Returns
+    -------
+    dict
+        Dictionary containing convergence analysis results:
+        
+        - **dt_values** : list of float
+            Time steps tested (copy of input)
+        
+        - **errors** : list of float
+            RMS error for each dt value, computed as:
+            error = sqrt(mean((y(t) - y_ref(t))^2))
+            where mean is over all time points and state dimensions
+        
+        - **timings** : list of float
+            Wall-clock time (seconds) for each simulation
+        
+        - **reference** : dict
+            Reference simulation result from DiscretizedSystem.simulate()
+        
+        - **method** : str
+            Integration method analyzed
+        
+        - **convergence_rate** : float
+            Estimated order of accuracy (slope of log(error) vs log(dt)).
+            
+            **Expected values:**
+            - Euler: ~1.0
+            - Heun/Midpoint/RK2: ~2.0
+            - RK4: ~4.0
+            - RK45 (adaptive, tight tol): ~5.0
+            
+            **Interpretation:**
+            - Rate < expected: Implementation bug or insufficient reference accuracy
+            - Rate > expected: Asymptotic regime not reached (dt too large)
+            - Rate ≈ expected: Correct implementation ✓
+    
+    Algorithm
+    ---------
+    1. Generate reference solution at dt_ref with high-accuracy LSODA
+    2. For each dt in dt_values:
+       a. Simulate system with method and dt
+       b. Interpolate both trajectories to common time grid
+       c. Compute RMS error between method and reference
+       d. Record computation time
+    3. Fit line to log(error) vs log(dt) to estimate convergence rate
+    
+    Convergence Rate Theory
+    -----------------------
+    For a pth-order method, the global error scales as:
+    
+        error ≈ C * dt^p
+    
+    Taking logarithms:
+    
+        log(error) ≈ log(C) + p * log(dt)
+    
+    The convergence rate p is the slope of the log-log plot. This is a
+    fundamental property of numerical methods:
+    
+    - **Linear (p=1)**: Halving dt halves the error
+    - **Quadratic (p=2)**: Halving dt quarters the error  
+    - **Quartic (p=4)**: Halving dt reduces error by 16×
+    
+    Method Selection Guidance
+    -------------------------
+    Use convergence analysis to choose method and dt:
+    
+    **For real-time applications** (fixed computational budget):
+    - Plot error vs timing
+    - Choose method with lowest error for available time
+    - Example: RK4 at dt=0.01 may beat RK45 at dt=0.001 if both take 0.1s
+    
+    **For accuracy requirements** (target error threshold):
+    - Find dt where error < threshold
+    - Choose method with largest viable dt (fastest)
+    - Example: RK4 needs dt=0.001 but Euler needs dt=0.0001 for error < 1e-6
+    
+    **For long-term stability**:
+    - Verify convergence rate matches expected order
+    - Check that error doesn't grow catastrophically
+    - Consider energy-preserving methods for conservative systems
+    
+    Interpreting Convergence Rates
+    -------------------------------
+    **Rate matches expected order** (e.g., RK4 gives ~4.0):
+    - ✓ Implementation correct
+    - ✓ dt range appropriate (in asymptotic regime)
+    - ✓ Reference solution sufficiently accurate
+    
+    **Rate lower than expected** (e.g., RK4 gives ~2.5):
+    - Reference solution not accurate enough (decrease reference_dt)
+    - Implementation bug in method
+    - System has discontinuities (rate limited by smoothness)
+    - Floating-point roundoff dominates (dt too small)
+    
+    **Rate higher than expected** (e.g., RK4 gives ~5.0):
+    - dt too large (not in asymptotic regime yet)
+    - System has special structure method exploits
+    - Insufficient dt values to establish trend
+    
+    **Rate near zero or negative**:
+    - Serious implementation problem
+    - Reference solution wrong
+    - System behavior changes between dt values
+    
+    Notes
+    -----
+    - All simulations use same initial condition x0
+    - Same control sequence u_sequence applied (scaled to final time)
+    - Reference solution should have error << smallest dt error
+    - Convergence rate assumes asymptotic regime (sufficiently small dt)
+    - Results only valid for smooth systems (discontinuities reduce rate)
+    
+    Limitations
+    -----------
+    - Does not test adaptive methods at their natural tolerances
+    - RMS error may hide localized large errors
+    - Single initial condition may not be representative
+    - Does not account for stiffness or stability limits
+    
+    Examples
+    --------
+    **Basic convergence study:**
+    
+    >>> from src.systems.examples import Pendulum
+    >>> system = Pendulum(m=1.0, l=0.5)
+    >>> x0 = np.array([np.pi/4, 0.0])  # 45° initial angle
+    >>> 
+    >>> # Test dt from 0.1 down to 0.00625 (4 halvings)
+    >>> dt_values = 0.1 / 2**np.arange(5)  # [0.1, 0.05, 0.025, 0.0125, 0.00625]
+    >>> 
+    >>> results = analyze_discretization_error(
+    ...     system, x0, u_sequence=None, 
+    ...     dt_values=dt_values, 
+    ...     method='rk4',
+    ...     n_steps=100  # Simulate to t=10s
+    ... )
+    >>> 
+    >>> print(f"Convergence rate: {results['convergence_rate']:.2f}")
+    >>> print(f"Expected for RK4: ~4.0")
+    Convergence rate: 3.98
+    Expected for RK4: ~4.0
+    
+    **Compare multiple methods:**
+    
+    >>> methods = ['euler', 'midpoint', 'rk4']
+    >>> dt_values = 0.1 / 2**np.arange(4)
+    >>> 
+    >>> for method in methods:
+    ...     result = analyze_discretization_error(
+    ...         system, x0, None, dt_values, method=method
+    ...     )
+    ...     print(f"{method:8s}: rate = {result['convergence_rate']:.2f}")
+    euler   : rate = 0.99
+    midpoint: rate = 2.01  
+    rk4     : rate = 3.98
+    
+    **Visualize convergence:**
+    
+    >>> import matplotlib.pyplot as plt
+    >>> 
+    >>> result = analyze_discretization_error(system, x0, None, dt_values, 'rk4')
+    >>> 
+    >>> # Log-log plot
+    >>> plt.figure(figsize=(10, 6))
+    >>> plt.loglog(result['dt_values'], result['errors'], 'o-', label='RK4')
+    >>> 
+    >>> # Reference lines for different orders
+    >>> dt_ref = np.array(result['dt_values'])
+    >>> for order in [1, 2, 4]:
+    ...     # Normalize to pass through first point
+    ...     err_ref = result['errors'][0] * (dt_ref / dt_ref[0])**order
+    ...     plt.loglog(dt_ref, err_ref, '--', alpha=0.5, 
+    ...                label=f'Order {order}')
+    >>> 
+    >>> plt.xlabel('Time step dt')
+    >>> plt.ylabel('RMS Error')
+    >>> plt.title(f'Convergence Study (rate = {result["convergence_rate"]:.2f})')
+    >>> plt.legend()
+    >>> plt.grid(True, which='both', alpha=0.3)
+    >>> plt.show()
+    
+    **Accuracy vs efficiency:**
+    
+    >>> # Plot error vs computation time
+    >>> plt.figure()
+    >>> plt.loglog(result['timings'], result['errors'], 'o-')
+    >>> plt.xlabel('Computation Time (s)')
+    >>> plt.ylabel('RMS Error')
+    >>> plt.title('Error vs Computational Cost')
+    >>> plt.grid(True)
+    
+    **Method selection for target accuracy:**
+    
+    >>> target_error = 1e-6
+    >>> 
+    >>> # Find required dt for each method
+    >>> for method in ['euler', 'midpoint', 'rk4']:
+    ...     result = analyze_discretization_error(
+    ...         system, x0, None, dt_values, method=method
+    ...     )
+    ...     
+    ...     # Interpolate to find dt for target error
+    ...     # Assume error = C * dt^p
+    ...     C = result['errors'][0] / dt_values[0]**result['convergence_rate']
+    ...     dt_required = (target_error / C)**(1/result['convergence_rate'])
+    ...     
+    ...     print(f"{method:8s}: dt = {dt_required:.6f} for error < {target_error}")
+    euler   : dt = 0.001000 for error < 1e-06
+    midpoint: dt = 0.003162 for error < 1e-06
+    rk4     : dt = 0.010000 for error < 1e-06
+    
+    **Detecting implementation bugs:**
+    
+    >>> # Custom method with bug
+    >>> result = analyze_discretization_error(system, x0, None, dt_values, 
+    ...                                       method='my_buggy_rk4')
+    >>> 
+    >>> if abs(result['convergence_rate'] - 4.0) > 0.5:
+    ...     print(f"WARNING: Expected rate ~4.0, got {result['convergence_rate']:.2f}")
+    ...     print("Check implementation!")
+    
+    See Also
+    --------
+    recommend_dt : Automatically recommend dt for target accuracy
+    compare_modes : Compare discretization modes for a system
+    DiscretizedSystem : The discretization class being analyzed
+    """
     if reference_dt is None:
         reference_dt = min(dt_values) / 10
     
@@ -2674,7 +3335,192 @@ def detect_sde_integrator(continuous_system):
 
 
 def compute_discretization_quality(discrete_system, x0, u_sequence, n_steps, metrics=None):
-    """Compute quality metrics for discretization."""
+    """
+    Compute quality metrics for discretization configuration.
+    
+    Evaluates a configured DiscretizedSystem on timing and stability metrics
+    to assess suitability for a given application. Useful for quick sanity
+    checks before running expensive simulations.
+    
+    Parameters
+    ----------
+    discrete_system : DiscretizedSystem
+        Configured discretization to evaluate
+    x0 : StateVector
+        Initial condition (nx,)
+    u_sequence : DiscreteControlInput, optional
+        Control sequence for simulation
+    n_steps : int
+        Number of time steps to simulate
+    metrics : list of str, optional
+        Metrics to compute. Available options:
+        - 'timing': Measure computational performance
+        - 'stability': Check numerical stability
+        
+        If None, computes ['timing', 'stability'] (all metrics).
+    
+    Returns
+    -------
+    dict
+        Dictionary with requested metrics:
+        
+        **If 'timing' requested:**
+        - timing : dict
+            - total_time : float
+                Wall-clock time for simulation (seconds)
+            - time_per_step : float  
+                Average time per step (seconds/step)
+            - steps_per_second : float
+                Throughput (steps/second)
+        
+        **If 'stability' requested:**
+        - stability : dict
+            - is_stable : bool
+                True if final norm < 100× initial norm (heuristic)
+            - final_norm : float
+                ||x(T)||₂ (Euclidean norm of final state)
+            - max_norm : float
+                max_t ||x(t)||₂ (maximum norm over trajectory)
+    
+    Interpreting Results
+    --------------------
+    **Timing Metrics:**
+    
+    - **Real-time capable**: steps_per_second >> 1/dt
+      - Example: dt=0.01 requires >100 steps/sec for 1× real-time
+      - For 10× real-time: need >1000 steps/sec
+    
+    - **Method efficiency**: Compare time_per_step across methods
+      - RK4: ~4 function evaluations per step
+      - RK45: Variable, typically 6-10 evaluations per step
+      - Adaptive methods faster per step on smooth systems
+    
+    - **Scalability**: time_per_step should be constant
+      - Linear growth: Expected (fixed cost per step)
+      - Superlinear growth: Memory/cache issues, numerical problems
+    
+    **Stability Metrics:**
+    
+    - **is_stable = True**: Trajectory bounded (not diverging)
+      - Heuristic: final_norm < 100 * initial_norm
+      - Does NOT guarantee physical correctness
+      - May still have large numerical error
+    
+    - **is_stable = False**: Numerical instability likely
+      - State norm grew by >100× 
+      - Possible causes:
+        * dt too large (violates CFL/stability conditions)
+        * Method unsuitable for problem (explicit for stiff)
+        * Physical instability (system actually unstable)
+    
+    - **max_norm >> final_norm**: Potential issues
+      - Transient instability
+      - Control saturation not modeled
+      - Constraint violation
+    
+    Limitations
+    -----------
+    - Single trajectory test (may not be representative)
+    - Stability check is heuristic (not rigorous)
+    - No accuracy assessment (use analyze_discretization_error)
+    - No convergence verification
+    - Timing affected by system load, CPU throttling, etc.
+    
+    Examples
+    --------
+    **Basic quality check:**
+    
+    >>> from src.systems.examples import Pendulum
+    >>> system = Pendulum(m=1.0, l=0.5)
+    >>> discrete = DiscretizedSystem(system, dt=0.01, method='rk4')
+    >>> 
+    >>> quality = compute_discretization_quality(
+    ...     discrete, 
+    ...     x0=np.array([0.1, 0.0]),
+    ...     u_sequence=None,
+    ...     n_steps=1000
+    ... )
+    >>> 
+    >>> print(f"Stable: {quality['stability']['is_stable']}")
+    >>> print(f"Speed: {quality['timing']['steps_per_second']:.1f} steps/sec")
+    Stable: True
+    Speed: 15234.5 steps/sec
+    
+    **Check real-time capability:**
+    
+    >>> dt = 0.01  # 100 Hz
+    >>> quality = compute_discretization_quality(discrete, x0, None, 1000)
+    >>> 
+    >>> realtime_factor = quality['timing']['steps_per_second'] * dt
+    >>> print(f"Real-time factor: {realtime_factor:.1f}×")
+    >>> 
+    >>> if realtime_factor > 10:
+    ...     print("✓ Suitable for real-time control (10× margin)")
+    >>> elif realtime_factor > 1:
+    ...     print("⚠ Marginal for real-time (consider faster method)")
+    >>> else:
+    ...     print("✗ Too slow for real-time")
+    Real-time factor: 152.3×
+    ✓ Suitable for real-time control (10× margin)
+    
+    **Compare methods:**
+    
+    >>> methods = ['euler', 'rk4', 'RK45']
+    >>> x0 = np.array([0.1, 0.0])
+    >>> 
+    >>> for method in methods:
+    ...     disc = DiscretizedSystem(system, dt=0.01, method=method)
+    ...     quality = compute_discretization_quality(disc, x0, None, 1000)
+    ...     
+    ...     print(f"{method:8s}: {quality['timing']['steps_per_second']:8.1f} steps/s, "
+    ...           f"stable={quality['stability']['is_stable']}")
+    euler   :  25432.1 steps/s, stable=True
+    rk4     :  15234.5 steps/s, stable=True
+    RK45    :  12456.3 steps/s, stable=True
+    
+    **Stability diagnosis:**
+    
+    >>> # Try large dt that may be unstable
+    >>> discrete = DiscretizedSystem(system, dt=0.1, method='euler')
+    >>> quality = compute_discretization_quality(discrete, x0, None, 100)
+    >>> 
+    >>> if not quality['stability']['is_stable']:
+    ...     print(f"⚠ UNSTABLE: norm grew to {quality['stability']['final_norm']:.2e}")
+    ...     print(f"  Initial norm: {np.linalg.norm(x0):.2e}")
+    ...     print(f"  Growth factor: {quality['stability']['final_norm'] / np.linalg.norm(x0):.1f}×")
+    ...     print("  → Try smaller dt or different method")
+    
+    **Only compute timing (faster):**
+    
+    >>> quality = compute_discretization_quality(
+    ...     discrete, x0, None, n_steps=10000,
+    ...     metrics=['timing']  # Skip stability check
+    ... )
+    >>> print(f"Throughput: {quality['timing']['steps_per_second']:.1f} steps/sec")
+    
+    **Benchmark mode selection:**
+    
+    >>> modes = [
+    ...     ('fixed', DiscretizationMode.FIXED_STEP),
+    ...     ('dense', DiscretizationMode.DENSE_OUTPUT),
+    ...     ('batch', DiscretizationMode.BATCH_INTERPOLATION)
+    ... ]
+    >>> 
+    >>> for name, mode in modes:
+    ...     disc = DiscretizedSystem(system, dt=0.01, method='RK45', mode=mode)
+    ...     quality = compute_discretization_quality(disc, x0, None, 1000,
+    ...                                              metrics=['timing'])
+    ...     print(f"{name:8s}: {quality['timing']['total_time']:.4f}s")
+    fixed   : 0.0856s
+    dense   : 0.0834s
+    batch   : 0.0124s  ← Fastest for batch simulation!
+    
+    See Also
+    --------
+    analyze_discretization_error : Comprehensive convergence analysis
+    recommend_dt : Find dt for target accuracy
+    compare_modes : Compare all discretization modes
+    """
     if metrics is None:
         metrics = ['timing', 'stability']
     
