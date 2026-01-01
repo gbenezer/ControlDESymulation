@@ -2287,27 +2287,384 @@ class DiscretizedSystem(DiscreteSystemBase):
     
     def get_info(self) -> dict:
         """
-        Get comprehensive discretization information.
+        Get comprehensive discretization information and configuration.
+        
+        Returns detailed information about the discretization including method
+        selection, system type, capabilities, and any warnings or recommendations.
+        Useful for debugging, logging, and verifying configuration.
         
         Returns
         -------
         dict
-            Dictionary containing:
-            - Basic info: class, mode, method, dt, dimensions
-            - System type: is_stochastic, is_symbolic, continuous_system_type
-            - Capabilities: supports_step, supports_closed_loop, interpolation
-            - Stochastic info: noise type, SDE method, availability (if stochastic)
-            - Symbolic info: symbolic variables, Jacobian availability (if symbolic)
-            - Integrator settings: kwargs passed to integrator
+            Nested dictionary with complete discretization information.
+            
+            **Always present keys:**
+            
+            - **class** : str
+                Class name ('DiscretizedSystem')
+            
+            - **mode** : str
+                Discretization mode: 'fixed_step', 'dense_output', or 
+                'batch_interpolation'
+            
+            - **method** : str
+                Integration method being used (after normalization)
+            
+            - **dt** : float
+                Time step in seconds
+            
+            - **is_fixed_step** : bool
+                True if method uses fixed time stepping
+            
+            - **interpolation** : str
+                Interpolation kind: 'linear' or 'cubic'
+            
+            - **supports_step** : bool
+                True if step() method is available (False for BATCH mode)
+            
+            - **supports_closed_loop** : bool
+                True if state feedback control is supported (False for BATCH mode)
+            
+            - **supports_linearization** : bool
+                True if linearize() method is available (always True)
+            
+            - **continuous_system_type** : str
+                Name of wrapped continuous system class
+            
+            - **is_stochastic** : bool
+                True if system is stochastic
+            
+            - **is_symbolic** : bool
+                True if system has symbolic expressions
+            
+            - **dimensions** : dict
+                System dimensions:
+                
+                - 'nx' : int - Number of states
+                - 'nu' : int - Number of control inputs
+                - 'ny' : int - Number of outputs
+            
+            - **integrator_kwargs** : dict
+                Additional arguments passed to integrator (e.g., rtol, atol, seed)
+            
+            - **method_selection** : dict
+                Method selection information:
+                
+                - 'source' : str
+                    How method was selected:
+                    
+                    - 'explicit' - sde_method explicitly provided and used
+                    - 'explicit_unavailable' - sde_method requested but unavailable
+                    - 'deterministic_fallback' - stochastic system using deterministic
+                    - 'user_specified' - user chose method or disabled auto-detect
+                    - 'deterministic_system' - deterministic system (no special handling)
+                
+                - 'original_method' : str
+                    Method name as provided by user (before normalization)
+                
+                - 'final_method' : str
+                    Method name after normalization (same as 'method' key above)
+                
+                - 'description' : str
+                    Human-readable description of method selection process
+            
+            **Conditional keys:**
+            
+            - **stochastic_info** : dict (only if is_stochastic=True)
+                Stochastic system information:
+                
+                - 'is_stochastic' : bool - Always True in this section
+                - 'has_sde_integrator' : bool - SDE integrator available?
+                - 'recommended_method' : str - Recommended SDE method for system
+                - 'noise_ignored' : bool - True if using deterministic method
+                - 'is_additive_noise' : bool or None - Noise structure
+                - 'is_diagonal_noise' : bool or None - Noise structure
+                - 'sde_type' : str - 'ito', 'stratonovich', or 'unknown'
+                - 'noise_dimension' : int or None - Number of noise sources (nw)
+            
+            - **symbolic_info** : dict (only if is_symbolic=True)
+                Symbolic system information:
+                
+                - 'is_symbolic' : bool - Always True in this section
+                - 'has_symbolic_jacobian' : bool - Symbolic Jacobian available?
+                - 'can_generate_code' : bool - Code generation possible?
+                - 'state_vars' : list of str or None - State variable names
+                - 'control_vars' : list of str or None - Control variable names
+                - 'parameters' : dict or None - Symbolic parameters {name: value}
+            
+            - **warnings** : list of str (only if warnings exist)
+                List of warning messages about configuration issues:
+                
+                - Stochastic system with deterministic method (noise ignored)
+                - Missing SDE integrator
+                - BATCH mode with stochastic system
+                - Cubic interpolation with potential fallback
         
-        Examples
-        --------
-        >>> discrete = DiscretizedSystem(stochastic_system, dt=0.01)
+        Dictionary Schema Example
+        -------------------------
+        **Deterministic system:**
+    ```python
+        {
+            'class': 'DiscretizedSystem',
+            'mode': 'fixed_step',
+            'method': 'rk4',
+            'dt': 0.01,
+            'is_fixed_step': True,
+            'interpolation': 'linear',
+            'supports_step': True,
+            'supports_closed_loop': True,
+            'supports_linearization': True,
+            'continuous_system_type': 'Pendulum',
+            'is_stochastic': False,
+            'is_symbolic': False,
+            'dimensions': {
+                'nx': 2,
+                'nu': 1,
+                'ny': 2
+            },
+            'integrator_kwargs': {},
+            'method_selection': {
+                'source': 'deterministic_system',
+                'original_method': 'rk4',
+                'final_method': 'rk4',
+                'description': 'Deterministic system'
+            }
+        }
+    ```
+        
+        **Stochastic system with SDE method:**
+    ```python
+        {
+            'class': 'DiscretizedSystem',
+            'mode': 'fixed_step',
+            'method': 'EM',  # Normalized from 'euler_maruyama'
+            'dt': 0.01,
+            'is_fixed_step': True,
+            'interpolation': 'linear',
+            'supports_step': True,
+            'supports_closed_loop': True,
+            'supports_linearization': True,
+            'continuous_system_type': 'StochasticPendulum',
+            'is_stochastic': True,
+            'is_symbolic': False,
+            'dimensions': {
+                'nx': 2,
+                'nu': 1,
+                'ny': 2
+            },
+            'integrator_kwargs': {'seed': 42},
+            'method_selection': {
+                'source': 'explicit',
+                'original_method': 'euler_maruyama',
+                'final_method': 'EM',
+                'description': "Explicitly set via sde_method='EM'"
+            },
+            'stochastic_info': {
+                'is_stochastic': True,
+                'has_sde_integrator': True,
+                'recommended_method': 'euler_maruyama',
+                'noise_ignored': False,
+                'is_additive_noise': True,
+                'is_diagonal_noise': False,
+                'sde_type': 'ito',
+                'noise_dimension': 2
+            }
+        }
+    ```
+        
+        **Symbolic system:**
+    ```python
+        {
+            'class': 'DiscretizedSystem',
+            'mode': 'dense_output',
+            'method': 'RK45',
+            'dt': 0.01,
+            'is_fixed_step': False,
+            'interpolation': 'linear',
+            'supports_step': True,
+            'supports_closed_loop': True,
+            'supports_linearization': True,
+            'continuous_system_type': 'SymbolicCartPole',
+            'is_stochastic': False,
+            'is_symbolic': True,
+            'dimensions': {
+                'nx': 4,
+                'nu': 1,
+                'ny': 4
+            },
+            'integrator_kwargs': {'rtol': 1e-9, 'atol': 1e-11},
+            'method_selection': {
+                'source': 'deterministic_system',
+                'original_method': 'RK45',
+                'final_method': 'RK45',
+                'description': 'Deterministic system'
+            },
+            'symbolic_info': {
+                'is_symbolic': True,
+                'has_symbolic_jacobian': True,
+                'can_generate_code': True,
+                'state_vars': ['x', 'x_dot', 'theta', 'theta_dot'],
+                'control_vars': ['F'],
+                'parameters': {
+                    'M': 1.0,
+                    'm': 0.1,
+                    'l': 0.5,
+                    'g': 9.81
+                }
+            }
+        }
+    ```
+        
+        **With warnings:**
+    ```python
+        {
+            'class': 'DiscretizedSystem',
+            'mode': 'batch_interpolation',
+            'method': 'rk4',  # Deterministic method on stochastic system
+            'dt': 0.01,
+            'is_fixed_step': True,
+            'interpolation': 'cubic',
+            'supports_step': False,  # BATCH mode
+            'supports_closed_loop': False,
+            'supports_linearization': True,
+            'continuous_system_type': 'StochasticPendulum',
+            'is_stochastic': True,
+            'is_symbolic': False,
+            'dimensions': {
+                'nx': 2,
+                'nu': 1,
+                'ny': 2
+            },
+            'integrator_kwargs': {},
+            'method_selection': {
+                'source': 'deterministic_fallback',
+                'original_method': 'rk4',
+                'final_method': 'rk4',
+                'description': "Deterministic fallback (SDE integrator unavailable)"
+            },
+            'stochastic_info': {
+                'is_stochastic': True,
+                'has_sde_integrator': False,
+                'recommended_method': 'euler_maruyama',
+                'noise_ignored': True,  # ⚠️
+                'is_additive_noise': True,
+                'is_diagonal_noise': None,
+                'sde_type': 'ito',
+                'noise_dimension': 2
+            },
+            'warnings': [
+                'Stochastic system with deterministic integrator - noise is IGNORED. '
+                'Install SDE integration support for proper noise handling.',
+                'BATCH_INTERPOLATION mode with stochastic system - '
+                'each simulation produces different trajectory.',
+                'Using cubic interpolation - automatic fallback to linear if <4 adaptive points.'
+            ]
+        }
+    ```
+        
+        Use Cases
+        ---------
+        **Configuration verification:**
+        
+        >>> discrete = DiscretizedSystem(system, dt=0.01, sde_method='euler_maruyama')
         >>> info = discrete.get_info()
-        >>> print(info['stochastic_info']['recommended_method'])
-        'euler_maruyama'
-        >>> print(info['method_selection']['source'])
-        'auto_detected'
+        >>> 
+        >>> # Verify SDE integration is actually being used
+        >>> assert info['is_stochastic']
+        >>> assert info['stochastic_info']['has_sde_integrator']
+        >>> assert not info['stochastic_info']['noise_ignored']
+        >>> print("✓ SDE integration configured correctly")
+        
+        **Debugging method selection:**
+        
+        >>> info = discrete.get_info()
+        >>> print(f"Original method: {info['method_selection']['original_method']}")
+        >>> print(f"Final method: {info['method_selection']['final_method']}")
+        >>> print(f"Selection: {info['method_selection']['description']}")
+        Original method: euler_maruyama
+        Final method: EM
+        Selection: Explicitly set via sde_method='EM'
+        
+        **Logging configuration:**
+        
+        >>> import json
+        >>> info = discrete.get_info()
+        >>> with open('simulation_config.json', 'w') as f:
+        ...     json.dump(info, f, indent=2)
+        >>> # Saved configuration for reproducibility
+        
+        **Checking for warnings:**
+        
+        >>> info = discrete.get_info()
+        >>> if 'warnings' in info:
+        ...     print("⚠️  Configuration warnings:")
+        ...     for i, warning in enumerate(info['warnings'], 1):
+        ...         print(f"{i}. {warning}")
+        >>> else:
+        ...     print("✓ No configuration warnings")
+        
+        **Generating reports:**
+        
+        >>> def print_config_report(discrete_system):
+        ...     info = discrete_system.get_info()
+        ...     
+        ...     print(f"System: {info['continuous_system_type']}")
+        ...     print(f"Method: {info['method']} ({info['mode']})")
+        ...     print(f"Time step: {info['dt']}s")
+        ...     print(f"Dimensions: {info['dimensions']['nx']} states, "
+        ...           f"{info['dimensions']['nu']} controls")
+        ...     
+        ...     if info['is_stochastic']:
+        ...         sinfo = info['stochastic_info']
+        ...         print(f"Stochastic: {sinfo['sde_type'].upper()}, "
+        ...               f"{sinfo['noise_dimension']} noise sources")
+        ...         if sinfo['noise_ignored']:
+        ...             print("⚠️  WARNING: Noise is being ignored!")
+        ...     
+        ...     if 'warnings' in info:
+        ...         print(f"\n{len(info['warnings'])} warning(s) detected")
+        >>> 
+        >>> print_config_report(discrete)
+        
+        **Comparing configurations:**
+        
+        >>> discrete1 = DiscretizedSystem(system, dt=0.01, method='rk4')
+        >>> discrete2 = DiscretizedSystem(system, dt=0.01, method='euler')
+        >>> 
+        >>> info1 = discrete1.get_info()
+        >>> info2 = discrete2.get_info()
+        >>> 
+        >>> print(f"Method 1: {info1['method']} (order ~4)")
+        >>> print(f"Method 2: {info2['method']} (order ~1)")
+        
+        **Programmatic configuration checks:**
+        
+        >>> info = discrete.get_info()
+        >>> 
+        >>> # Check if suitable for real-time control
+        >>> if not info['supports_closed_loop']:
+        ...     raise ValueError("System doesn't support closed-loop control!")
+        >>> 
+        >>> # Check if using appropriate method
+        >>> if info['is_stochastic'] and info['stochastic_info']['noise_ignored']:
+        ...     raise ValueError("Stochastic system must use SDE method!")
+        >>> 
+        >>> # Verify dimensions match controller
+        >>> if info['dimensions']['nu'] != len(u_nominal):
+        ...     raise ValueError(f"Control dimension mismatch!")
+        
+        See Also
+        --------
+        print_info : Human-readable formatted output of get_info()
+        _get_method_selection_description : Generates method selection description
+        
+        Notes
+        -----
+        - Dictionary structure is stable across versions (new keys may be added)
+        - All values are JSON-serializable (for logging/configuration files)
+        - Nested dictionaries only present when relevant (e.g., stochastic_info)
+        - Warnings list only present if warnings exist
+        - None values indicate information unavailable, not errors
         """
         info = {
             # ====================================================================
@@ -2479,21 +2836,6 @@ class DiscretizedSystem(DiscreteSystemBase):
             info['warnings'] = warnings
         
         return info
-
-
-    def _get_method_selection_description(self) -> str:
-        """Get human-readable description of how method was selected."""
-        source = self._method_source
-        
-        descriptions = {
-            'explicit': f"Explicitly set via sde_method='{self._method}'",
-            'auto_detected': f"Auto-detected for stochastic system (was '{self._original_method}')",
-            'deterministic_fallback': f"Deterministic fallback (SDE integrator unavailable)",
-            'user_specified': f"User-specified (auto-detection disabled)",
-            'deterministic_system': f"Deterministic system"
-        }
-        
-        return descriptions.get(source, f"Unknown ({source})")
 
 
     def print_info(self):
