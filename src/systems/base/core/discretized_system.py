@@ -142,22 +142,188 @@ class DiscretizedSystem(DiscreteSystemBase):
     
     @classmethod
     def _is_method_sde(cls, method: str) -> bool:
-        """Check if method is for stochastic systems."""
-        return method in cls._SDE_METHODS
-    
-    @classmethod
-    def _is_method_fixed_step(cls, method: str) -> bool:
         """
-        Check if method uses fixed time stepping.
+        Check if integration method is for stochastic differential equations.
         
-        Returns True if method requires or uses fixed stepping.
-        Returns False for adaptive methods.
+        Determines whether a given method name is designed for SDE integration
+        (stochastic systems) or deterministic ODE integration.
+        
+        Parameters
+        ----------
+        method : str
+            Integration method name (normalized or original)
+        
+        Returns
+        -------
+        bool
+            True if method is for stochastic systems (SDE), False otherwise
         
         Notes
         -----
-        - Most SDE methods are fixed-step
-        - Deterministic methods are split between fixed and adaptive
-        - When in doubt, return False (adaptive mode is more flexible)
+        - Checks against the class-level `_SDE_METHODS` frozenset
+        - Works with both canonical names ('euler_maruyama') and backend-specific
+        names ('EM', 'euler', 'Euler')
+        - Method name should ideally be normalized first, but this works with
+        any name in the _SDE_METHODS set
+        - Returns False for deterministic methods (euler, rk4, RK45, etc.)
+        
+        Examples
+        --------
+        >>> # Canonical SDE names
+        >>> DiscretizedSystem._is_method_sde('euler_maruyama')
+        True
+        >>> DiscretizedSystem._is_method_sde('milstein')
+        True
+        
+        >>> # Backend-specific SDE names
+        >>> DiscretizedSystem._is_method_sde('EM')  # NumPy/Julia
+        True
+        >>> DiscretizedSystem._is_method_sde('euler')  # PyTorch (ambiguous!)
+        True
+        >>> DiscretizedSystem._is_method_sde('ItoMilstein')  # JAX
+        True
+        
+        >>> # Deterministic methods
+        >>> DiscretizedSystem._is_method_sde('rk4')
+        False
+        >>> DiscretizedSystem._is_method_sde('RK45')
+        False
+        >>> DiscretizedSystem._is_method_sde('dopri5')
+        False
+        
+        >>> # Unknown methods
+        >>> DiscretizedSystem._is_method_sde('my_custom_method')
+        False
+        
+        Ambiguous Cases
+        ---------------
+        Some method names appear in both deterministic and stochastic contexts:
+        
+        - 'euler': Both a deterministic method (Forward Euler) and SDE method
+        (Euler-Maruyama for PyTorch/TorchSDE). In _SDE_METHODS, so returns True.
+        - 'midpoint': Similar ambiguity. Returns True (in _SDE_METHODS).
+        
+        For these cases, normalization to canonical names ('euler_maruyama' vs 'rk4')
+        is recommended before calling this method.
+        
+        See Also
+        --------
+        _is_method_fixed_step : Classify method by time-stepping strategy
+        _normalize_method_name : Convert canonical names to backend-specific
+        """
+        return method in cls._SDE_METHODS
+
+    @classmethod
+    def _is_method_fixed_step(cls, method: str) -> bool:
+        """
+        Check if integration method uses fixed time stepping.
+        
+        Classifies methods into fixed-step (constant dt throughout integration)
+        or adaptive (dt adjusted based on error estimates). This classification
+        is used to auto-select discretization mode and validate mode/method
+        compatibility.
+        
+        Parameters
+        ----------
+        method : str
+            Integration method name (normalized or original)
+        
+        Returns
+        -------
+        bool
+            True if method uses fixed time steps, False if adaptive
+        
+        Classification Rules
+        --------------------
+        1. **Deterministic fixed-step**: euler, midpoint, rk4, heun → True
+        2. **Deterministic adaptive**: RK45, LSODA, dopri5, tsit5, etc. → False
+        3. **SDE fixed-step**: Most SDE methods (EM, euler_maruyama, etc.) → True
+        4. **SDE adaptive**: Rare cases (LambaEM, AutoEM, adaptive_heun) → False
+        5. **Unknown methods**: Conservative default → False (more flexible)
+        
+        Notes
+        -----
+        - Fixed-step methods take exactly `n_steps` integrations of size `dt`
+        - Adaptive methods adjust step size internally for accuracy/efficiency
+        - Most SDE methods are fixed-step (adaptive SDE solvers are rare)
+        - Unknown methods default to False (adaptive mode works for both cases)
+        - Used to auto-select DiscretizationMode.FIXED_STEP vs DENSE_OUTPUT
+        
+        Design Decision: Conservative Default
+        -------------------------------------
+        When method is unknown, returns False (assume adaptive) because:
+        - DENSE_OUTPUT mode works for both fixed and adaptive methods
+        - FIXED_STEP mode ONLY works for fixed-step methods
+        - Better to be conservative than raise unexpected errors
+        
+        Examples
+        --------
+        >>> # Deterministic fixed-step methods
+        >>> DiscretizedSystem._is_method_fixed_step('euler')
+        True
+        >>> DiscretizedSystem._is_method_fixed_step('rk4')
+        True
+        >>> DiscretizedSystem._is_method_fixed_step('heun')
+        True
+        
+        >>> # Deterministic adaptive methods
+        >>> DiscretizedSystem._is_method_fixed_step('RK45')
+        False
+        >>> DiscretizedSystem._is_method_fixed_step('LSODA')
+        False
+        >>> DiscretizedSystem._is_method_fixed_step('dopri5')  # PyTorch
+        False
+        >>> DiscretizedSystem._is_method_fixed_step('tsit5')  # JAX
+        False
+        
+        >>> # SDE methods (mostly fixed-step)
+        >>> DiscretizedSystem._is_method_fixed_step('euler_maruyama')
+        True
+        >>> DiscretizedSystem._is_method_fixed_step('EM')  # NumPy/Julia
+        True
+        >>> DiscretizedSystem._is_method_fixed_step('milstein')
+        True
+        >>> DiscretizedSystem._is_method_fixed_step('SRIW1')  # Julia SDE
+        True
+        
+        >>> # Rare adaptive SDE methods
+        >>> DiscretizedSystem._is_method_fixed_step('LambaEM')  # Julia adaptive
+        False
+        >>> DiscretizedSystem._is_method_fixed_step('AutoEM')  # Julia adaptive
+        False
+        >>> DiscretizedSystem._is_method_fixed_step('adaptive_heun')  # PyTorch
+        False
+        
+        >>> # Unknown method (conservative default)
+        >>> DiscretizedSystem._is_method_fixed_step('my_custom_method')
+        False
+        
+        Usage in __init__
+        -----------------
+        >>> # Auto-select mode based on method
+        >>> discrete = DiscretizedSystem(system, dt=0.01, method='rk4')
+        >>> # _is_method_fixed_step('rk4') = True
+        >>> # → mode auto-selected as FIXED_STEP
+        
+        >>> discrete = DiscretizedSystem(system, dt=0.01, method='RK45')
+        >>> # _is_method_fixed_step('RK45') = False
+        >>> # → mode auto-selected as DENSE_OUTPUT
+        
+        Edge Cases
+        ----------
+        **Ambiguous names** (appear in multiple contexts):
+        - 'euler': In both _DETERMINISTIC_FIXED_STEP and _SDE_METHODS
+        - Returns True (deterministic check comes first)
+        - 'midpoint': Similar ambiguity, returns True
+        
+        **Method not in any set**:
+        - Returns False (conservative default)
+        - User can still manually specify mode=FIXED_STEP if desired
+        
+        See Also
+        --------
+        _is_method_sde : Check if method is for stochastic systems
+        DiscretizationMode : Enum defining discretization strategies
         """
         # Deterministic fixed-step
         if method in cls._DETERMINISTIC_FIXED_STEP:
@@ -1238,49 +1404,140 @@ class DiscretizedSystem(DiscreteSystemBase):
         """
         Simulate stochastic system with multiple Monte Carlo trajectories.
         
-        Only available for stochastic systems. For deterministic systems,
-        use regular simulate() method.
+        Generates multiple independent realizations of the stochastic system,
+        each with different random noise. Useful for uncertainty quantification,
+        statistical analysis, and estimating expectations over noise distributions.
+        
+        Only available for stochastic systems with SDE integration methods.
+        For deterministic systems, use the regular `simulate()` method.
         
         Parameters
         ----------
         x0 : StateVector
-            Initial state (nx,)
+            Initial state (nx,). Same initial condition used for all trajectories.
         u_sequence : DiscreteControlInput, optional
-            Control sequence (same for all trajectories)
-        n_steps : int
-            Number of time steps
-        n_trajectories : int
-            Number of Monte Carlo realizations
+            Control sequence applied to all trajectories. Can be:
+            - None: Zero control (or no control if nu=0)
+            - ndarray: Shape (n_steps, nu) - open-loop control sequence
+            - callable(k): Time-dependent control u(k) - same for all trajectories
+            - callable(x, k): **NOT SUPPORTED** - state feedback requires different
+              control for each trajectory, which is not implemented
+            
+            **Important**: The same control sequence is applied to ALL trajectories.
+            Each trajectory differs only in the random noise realization.
+        n_steps : int, default=100
+            Number of time steps to simulate
+        n_trajectories : int, default=100
+            Number of independent Monte Carlo realizations to generate.
+            
+            **Memory warning**: Total memory scales as:
+            `n_trajectories × (n_steps+1) × nx × 8 bytes`
+            
+            Examples:
+            - 100 trajectories × 1000 steps × 10 states ≈ 8 MB
+            - 1000 trajectories × 10000 steps × 50 states ≈ 4 GB
+            
+            For large simulations, consider:
+            - Processing trajectories in batches
+            - Using lower precision (float32)
+            - Computing statistics online without storing all trajectories
         **kwargs
-            Additional arguments
+            Additional arguments passed to integrator:
+            - seed : int - Random seed for reproducibility. If not provided,
+              each call produces different results. If provided, all n_trajectories
+              use sequential seeds: seed, seed+1, seed+2, ...
+            - Other integrator-specific kwargs (rtol, atol, etc.)
         
         Returns
         -------
         dict
-            Dictionary with:
-            - states: (n_trajectories, n_steps+1, nx) array
-            - controls: (n_steps, nu) array or None  
-            - mean_trajectory: (n_steps+1, nx) mean over trajectories
-            - std_trajectory: (n_steps+1, nx) std over trajectories
-            - time_steps: (n_steps+1,) array
-            - dt: float
-            - success: bool
-            - metadata: dict
+            Dictionary containing Monte Carlo simulation results:
+            
+            - **states** : ndarray, shape (n_trajectories, n_steps+1, nx)
+                All individual trajectories. states[i, k, :] is the state of
+                trajectory i at time step k.
+            
+            - **controls** : ndarray, shape (n_steps, nu) or None
+                Control sequence applied (same for all trajectories). None if
+                nu=0 or u_sequence=None.
+            
+            - **mean_trajectory** : ndarray, shape (n_steps+1, nx)
+                Sample mean over all trajectories at each time step.
+                mean_trajectory[k, :] = mean(states[:, k, :], axis=0)
+            
+            - **std_trajectory** : ndarray, shape (n_steps+1, nx)
+                Sample standard deviation over all trajectories at each time step.
+                std_trajectory[k, :] = std(states[:, k, :], axis=0)
+            
+            - **time_steps** : ndarray, shape (n_steps+1,)
+                Time step indices [0, 1, 2, ..., n_steps]
+            
+            - **dt** : float
+                Sampling time step (seconds)
+            
+            - **success** : bool
+                Always True (included for consistency with simulate())
+            
+            - **n_trajectories** : int
+                Number of trajectories generated
+            
+            - **metadata** : dict
+                Additional information:
+                - 'method': Integration method used
+                - 'mode': Discretization mode
+                - 'is_stochastic': True
+                - 'convergence_type': 'strong' (assumed for most SDE methods)
         
         Raises
         ------
         ValueError
-            If system is not stochastic or SDE method not set
+            If system is not stochastic, or if SDE method not configured,
+            or if SDE integrator not available
+        NotImplementedError
+            If u_sequence is state-feedback (callable with 2 arguments).
+            State-feedback control requires per-trajectory control computation,
+            which is not currently implemented.
+        
+        Notes
+        -----
+        **Random Seed Behavior:**
+        - Without seed: Each call generates different random trajectories
+        - With seed: Reproducible results across calls
+        - Seed assignment: Trajectory i uses seed + i (if seed provided)
+        
+        **Control Sequence Behavior:**
+        - Open-loop control: Same u(k) applied to all trajectories
+        - State feedback: NOT SUPPORTED (would require per-trajectory control)
+        - No control (None): Zero control vector applied
+        
+        **Convergence Properties:**
+        - Sample mean converges to E[X(t)] as n_trajectories → ∞
+        - Convergence rate typically O(1/√n_trajectories) (Central Limit Theorem)
+        - For variance estimation, n_trajectories > 100 recommended
+        - For tail probabilities, n_trajectories > 1000 recommended
+        
+        **Memory Management:**
+        All trajectories are stored in memory simultaneously. For large-scale
+        simulations, consider implementing custom batched processing or
+        computing statistics online.
+        
+        **Statistical Estimators:**
+        The returned statistics (mean_trajectory, std_trajectory) are sample
+        statistics, not population parameters. They have estimation error
+        that decreases with n_trajectories.
         
         Examples
         --------
-        >>> # Monte Carlo simulation with 1000 paths
+        **Basic Monte Carlo Simulation:**
+        
+        >>> # Setup stochastic system
         >>> discrete = DiscretizedSystem(
         ...     stochastic_system, 
         ...     dt=0.01, 
         ...     sde_method='euler_maruyama'
         ... )
         >>> 
+        >>> # Run 100 trajectories
         >>> result = discrete.simulate_stochastic(
         ...     x0=np.array([1.0, 0.0]),
         ...     u_sequence=None,
@@ -1290,14 +1547,128 @@ class DiscretizedSystem(DiscreteSystemBase):
         >>> 
         >>> print(f"Mean final state: {result['mean_trajectory'][-1]}")
         >>> print(f"Std final state: {result['std_trajectory'][-1]}")
+        
+        **Reproducible Simulation with Seed:**
+        
+        >>> # Same seed produces identical results
+        >>> result1 = discrete.simulate_stochastic(
+        ...     x0=np.array([1.0, 0.0]),
+        ...     n_steps=1000,
+        ...     n_trajectories=100,
+        ...     seed=42
+        ... )
         >>> 
-        >>> # Plot confidence bands
+        >>> result2 = discrete.simulate_stochastic(
+        ...     x0=np.array([1.0, 0.0]),
+        ...     n_steps=1000,
+        ...     n_trajectories=100,
+        ...     seed=42
+        ... )
+        >>> 
+        >>> np.allclose(result1['states'], result2['states'])
+        True
+        
+        **With Open-Loop Control:**
+        
+        >>> # Constant control applied to all trajectories
+        >>> u_const = np.array([1.0])
+        >>> result = discrete.simulate_stochastic(
+        ...     x0=np.array([0.0, 0.0]),
+        ...     u_sequence=u_const,  # Same control for all trajectories
+        ...     n_steps=500,
+        ...     n_trajectories=200
+        ... )
+        >>> 
+        >>> # Time-varying control (same for all trajectories)
+        >>> def u_func(k):
+        ...     return np.array([np.sin(k * 0.1)])
+        >>> 
+        >>> result = discrete.simulate_stochastic(
+        ...     x0=np.array([0.0, 0.0]),
+        ...     u_sequence=u_func,
+        ...     n_steps=500,
+        ...     n_trajectories=200
+        ... )
+        
+        **Plotting Confidence Intervals:**
+        
         >>> import matplotlib.pyplot as plt
+        >>> 
+        >>> # Extract results
         >>> t = result['time_steps'] * result['dt']
-        >>> mean = result['mean_trajectory'][:, 0]
+        >>> mean = result['mean_trajectory'][:, 0]  # First state
         >>> std = result['std_trajectory'][:, 0]
-        >>> plt.plot(t, mean, 'b-', label='Mean')
-        >>> plt.fill_between(t, mean-2*std, mean+2*std, alpha=0.3, label='95% CI')
+        >>> 
+        >>> # Plot mean ± 2σ (≈95% confidence)
+        >>> plt.figure(figsize=(10, 6))
+        >>> plt.plot(t, mean, 'b-', linewidth=2, label='Mean')
+        >>> plt.fill_between(t, mean-2*std, mean+2*std, 
+        ...                  alpha=0.3, label='95% CI')
+        >>> plt.xlabel('Time (s)')
+        >>> plt.ylabel('State')
+        >>> plt.legend()
+        >>> plt.grid(True)
+        >>> plt.show()
+        
+        **Analyzing Individual Trajectories:**
+        
+        >>> # Access individual trajectories
+        >>> traj_5 = result['states'][5, :, :]  # 6th trajectory
+        >>> 
+        >>> # Plot first 10 trajectories
+        >>> plt.figure()
+        >>> for i in range(10):
+        ...     plt.plot(t, result['states'][i, :, 0], alpha=0.5)
+        >>> plt.plot(t, result['mean_trajectory'][:, 0], 'k-', 
+        ...          linewidth=2, label='Mean')
+        >>> plt.legend()
+        
+        **Computing Additional Statistics:**
+        
+        >>> # Quantiles (median, 5th, 95th percentiles)
+        >>> median = np.percentile(result['states'], 50, axis=0)
+        >>> lower = np.percentile(result['states'], 5, axis=0)
+        >>> upper = np.percentile(result['states'], 95, axis=0)
+        >>> 
+        >>> # Probability of exceeding threshold
+        >>> threshold = 2.0
+        >>> prob_exceed = np.mean(result['states'][:, -1, 0] > threshold)
+        >>> print(f"P(x[0] > {threshold}) ≈ {prob_exceed:.2%}")
+        
+        **Memory-Conscious Batch Processing:**
+        
+        >>> # For very large simulations, process in batches
+        >>> n_total = 10000
+        >>> batch_size = 100
+        >>> n_batches = n_total // batch_size
+        >>> 
+        >>> # Accumulate statistics online
+        >>> sum_states = None
+        >>> sum_sq_states = None
+        >>> 
+        >>> for batch in range(n_batches):
+        ...     result = discrete.simulate_stochastic(
+        ...         x0=x0, n_steps=n_steps, 
+        ...         n_trajectories=batch_size,
+        ...         seed=batch*batch_size  # Different seeds per batch
+        ...     )
+        ...     
+        ...     if sum_states is None:
+        ...         sum_states = result['states'].sum(axis=0)
+        ...         sum_sq_states = (result['states']**2).sum(axis=0)
+        ...     else:
+        ...         sum_states += result['states'].sum(axis=0)
+        ...         sum_sq_states += (result['states']**2).sum(axis=0)
+        >>> 
+        >>> # Compute overall statistics
+        >>> mean = sum_states / n_total
+        >>> variance = (sum_sq_states / n_total) - mean**2
+        >>> std = np.sqrt(variance)
+        
+        See Also
+        --------
+        simulate : Single trajectory simulation (deterministic or stochastic)
+        _detect_sde_method : Auto-detect appropriate SDE integration method
         """
         if not self._is_stochastic:
             raise ValueError(
