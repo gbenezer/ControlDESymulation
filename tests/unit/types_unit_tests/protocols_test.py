@@ -823,7 +823,8 @@ class TestRealSystemIntegration:
     def test_discretized_system_satisfies_linearizable_protocol(self):
         """Real DiscretizedSystem should satisfy LinearizableDiscreteProtocol but NOT Symbolic."""
         try:
-            from src.systems import ContinuousSymbolicSystem, DiscretizedSystem
+            from src.systems.base.core.continuous_symbolic_system import ContinuousSymbolicSystem
+            from src.systems.base.core.discretized_system import DiscretizedSystem
             import sympy as sp
 
             # Create continuous system
