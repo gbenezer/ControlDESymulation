@@ -272,7 +272,7 @@ class TestUnifiedLQRMethod(SynthesisTestCase):
     
     def test_design_lqr_backend_propagation(self):
         """Test that backend is passed to unified LQR function."""
-        with patch('src.control.control_synthesis.design_lqr') as mock_func:
+        with patch('src.control.classical_control_functions.design_lqr') as mock_func:
             mock_func.return_value = {
                 'gain': np.zeros((1, 2)),
                 'cost_to_go': np.eye(2),
@@ -664,6 +664,7 @@ class TestDelegation(SynthesisTestCase):
                 system_type='discrete'
             )
             
+            # Note: N parameter defaults to None and is passed as positional arg
             mock_func.assert_called_once_with(
                 self.Ad,
                 self.Bd,
@@ -672,6 +673,7 @@ class TestDelegation(SynthesisTestCase):
                 self.R,
                 self.Q_process,
                 self.R_meas,
+                None,  # N parameter (default)
                 'discrete',
                 backend='numpy'
             )
