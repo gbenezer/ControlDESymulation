@@ -548,11 +548,14 @@ class TestLQG(ControlTestCase):
         )
     
     def test_lqg_observer_faster_than_controller(self):
-        """Test design where observer converges faster than controller."""
-        # Design with aggressive estimator (low R)
+        """Test that observer eigenvalues can be placed independently of controller."""
+        # Design with aggressive estimator (low measurement noise)
+        # This doesn't guarantee faster convergence, but tests that
+        # the estimator gain responds to measurement noise changes
         R_meas_low = 0.001 * np.eye(1)
+        R_meas_high = 1.0 * np.eye(1)
         
-        result = design_lqg(
+        result_low_r = design_lqg(
             self.Ad_double_int,
             self.Bd_double_int,
             self.C_double_int,
@@ -563,12 +566,23 @@ class TestLQG(ControlTestCase):
             system_type='discrete'
         )
         
-        # Observer poles should be further from unit circle
-        controller_mag = np.max(np.abs(result['closed_loop_eigenvalues']))
-        observer_mag = np.max(np.abs(result['observer_eigenvalues']))
+        result_high_r = design_lqg(
+            self.Ad_double_int,
+            self.Bd_double_int,
+            self.C_double_int,
+            self.Q2,
+            self.R1,
+            self.Q_process,
+            R_meas_high,
+            system_type='discrete'
+        )
         
-        # Observer should converge faster (smaller magnitude)
-        self.assertLess(observer_mag, controller_mag)
+        # With lower R (more trust in measurements), Kalman gain should be larger
+        L_low = np.linalg.norm(result_low_r['estimator_gain'])
+        L_high = np.linalg.norm(result_high_r['estimator_gain'])
+        
+        self.assertGreater(L_low, L_high, 
+            "Lower measurement noise should give larger Kalman gain")
 
 
 # ============================================================================
@@ -680,9 +694,11 @@ class TestControllability(ControlTestCase):
     
     def test_controllability_uncontrollable(self):
         """Test uncontrollable system."""
-        # Diagonal system with identical input
+        # System where one mode cannot be controlled
+        # dx1/dt = x1 (uncontrollable eigenvalue at 1)
+        # dx2/dt = 2*x2 + u (controllable)
         A = np.array([[1, 0], [0, 2]])
-        B = np.array([[1], [1]])
+        B = np.array([[0], [1]])  # Only affects second state
         
         result = analyze_controllability(A, B)
         
@@ -740,9 +756,10 @@ class TestObservability(ControlTestCase):
     
     def test_observability_unobservable(self):
         """Test unobservable system."""
-        # Can't distinguish states
+        # System where one mode cannot be observed
+        # y = x1 (cannot see x2)
         A = np.array([[1, 0], [0, 2]])
-        C = np.array([[1, 1]])
+        C = np.array([[1, 0]])  # Only measures first state
         
         result = analyze_observability(A, C)
         
