@@ -853,7 +853,7 @@ class ContinuousStochasticSystem(ContinuousSymbolicSystem):
 
     # May need to make this more elaborate or otherwise replace with
     # cleaner implementation
-    def get_diffusion_matrix(self, x, u=None, backend=Backend | None):
+    def get_diffusion_matrix(self, x, u=None, backend: Optional[Backend] = None):
         return self.diffusion(x, u, backend=backend)
 
     def depends_on_state(self) -> bool:
