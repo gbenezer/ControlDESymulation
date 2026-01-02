@@ -196,7 +196,7 @@ class ControlSynthesis:
         design_lqr_discrete : Discrete-time LQR
         design_lqg : Combined LQR + Kalman filter
         """
-        from .classical import design_lqr_continuous
+        from src.control.classical_control_functions import design_lqr_continuous
 
         return design_lqr_continuous(A, B, Q, R, N, backend=self.backend)
 
@@ -246,7 +246,7 @@ class ControlSynthesis:
         --------
         design_lqr_continuous : Continuous-time LQR
         """
-        from .classical import design_lqr_discrete
+        from src.control.classical_control_functions import design_lqr_discrete
 
         return design_lqr_discrete(A, B, Q, R, N, backend=self.backend)
 
@@ -313,7 +313,7 @@ class ControlSynthesis:
         --------
         design_lqg : Combined LQR + Kalman (full LQG controller)
         """
-        from .classical import design_kalman_filter
+        from src.control.classical_control_functions import design_kalman_filter
 
         return design_kalman_filter(A, C, Q, R, system_type, backend=self.backend)
 
@@ -406,7 +406,7 @@ class ControlSynthesis:
         design_lqr_discrete : Discrete LQR controller only
         design_kalman : Kalman filter only
         """
-        from .classical import design_lqg
+        from src.control.classical_control_functions import design_lqg
 
         return design_lqg(
             A,
