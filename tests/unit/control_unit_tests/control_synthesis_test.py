@@ -427,7 +427,7 @@ class TestBackendConsistency(SynthesisTestCase):
     
     def test_backend_passed_to_lqr_continuous(self):
         """Test that backend is passed to underlying LQR function."""
-        with patch('src.control.synthesis.design_lqr_continuous') as mock_lqr:
+        with patch('src.control.classical_control_functions.design_lqr_continuous') as mock_lqr:
             mock_lqr.return_value = {
                 'gain': np.zeros((1, 2)),
                 'cost_to_go': np.eye(2),
@@ -450,7 +450,7 @@ class TestBackendConsistency(SynthesisTestCase):
     
     def test_backend_passed_to_lqr_discrete(self):
         """Test that backend is passed to discrete LQR."""
-        with patch('src.control.synthesis.design_lqr_discrete') as mock_lqr:
+        with patch('src.control.classical_control_functions.design_lqr_discrete') as mock_lqr:
             mock_lqr.return_value = {
                 'gain': np.zeros((1, 2)),
                 'cost_to_go': np.eye(2),
@@ -471,7 +471,7 @@ class TestBackendConsistency(SynthesisTestCase):
     
     def test_backend_passed_to_kalman(self):
         """Test that backend is passed to Kalman filter."""
-        with patch('src.control.synthesis.design_kalman_filter') as mock_kalman:
+        with patch('src.control.classical_control_functions.design_kalman_filter') as mock_kalman:
             mock_kalman.return_value = {
                 'gain': np.zeros((2, 1)),
                 'error_covariance': np.eye(2),
@@ -492,7 +492,7 @@ class TestBackendConsistency(SynthesisTestCase):
     
     def test_backend_passed_to_lqg(self):
         """Test that backend is passed to LQG."""
-        with patch('src.control.synthesis.design_lqg') as mock_lqg:
+        with patch('src.control.classical_control_functions.design_lqg') as mock_lqg:
             mock_lqg.return_value = {
                 'controller_gain': np.zeros((1, 2)),
                 'estimator_gain': np.zeros((2, 1)),
@@ -562,7 +562,7 @@ class TestDelegation(SynthesisTestCase):
     
     def test_lqr_continuous_delegates_correctly(self):
         """Test that design_lqr_continuous delegates with correct arguments."""
-        with patch('src.control.synthesis.design_lqr_continuous') as mock_func:
+        with patch('src.control.classical_control_functions.design_lqr_continuous') as mock_func:
             mock_func.return_value = {
                 'gain': np.zeros((1, 2)),
                 'cost_to_go': np.eye(2),
@@ -593,7 +593,7 @@ class TestDelegation(SynthesisTestCase):
     
     def test_lqr_discrete_delegates_correctly(self):
         """Test that design_lqr_discrete delegates with correct arguments."""
-        with patch('src.control.synthesis.design_lqr_discrete') as mock_func:
+        with patch('src.control.classical_control_functions.design_lqr_discrete') as mock_func:
             mock_func.return_value = {
                 'gain': np.zeros((1, 2)),
                 'cost_to_go': np.eye(2),
@@ -621,7 +621,7 @@ class TestDelegation(SynthesisTestCase):
     
     def test_kalman_delegates_correctly(self):
         """Test that design_kalman delegates with correct arguments."""
-        with patch('src.control.synthesis.design_kalman_filter') as mock_func:
+        with patch('src.control.classical_control_functions.design_kalman_filter') as mock_func:
             mock_func.return_value = {
                 'gain': np.zeros((2, 1)),
                 'error_covariance': np.eye(2),
@@ -650,7 +650,7 @@ class TestDelegation(SynthesisTestCase):
     
     def test_lqg_delegates_correctly(self):
         """Test that design_lqg delegates with correct arguments."""
-        with patch('src.control.synthesis.design_lqg') as mock_func:
+        with patch('src.control.classical_control_functions.design_lqg') as mock_func:
             mock_func.return_value = {
                 'controller_gain': np.zeros((1, 2)),
                 'estimator_gain': np.zeros((2, 1)),
