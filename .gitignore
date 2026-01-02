@@ -383,6 +383,11 @@ test_venv*/
 # personal reference documents for my own usage
 personal_reference/
 
+# test generated plots
+tests/visual_tests/control_plotter/
+tests/visual_tests/phase_portrait/
+tests/visual_tests/trajectory_plotter/
+
 # ============================================================================
 # Keep These (Negations)
 # ============================================================================
