@@ -43,7 +43,8 @@ from src.systems.base.core.continuous_stochastic_system import (
     ContinuousStochasticSystem,
     StochasticDynamicalSystem,  # Backward compatibility alias
 )
-from src.systems.base.utils.stochastic.noise_analysis import NoiseType, SDEType
+from src.systems.base.utils.stochastic.noise_analysis import NoiseType
+from src.types.backends import SDEType
 
 # from src.systems.base.utils.symbolic_validator import
 from src.systems.base.utils.stochastic.sde_validator import ValidationError

@@ -37,9 +37,9 @@ from src.systems.base.utils.stochastic.noise_analysis import (
     NoiseCharacteristics,
     NoiseCharacterizer,
     NoiseType,
-    SDEType,
     analyze_noise_structure,
 )
+from src.types.backends import SDEType
 
 
 # ============================================================================

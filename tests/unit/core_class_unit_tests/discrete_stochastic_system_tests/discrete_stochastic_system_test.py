@@ -48,7 +48,8 @@ import sympy as sp
 
 from src.systems.base.core.discrete_stochastic_system import DiscreteStochasticSystem
 from src.systems.base.utils.stochastic.sde_validator import ValidationError
-from src.systems.base.utils.stochastic.noise_analysis import NoiseType, SDEType
+from src.systems.base.utils.stochastic.noise_analysis import NoiseType
+from src.types.backends import SDEType
 
 
 # ============================================================================
