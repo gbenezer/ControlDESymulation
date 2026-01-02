@@ -157,77 +157,155 @@ def _from_numpy(arr: np.ndarray, backend: Backend):
 # LQR - Linear Quadratic Regulator
 # ============================================================================
 
-
-def design_lqr_continuous(
+def design_lqr(
     A: StateMatrix,
     B: InputMatrix,
     Q: StateMatrix,
     R: InputMatrix,
     N: Optional[InputMatrix] = None,
+    system_type: str = "discrete",
     backend: Backend = "numpy",
 ) -> LQRResult:
     """
-    Design continuous-time Linear Quadratic Regulator (LQR).
+    Design Linear Quadratic Regulator (LQR) controller.
 
     Minimizes cost functional:
-        J = ∫₀^∞ (x'Qx + u'Ru + 2x'Nu) dt
+        Continuous: J = ∫₀^∞ (x'Qx + u'Ru + 2x'Nu) dt
+        Discrete:   J = Σₖ₌₀^∞ (x[k]'Qx[k] + u[k]'Ru[k] + 2x[k]'Nu[k])
 
-    Solves continuous-time algebraic Riccati equation (CARE):
-        A'P + PA - (PB + N)R⁻¹(B'P + N') + Q = 0
+    Solves algebraic Riccati equation (ARE):
+        Continuous (CARE): A'P + PA - (PB + N)R⁻¹(B'P + N') + Q = 0
+        Discrete (DARE):   P = A'PA - (A'PB + N)(R + B'PB)⁻¹(B'PA + N') + Q
 
-    Optimal control law: u = -Kx where K = R⁻¹(B'P + N')
+    Optimal control law:
+        Continuous: u = -Kx where K = R⁻¹(B'P + N')
+        Discrete:   u[k] = -Kx[k] where K = (R + B'PB)⁻¹(B'PA + N')
 
-    Args:
-        A: State matrix (nx, nx)
-        B: Input matrix (nx, nu)
-        Q: State cost matrix (nx, nx), must be positive semi-definite (Q ≥ 0)
-        R: Control cost matrix (nu, nu), must be positive definite (R > 0)
-        N: Cross-coupling matrix (nx, nu), optional. Default is zero.
-        backend: Computational backend ('numpy', 'torch', 'jax')
+    Parameters
+    ----------
+    A : StateMatrix
+        State matrix (nx, nx)
+    B : InputMatrix
+        Input matrix (nx, nu)
+    Q : StateMatrix
+        State cost matrix (nx, nx), must be positive semi-definite (Q ≥ 0)
+    R : InputMatrix
+        Control cost matrix (nu, nu), must be positive definite (R > 0)
+    N : Optional[InputMatrix]
+        Cross-coupling matrix (nx, nu), optional. Default is zero.
+        Allows for non-quadratic objectives.
+    system_type : str
+        'continuous' or 'discrete', default 'discrete'
+    backend : Backend
+        Computational backend ('numpy', 'torch', 'jax'), default 'numpy'
 
-    Returns:
-        LQRResult containing:
+    Returns
+    -------
+    LQRResult
+        Dictionary containing:
             - gain: Optimal feedback gain K (nu, nx)
             - cost_to_go: Riccati solution P (nx, nx)
             - closed_loop_eigenvalues: Eigenvalues of (A - BK)
-            - stability_margin: -max(Re(λ)) for continuous systems (positive = stable)
+            - stability_margin: Distance from stability boundary
+              * Continuous: -max(Re(λ)) (positive = stable)
+              * Discrete: 1 - max(|λ|) (positive = stable)
 
-    Raises:
-        ValueError: If matrices have incompatible shapes
-        LinAlgError: If Riccati equation has no solution (system may be unstable or uncontrollable)
+    Raises
+    ------
+    ValueError
+        If matrices have incompatible shapes or invalid system_type
+    LinAlgError
+        If Riccati equation has no solution (system may be unstabilizable)
 
     Examples
     --------
-    >>> # Simple double integrator
+    Continuous-time double integrator:
+    
     >>> A = np.array([[0, 1], [0, 0]])
     >>> B = np.array([[0], [1]])
     >>> Q = np.diag([10, 1])  # Penalize position more
-    >>> R = np.array([[0.1]])  # Small control cost
-    >>>
-    >>> result = design_lqr_continuous(A, B, Q, R)
+    >>> R = np.array([[0.1]])
+    >>> 
+    >>> result = design_lqr(A, B, Q, R, system_type='continuous')
     >>> K = result['gain']
-    >>> print(f"Gain: {K}")  # Approximately [[10, 4.47]]
-    >>> print(f"Stable: {result['stability_margin'] > 0}")  # True
-    >>>
-    >>> # Apply control
+    >>> print(f"Gain: {K}")
+    >>> print(f"Stable: {result['stability_margin'] > 0}")
+    
+    Discrete-time system:
+    
+    >>> Ad = np.array([[1, 0.1], [0, 1]])
+    >>> Bd = np.array([[0.005], [0.1]])
+    >>> Q = np.diag([10, 1])
+    >>> R = np.array([[0.1]])
+    >>> 
+    >>> result = design_lqr(Ad, Bd, Q, R, system_type='discrete')
+    >>> K = result['gain']
+    >>> 
+    >>> # Apply control in simulation
     >>> x = np.array([1.0, 0.0])
-    >>> u = -K @ x
-    >>>
-    >>> # Pendulum linearized at upright
-    >>> A = np.array([[0, 1], [g/l, 0]])
-    >>> B = np.array([[0], [1/(m*l**2)]])
-    >>> Q = np.diag([100, 10])  # Heavy penalty on angle
-    >>> R = np.array([[1]])
-    >>> result = design_lqr_continuous(A, B, Q, R)
+    >>> for k in range(100):
+    ...     u = -K @ x
+    ...     x = Ad @ x + Bd @ u
+    
+    With cross-coupling term:
+    
+    >>> N = np.array([[0.5], [0.1]])
+    >>> result = design_lqr(A, B, Q, R, N=N, system_type='continuous')
+    
+    Using PyTorch backend:
+    
+    >>> import torch
+    >>> A_torch = torch.tensor(A, dtype=torch.float64)
+    >>> B_torch = torch.tensor(B, dtype=torch.float64)
+    >>> Q_torch = torch.tensor(Q, dtype=torch.float64)
+    >>> R_torch = torch.tensor(R, dtype=torch.float64)
+    >>> 
+    >>> result = design_lqr(
+    ...     A_torch, B_torch, Q_torch, R_torch,
+    ...     system_type='continuous',
+    ...     backend='torch'
+    ... )
+    >>> K = result['gain']  # Returns torch.Tensor
 
     Notes
     -----
-    - For controllability, (A,B) must be controllable
-    - For stabilizability, unstable modes must be controllable
+    **Controllability Requirements:**
+    - Full controllability: (A, B) must be controllable for arbitrary pole placement
+    - Stabilizability: Unstable modes must be controllable (weaker, sufficient for LQR)
+    
+    **Cost Matrix Requirements:**
     - Q must be positive semi-definite (all eigenvalues ≥ 0)
     - R must be positive definite (all eigenvalues > 0)
-    - Cross-term N allows for non-quadratic objectives
+    - (Q, A) should be detectable for finite-horizon convergence
+    
+    **Stability:**
+    - Continuous: Closed-loop stable if all Re(λ) < 0 (left half-plane)
+    - Discrete: Closed-loop stable if all |λ| < 1 (inside unit circle)
+    - stability_margin > 0 indicates asymptotic stability
+    
+    **Cross-Coupling Term N:**
+    - Allows non-standard quadratic costs
+    - Useful for systems with control-state coupling
+    - Set to None (default) for standard LQR
+    
+    **Numerical Considerations:**
+    - Uses scipy's solve_continuous_are / solve_discrete_are
+    - Numerical issues may arise for ill-conditioned systems
+    - Consider scaling states/controls for better conditioning
+
+    See Also
+    --------
+    design_kalman_filter : Optimal state estimator (dual to LQR)
+    design_lqg : Combined LQR + Kalman filter
+    analyze_controllability : Test controllability of (A, B)
+    analyze_stability : Analyze closed-loop stability
     """
+    # Validate system_type first
+    if system_type not in ["continuous", "discrete"]:
+        raise ValueError(
+            f"system_type must be 'continuous' or 'discrete', got '{system_type}'"
+        )
+
     # Convert to NumPy for scipy
     A_np = _to_numpy(A, backend)
     B_np = _to_numpy(B, backend)
@@ -247,142 +325,52 @@ def design_lqr_continuous(
     if R_np.shape != (nu, nu):
         raise ValueError(f"R must be ({nu}, {nu}), got {R_np.shape}")
 
-    # Solve continuous-time ARE
+    # Process cross-coupling term N if provided
+    N_np = None
     if N is not None:
         N_np = _to_numpy(N, backend)
         if N_np.shape != (nx, nu):
             raise ValueError(f"N must be ({nx}, {nu}), got {N_np.shape}")
-        P = linalg.solve_continuous_are(A_np, B_np, Q_np, R_np, s=N_np)
-        # K = R^{-1}(B'P + N')
-        K = linalg.solve(R_np, B_np.T @ P + N_np.T)
-    else:
-        P = linalg.solve_continuous_are(A_np, B_np, Q_np, R_np)
-        # K = R^{-1}B'P
-        K = linalg.solve(R_np, B_np.T @ P)
 
-    # Closed-loop system: A_cl = A - BK
-    A_cl = A_np - B_np @ K
-    eigenvalues = np.linalg.eigvals(A_cl)
+    # Solve appropriate Riccati equation and compute gain
+    if system_type == "continuous":
+        # Continuous-time Algebraic Riccati Equation (CARE)
+        if N_np is not None:
+            P = linalg.solve_continuous_are(A_np, B_np, Q_np, R_np, s=N_np)
+            # K = R^{-1}(B'P + N')
+            K = linalg.solve(R_np, B_np.T @ P + N_np.T)
+        else:
+            P = linalg.solve_continuous_are(A_np, B_np, Q_np, R_np)
+            # K = R^{-1}B'P
+            K = linalg.solve(R_np, B_np.T @ P)
 
-    # Stability margin for continuous: -max(Re(λ))
-    # Positive margin = stable (all Re(λ) < 0)
-    stability_margin = -np.max(np.real(eigenvalues))
+        # Closed-loop system: A_cl = A - BK
+        A_cl = A_np - B_np @ K
+        eigenvalues = np.linalg.eigvals(A_cl)
 
-    # Convert back to target backend
-    result: LQRResult = {
-        "gain": _from_numpy(K, backend),
-        "cost_to_go": _from_numpy(P, backend),
-        "closed_loop_eigenvalues": _from_numpy(eigenvalues, backend),
-        "stability_margin": float(stability_margin),
-    }
+        # Stability margin for continuous: -max(Re(λ))
+        # Positive margin = stable (all Re(λ) < 0)
+        stability_margin = -np.max(np.real(eigenvalues))
 
-    return result
+    else:  # discrete
+        # Discrete-time Algebraic Riccati Equation (DARE)
+        if N_np is not None:
+            P = linalg.solve_discrete_are(A_np, B_np, Q_np, R_np, s=N_np)
+            # K = (R + B'PB)^{-1}(B'PA + N')
+            K = linalg.solve(R_np + B_np.T @ P @ B_np, B_np.T @ P @ A_np + N_np.T)
+        else:
+            P = linalg.solve_discrete_are(A_np, B_np, Q_np, R_np)
+            # K = (R + B'PB)^{-1}B'PA
+            K = linalg.solve(R_np + B_np.T @ P @ B_np, B_np.T @ P @ A_np)
 
+        # Closed-loop system
+        A_cl = A_np - B_np @ K
+        eigenvalues = np.linalg.eigvals(A_cl)
 
-def design_lqr_discrete(
-    A: StateMatrix,
-    B: InputMatrix,
-    Q: StateMatrix,
-    R: InputMatrix,
-    N: Optional[InputMatrix] = None,
-    backend: Backend = "numpy",
-) -> LQRResult:
-    """
-    Design discrete-time Linear Quadratic Regulator (LQR).
-
-    Minimizes cost functional:
-        J = Σₖ₌₀^∞ (x[k]'Qx[k] + u[k]'Ru[k] + 2x[k]'Nu[k])
-
-    Solves discrete-time algebraic Riccati equation (DARE):
-        P = A'PA - (A'PB + N)(R + B'PB)⁻¹(B'PA + N') + Q
-
-    Optimal control law: u[k] = -Kx[k] where K = (R + B'PB)⁻¹(B'PA + N')
-
-    Args:
-        A: State matrix (nx, nx)
-        B: Input matrix (nx, nu)
-        Q: State cost matrix (nx, nx), must be positive semi-definite (Q ≥ 0)
-        R: Control cost matrix (nu, nu), must be positive definite (R > 0)
-        N: Cross-coupling matrix (nx, nu), optional. Default is zero.
-        backend: Computational backend ('numpy', 'torch', 'jax')
-
-    Returns:
-        LQRResult containing:
-            - gain: Optimal feedback gain K (nu, nx)
-            - cost_to_go: Riccati solution P (nx, nx)
-            - closed_loop_eigenvalues: Eigenvalues of (A - BK)
-            - stability_margin: 1 - max(|λ|) for discrete systems (positive = stable)
-
-    Raises:
-        ValueError: If matrices have incompatible shapes
-        LinAlgError: If Riccati equation has no solution
-
-    Examples
-    --------
-    >>> # Discretized double integrator (dt = 0.1)
-    >>> A = np.array([[1, 0.1], [0, 1]])
-    >>> B = np.array([[0.005], [0.1]])
-    >>> Q = np.diag([10, 1])
-    >>> R = np.array([[0.1]])
-    >>>
-    >>> result = design_lqr_discrete(A, B, Q, R)
-    >>> K = result['gain']
-    >>> print(f"Discrete gain: {K}")
-    >>> print(f"Stable: {result['stability_margin'] > 0}")  # True
-    >>>
-    >>> # Apply control in simulation
-    >>> x = np.array([1.0, 0.0])
-    >>> for k in range(100):
-    ...     u = -K @ x
-    ...     x = A @ x + B @ u  # Closed-loop dynamics
-
-    Notes
-    -----
-    - For discrete systems, stability requires |λ| < 1 (inside unit circle)
-    - Q must be positive semi-definite
-    - R must be positive definite
-    - (A, B) should be stabilizable for solution to exist
-    """
-    # Convert to NumPy
-    A_np = _to_numpy(A, backend)
-    B_np = _to_numpy(B, backend)
-    Q_np = _to_numpy(Q, backend)
-    R_np = _to_numpy(R, backend)
-
-    # Validate shapes
-    nx = A_np.shape[0]
-    nu = B_np.shape[1]
-
-    if A_np.shape != (nx, nx):
-        raise ValueError(f"A must be square, got shape {A_np.shape}")
-    if B_np.shape[0] != nx:
-        raise ValueError(f"B must have {nx} rows, got {B_np.shape[0]}")
-    if Q_np.shape != (nx, nx):
-        raise ValueError(f"Q must be ({nx}, {nx}), got {Q_np.shape}")
-    if R_np.shape != (nu, nu):
-        raise ValueError(f"R must be ({nu}, {nu}), got {R_np.shape}")
-
-    # Solve discrete-time ARE
-    if N is not None:
-        N_np = _to_numpy(N, backend)
-        if N_np.shape != (nx, nu):
-            raise ValueError(f"N must be ({nx}, {nu}), got {N_np.shape}")
-        P = linalg.solve_discrete_are(A_np, B_np, Q_np, R_np, s=N_np)
-        # K = (R + B'PB)^{-1}(B'PA + N')
-        K = linalg.solve(R_np + B_np.T @ P @ B_np, B_np.T @ P @ A_np + N_np.T)
-    else:
-        P = linalg.solve_discrete_are(A_np, B_np, Q_np, R_np)
-        # K = (R + B'PB)^{-1}B'PA
-        K = linalg.solve(R_np + B_np.T @ P @ B_np, B_np.T @ P @ A_np)
-
-    # Closed-loop system
-    A_cl = A_np - B_np @ K
-    eigenvalues = np.linalg.eigvals(A_cl)
-
-    # Stability margin for discrete: 1 - max(|λ|)
-    # Positive margin = stable (all |λ| < 1)
-    max_magnitude = np.max(np.abs(eigenvalues))
-    stability_margin = 1.0 - max_magnitude
+        # Stability margin for discrete: 1 - max(|λ|)
+        # Positive margin = stable (all |λ| < 1)
+        max_magnitude = np.max(np.abs(eigenvalues))
+        stability_margin = 1.0 - max_magnitude
 
     # Convert back to target backend
     result: LQRResult = {
@@ -548,6 +536,7 @@ def design_lqg(
     R_control: InputMatrix,
     Q_process: StateMatrix,
     R_measurement: OutputMatrix,
+    N: Optional[InputMatrix] = None,
     system_type: str = "discrete",
     backend: Backend = "numpy",
 ) -> LQGResult:
@@ -630,12 +619,15 @@ def design_lqg(
     - Trade-off: Lower Q_process/R_measurement → more aggressive estimator
     """
     # Design LQR controller
-    if system_type == "continuous":
-        lqr_result = design_lqr_continuous(A, B, Q_state, R_control, backend=backend)
-    elif system_type == "discrete":
-        lqr_result = design_lqr_discrete(A, B, Q_state, R_control, backend=backend)
-    else:
-        raise ValueError(f"system_type must be 'continuous' or 'discrete', got '{system_type}'")
+    lqr_result = lqr_result = design_lqr(
+        A=A, 
+        B=B, 
+        Q=Q_state, 
+        R=R_control, 
+        N=N,
+        system_type=system_type, 
+        backend=backend
+    )
 
     # Design Kalman filter estimator
     kalman_result = design_kalman_filter(A, C, Q_process, R_measurement, system_type, backend)
@@ -966,8 +958,7 @@ def analyze_observability(
 
 __all__ = [
     # LQR
-    "design_lqr_continuous",
-    "design_lqr_discrete",
+    "design_lqr",
     # Kalman Filter
     "design_kalman_filter",
     # LQG

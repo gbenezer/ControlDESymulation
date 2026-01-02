@@ -17,7 +17,7 @@
 Unit Tests for Classical Control Functions
 
 Tests cover:
-- LQR design (continuous and discrete)
+- Unified LQR design (continuous and discrete via system_type parameter)
 - Kalman filter design
 - LQG controller design
 - Stability analysis
@@ -27,6 +27,7 @@ Tests cover:
 - Error handling and edge cases
 
 Test Structure:
+- TestUnifiedLQR: Unified design_lqr() interface tests
 - TestLQRContinuous: Continuous-time LQR tests
 - TestLQRDiscrete: Discrete-time LQR tests
 - TestKalmanFilter: Kalman filter tests
@@ -39,6 +40,7 @@ Test Structure:
 """
 
 import unittest
+import warnings
 from typing import Dict, Any
 
 import numpy as np
@@ -58,8 +60,7 @@ except ImportError:
     HAS_JAX = False
 
 from src.control.classical_control_functions import (
-    design_lqr_continuous,
-    design_lqr_discrete,
+    design_lqr,
     design_kalman_filter,
     design_lqg,
     analyze_stability,
@@ -138,7 +139,106 @@ class ControlTestCase(unittest.TestCase):
 
 
 # ============================================================================
-# LQR Continuous Tests
+# Unified LQR Tests
+# ============================================================================
+
+class TestUnifiedLQR(ControlTestCase):
+    """Test unified design_lqr() interface."""
+    
+    def test_unified_lqr_continuous(self):
+        """Test unified LQR with system_type='continuous'."""
+        result = design_lqr(
+            self.A_stable,
+            self.B_stable,
+            self.Q2,
+            self.R1,
+            system_type='continuous'
+        )
+        
+        # Check result structure
+        self.assertIn('gain', result)
+        self.assertIn('cost_to_go', result)
+        self.assertIn('closed_loop_eigenvalues', result)
+        self.assertIn('stability_margin', result)
+        
+        # Check dimensions
+        self.assertEqual(result['gain'].shape, (1, 2))
+        self.assertEqual(result['cost_to_go'].shape, (2, 2))
+        
+        # Check stability
+        self.assertGreater(result['stability_margin'], 0)
+        self.assert_stable_continuous(result['closed_loop_eigenvalues'])
+    
+    def test_unified_lqr_discrete_default(self):
+        """Test unified LQR with default system_type='discrete'."""
+        # Default should be discrete
+        result = design_lqr(
+            self.Ad_double_int,
+            self.Bd_double_int,
+            self.Q2,
+            self.R1
+        )
+        
+        self.assertEqual(result['gain'].shape, (1, 2))
+        self.assertGreater(result['stability_margin'], 0)
+        self.assert_stable_discrete(result['closed_loop_eigenvalues'])
+    
+    def test_unified_lqr_discrete_explicit(self):
+        """Test unified LQR with explicit system_type='discrete'."""
+        result = design_lqr(
+            self.Ad_double_int,
+            self.Bd_double_int,
+            self.Q2,
+            self.R1,
+            system_type='discrete'
+        )
+        
+        self.assertEqual(result['gain'].shape, (1, 2))
+        self.assertGreater(result['stability_margin'], 0)
+        self.assert_stable_discrete(result['closed_loop_eigenvalues'])
+    
+    def test_unified_lqr_with_cross_term(self):
+        """Test unified LQR with cross-coupling term N."""
+        N = np.array([[0.5], [0.1]])
+        
+        # Continuous
+        result_c = design_lqr(
+            self.A_stable,
+            self.B_stable,
+            self.Q2,
+            self.R1,
+            N=N,
+            system_type='continuous'
+        )
+        self.assertGreater(result_c['stability_margin'], 0)
+        
+        # Discrete
+        result_d = design_lqr(
+            self.Ad_double_int,
+            self.Bd_double_int,
+            self.Q2,
+            self.R1,
+            N=N,
+            system_type='discrete'
+        )
+        self.assertGreater(result_d['stability_margin'], 0)
+    
+    def test_unified_lqr_invalid_system_type(self):
+        """Test unified LQR with invalid system_type."""
+        with self.assertRaises(ValueError) as cm:
+            design_lqr(
+                self.A_stable,
+                self.B_stable,
+                self.Q2,
+                self.R1,
+                system_type='invalid'
+            )
+        self.assertIn('continuous', str(cm.exception))
+        self.assertIn('discrete', str(cm.exception))
+
+
+# ============================================================================
+# LQR Continuous Tests (Unified)
 # ============================================================================
 
 class TestLQRContinuous(ControlTestCase):
@@ -146,11 +246,13 @@ class TestLQRContinuous(ControlTestCase):
     
     def test_lqr_double_integrator(self):
         """Test LQR on standard double integrator."""
-        result = design_lqr_continuous(
+        # Use unified interface
+        result = design_lqr(
             self.A_double_int,
             self.B_double_int,
             self.Q2,
-            self.R1
+            self.R1,
+            system_type='continuous'
         )
         
         # Check result structure
@@ -182,11 +284,12 @@ class TestLQRContinuous(ControlTestCase):
     
     def test_lqr_stable_system(self):
         """Test LQR on already stable system."""
-        result = design_lqr_continuous(
+        result = design_lqr(
             self.A_stable,
             self.B_stable,
             self.Q2,
-            self.R1
+            self.R1,
+            system_type='continuous'
         )
         
         # Should still be stable with improved performance
@@ -204,12 +307,13 @@ class TestLQRContinuous(ControlTestCase):
         """Test LQR with cross-coupling term N."""
         N = np.array([[0.5], [0.1]])
         
-        result = design_lqr_continuous(
+        result = design_lqr(
             self.A_stable,
             self.B_stable,
             self.Q2,
             self.R1,
-            N=N
+            N=N,
+            system_type='continuous'
         )
         
         # Should still produce stable controller
@@ -220,20 +324,22 @@ class TestLQRContinuous(ControlTestCase):
         """Test effect of Q vs R weighting."""
         # High Q (penalize state more)
         Q_high = 100 * self.Q2
-        result_high_q = design_lqr_continuous(
+        result_high_q = design_lqr(
             self.A_double_int,
             self.B_double_int,
             Q_high,
-            self.R1
+            self.R1,
+            system_type='continuous'
         )
         
         # High R (penalize control more)
         R_high = 10 * self.R1
-        result_high_r = design_lqr_continuous(
+        result_high_r = design_lqr(
             self.A_double_int,
             self.B_double_int,
             self.Q2,
-            R_high
+            R_high,
+            system_type='continuous'
         )
         
         # High Q should give larger gains
@@ -249,14 +355,14 @@ class TestLQRContinuous(ControlTestCase):
         Q = np.eye(3)
         R = np.eye(2)
         
-        result = design_lqr_continuous(A, B, Q, R)
+        result = design_lqr(A, B, Q, R, system_type='continuous')
         
         self.assertEqual(result['gain'].shape, (2, 3))
         self.assertGreater(result['stability_margin'], 0)
 
 
 # ============================================================================
-# LQR Discrete Tests
+# LQR Discrete Tests (Unified)
 # ============================================================================
 
 class TestLQRDiscrete(ControlTestCase):
@@ -264,11 +370,12 @@ class TestLQRDiscrete(ControlTestCase):
     
     def test_lqr_discrete_double_integrator(self):
         """Test discrete LQR on double integrator."""
-        result = design_lqr_discrete(
+        result = design_lqr(
             self.Ad_double_int,
             self.Bd_double_int,
             self.Q2,
-            self.R1
+            self.R1,
+            system_type='discrete'
         )
         
         # Check result structure
@@ -296,11 +403,12 @@ class TestLQRDiscrete(ControlTestCase):
     
     def test_lqr_discrete_stability_margin(self):
         """Test stability margin calculation for discrete systems."""
-        result = design_lqr_discrete(
+        result = design_lqr(
             self.Ad_double_int,
             self.Bd_double_int,
             self.Q2,
-            self.R1
+            self.R1,
+            system_type='discrete'
         )
         
         # Stability margin = 1 - max(|λ|)
@@ -316,19 +424,21 @@ class TestLQRDiscrete(ControlTestCase):
     def test_lqr_discrete_vs_continuous_consistency(self):
         """Test that discretized continuous LQR gives similar results."""
         # Design continuous LQR
-        result_c = design_lqr_continuous(
+        result_c = design_lqr(
             self.A_double_int,
             self.B_double_int,
             self.Q2,
-            self.R1
+            self.R1,
+            system_type='continuous'
         )
         
         # Design discrete LQR
-        result_d = design_lqr_discrete(
+        result_d = design_lqr(
             self.Ad_double_int,
             self.Bd_double_int,
             self.Q2,
-            self.R1
+            self.R1,
+            system_type='discrete'
         )
         
         # Gains should be similar (not exact due to discretization)
@@ -399,7 +509,7 @@ class TestKalmanFilter(ControlTestCase):
         self.assert_stable_continuous(result['observer_eigenvalues'])
     
     def test_kalman_perfect_measurement(self):
-        """Test with very low measurement noise (R â†' 0)."""
+        """Test with very low measurement noise (R → 0)."""
         R_low = 1e-6 * np.eye(1)
         
         result = design_kalman_filter(
@@ -506,12 +616,13 @@ class TestLQG(ControlTestCase):
     
     def test_lqg_separation_principle(self):
         """Test separation principle: LQG = LQR + Kalman designed independently."""
-        # Design LQR separately
-        lqr_result = design_lqr_discrete(
+        # Design LQR separately  
+        lqr_result = design_lqr(
             self.Ad_double_int,
             self.Bd_double_int,
             self.Q2,
-            self.R1
+            self.R1,
+            system_type='discrete'
         )
         
         # Design Kalman separately
@@ -799,11 +910,12 @@ class TestBackendConversion(ControlTestCase):
     
     def test_numpy_backend(self):
         """Test with explicit NumPy backend."""
-        result = design_lqr_continuous(
+        result = design_lqr(
             self.A_stable,
             self.B_stable,
             self.Q2,
             self.R1,
+            system_type='continuous',
             backend='numpy'
         )
         
@@ -818,8 +930,9 @@ class TestBackendConversion(ControlTestCase):
         Q_torch = torch.tensor(self.Q2, dtype=torch.float64)
         R_torch = torch.tensor(self.R1, dtype=torch.float64)
         
-        result = design_lqr_continuous(
+        result = design_lqr(
             A_torch, B_torch, Q_torch, R_torch,
+            system_type='continuous',
             backend='torch'
         )
         
@@ -838,8 +951,9 @@ class TestBackendConversion(ControlTestCase):
         Q_jax = jnp.array(self.Q2)
         R_jax = jnp.array(self.R1)
         
-        result = design_lqr_continuous(
+        result = design_lqr(
             A_jax, B_jax, Q_jax, R_jax,
+            system_type='continuous',
             backend='jax'
         )
         
@@ -864,18 +978,19 @@ class TestErrorHandling(ControlTestCase):
         B_wrong = np.array([[1]])  # Should be (2, 1)
         
         with self.assertRaises(ValueError):
-            design_lqr_continuous(A, B_wrong, self.Q2, self.R1)
+            design_lqr(A, B_wrong, self.Q2, self.R1, system_type='continuous')
     
     def test_lqr_non_square_A(self):
         """Test LQR with non-square A matrix."""
         A_wrong = np.array([[1, 2, 3], [4, 5, 6]])
         
         with self.assertRaises(ValueError):
-            design_lqr_continuous(
+            design_lqr(
                 A_wrong,
                 self.B_stable,
                 self.Q2,
-                self.R1
+                self.R1,
+                system_type='continuous'
             )
     
     def test_kalman_dimension_mismatch(self):
@@ -942,10 +1057,10 @@ class TestIntegration(ControlTestCase):
         stability_ol = analyze_stability(A_unstable, system_type='continuous')
         self.assertTrue(stability_ol['is_unstable'])
         
-        # Design LQR
+        # Design LQR using unified interface
         Q = np.eye(2)
         R = np.array([[1.0]])
-        result = design_lqr_continuous(A_unstable, B, Q, R)
+        result = design_lqr(A_unstable, B, Q, R, system_type='continuous')
         
         # Closed-loop should be stable
         stability_cl = analyze_stability(
@@ -970,7 +1085,7 @@ class TestIntegration(ControlTestCase):
         R = np.array([[1.0]])
         
         try:
-            result = design_lqr_continuous(A, B, Q, R)
+            result = design_lqr(A, B, Q, R, system_type='continuous')
             # If it succeeds, check that it doesn't stabilize
             A_cl = A - B @ result['gain']
             stability = analyze_stability(A_cl, system_type='continuous')
@@ -1036,7 +1151,7 @@ class TestPerformance(ControlTestCase):
         Q = np.diag([100, 1])
         R = np.array([[0.001]])
         
-        result = design_lqr_continuous(A, B, Q, R)
+        result = design_lqr(A, B, Q, R, system_type='continuous')
         
         # Should still converge
         self.assertGreater(result['stability_margin'], 0)
@@ -1053,7 +1168,7 @@ class TestPerformance(ControlTestCase):
         R = np.eye(2)
         
         # Should complete without error
-        result = design_lqr_continuous(A, B, Q, R)
+        result = design_lqr(A, B, Q, R, system_type='continuous')
         
         self.assertEqual(result['gain'].shape, (2, n))
         self.assertEqual(result['cost_to_go'].shape, (n, n))
@@ -1068,6 +1183,7 @@ def suite():
     test_suite = unittest.TestSuite()
     
     # Add all test classes
+    test_suite.addTests(unittest.TestLoader().loadTestsFromTestCase(TestUnifiedLQR))
     test_suite.addTests(unittest.TestLoader().loadTestsFromTestCase(TestLQRContinuous))
     test_suite.addTests(unittest.TestLoader().loadTestsFromTestCase(TestLQRDiscrete))
     test_suite.addTests(unittest.TestLoader().loadTestsFromTestCase(TestKalmanFilter))
