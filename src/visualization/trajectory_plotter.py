@@ -77,8 +77,8 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from src.types.backends import Backend
 from src.visualization.themes import ColorSchemes, PlotThemes
+from src.types.backends import Backend
 
 
 class TrajectoryPlotter:
@@ -276,25 +276,35 @@ class TrajectoryPlotter:
         # Determine subplot layout
         n_rows, n_cols = self._determine_layout(nx)
 
+        # Adjust vertical spacing based on number of rows - more aggressive
+        if n_rows == 1:
+            vertical_spacing = 0.1
+        elif n_rows == 2:
+            vertical_spacing = 0.15
+        elif n_rows == 3:
+            vertical_spacing = 0.12
+        else:
+            vertical_spacing = 0.10
+
         # Create subplots
         fig = make_subplots(
             rows=n_rows,
             cols=n_cols,
             subplot_titles=state_names,
-            vertical_spacing=0.08,
+            vertical_spacing=vertical_spacing,
             horizontal_spacing=0.08,
         )
 
         # Add trajectory traces
         self._add_trajectory_traces(
-            fig, t_np, x_np, state_names, colors, is_batched, n_rows, n_cols,
+            fig, t_np, x_np, state_names, colors, is_batched, n_rows, n_cols
         )
 
         # Update layout
         fig.update_layout(
             title=title,
-            showlegend=show_legend and is_batched,
-            height=max(300, 200 * n_rows),
+            showlegend=show_legend,  # Always respect user's show_legend parameter
+            height=max(400, 300 * n_rows),  # Increased from 250 to 300 per row
         )
 
         # Update axes
@@ -319,6 +329,7 @@ class TrajectoryPlotter:
         title: str = "State and Control Trajectories",
         color_scheme: str = "plotly",
         theme: Optional[str] = None,
+        show_legend: bool = True,
         **kwargs,
     ) -> go.Figure:
         """
@@ -348,6 +359,9 @@ class TrajectoryPlotter:
             Plot theme to apply
             Options: 'default', 'publication', 'dark', 'presentation'
             If None, uses self.default_theme
+        show_legend : bool
+            Whether to show legend
+            Default: True
         **kwargs
             Additional arguments
 
@@ -415,6 +429,16 @@ class TrajectoryPlotter:
         n_total = nx + nu
         n_rows, n_cols = self._determine_layout(n_total)
 
+        # Adjust vertical spacing based on number of rows
+        if n_rows == 1:
+            vertical_spacing = 0.1
+        elif n_rows == 2:
+            vertical_spacing = 0.15
+        elif n_rows == 3:
+            vertical_spacing = 0.12
+        else:
+            vertical_spacing = 0.10
+
         # Create subplots with section titles
         subplot_titles = state_names + control_names
 
@@ -422,25 +446,29 @@ class TrajectoryPlotter:
             rows=n_rows,
             cols=n_cols,
             subplot_titles=subplot_titles,
-            vertical_spacing=0.08,
+            vertical_spacing=vertical_spacing,
             horizontal_spacing=0.08,
         )
 
         # Add state traces
         self._add_trajectory_traces(
-            fig, t_np, x_np, state_names, colors, is_batched, n_rows, n_cols, offset=0,
+            fig, t_np, x_np, state_names, colors, is_batched, n_rows, n_cols, 
+            offset=0,
+            trace_type="States"
         )
 
         # Add control traces
         self._add_trajectory_traces(
-            fig, t_np, u_np, control_names, colors, is_batched, n_rows, n_cols, offset=nx,
+            fig, t_np, u_np, control_names, colors, is_batched, n_rows, n_cols, 
+            offset=nx,
+            trace_type="Controls"
         )
 
         # Update layout
         fig.update_layout(
             title=title,
-            showlegend=is_batched,
-            height=max(400, 200 * n_rows),
+            showlegend=show_legend,  # Always respect show_legend parameter
+            height=max(500, 300 * n_rows),  # Increased base and per-row height
         )
 
         # Update axes
@@ -536,7 +564,7 @@ class TrajectoryPlotter:
                 trajectories_np[label] = x
             if x.shape != (T, nx):
                 raise ValueError(
-                    f"Trajectory '{label}' shape {x.shape} != expected {(T, nx)}",
+                    f"Trajectory '{label}' shape {x.shape} != expected {(T, nx)}"
                 )
 
         # Generate state names
@@ -550,12 +578,22 @@ class TrajectoryPlotter:
         # Determine layout
         n_rows, n_cols = self._determine_layout(nx)
 
+        # Adjust vertical spacing based on number of rows
+        if n_rows == 1:
+            vertical_spacing = 0.1
+        elif n_rows == 2:
+            vertical_spacing = 0.15
+        elif n_rows == 3:
+            vertical_spacing = 0.12
+        else:
+            vertical_spacing = 0.10
+
         # Create subplots
         fig = make_subplots(
             rows=n_rows,
             cols=n_cols,
             subplot_titles=state_names,
-            vertical_spacing=0.08,
+            vertical_spacing=vertical_spacing,
             horizontal_spacing=0.08,
         )
 
@@ -582,8 +620,8 @@ class TrajectoryPlotter:
         # Update layout
         fig.update_layout(
             title=title,
-            showlegend=True,
-            height=max(400, 200 * n_rows),
+            showlegend=True,  # Always show legend for comparison
+            height=max(500, 300 * n_rows),  # Increased base and per-row height
         )
 
         # Update axes
@@ -676,10 +714,11 @@ class TrajectoryPlotter:
         if x.ndim == 3:
             return True
         # 2D or 1D → single
-        if x.ndim <= 2:
+        elif x.ndim <= 2:
             return False
-        # 4D+ is unexpected but treat as batched
-        return True
+        else:
+            # 4D+ is unexpected but treat as batched
+            return True
 
     def _determine_layout(self, n_plots: int) -> Tuple[int, int]:
         """
@@ -708,22 +747,23 @@ class TrajectoryPlotter:
         """
         if n_plots == 1:
             return (1, 1)
-        if n_plots <= 4:
+        elif n_plots <= 4:
             # Single row
             return (1, n_plots)
-        if n_plots <= 8:
+        elif n_plots <= 8:
             # Two rows
             n_cols = math.ceil(n_plots / 2)
             return (2, n_cols)
-        if n_plots <= 12:
+        elif n_plots <= 12:
             # Three rows, 4 columns max
             n_cols = min(4, math.ceil(n_plots / 3))
             n_rows = math.ceil(n_plots / n_cols)
             return (n_rows, n_cols)
-        # Square-ish grid
-        n_cols = math.ceil(math.sqrt(n_plots))
-        n_rows = math.ceil(n_plots / n_cols)
-        return (n_rows, n_cols)
+        else:
+            # Square-ish grid
+            n_cols = math.ceil(math.sqrt(n_plots))
+            n_rows = math.ceil(n_plots / n_cols)
+            return (n_rows, n_cols)
 
     def _add_trajectory_traces(
         self,
@@ -736,6 +776,7 @@ class TrajectoryPlotter:
         n_rows: int,
         n_cols: int,
         offset: int = 0,
+        trace_type: str = "Trajectory 1",
     ) -> None:
         """
         Add trajectory traces to figure.
@@ -760,6 +801,10 @@ class TrajectoryPlotter:
             Number of subplot columns
         offset : int
             Subplot offset (for combined plots)
+        trace_type : str
+            Type of trace for legend naming
+            For single trajectories: "Trajectory 1", "States", "Controls", etc.
+            For batched trajectories: This parameter is ignored
         """
         if is_batched:
             # x: (n_batch, T, nx)
@@ -793,13 +838,18 @@ class TrajectoryPlotter:
                 row = subplot_idx // n_cols + 1
                 col = subplot_idx % n_cols + 1
 
+                # For single trajectory, use the provided trace_type name
+                trace_name = trace_type
+
                 fig.add_trace(
                     go.Scatter(
                         x=t,
                         y=x[:, state_idx],
                         mode="lines",
+                        name=trace_name,
                         line=dict(color=colors[0], width=2),
-                        showlegend=False,
+                        showlegend=(state_idx == 0),  # Only show once in legend
+                        legendgroup=trace_type.lower().replace(" ", "_"),  # Group by type
                     ),
                     row=row,
                     col=col,
