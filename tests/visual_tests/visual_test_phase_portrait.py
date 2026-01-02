@@ -26,6 +26,13 @@ Output:
     Creates HTML files in ./visual_tests/phase_portrait/
 """
 
+import sys
+from pathlib import Path
+
+# Add project root to Python path
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
+
 import numpy as np
 from pathlib import Path
 
@@ -33,7 +40,7 @@ from src.visualization.phase_portrait import PhasePortraitPlotter
 
 def setup_output_directory():
     """Create output directory for visual tests."""
-    output_dir = Path("visual_tests/phase_portrait")
+    output_dir = Path("tests/visual_tests/phase_portrait")
     output_dir.mkdir(parents=True, exist_ok=True)
     return output_dir
 

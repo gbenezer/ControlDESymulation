@@ -26,6 +26,13 @@ Output:
     Creates HTML files in ./visual_tests/control_plotter/
 """
 
+import sys
+from pathlib import Path
+
+# Add project root to Python path
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
+
 import numpy as np
 from pathlib import Path
 from scipy.linalg import solve_continuous_are, expm
@@ -36,7 +43,7 @@ from src.visualization.control_plots import ControlPlotter
 
 def setup_output_directory():
     """Create output directory for visual tests."""
-    output_dir = Path("visual_tests/control_plotter")
+    output_dir = Path("tests/visual_tests/control_plotter")
     output_dir.mkdir(parents=True, exist_ok=True)
     return output_dir
 
