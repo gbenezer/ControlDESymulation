@@ -21,7 +21,7 @@ Abstract base class for all continuous-time dynamical systems.
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 import numpy as np
 
@@ -29,6 +29,10 @@ from src.types.backends import Backend, IntegrationMethod
 from src.types.core import ControlInput, ControlVector, FeedbackController, ScalarLike, StateVector
 from src.types.linearization import LinearizationResult
 from src.types.trajectories import IntegrationResult, SimulationResult, TimeSpan
+
+if TYPE_CHECKING:
+    from src.control.system_analysis import SystemAnalysis
+    from src.control.control_synthesis import ControlSynthesis
 
 
 class ContinuousSystemBase(ABC):
@@ -858,6 +862,114 @@ class ContinuousSystemBase(ABC):
         result["metadata"]["method_type"] = "rollout"
 
         return result
+    
+    # =========================================================================
+    # Control Framework Integration
+    # =========================================================================
+
+    @property
+    def control(self) -> "ControlSynthesis":
+        """
+        Access control synthesis utilities.
+
+        Provides classical control design algorithms including LQR, Kalman filter,
+        and LQG for continuous-time systems.
+
+        Returns
+        -------
+        ControlSynthesis
+            Control design utilities with methods:
+            - design_lqr(A, B, Q, R, N=None, system_type='continuous')
+            - design_kalman(A, C, Q, R, system_type='continuous')
+            - design_lqg(A, B, C, Q_state, R_control, Q_process, R_measurement, ...)
+
+        Examples
+        --------
+        >>> # Linearize and design LQR
+        >>> A, B = system.linearize(x_eq, u_eq)
+        >>> Q = np.diag([10, 1])
+        >>> R = np.array([[0.1]])
+        >>> result = system.control.design_lqr(A, B, Q, R, system_type='continuous')
+        >>> K = result['gain']
+        >>>
+        >>> # Design Kalman filter
+        >>> C = np.array([[1, 0]])
+        >>> kalman = system.control.design_kalman(
+        ...     A, C, Q_proc=0.01*np.eye(2), R_meas=np.array([[0.1]]),
+        ...     system_type='continuous'
+        ... )
+        >>> L = kalman['gain']
+
+        See Also
+        --------
+        analysis : System analysis utilities
+        design_lqr : Convenience method (linearizes + designs in one call)
+        """
+        if not hasattr(self, "_control_synthesis"):
+            self._control_synthesis = None
+
+        if self._control_synthesis is None:
+            from src.control.control_synthesis import ControlSynthesis
+
+            backend = getattr(self, "backend", None)
+            if backend is not None and hasattr(backend, "default_backend"):
+                backend_str = backend.default_backend
+            else:
+                backend_str = "numpy"
+
+            self._control_synthesis = ControlSynthesis(backend=backend_str)
+
+        return self._control_synthesis
+
+    @property
+    def analysis(self) -> "SystemAnalysis":
+        """
+        Access system analysis utilities.
+
+        Provides stability, controllability, and observability analysis
+        for continuous-time linear systems.
+
+        Returns
+        -------
+        SystemAnalysis
+            System analysis utilities with methods:
+            - stability(A, system_type='continuous', tolerance=1e-10)
+            - controllability(A, B, tolerance=1e-10)
+            - observability(A, C, tolerance=1e-10)
+            - analyze_linearization(A, B, C, system_type='continuous')
+
+        Examples
+        --------
+        >>> # Check stability
+        >>> A, B = system.linearize(x_eq, u_eq)
+        >>> stability = system.analysis.stability(A, system_type='continuous')
+        >>> print(f"Stable: {stability['is_stable']}")
+        >>>
+        >>> # Check controllability
+        >>> ctrl_info = system.analysis.controllability(A, B)
+        >>> if ctrl_info['is_controllable']:
+        ...     result = system.design_lqr(Q, R)
+
+        See Also
+        --------
+        control : Control synthesis utilities
+        linearize : Compute linearization matrices
+        """
+        if not hasattr(self, "_system_analysis"):
+            self._system_analysis = None
+
+        if self._system_analysis is None:
+            from src.control.system_analysis import SystemAnalysis
+
+            backend = getattr(self, "backend", None)
+            if backend is not None and hasattr(backend, "default_backend"):
+                backend_str = backend.default_backend
+            else:
+                backend_str = "numpy"
+
+            self._system_analysis = SystemAnalysis(backend=backend_str)
+
+        return self._system_analysis
 
     # =========================================================================
     # Properties (Optional, can be overridden by subclasses)
