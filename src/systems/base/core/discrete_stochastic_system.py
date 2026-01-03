@@ -975,6 +975,10 @@ class DiscreteStochasticSystem(DiscreteSymbolicSystem):
     def is_scalar_noise(self) -> bool:
         """Check if system has single noise source."""
         return self.noise_characteristics.is_scalar
+    
+    def is_pure_diffusion(self) -> bool:
+        """Check if system is pure diffusion (zero deterministic part)."""
+        return all(expr == 0 for expr in self._f_sym)
 
     def get_noise_type(self) -> NoiseType:
         """Get classified noise type."""

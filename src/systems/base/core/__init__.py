@@ -14,7 +14,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 """
-Core System Base Classes (Layer 1)
+Core System Classes
 ==================================
 
 This module provides the abstract base classes that define the fundamental
@@ -37,8 +37,7 @@ Layer 3 (Discrete Implementations):
     - DiscreteStochasticSystem(DiscreteSymbolicSystem, DiscreteSystemBase)
 
 Layer 4 (Bridges):
-    - DiscreteTimeWrapper
-    - Discretizer
+    - DiscretizedSystem
 
 Key Design Principles
 --------------------
@@ -48,179 +47,206 @@ Key Design Principles
 4. **Semantic Clarity**: Method names reflect intent (integrate vs simulate)
 5. **Multi-Backend**: Works with NumPy, PyTorch, JAX
 
-Type System Integration
-----------------------
-The base classes integrate with the comprehensive type system:
-
-Result Types (from src/types/trajectories):
-    - IntegrationResult: Low-level ODE solver output (adaptive time points)
-    - SimulationResult: High-level continuous trajectory (regular time grid)
-    - DiscreteSimulationResult: Discrete-time trajectory (integer time steps)
-
-Linearization Types (from src/types/linearization):
-    - Tuples: (A, B) for deterministic, (A, B, G) for stochastic
-    - ContinuousLinearization: Alias for continuous systems
-    - DiscreteLinearization: Alias for discrete systems
-
-Core Types (from src/types/core):
-    - StateVector, ControlVector, OutputVector
-    - StateMatrix, InputMatrix, DiffusionMatrix
-    - Backend-agnostic ArrayLike
-
 Method Interfaces
 ----------------
-ContinuousSystemBase:
-    __call__(x, u, t) → StateVector
-        Evaluate dynamics: dx/dt = f(x, u, t)
 
-    integrate(x0, u, t_span, method) → IntegrationResult
-        Low-level ODE solver with diagnostics (adaptive steps)
+Layer 1 - Abstract Base Classes:
 
-    simulate(x0, controller, t_span, dt) → SimulationResult
-        High-level trajectory on regular time grid
+    SymbolicSystemBase:
+        define_system(*args, **kwargs)
+            Define symbolic dynamics (override in subclass)
+        __repr__ and __str__
+            Define string representations for debugging
+        print_equations
+            Display symbolic equations
+        compile
+            Pre-compile dynamics functions for specified backends
+        reset_caches
+            Reset cached compiled functions for specified backends
+        nx, nu, ny, nq (properties)
+            State, control, output, and noise dimensions
+        set_default_backend
+            Set default computation backend
+        to_device
+            Switches the device the system is on (PyTorch/JAX only)
+        get_backend_info
+            Get info on backend configuration
+        use_backend
+            Temporarily use a different backend without changing default
+        get_performance_stats
+            Get performance statistics for system operations
+        reset_performance_stats
+            Reset all performance counters to zero
+        substitute_parameters
+            Substitute numerical parameter values into symbolic expression
+        setup_equilibria
+            Optional hook to add equilibria after system initialization (override in subclass)
+        add_equilibrium(name, x_eq, u_eq, ...)
+            Register named equilibrium point
+        set_default_equilibrium
+            Set default equilibrium for get operations without name
+        get_equilibrium
+            Get equilibrium state and control in specified backend
+        list_equilibria
+            List all equilibrium names
+        get_equilibrium_metadata
+            Get metadata for equilibrium
+        remove_equilibrium
+            Remove an equilibrium point
+        get_config_dict
+            Get system configuration as dictionary
+        save_config
+            Save system configuration to JSON file
 
-    linearize(x_eq, u_eq) → (A, B) or (A, B, G)
-        Compute Jacobian matrices at equilibrium
+    ContinuousSystemBase:
+        __call__(x, u, t) → StateVector
+            Evaluate dynamics: dx/dt = f(x, u, t)
+        integrate(x0, u, t_span, method) → IntegrationResult
+            Low-level ODE solver with diagnostics (adaptive steps)
+        simulate(x0, controller, t_span, dt) → SimulationResult
+            High-level trajectory on regular time grid
+        rollout(x0, policy, t_span, dt) → SimulationResult
+            Closed-loop simulation with state feedback policy
+        linearize(x_eq, u_eq) → (A, B)
+            Compute Jacobian matrices at equilibrium
+        control, analysis, plotter, phase_plotter, control_plotter (properties)
+            Access control synthesis, analysis, and plotting interfaces
+        plot
+            alias for plotter.plot_trajectory
+        is_continuous, is_discrete, is_stochastic, is_time_varying (properties)
+            Boolean properties for downstream applications based on system characteristics
 
-DiscreteSystemBase:
-    dt (property) → float
-        Sampling period / time step
+    DiscreteSystemBase:
+        dt (property) → float
+            Sampling period / time step
+        sampling_frequency (property)
+            Get the sampling frequency in Hertz
+        step(x, u, k) → StateVector
+            Single time step: x[k+1] = f(x[k], u[k], k)
+        simulate(x0, u_sequence, n_steps) → DiscreteSimulationResult
+            Multi-step open/closed-loop simulation
+        rollout(x0, policy, n_steps) → DiscreteSimulationResult
+            Closed-loop with state feedback policy
+        linearize(x_eq, u_eq) → (Ad, Bd)
+            Compute discrete Jacobian matrices
+        control, analysis, plotter, phase_plotter, control_plotter (properties)
+            Access control synthesis, analysis, and plotting interfaces
+        plot
+            alias for plotter.plot_trajectory
+        is_continuous, is_discrete, is_stochastic, is_time_varying (properties)
+            Boolean properties for downstream applications based on system characteristics
 
-    step(x, u, k) → StateVector
-        Single time step: x[k+1] = f(x[k], u[k], k)
+Layer 2 - Deterministic Symbolic Systems:
 
-    simulate(x0, u_sequence, n_steps) → DiscreteSimulationResult
-        Multi-step open/closed-loop simulation
+    ContinuousSymbolicSystem(SymbolicSystemBase, ContinuousSystemBase):
+        forward(x, u, t, backend) → StateVector
+            Evaluate dynamics with explicit backend selection
+        linearized_dynamics_symbolic
+            Compute symbolic linearization: A = ∂f/∂x, B = ∂f/∂u.
+        linearized_dynamics(x, u, A, B, backend) → StateVector
+            Evaluate linearized dynamics: dx/dt = A(x - x_eq) + B(u - u_eq)
+        verify_jacobians
+            Verify symbolic Jacobians against automatic differentiation.
+        h(x, backend) → OutputVector
+            Evaluate output function y = h(x)
+        linearized_observation_symbolic
+            Compute symbolic observation Jacobian: C = ∂h/∂x
+        linearized_observation(x, x_eq, C, backend) → OutputVector
+            Evaluate linearized output: y = C(x - x_eq)
+        warmup(backends, n_calls)
+            Pre-compile and warm up JIT caches
 
-    rollout(x0, policy, n_steps) → DiscreteSimulationResult
-        Closed-loop with state feedback policy
+    DiscreteSymbolicSystem(SymbolicSystemBase, DiscreteSystemBase):
+        forward(x, u, k, backend) → StateVector
+            Evaluate dynamics with explicit backend selection
+        linearized_dynamics_symbolic
+            Compute symbolic discrete linearization
+        linearized_dynamics(x, u, Ad, Bd, backend) → StateVector
+            Evaluate linearized dynamics: x[k+1] = Ad(x - x_eq) + Bd(u - u_eq)
+        h(x, backend) → OutputVector
+            Evaluate output function y = h(x)
+        linearized_observation_symbolic
+            Compute symbolic observation Jacobian: C = ∂h/∂x
+        linearized_observation(x, x_eq, C, backend) → OutputVector
+            Evaluate linearized output: y = C(x - x_eq)
+        warmup(backends, n_calls)
+            Pre-compile and warm up JIT caches
 
-    linearize(x_eq, u_eq) → (Ad, Bd) or (Ad, Bd, Gd)
-        Compute discrete Jacobian matrices
+Layer 3 - Stochastic Systems:
 
-Usage Examples
--------------
->>> # Define a custom continuous system
->>> class MyODE(ContinuousSystemBase):
-...     def __init__(self):
-...         self.nx = 2
-...         self.nu = 1
-...
-...     def __call__(self, x, u=None, t=0.0):
-...         return -x + (u if u is not None else 0.0)
-...
-...     def integrate(self, x0, u, t_span, method="RK45", **kwargs):
-...         # Use scipy.integrate.solve_ivp
-...         result = solve_ivp(...)
-...         return {
-...             "t": result.t,
-...             "y": result.y,
-...             "success": result.success,
-...             "nfev": result.nfev
-...         }
-...
-...     def linearize(self, x_eq, u_eq):
-...         A = -np.eye(self.nx)
-...         B = np.eye(self.nx, self.nu)
-...         return (A, B)
+    ContinuousStochasticSystem(ContinuousSymbolicSystem):
+        drift(x, u, t, backend) → StateVector
+            Evaluate deterministic drift: f(x, u, t)
+        diffusion(x, u, t, backend) → DiffusionMatrix
+            Evaluate noise diffusion: G(x, u, t)
+        linearize(x_eq, u_eq) → (A, B, G)
+            Returns Jacobians plus diffusion matrix
+        recommend_solvers
+            Recommend efficient SDE solvers based on noise structure
+        is_additive_noise, is_multiplicative_noise, is_diagonal_noise, is_scalar_noise (properties)
+            Noise structure classification
+        is_pure_diffusion
+            Whether or not the system is a pure diffusion (no drift) system
+        get_noise_type() → NoiseType
+            Get noise type (additive, multiplicative, etc.)
+        get_sde_type() → SDEType
+            Get SDE type (Ito, Stratonovich)
+        get_diffusion_matrix
+            Get the diffusion matrix
+        depends_on_state, depends_on_control, depends_on_time
+            Check if diffusion depends on particular variables
+        compile_diffusion, compile_all, reset_diffusion_cache, reset_all_caches
+            Companion methods to pre-compile diffusion functions or both functions and reset them
 
->>> # Use the system
->>> system = MyODE()
->>> x0 = np.array([1.0, 0.0])
->>>
->>> # Low-level: Access solver diagnostics
->>> int_result = system.integrate(x0, u=None, t_span=(0, 10))
->>> print(f"Solver used {int_result['nfev']} evaluations")
->>>
->>> # High-level: Get clean trajectory
->>> sim_result = system.simulate(x0, controller=None, t_span=(0, 10), dt=0.01)
->>> plt.plot(sim_result["time"], sim_result["states"][0, :])
+    DiscreteStochasticSystem(DiscreteSymbolicSystem):
+        diffusion(x, u, k, backend) → DiffusionMatrix
+            Evaluate noise diffusion: G(x, u, k)
+        step_stochastic(x, u, k, noise, backend) → StateVector
+            Single stochastic step with explicit noise
+        simulate_stochastic(x0, u_sequence, n_steps, ...) → DiscreteSimulationResult
+            Monte Carlo simulation with noise realizations
+        linearize(x_eq, u_eq) → (Ad, Bd, Gd)
+            Returns discrete Jacobians plus diffusion matrix
+        is_additive_noise, is_multiplicative_noise, is_diagonal_noise, is_scalar_noise (properties)
+            Noise structure classification
+        is_pure_diffusion
+            Whether or not the system is a pure diffusion (no drift) system
+        depends_on_state, depends_on_control, depends_on_time
+            Check if diffusion depends on particular variables
+        compile_diffusion, compile_all, reset_diffusion_cache, reset_all_caches
+            Companion methods to pre-compile diffusion functions or both functions and reset them
+            
+Layer 4 - Discretized Systems (Bridge):
 
->>> # Define a custom discrete system
->>> class MyDiscreteSystem(DiscreteSystemBase):
-...     def __init__(self, dt=0.1):
-...         self._dt = dt
-...         self.nx = 2
-...         self.nu = 1
-...
-...     @property
-...     def dt(self):
-...         return self._dt
-...
-...     def step(self, x, u=None, k=0):
-...         u = u if u is not None else np.zeros(self.nu)
-...         return 0.9 * x + 0.1 * u
-...
-...     def simulate(self, x0, u_sequence, n_steps):
-...         # Implement multi-step simulation
-...         ...
-...
-...     def linearize(self, x_eq, u_eq):
-...         Ad = 0.9 * np.eye(self.nx)
-...         Bd = 0.1 * np.eye(self.nx, self.nu)
-...         return (Ad, Bd)
+    DiscretizedSystem(DiscreteSystemBase):
+        dt, mode (properties)
+            Sampling period and discretization mode
+        step(x, u, k) → StateVector
+            Discretized step using configured method
+        simulate(x0, u_sequence, n_steps) → DiscreteSimulationResult
+            Simulate using fixed or dense output mode
+        simulate_stochastic(x0, u_sequence, n_steps, ...) → DiscreteSimulationResult
+            Stochastic simulation (for wrapped stochastic systems)
+        linearize(x_eq, u_eq) → (Ad, Bd) or (Ad, Bd, Gd)
+            Discrete linearization of continuous system
+        compare_modes(x0, u_sequence, n_steps) → dict
+            Compare FIXED vs DENSE discretization accuracy
+        change_method(new_method) → DiscretizedSystem
+            Return copy with different integration method
+        get_info() → dict
+            Get discretization configuration details
 
->>> # Use the discrete system
->>> discrete_sys = MyDiscreteSystem(dt=0.1)
->>>
->>> # Open-loop simulation
->>> result = discrete_sys.simulate(x0, u_sequence=u_seq, n_steps=100)
->>>
->>> # Closed-loop with state feedback
->>> K = np.array([[-1.0, -2.0]])
->>> def policy(x, k):
-...     return -K @ x
->>> result = discrete_sys.rollout(x0, policy, n_steps=100)
-
-Integration with Phase 2
-------------------------
-After Phase 1, the existing symbolic system classes will be refactored:
-
-Phase 2.1: SymbolicDynamicalSystem → ContinuousSymbolicSystem
-    - Will inherit from ContinuousSystemBase
-    - Implements abstract methods using existing functionality
-    - Adds backward compatibility alias
-
-Phase 2.2: StochasticDynamicalSystem → ContinuousStochasticSystem
-    - Will inherit from ContinuousSymbolicSystem
-    - Extends linearize() to return (A, B, G) tuple
-    - Adds backward compatibility alias
-
-Phase 3: Discrete systems will be updated similarly
-    - DiscreteSymbolicSystem inherits from DiscreteSystemBase
-    - DiscreteStochasticSystem uses multiple inheritance
-
-Migration Notes
---------------
-For users of the library:
-- Old class names will remain as aliases for 2+ versions
-- New code should use ContinuousSymbolicSystem, ContinuousStochasticSystem
-- linearize() returns tuples (always has in this codebase)
-- simulate() returns dicts (TypedDict annotations, not instances)
-
-For developers:
-- Follow the abstract base class contracts
-- Use type hints from src/types throughout
-- Return IntegrationResult from integrate(), SimulationResult from simulate()
-- Return tuples from linearize(), not dicts or objects
-
-See Also
---------
-- src/types/trajectories: Result type definitions
-- src/types/linearization: Linearization type definitions
-- src/types/core: Core vector and matrix types
-- tests/unit/core_class_unit_tests/: Unit tests for base classes
-
-References
----------
-Phase 1 Implementation:
-    Date: December 26, 2025
-    Conversation: Extended design discussion on type system semantics
-    Key Decisions:
-        - Three-tier result types (Integration/Simulation/DiscreteSim)
-        - integrate() vs simulate() semantic distinction
-        - Tuples for linearization (not dicts or dataclasses)
-        - TypedDict returns plain dicts (not instances)
+    Helper Functions:
+        discretize(system, dt, method, mode) → DiscretizedSystem
+            Create discretized wrapper for continuous system
+        discretize_batch(systems, dt, method) → List[DiscretizedSystem]
+            Batch discretization of multiple systems
+        analyze_discretization_error(system, dt_values, ...) → dict
+            Analyze discretization error across time steps
+        recommend_dt(system, x0, u, ...) → float
+            Recommend appropriate time step
+        compute_discretization_quality(system, dt, ...) → dict
+            Compute quality metrics for given dt
 
 Authors
 -------
@@ -231,12 +257,33 @@ License
 GNU Affero General Public License v3.0
 """
 
-# Import base classes
-from .continuous_symbolic_system import ContinuousSymbolicSystem
+# Layer 1: Abstract base classes
 from .continuous_system_base import ContinuousSystemBase
-from .discrete_symbolic_system import DiscreteSymbolicSystem
 from .discrete_system_base import DiscreteSystemBase
 from .symbolic_system_base import SymbolicSystemBase
+
+# Layer 2: Deterministic symbolic systems
+from .continuous_symbolic_system import (
+    ContinuousSymbolicSystem,
+    ContinuousDynamicalSystem,
+    SymbolicDynamicalSystem,
+)
+from .discrete_symbolic_system import DiscreteSymbolicSystem, DiscreteDynamicalSystem
+
+# Layer 3: Stochastic systems
+from .continuous_stochastic_system import ContinuousStochasticSystem, StochasticDynamicalSystem
+from .discrete_stochastic_system import DiscreteStochasticSystem
+
+# Layer 4: Discretized systems (bridge)
+from .discretized_system import (
+    DiscretizationMode,
+    DiscretizedSystem,
+    discretize,
+    discretize_batch,
+    analyze_discretization_error,
+    recommend_dt,
+    compute_discretization_quality,
+)
 
 # Export public API
 __all__ = [
@@ -244,17 +291,30 @@ __all__ = [
     "SymbolicSystemBase",
     "ContinuousSystemBase",
     "DiscreteSystemBase",
-    # Layer 2: Deterministic Systems
+    # Layer 2: Deterministic symbolic systems and aliases
     "ContinuousSymbolicSystem",
+    "ContinuousDynamicalSystem",
+    "SymbolicDynamicalSystem",
+    "DiscreteDynamicalSystem",
     "DiscreteSymbolicSystem",
-    # Layer 3: Stochastic Systems
-    # Layer 4: Discretized Systems
+    # Layer 3: Stochastic systems and aliases
+    "ContinuousStochasticSystem",
+    "StochasticDynamicalSystem",
+    "DiscreteStochasticSystem",
+    # Layer 4: Discretized systems
+    "DiscretizationMode",
+    "DiscretizedSystem",
+    "discretize",
+    "discretize_batch",
+    "analyze_discretization_error",
+    "recommend_dt",
+    "compute_discretization_quality",
 ]
 
 # Version tracking for this module
-__version__ = "2.0.0"
-__phase__ = "Phase 2: Deterministic System Classes"
-__last_updated__ = "2025-12-30"
+__version__ = "1.0.0"
+__phase__ = "Phase 4: Complete Core System Classes"
+__last_updated__ = "2026-01-03"
 
 # Module-level documentation
 __doc_title__ = "Core System Classes"
