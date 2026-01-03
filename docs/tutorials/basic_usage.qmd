@@ -1,0 +1,134 @@
+---
+title: "Basic Usage"
+format: html
+execute:
+  eval: true
+---
+
+## Introduction
+
+This tutorial covers the basics of defining and simulating dynamical systems.
+
+## Setting Up
+
+First, import the necessary modules:
+
+```{python}
+# TODO: Change once API regarding exports stabilizes
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path.cwd().parent.parent))
+
+import numpy as np
+import sympy as sp
+# need to adjust import once API stabilizes
+from src.systems.base.core.continuous_symbolic_system import ContinuousSymbolicSystem
+
+# Set random seed for reproducibility
+np.random.seed(42)
+```
+
+## Defining a Simple System
+
+Let's create a simple pendulum:
+```{python}
+class SymbolicPendulum(ContinuousSymbolicSystem):
+    def define_system(
+        self,
+        m_val: float = 1.0,
+        l_val: float = 1.0,
+        beta_val: float = 1.0,
+        g_val: float = 9.81,
+    ):
+        """First order model of a pendulum"""
+        # define the symbolic variables
+        theta, theta_dot = sp.symbols("theta theta_dot", real=True)
+        u = sp.symbols("u", real=True)
+        m, l, beta, g = sp.symbols("m l beta g", real=True, positive=True)
+
+        # add the variables to the system fields properly
+        self.parameters = {m: m_val, l: l_val, beta: beta_val, g: g_val}
+        self.state_vars = [theta, theta_dot]
+        self.control_vars = [u]
+        self.order = 1
+
+        # define the dynamics of the system
+        ml2 = m * l * l
+        self._f_sym = sp.Matrix(
+            [theta_dot, (-beta / ml2) * theta_dot + (g / l) * sp.sin(theta) + u / ml2],
+        )
+        self._h_sym = sp.Matrix([theta])
+
+    def setup_equilibria(self):
+        # method to add equilibria to the system automatically after initialization
+
+        # add the stable equilibrium where the pendulum is hanging down
+        self.add_equilibrium(
+            'downward',
+            x_eq=np.array([0.0, 0.0]),
+            u_eq=np.array([0.0]),
+            verify=True
+            )
+
+        # add the unstable equilibrium where the pendulum is inverted
+        self.add_equilibrium(
+            'inverted',
+            x_eq=np.array([np.pi, 0.0]),
+            u_eq=np.array([0.0]),
+            stability='unstable',
+            notes='Requires active control'
+            )
+
+# Instantiate the system
+pendulum = SymbolicPendulum()
+
+# Initial conditions
+x0 = np.array([1.0, 0.0])
+```
+
+## Simulation
+
+Now simulate the system:
+```{python}
+# Integrate a trajectory with auto-selection of
+# relevant arguments
+pendulum_integration_result = pendulum.integrate(
+        x0=x0,
+        t_span = (0.0, 200.0)
+    )
+print(pendulum_integration_result['x'])
+```
+
+## Visualization
+
+Plot the trajectory in 2D:
+```{python}
+STATE_NAMES = ['angle', 'angular velocity']
+trajectory_plot = pendulum.plot(
+    result=pendulum_integration_result,
+    state_names = STATE_NAMES
+)
+trajectory_plot.show()
+```
+
+## Phase Portrait
+
+Plot the 2D phase portrait
+```{python}
+upright_point = pendulum.get_equilibrium('inverted')
+downward_point = pendulum.get_equilibrium('downward')
+phase_portrait = pendulum.phase_plotter.plot_2d(
+    x=pendulum_integration_result['x'],
+    state_names = STATE_NAMES,
+    show_direction = True,
+    equilibria=[upright_point, 
+                downward_point]
+)
+phase_portrait.show()
+```
+
+## Next Steps
+
+- Learn about [stochastic systems](sde-integration.qmd) *not implemented*
+- Explore [different backends](backends.qmd) *not implemented*
+- See [advanced examples](../examples/index.qmd) *not implemented*
