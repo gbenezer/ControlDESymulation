@@ -18,7 +18,7 @@ import sympy as sp
 from src.systems.base.core.continuous_symbolic_system import ContinuousSymbolicSystem
 
 
-class ControlledDuffingOscillator(ContinuousSymbolicSystem):
+class DuffingOscillator(ContinuousSymbolicSystem):
     """
     Duffing oscillator - nonlinear oscillator with cubic stiffness term.
     # NOTE: Implementation is incomplete because there is currently no way
