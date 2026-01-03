@@ -81,7 +81,6 @@ target/
 # Jupyter Notebook
 .ipynb_checkpoints
 *.ipynb
-!example_notebooks/*.ipynb  # Keep example notebooks
 
 # IPython
 profile_default/
@@ -393,7 +392,7 @@ tests/visual_tests/trajectory_plotter/
 # ============================================================================
 
 # Keep example notebooks
-!example_notebooks/*.ipynb
+!docs/examples/*.ipynb
 
 # Keep important configs
 !.github/
