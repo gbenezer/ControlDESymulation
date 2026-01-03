@@ -221,6 +221,8 @@ Layer 4 - Discretized Systems (Bridge):
     DiscretizedSystem(DiscreteSystemBase):
         dt, mode (properties)
             Sampling period and discretization mode
+        get_available_methods
+            Get available integration methods for a backend.
         step(x, u, k) → StateVector
             Discretized step using configured method
         simulate(x0, u_sequence, n_steps) → DiscreteSimulationResult
