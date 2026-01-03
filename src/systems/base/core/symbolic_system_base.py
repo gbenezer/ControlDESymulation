@@ -429,10 +429,6 @@ class SymbolicSystemBase(ABC):
         # Step 5: Initialize code generator (depends on validated system)
         self._code_gen = CodeGenerator(self)
 
-        # Step 6: Post-initialization hook for equilibria
-        if self._auto_add_equilibria and hasattr(self, "setup_equilibria"):
-            self.setup_equilibria()
-
     # ========================================================================
     # String Representations
     # ========================================================================

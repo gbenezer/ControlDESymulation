@@ -210,6 +210,10 @@ class DiscreteSymbolicSystem(SymbolicSystemBase, DiscreteSystemBase):
 
         self._observation = ObservationEngine(self, self._code_gen, self.backend)
         """Evaluates output: y[k] = h(x[k])"""
+        
+        # call setup_equilibria after _dynamics exists
+        if self._auto_add_equilibria and hasattr(self, "setup_equilibria"):
+            self.setup_equilibria()
 
     # ========================================================================
     # DiscreteSystemBase Interface Implementation

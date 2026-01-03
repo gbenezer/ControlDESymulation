@@ -235,6 +235,10 @@ class ContinuousSymbolicSystem(SymbolicSystemBase, ContinuousSystemBase):
 
         self._observation = ObservationEngine(self, self._code_gen, self.backend)
         """Evaluates output: y = h(x) and C = ∂h/∂x"""
+        
+        # call setup_equilibria after _dynamics exists
+        if self._auto_add_equilibria and hasattr(self, "setup_equilibria"):
+            self.setup_equilibria()
 
     # ========================================================================
     # ContinuousSystemBase Interface Implementation
