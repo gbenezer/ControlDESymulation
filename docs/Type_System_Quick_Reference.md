@@ -29,6 +29,16 @@ from src.types.linearization import (
     LinearizationResult,
     DeterministicLinearization,
 )
+
+# Control types
+from src.types.control_classical import (
+    LQRResult,
+    KalmanFilterResult,
+    LQGResult,
+    StabilityInfo,
+    ControllabilityInfo,
+    ObservabilityInfo,
+)
 ```
 
 ## Foundational Types
@@ -245,6 +255,109 @@ C, D = system.linearized_observation(x_eq, u_eq)
 
 # Full state-space
 A, B, C, D = system.full_linearization(x_eq, u_eq)
+```
+
+### Control Design Results
+
+```python
+from src.types.control_classical import (
+    LQRResult,
+    KalmanFilterResult,
+    LQGResult,
+    StabilityInfo,
+    ControllabilityInfo,
+    ObservabilityInfo,
+)
+
+# LQR controller design
+A, B = system.linearize(x_eq, u_eq)
+Q = np.diag([10, 1])
+R = np.array([[0.1]])
+
+result: LQRResult = system.control.design_lqr(
+    A, B, Q, R,
+    system_type='continuous'
+)
+
+# Access LQR result fields
+K: GainMatrix = result['gain']                    # Feedback gain (nu, nx)
+P: CovarianceMatrix = result['cost_to_go']        # Riccati solution (nx, nx)
+eigs: np.ndarray = result['closed_loop_eigenvalues']  # (A-BK) eigenvalues
+margin: float = result['stability_margin']        # Phase/gain margin
+
+# Check stability
+is_stable = np.all(np.real(eigs) < 0)  # Continuous
+is_stable = np.all(np.abs(eigs) < 1)   # Discrete
+
+# Kalman filter design
+C = np.array([[1, 0]])
+Q_proc = 0.01 * np.eye(2)
+R_meas = np.array([[0.1]])
+
+kalman: KalmanFilterResult = system.control.design_kalman(
+    A, C, Q_proc, R_meas,
+    system_type='discrete'
+)
+
+# Access Kalman result fields
+L: GainMatrix = kalman['gain']                     # Kalman gain (nx, ny)
+P_est: CovarianceMatrix = kalman['error_covariance']  # Error cov (nx, nx)
+S: CovarianceMatrix = kalman['innovation_covariance']  # Innovation (ny, ny)
+obs_eigs: np.ndarray = kalman['observer_eigenvalues']  # (A-LC) eigenvalues
+
+# LQG controller (combined)
+lqg: LQGResult = system.control.design_lqg(
+    A, B, C,
+    Q, R,           # LQR weights
+    Q_proc, R_meas,  # Kalman noise
+    system_type='discrete'
+)
+
+# Access LQG result fields
+K_lqr: GainMatrix = lqg['control_gain']           # LQR gain (nu, nx)
+L_kf: GainMatrix = lqg['estimator_gain']          # Kalman gain (nx, ny)
+P_ctrl: CovarianceMatrix = lqg['control_cost_to_go']  # Controller Riccati
+P_est: CovarianceMatrix = lqg['estimation_error_covariance']  # Estimator Riccati
+stable: bool = lqg['closed_loop_stable']          # Overall stability
+separated: bool = lqg['separation_verified']      # Separation principle
+ctrl_eigs: np.ndarray = lqg['controller_eigenvalues']  # (A-BK) eigenvalues
+est_eigs: np.ndarray = lqg['estimator_eigenvalues']    # (A-LC) eigenvalues
+```
+
+### System Analysis Results
+
+```python
+# Stability analysis
+stability: StabilityInfo = analyze_stability(A, system_type='continuous')
+
+# Access stability fields
+eigs: np.ndarray = stability['eigenvalues']          # Complex eigenvalues
+mags: np.ndarray = stability['magnitudes']           # |λ| values
+max_mag: float = stability['max_magnitude']          # Spectral radius
+rho: float = stability['spectral_radius']            # Same as max_magnitude
+is_stable: bool = stability['is_stable']             # Asymptotically stable
+is_marginal: bool = stability['is_marginally_stable']  # On stability boundary
+is_unstable: bool = stability['is_unstable']         # Unstable
+
+# Controllability analysis
+ctrl: ControllabilityInfo = analyze_controllability(A, B)
+
+# Access controllability fields
+C_matrix: ControllabilityMatrix = ctrl['controllability_matrix']  # (nx, nx*nu)
+rank: int = ctrl['rank']                             # Rank of C_matrix
+controllable: bool = ctrl['is_controllable']         # rank == nx
+if 'uncontrollable_modes' in ctrl:
+    uncontrol_modes: np.ndarray = ctrl['uncontrollable_modes']  # Eigenvalues
+
+# Observability analysis
+obs: ObservabilityInfo = analyze_observability(A, C)
+
+# Access observability fields
+O_matrix: ObservabilityMatrix = obs['observability_matrix']  # (nx*ny, nx)
+rank: int = obs['rank']                              # Rank of O_matrix
+observable: bool = obs['is_observable']              # rank == nx
+if 'unobservable_modes' in obs:
+    unobs_modes: np.ndarray = obs['unobservable_modes']  # Eigenvalues
 ```
 
 ## Symbolic Types
@@ -618,4 +731,5 @@ def test_integration_result():
 - **Core Types:** See `src/types/core.py`
 - **Backend Types:** See `src/types/backends.py`
 - **Result Types:** See `src/types/trajectories.py`
+- **Control Types:** See `src/types/control_classical.py`
 - **Protocols:** See `src/types/protocols.py`
