@@ -786,6 +786,7 @@ For commercial licensing or consulting inquiries, contact via email.
 - ✅ Comprehensive documentation
 - ✅ Classical control design methods
 - ✅ Advanced plotting capabilities
+- 🔄 Constructing integration test suites for debugging and regression testing
 - 🔄 Addressing warnings and ruff/mypy issues
 - 🔄 Polishing and reorganizing example systems
 - 🔄 Constructing notebooks and tutorials
