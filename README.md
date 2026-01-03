@@ -66,7 +66,7 @@ pip install -e ".[all]"        # Everything
 ### Your First System
 
 ```python
-from src.systems.base import ContinuousSymbolicSystem
+from src.systems.base.core.continuous_symbolic_system import ContinuousSymbolicSystem
 import sympy as sp
 import numpy as np
 
@@ -186,7 +186,7 @@ ControlDESymulation follows a clean 4-layer architecture:
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                  Layer 3: User Interface                     │
-│  ContinuousSymbolicSystem  |  DiscreteSymbolicSystem         │
+│  ContinuousSymbolicSystem   | DiscreteSymbolicSystem         │
 │  ContinuousStochasticSystem | DiscreteStochasticSystem       │
 │                                                              │
 └─────────────────────┬───────────────────────────────────────┘
@@ -208,7 +208,7 @@ ControlDESymulation follows a clean 4-layer architecture:
 ┌─────────────────────▼───────────────────────────────────────┐
 │              Layer 0: Type System                            │
 │  TypedDict definitions for type safety                       │
-│  218 types across 19 focused modules                         │
+│  200+ types across 19 focused modules                        │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -506,11 +506,14 @@ For commercial licensing or consulting inquiries, contact via email.
 - ✅ Comprehensive documentation
 - ✅ Classical control design methods
 - ✅ Advanced plotting capabilities
+- 🔄 Debug plotting capabilities
+    - Make sure control plotting capabilities auto-calculate relevant quantities
+    - Debug issue of equilibrium markers not appearing in 2D phase portraits
 - 🔄 Constructing integration test suites for debugging and regression testing
 - 🔄 Addressing warnings and ruff/mypy issues
 - 🔄 Polishing and reorganizing example systems
-- 🔄 Constructing notebooks and tutorials
-- 🔄 Verifying and adding additional documentation
+- 🔄 Constructing notebooks, tutorials, and other documentation with Quarto and GitHub Pages
+- 🔄 Verifying constructed documentation
 
 ### v1.1 (Planned)
 - [ ] RL Environment Synthesis using Gymnasium, PyBullet, and/or Brax
