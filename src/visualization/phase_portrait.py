@@ -506,6 +506,12 @@ class PhasePortraitPlotter:
         # Get colors from centralized color schemes
         colors = ColorSchemes.get_colors(color_scheme, n_batch)
 
+        # Generate trajectory names if not provided
+        if trajectory_names is None:
+            trajectory_names = [f"Trajectory {i + 1}" for i in range(n_batch)]
+        elif len(trajectory_names) != n_batch:
+            raise ValueError(f"trajectory_names length {len(trajectory_names)} != n_batch {n_batch}")
+
         # Create figure
         fig = go.Figure()
 
@@ -521,6 +527,7 @@ class PhasePortraitPlotter:
                     name="Start",
                     marker=dict(color="green", size=8, symbol="circle"),
                     showlegend=True,
+                    hovertemplate=f"<b>Start: {trajectory_names[0]}</b><br>{state_names[0]}: %{{x:.3f}}<br>{state_names[1]}: %{{y:.3f}}<br>{state_names[2]}: %{{z:.3f}}<extra></extra>",
                 )
             )
             
@@ -534,6 +541,7 @@ class PhasePortraitPlotter:
                     name="End",
                     marker=dict(color="red", size=8, symbol="square"),
                     showlegend=True,
+                    hovertemplate=f"<b>End: {trajectory_names[0]}</b><br>{state_names[0]}: %{{x:.3f}}<br>{state_names[1]}: %{{y:.3f}}<br>{state_names[2]}: %{{z:.3f}}<extra></extra>",
                 )
             )
 
@@ -578,7 +586,7 @@ class PhasePortraitPlotter:
                         y=x_traj[:, 1],
                         z=x_traj[:, 2],
                         mode="lines",
-                        name=f"Trajectory {batch_idx + 1}" if is_batched else "Trajectory",
+                        name=trajectory_names[batch_idx],
                         line=dict(color=colors[batch_idx], width=3),
                         showlegend=True,
                     )
@@ -595,6 +603,7 @@ class PhasePortraitPlotter:
                         mode="markers",
                         marker=dict(color="green", size=8, symbol="circle"),
                         showlegend=False,
+                        hovertemplate=f"<b>Start: {trajectory_names[batch_idx]}</b><br>{state_names[0]}: %{{x:.3f}}<br>{state_names[1]}: %{{y:.3f}}<br>{state_names[2]}: %{{z:.3f}}<extra></extra>",
                     )
                 )
 
@@ -607,6 +616,7 @@ class PhasePortraitPlotter:
                         mode="markers",
                         marker=dict(color="red", size=8, symbol="square"),
                         showlegend=False,
+                        hovertemplate=f"<b>End: {trajectory_names[batch_idx]}</b><br>{state_names[0]}: %{{x:.3f}}<br>{state_names[1]}: %{{y:.3f}}<br>{state_names[2]}: %{{z:.3f}}<extra></extra>",
                     )
                 )
 
