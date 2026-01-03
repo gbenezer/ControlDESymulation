@@ -1,0 +1,30 @@
+project:
+  type: website
+  output-dir: _site
+
+website:
+  title: "ControlDESymulation"
+  navbar:
+    left:
+      - href: index.qmd
+        text: Home
+      - href: tutorials/index.qmd
+        text: Tutorials
+      - href: examples/index.qmd
+        text: Examples
+      - href: api/index.qmd
+        text: API Reference
+    right:
+      - icon: github
+        href: https://github.com/gbenezer/ControlDESymulation
+
+format:
+  html:
+    theme: cosmo
+    css: styles.css
+    toc: true
+    code-copy: true
+    code-fold: false
+
+execute:
+  freeze: auto  # Only re-execute changed files
