@@ -1452,6 +1452,7 @@ class SymbolicSystemBase(ABC):
 
         See Also
         --------
+        setup_equilibrium: Automatically add equilibria after system initialization
         get_equilibrium : Retrieve equilibrium in specified backend
         list_equilibria : List all equilibrium names
         set_default_equilibrium : Set default equilibrium
