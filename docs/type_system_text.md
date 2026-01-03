@@ -46,20 +46,20 @@
 ┣━━━━━━━━━━━━━━━━━━━━━━━━━┫      ┃ │  • OutputExpression   ┃
 ┃ backends.py (735 lines) ┃      ┃ │  • DiffusionExpression┃
 ┃ ├─ Backend Types        ┃      ┃ └─ ParameterDict       ┃
-┃ │  • Backend            ┃      ┗━━━━━━━━━━━━━━━━━━━━━━━━━┛
-┃ │  • Device             ┃
-┃ │  • BackendConfig      ┃                ↓
-┃ ├─ Integration Methods  ┃      ┏━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ │  • IntegrationMethod  ┃      ┃ STRUCTURAL TYPES        ┃
-┃ │  • OdeMethod          ┃      ┣━━━━━━━━━━━━━━━━━━━━━━━━━┫
-┃ │  • SdeMethod          ┃      ┃ protocols.py (1,086)    ┃
-┃ ├─ Noise Types          ┃      ┃ ├─ System Protocols     ┃
-┃ │  • NoiseType          ┃      ┃ │  • DynamicalSystem    ┃
-┃ │  • SDEType            ┃      ┃ │  • ContinuousSystem   ┃
-┃ │  • ConvergenceType    ┃      ┃ │  • DiscreteSystem     ┃
-┃ └─ Configuration        ┃      ┃ │  • StochasticSystem   ┃
-┃    • SystemConfig       ┃      ┃ ├─ Observer Protocols   ┃
-┗━━━━━━━━━━━━━━━━━━━━━━━━━┛      ┃ └─ Controller Protocols ┃
+┃ │  • Backend            ┃      ┣━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ │  • Device             ┃      ┃ control_classical.py    ┃
+┃ │  • BackendConfig      ┃      ┃ ├─ Analysis Results     ┃
+┃ ├─ Integration Methods  ┃      ┃ │  • StabilityInfo      ┃
+┃ │  • IntegrationMethod  ┃      ┃ │  • ControllabilityInfo┃
+┃ │  • OdeMethod          ┃      ┃ │  • ObservabilityInfo  ┃
+┃ │  • SdeMethod          ┃      ┃ ├─ Control Design       ┃
+┃ ├─ Noise Types          ┃      ┃ │  • LQRResult          ┃
+┃ │  • NoiseType          ┃      ┃ │  • KalmanFilterResult ┃
+┃ │  • SDEType            ┃      ┃ │  • LQGResult          ┃
+┃ │  • ConvergenceType    ┃      ┃ └─ Other Controllers    ┃
+┃ └─ Configuration        ┃      ┃    • PolePlacementResult┃
+┃    • SystemConfig       ┃      ┃    • LuenbergerObserver ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━┛      ┗━━━━━━━━━━━━━━━━━━━━━━━━━┛
                                  ┣━━━━━━━━━━━━━━━━━━━━━━━━━┫
                                  ┃ utilities.py (1,132)    ┃
                                  ┃ ├─ Type Guards          ┃
@@ -101,6 +101,9 @@
 │ LINEARIZATION TYPES    │  15+   │ DeterministicLinearization,      │
 │                        │        │ StateJacobian, LinearizationResult│
 ├────────────────────────┼────────┼──────────────────────────────────┤
+│ CONTROL TYPES          │  8     │ LQRResult, KalmanFilterResult,   │
+│                        │        │ LQGResult, StabilityInfo         │
+├────────────────────────┼────────┼──────────────────────────────────┤
 │ SYMBOLIC TYPES         │  10+   │ SymbolicExpression, ParameterDict│
 │                        │        │ DynamicsExpression               │
 ├────────────────────────┼────────┼──────────────────────────────────┤
@@ -110,9 +113,9 @@
 │ UTILITY TYPES          │  20+   │ ExecutionStats, ValidationResult,│
 │                        │        │ Type guards, shape utilities     │
 ├────────────────────────┼────────┼──────────────────────────────────┤
-│ TYPEDDICT RESULTS      │  15+   │ IntegrationResult,               │
+│ TYPEDDICT RESULTS      │  20+   │ IntegrationResult,               │
 │                        │        │ SDEIntegrationResult,            │
-│                        │        │ ExecutionStats                   │
+│                        │        │ LQRResult, LQGResult             │
 ├────────────────────────┼────────┼──────────────────────────────────┤
 │ TOTAL TYPES            │ 200+   │                                  │
 └────────────────────────┴────────┴──────────────────────────────────┘
@@ -241,8 +244,9 @@
 │ trajectories.py     │    879  │ Time series, results           │
 │ linearization.py    │    502  │ Jacobians, tuples              │
 │ symbolic.py         │    646  │ SymPy types                    │
+│ control_classical.py│    542  │ Control design results         │
 ├─────────────────────┼─────────┼────────────────────────────────┤
-│ Subtotal            │  2,027  │                                │
+│ Subtotal            │  2,569  │                                │
 ├─────────────────────┼─────────┼────────────────────────────────┤
 │ STRUCTURAL          │         │                                │
 ├─────────────────────┼─────────┼────────────────────────────────┤
@@ -251,7 +255,7 @@
 ├─────────────────────┼─────────┼────────────────────────────────┤
 │ Subtotal            │  2,218  │                                │
 ├─────────────────────┼─────────┼────────────────────────────────┤
-│ TOTAL               │  6,481  │ 200+ types                     │
+│ TOTAL               │  7,023  │ 200+ types                     │
 └─────────────────────┴─────────┴────────────────────────────────┘
 
 
@@ -295,7 +299,7 @@
 
 ## Type System Summary
 
-**Foundation:** 6,481 lines defining 200+ types
+**Foundation:** 7,023 lines defining 200+ types
 
 **Philosophy:** Type-driven design for clarity and safety
 
