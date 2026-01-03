@@ -32,7 +32,6 @@ from src.types.trajectories import IntegrationResult, SimulationResult, TimeSpan
 
 if TYPE_CHECKING:
     import plotly.graph_objects as go
-
     from src.control.control_synthesis import ControlSynthesis
     from src.control.system_analysis import SystemAnalysis
     from src.visualization.control_plots import ControlPlotter
@@ -975,7 +974,8 @@ class ContinuousSystemBase(ABC):
             self._system_analysis = SystemAnalysis(backend=backend_str)
 
         return self._system_analysis
-
+    
+    
     # =========================================================================
     # Plotting Framework Integration
     # =========================================================================
