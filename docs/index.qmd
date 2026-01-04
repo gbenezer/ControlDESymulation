@@ -38,8 +38,8 @@ A comprehensive control systems simulation framework with symbolic dynamical sys
 
 ### Getting Started
 
-- [Installation Guide](tutorials/installation.qmd) *(not yet written)*
-- [Basic Tutorial](tutorials/basic-usage.qmd) *(not yet written)*
+- [Installation Guide](tutorials/installation.qmd)
+- [Basic Tutorial](tutorials/basic-usage.qmd)
 - [SDE Integration](tutorials/sde-integration.qmd) *(not yet written)*
 
 ### Examples
