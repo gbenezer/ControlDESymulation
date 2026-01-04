@@ -1,0 +1,370 @@
+---
+title: "Installation Guide"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-overflow: wrap
+---
+
+## Overview
+
+ControlDESymulation is a Python library for symbolic dynamical systems with multi-backend support. This guide covers installation methods, backend configuration, and verification steps.
+
+## Requirements
+
+### System Requirements
+
+- Python 3.9 or higher
+- pip package manager
+- (Optional) GPU with CUDA support for PyTorch/JAX acceleration
+
+### Core Dependencies
+
+The library requires:
+
+- `numpy` - Core numerical operations
+- `scipy` - Scientific computing and integration
+- `sympy` - Symbolic mathematics
+- `matplotlib` - Visualization
+
+### Optional Backend Dependencies
+
+- **PyTorch**: `torch` - For automatic differentiation and GPU acceleration
+- **JAX**: `jax`, `jaxlib` - For high-performance numerical computing and JIT compilation
+
+## Installation Methods
+
+### Standard Installation (NumPy Only)
+
+For basic functionality with NumPy backend:
+
+```bash
+pip install cdesym
+```
+
+This installs the core library with NumPy support, suitable for most educational and prototyping applications.
+
+### Installation with PyTorch Backend
+
+For neural network integration and GPU acceleration:
+
+```bash
+pip install cdesym torch
+```
+
+For specific CUDA versions, install PyTorch first:
+
+```bash
+# Example: CUDA 11.8
+pip install torch --index-url https://download.pytorch.org/whl/cu118
+pip install cdesym
+```
+
+### Installation with JAX Backend
+
+For high-performance computing and JIT compilation:
+
+```bash
+pip install cdesym jax jaxlib
+```
+
+For GPU support with JAX:
+
+```bash
+# CUDA 12
+pip install cdesym "jax[cuda12]"
+
+# CUDA 11
+pip install cdesym "jax[cuda11]"
+```
+
+### Development Installation
+
+To install from source for development or to access the latest features:
+
+```bash
+git clone https://github.com/yourusername/ControlDESymulation.git
+cd ControlDESymulation
+pip install -e .
+```
+
+The `-e` flag installs in editable mode, allowing you to modify the source code without reinstalling.
+
+### Installing All Backends
+
+For full functionality with all backends:
+
+```bash
+pip install cdesym torch jax jaxlib
+```
+
+## Backend Configuration
+
+### Setting the Default Backend
+
+ControlDESymulation automatically detects available backends. You can explicitly set the backend:
+
+```python
+from cdesym import DynamicalSystem
+
+# Using NumPy (default)
+system = DynamicalSystem(..., backend='numpy')
+
+# Using PyTorch
+system = DynamicalSystem(..., backend='torch')
+
+# Using JAX
+system = DynamicalSystem(..., backend='jax')
+```
+
+### Backend Priority
+
+When no backend is specified, the library searches in order:
+
+1. JAX (if available)
+2. PyTorch (if available)
+3. NumPy (always available)
+
+### Checking Available Backends
+
+```python
+from cdesym.backends import get_available_backends
+
+print(get_available_backends())
+# Output: ['numpy', 'torch', 'jax']
+```
+
+## Verification
+
+### Basic Installation Check
+
+Verify the installation:
+
+```python
+import cdesym
+print(cdesym.__version__)
+```
+
+### Testing Backend Functionality
+
+Test each backend with a simple system:
+
+```python
+import sympy as sp
+from cdesym import DynamicalSystem
+
+# Define symbolic variables
+x, y = sp.symbols('x y')
+
+# Define a simple system: dx/dt = -x, dy/dt = -y
+dynamics = sp.Matrix([-x, -y])
+state_vars = sp.Matrix([x, y])
+
+# Test NumPy backend
+system_np = DynamicalSystem(
+    dynamics=dynamics,
+    state_vars=state_vars,
+    backend='numpy'
+)
+
+# Test simulation
+t_span = (0, 5)
+initial_state = [1.0, 1.0]
+result = system_np.simulate(t_span, initial_state)
+print(f"NumPy backend: {len(result.t)} time points")
+
+# Test PyTorch backend (if available)
+try:
+    system_torch = DynamicalSystem(
+        dynamics=dynamics,
+        state_vars=state_vars,
+        backend='torch'
+    )
+    print("PyTorch backend: Available")
+except ImportError:
+    print("PyTorch backend: Not available")
+
+# Test JAX backend (if available)
+try:
+    system_jax = DynamicalSystem(
+        dynamics=dynamics,
+        state_vars=state_vars,
+        backend='jax'
+    )
+    print("JAX backend: Available")
+except ImportError:
+    print("JAX backend: Not available")
+```
+
+### Running Test Suite
+
+If you have the development installation, run the test suite:
+
+```bash
+pytest tests/
+```
+
+For specific backend tests:
+
+```bash
+pytest tests/test_numpy_backend.py
+pytest tests/test_torch_backend.py
+pytest tests/test_jax_backend.py
+```
+
+## Troubleshooting
+
+### Import Errors
+
+**Problem**: `ModuleNotFoundError: No module named 'cdesym'`
+
+**Solution**: Ensure installation completed successfully:
+```bash
+pip list | grep cdesym
+```
+
+### Backend Not Available
+
+**Problem**: "Backend 'torch' not available"
+
+**Solution**: Install the required backend:
+```bash
+pip install torch
+```
+
+### CUDA/GPU Issues
+
+**Problem**: PyTorch or JAX not utilizing GPU
+
+**Solution**: Verify GPU availability:
+
+```python
+# For PyTorch
+import torch
+print(torch.cuda.is_available())
+
+# For JAX
+import jax
+print(jax.devices())
+```
+
+Install appropriate CUDA-enabled versions if needed.
+
+### SymPy Compatibility
+
+**Problem**: Symbolic computation errors
+
+**Solution**: Ensure SymPy is up to date:
+```bash
+pip install --upgrade sympy
+```
+
+### Numerical Integration Warnings
+
+**Problem**: Integration warnings during simulation
+
+**Solution**: These are typically harmless but can be addressed by:
+- Adjusting tolerance parameters (`atol`, `rtol`)
+- Using different integration methods
+- Checking system stability
+
+## GPU Acceleration Setup
+
+### PyTorch GPU Configuration
+
+```python
+import torch
+
+# Check CUDA availability
+if torch.cuda.is_available():
+    device = torch.device('cuda')
+    print(f"Using GPU: {torch.cuda.get_device_name(0)}")
+else:
+    device = torch.device('cpu')
+    print("Using CPU")
+
+# Create system with PyTorch backend
+system = DynamicalSystem(..., backend='torch')
+
+# Move tensors to GPU when needed
+initial_state_gpu = torch.tensor(initial_state).to(device)
+```
+
+### JAX GPU Configuration
+
+```python
+import jax
+
+# JAX automatically uses GPU if available
+print(f"JAX backend: {jax.default_backend()}")
+print(f"JAX devices: {jax.devices()}")
+
+# Verify GPU usage
+import jax.numpy as jnp
+x = jnp.ones(1000)
+print(x.device())  # Should show GPU device
+```
+
+## Virtual Environment Setup
+
+### Using venv
+
+```bash
+# Create virtual environment
+python -m venv cds_env
+
+# Activate (Linux/Mac)
+source cds_env/bin/activate
+
+# Activate (Windows)
+cds_env\Scripts\activate
+
+# Install ControlDESymulation
+pip install cdesym
+```
+
+### Using conda
+
+```bash
+# Create conda environment
+conda create -n cds_env python=3.12
+
+# Activate environment
+conda activate cds_env
+
+# Install ControlDESymulation
+pip install cdesym
+```
+
+## Next Steps
+
+After successful installation:
+
+1. Review the [Quick Start Guide](quickstart.qmd) for basic usage examples
+2. Explore [Tutorials](tutorials/index.qmd) for detailed walkthroughs
+3. Check [API Reference](api/index.qmd) for comprehensive documentation
+4. See [Examples Gallery](examples/index.qmd) for application demonstrations
+
+## Getting Help
+
+If you encounter issues not covered here:
+
+- Check the [GitHub Issues](https://github.com/yourusername/ControlDESymulation/issues)
+- Review the [FAQ](faq.qmd)
+- Join the [Discussions](https://github.com/yourusername/ControlDESymulation/discussions)
+
+## Version Information
+
+Check your installed version:
+
+```python
+import cdesym
+print(f"ControlDESymulation version: {cdesym.__version__}")
+```
+
+Update to the latest version:
+
+```bash
+pip install --upgrade cdesym
+```
