@@ -32,7 +32,7 @@ Most control and dynamics libraries force you to choose between **symbolic elega
 
 ---
 
-## 🎯 Core Features
+## Core Features
 
 - **Symbolic Specification**: Define systems using SymPy with automatic code generation
 - **Multi-Backend Support**: Seamlessly switch between NumPy, PyTorch, JAX, and Julia
@@ -44,7 +44,7 @@ Most control and dynamics libraries force you to choose between **symbolic elega
 - **Zero Code Duplication**: Clean 4-layer architecture with composition over inheritance
 - **Production Ready**: Extensive test coverage, comprehensive documentation, CI/CD workflows
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Installation
 
@@ -158,7 +158,7 @@ dx_jax = pendulum(x_jax, jnp.array([0.0]))
 
 **Backend detection is automatic** - the same system object works with all three!
 
-## 📚 Documentation Structure
+## Documentation Structure
 
 ### Quick Reference Guides
 
@@ -179,7 +179,7 @@ dx_jax = pendulum(x_jax, jnp.array([0.0]))
 - **[Delegation Layer Architecture](docs/api/delegation_layer/Delegation_Layer_Architecture.md)** - Backend abstraction layer
 - **[Design Philosophy](docs/api/ControlDESymulation_Design_Philosophy.md)** - Core design principles
 
-## 🏗️ Architecture Overview
+## Architecture Overview
 
 ControlDESymulation follows a clean 4-layer architecture:
 
@@ -222,7 +222,7 @@ ControlDESymulation follows a clean 4-layer architecture:
 5. **Mathematical Rigor** - Proper handling of ODEs, SDEs, difference equations
 6. **Performance First** - Multi-backend support enables GPU and XLA acceleration
 
-## 🔬 System Types
+## System Types
 
 - **Continuous Deterministic Ordinary Differential Equations (Continuous ODEs)**
 - **Discrete Deterministic Ordinary Differential Equations (Discrete ODEs)**
@@ -237,17 +237,17 @@ All systems inherit from clean base classes:
 
 ---
 
-## 🎮 Backend Flexibility
+## Backend Flexibility
 
 ControlDESymulation supports multiple numerical backends with automatic detection:
 
 | Backend | Use Case | GPU | JIT | Auto-Diff |
 |---------|----------|-----|-----|-----------|
-| **NumPy** | Prototyping, CPU | ❌ | ❌ | ❌ |
-| **PyTorch** | Neural networks, GPU | ✅ | ✅ | ✅ |
-| **JAX** | Research, TPU, functional | ✅ | ✅ | ✅ |
+| **NumPy** | Prototyping, CPU | No | No | No |
+| **PyTorch** | Neural networks, GPU | Yes | Yes | Yes |
+| **JAX** | Research, TPU, functional | Yes | Yes | Yes |
 
-## 🧮 Integration Methods
+## Integration Methods
 
 ### Adaptive ODE Solvers
 
@@ -270,7 +270,7 @@ ControlDESymulation supports multiple numerical backends with automatic detectio
 | `milstein` | 1.0 (strong) | Diagonal |
 | `srk` | Various | Specific structures |
 
-## 🎨 Advanced Features
+## Advanced Features
 
 - **Automatic Linearization**
 - **Stability, Controllability, and Observability Analysis**
@@ -280,7 +280,7 @@ ControlDESymulation supports multiple numerical backends with automatic detectio
 - **SDE Monte Carlo Analysis**
 - **And more**
 
-## 🧪 Testing
+## Testing
 
 ControlDESymulation includes comprehensive test suites:
 
@@ -292,7 +292,7 @@ pytest
 pytest --cov=src --cov-report=html
 ```
 
-## 📦 Installation Options
+## Installation Options
 
 ### Basic (Core Only)
 ```bash
@@ -338,7 +338,7 @@ pip install -e ".[all]"
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 Repository is not currently ready for other contributors. Once all files are fully documented, initial example notebooks and/or more formal tutorials, all warnings addressed, and all mypy/ruff/pylint issues are resolved, then contributions are welcome. Some examples of future help would be:
 
@@ -378,7 +378,7 @@ Please see `CONTRIBUTING.md` for detailed guidelines. *(not yet written given la
 
 ---
 
-## 📖 Citation
+## Citation
 
 If you use this library in your research, please cite:
 
@@ -394,7 +394,7 @@ If you use this library in your research, please cite:
 
 ---
 
-## 📄 License
+## License
 
 ControlDESymulation is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**. The license file is in the repository here: [LICENSE](LICENSE)
 
@@ -431,24 +431,24 @@ See [LICENSE](LICENSE) for full terms.
 
 ### What This Means
 
-**✅ You CAN**:
+**You CAN**:
 - Use for research, academic, commercial, and internal purposes
 - Modify and distribute
 - Use in private or internal services
 
-**⚠️ You MUST**:
+**You MUST**:
 - Share modifications if you run modified code as a public/network service
 - Keep the same AGPL-3.0 license for modifications
 - Provide source code to users of your network service
 
-**❌ You DON'T need to**:
+**You DON'T need to**:
 - Share your own code that *uses* this library
 - Release internal modifications (unless network-accessible)
 - Open-source your proprietary systems
 
 ---
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 ControlDESymulation builds on excellent open-source libraries:
 
@@ -480,7 +480,7 @@ Original project: [Lyapunov-Stable Neural Controllers](https://github.com/gbenez
 
 ---
 
-## 📮 Contact
+## Contact
 
 **Gil Benezer**
 - **Email**: gil.benezer@gmail.com
@@ -496,25 +496,25 @@ For bug reports or feature requests, please [open an issue](https://github.com/g
 
 For commercial licensing or consulting inquiries, contact via email.
 
-## 🗺️ Roadmap
+## Roadmap
 
 ### v1.0 (Current - Release Candidate)
-- ✅ Core 4-layer architecture
-- ✅ Multi-backend support (NumPy/PyTorch/JAX/Julia)
-- ✅ ODE and SDE integration with 40+ methods
-- ✅ Type system with 200+ TypedDict definitions
-- ✅ Comprehensive documentation
-- ✅ Classical control design methods
-- ✅ Advanced plotting capabilities
-- 🔄 Debug plotting capabilities
+- [x] Core 4-layer architecture
+- [x] Multi-backend support (NumPy/PyTorch/JAX/Julia)
+- [x] ODE and SDE integration with 40+ methods
+- [x] Type system with 200+ TypedDict definitions
+- [x] Comprehensive documentation
+- [x] Classical control design methods
+- [x] Advanced plotting capabilities
+- [ ] Debug plotting capabilities
     - Make sure control plotting capabilities auto-calculate relevant quantities
     - Debug issue of equilibrium markers not appearing in 2D phase portraits
-- 🔄 Add capacity to symbolically specify time as a variable explicitly in equations
-- 🔄 Constructing integration test suites for debugging and regression testing
-- 🔄 Addressing warnings and ruff/mypy issues
-- 🔄 Polishing and reorganizing example systems
-- 🔄 Constructing notebooks, tutorials, and other documentation with Quarto and GitHub Pages
-- 🔄 Verifying constructed documentation
+- [ ] Add capacity to symbolically specify time as a variable explicitly in equations
+- [ ] Constructing integration test suites for debugging and regression testing
+- [ ] Addressing warnings and ruff/mypy issues
+- [ ] Polishing and reorganizing example systems
+- [ ] Constructing notebooks, tutorials, and other documentation with Quarto and GitHub Pages
+- [ ] Verifying constructed documentation
 
 ### v1.1 (Planned)
 - [ ] RL Environment Synthesis using Gymnasium, PyBullet, and/or Brax
