@@ -12,3 +12,123 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+"""
+Base System Infrastructure
+==========================
+
+This module provides the foundational infrastructure for defining and simulating
+dynamical systems in the ControlDESymulation framework.
+
+Submodules
+----------
+- **core**: Abstract base classes for continuous, discrete, and stochastic systems
+- **numerical_integration**: ODE and SDE integrators for multiple backends
+- **utils**: Utility classes for backend management, linearization, code generation
+
+System Classes
+--------------
+>>> from src.systems.base import (
+...     # Continuous-time deterministic
+...     ContinuousDynamicalSystem,
+...     ContinuousSymbolicSystem,
+...     # Discrete-time deterministic
+...     DiscreteDynamicalSystem,
+...     DiscreteSymbolicSystem,
+...     # Stochastic systems
+...     ContinuousStochasticSystem,
+...     DiscreteStochasticSystem,
+...     # Discretization
+...     DiscretizedSystem,
+...     discretize,
+... )
+
+Numerical Integration
+---------------------
+>>> from src.systems.base.numerical_integration import (
+...     IntegratorFactory,
+...     create_integrator,
+... )
+>>> from src.systems.base.numerical_integration.stochastic import (
+...     SDEIntegratorFactory,
+...     create_sde_integrator,
+... )
+
+Utilities
+---------
+>>> from src.systems.base.utils import (
+...     BackendManager,
+...     DynamicsEvaluator,
+...     LinearizationEngine,
+...     CodeGenerator,
+... )
+
+Authors
+-------
+Gil Benezer
+
+License
+-------
+GNU Affero General Public License v3.0
+"""
+
+# Core system classes (re-exported for convenience)
+from .core import (
+    # Layer 1: Abstract base classes
+    ContinuousSystemBase,
+    DiscreteSystemBase,
+    SymbolicSystemBase,
+    # Layer 2: Deterministic symbolic systems
+    ContinuousDynamicalSystem,
+    ContinuousSymbolicSystem,
+    DiscreteDynamicalSystem,
+    DiscreteSymbolicSystem,
+    SymbolicDynamicalSystem,
+    # Layer 3: Stochastic systems
+    ContinuousStochasticSystem,
+    DiscreteStochasticSystem,
+    StochasticDynamicalSystem,
+    # Layer 4: Discretization
+    DiscretizationMode,
+    DiscretizedSystem,
+    analyze_discretization_error,
+    compute_discretization_quality,
+    discretize,
+    discretize_batch,
+    recommend_dt,
+)
+
+# Re-export submodules for convenient access
+from . import core
+from . import numerical_integration
+from . import utils
+
+# Export public API
+__all__ = [
+    # Submodules
+    "core",
+    "numerical_integration",
+    "utils",
+    # Layer 1: Abstract base classes
+    "SymbolicSystemBase",
+    "ContinuousSystemBase",
+    "DiscreteSystemBase",
+    # Layer 2: Deterministic symbolic systems
+    "ContinuousSymbolicSystem",
+    "ContinuousDynamicalSystem",
+    "SymbolicDynamicalSystem",
+    "DiscreteDynamicalSystem",
+    "DiscreteSymbolicSystem",
+    # Layer 3: Stochastic systems
+    "ContinuousStochasticSystem",
+    "StochasticDynamicalSystem",
+    "DiscreteStochasticSystem",
+    # Layer 4: Discretization
+    "DiscretizationMode",
+    "DiscretizedSystem",
+    "discretize",
+    "discretize_batch",
+    "analyze_discretization_error",
+    "recommend_dt",
+    "compute_discretization_quality",
+]

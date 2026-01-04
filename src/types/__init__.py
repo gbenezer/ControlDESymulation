@@ -116,13 +116,21 @@ from src.types import core, estimation
 from .backends import (
     Backend,
     BackendConfig,
+    ConvergenceType,
     Device,
     DiscretizationMethod,
+    DiscretizerConfig,
     IntegrationMethod,
+    IntegratorConfig,
     NoiseType,
     OptimizationMethod,
     SDEIntegrationMethod,
+    SDEIntegratorConfig,
     SDEType,
+    SystemConfig,
+    get_backend_default_method,
+    validate_backend,
+    validate_device,
 )
 
 # =============================================================================
@@ -176,17 +184,27 @@ from .control_classical import (
 )
 from .core import (
     ArrayLike,
+    ControlInput,
+    ControlPolicy,
     ControlVector,
     CovarianceMatrix,
+    DiffusionFunction,
+    DiffusionMatrix,
+    DynamicsFunction,
+    FeedbackController,
     FeedthroughMatrix,
     GainMatrix,
     InputMatrix,
+    NoiseVector,
+    OutputFunction,
     OutputMatrix,
     OutputVector,
     ParameterVector,
+    ScalarLike,
     StateMatrix,
     StateVector,
     SystemDimensions,
+    TimeVaryingControl,
 )
 
 # =============================================================================
@@ -343,6 +361,21 @@ from .trajectories import (
 )
 
 # =============================================================================
+# Protocols - Structural subtyping for system interfaces
+# =============================================================================
+from .protocols import (
+    CompilableSystemProtocol,
+    ContinuousSystemProtocol,
+    DiscreteSystemProtocol,
+    LinearizableContinuousProtocol,
+    LinearizableDiscreteProtocol,
+    ParametricSystemProtocol,
+    StochasticSystemProtocol,
+    SymbolicContinuousProtocol,
+    SymbolicDiscreteProtocol,
+)
+
+# =============================================================================
 # Utilities - Type guards, converters, protocols
 # =============================================================================
 from .utilities import (
@@ -377,17 +410,28 @@ __all__ = [
     # Core Types
     # -------------------------------------------------------------------------
     "ArrayLike",
+    "ScalarLike",
     "StateVector",
     "ControlVector",
     "OutputVector",
+    "NoiseVector",
     "ParameterVector",
     "StateMatrix",
     "InputMatrix",
     "OutputMatrix",
+    "DiffusionMatrix",
     "FeedthroughMatrix",
     "GainMatrix",
     "CovarianceMatrix",
     "SystemDimensions",
+    # Function types
+    "DynamicsFunction",
+    "OutputFunction",
+    "DiffusionFunction",
+    "ControlPolicy",
+    "TimeVaryingControl",
+    "FeedbackController",
+    "ControlInput",
     # -------------------------------------------------------------------------
     # Backend Support
     # -------------------------------------------------------------------------
@@ -400,6 +444,14 @@ __all__ = [
     "OptimizationMethod",
     "NoiseType",
     "SDEType",
+    "ConvergenceType",
+    "SystemConfig",
+    "IntegratorConfig",
+    "DiscretizerConfig",
+    "SDEIntegratorConfig",
+    "get_backend_default_method",
+    "validate_backend",
+    "validate_device",
     # -------------------------------------------------------------------------
     # Trajectories
     # -------------------------------------------------------------------------
@@ -558,6 +610,18 @@ __all__ = [
     # -------------------------------------------------------------------------
     "BalancedRealizationResult",
     "ReducedOrderModelResult",
+    # -------------------------------------------------------------------------
+    # System Protocols
+    # -------------------------------------------------------------------------
+    "DiscreteSystemProtocol",
+    "LinearizableDiscreteProtocol",
+    "SymbolicDiscreteProtocol",
+    "ContinuousSystemProtocol",
+    "LinearizableContinuousProtocol",
+    "SymbolicContinuousProtocol",
+    "StochasticSystemProtocol",
+    "CompilableSystemProtocol",
+    "ParametricSystemProtocol",
     # -------------------------------------------------------------------------
     # Utilities - Protocols
     # -------------------------------------------------------------------------
