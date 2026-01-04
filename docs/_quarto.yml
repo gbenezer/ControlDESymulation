@@ -100,7 +100,6 @@ format:
   html:
     theme: 
       light: [cosmo, assets/css/custom.css]
-      dark: [cosmo, assets/css/custom-dark.css]
     css: assets/css/styles.css
     toc: true
     toc-depth: 5
