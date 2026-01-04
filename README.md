@@ -396,17 +396,16 @@ For commercial licensing or consulting inquiries, contact via email.
 - [x] Classical control design methods
 - [x] Advanced plotting capabilities
 - [ ] Debug plotting capabilities
-    - Make sure control plotting capabilities auto-calculate relevant quantities
-    - Debug issue of equilibrium markers not appearing in 2D phase portraits
-- [ ] Add capacity to symbolically specify time as a variable explicitly in equations
-- [ ] Constructing integration test suites for debugging and regression testing
-- [ ] Addressing warnings and ruff/mypy issues
-- [ ] Polishing and reorganizing example systems
+    - Make sure control plotting capabilities auto-calculate relevant quantities (future feature branch)
+- [ ] Add capacity to symbolically specify time as a variable explicitly in equations (time varying systems) (future feature branch)
+- [ ] Refactoring test suites to use common test fixtures and mock systems to reduce code duplication (future refactor branch)
+- [ ] Constructing integration test suites for debugging and regression testing (future refactor branch)
+- [ ] Addressing warnings and ruff/mypy issues (future refactor branch)
 - [ ] Constructing notebooks, tutorials, and other documentation with Quarto and GitHub Pages
 - [ ] Verifying constructed documentation
 
 ### v1.1 (Planned)
-- [ ] RL Environment Synthesis using Gymnasium, PyBullet, and/or Brax
+- [ ] RL Environment Synthesis using Gymnasium
 - [ ] Generation and Standardized Export of Synthetic Data
 - [ ] System Identification and Bayesian Inference
 - [ ] Neural Controller and Certificate Function Synthesis
