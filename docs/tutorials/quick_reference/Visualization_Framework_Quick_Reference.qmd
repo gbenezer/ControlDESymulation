@@ -1,11 +1,9 @@
 ---
-title: "Title Here"
+title: "Visualization Framework Quick Reference"
 format:
   html:
     toc: true
 ---
-
-# Visualization Framework Quick Reference
 
 ## Quick Start
 

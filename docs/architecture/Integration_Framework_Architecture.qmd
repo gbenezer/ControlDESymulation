@@ -1,11 +1,9 @@
 ---
-title: "Title Here"
+title: "ControlDESymulation Numerical Integration Framework Architecture"
 format:
   html:
     toc: true
 ---
-
-# ControlDESymulation Numerical Integration Framework Architecture
 
 ## Overview
 

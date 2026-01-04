@@ -1,11 +1,9 @@
 ---
-title: "Title Here"
+title: "Visualization Framework Architecture"
 format:
   html:
     toc: true
 ---
-
-# Visualization Framework Architecture
 
 ## Overview
 

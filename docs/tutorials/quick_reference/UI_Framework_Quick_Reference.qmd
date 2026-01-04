@@ -1,11 +1,9 @@
 ---
-title: "Title Here"
+title: "ControlDESymulation UI Framework Quick Reference"
 format:
   html:
     toc: true
 ---
-
-# ControlDESymulation UI Framework Quick Reference
 
 ## Quick Start Guide
 

@@ -1,11 +1,9 @@
 ---
-title: "Title Here"
+title: "ControlDESymulation Type System Architecture"
 format:
   html:
     toc: true
 ---
-
-# ControlDESymulation Type System Architecture
 
 ## Overview
 

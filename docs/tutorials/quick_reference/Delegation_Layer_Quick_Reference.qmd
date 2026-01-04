@@ -1,11 +1,9 @@
 ---
-title: "Title Here"
+title: "Delegation Layer Quick Reference"
 format:
   html:
     toc: true
 ---
-
-# Delegation Layer Quick Reference
 
 ## Overview
 

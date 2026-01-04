@@ -1,11 +1,9 @@
 ---
-title: "Title Here"
+title: "Type System Quick Reference"
 format:
   html:
     toc: true
 ---
-
-# Type System Quick Reference
 
 ## Quick Start
 

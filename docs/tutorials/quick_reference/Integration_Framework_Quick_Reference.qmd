@@ -1,11 +1,9 @@
 ---
-title: "Title Here"
+title: "Numerical Integration Framework Quick Reference"
 format:
   html:
     toc: true
 ---
-
-# Numerical Integration Framework Quick Reference
 
 ## Quick Start
 

@@ -1,11 +1,10 @@
 ---
-title: "Title Here"
+title: "ControlDESymulation Delegation Layer Architecture"
 format:
   html:
     toc: true
 ---
 
-# ControlDESymulation Delegation Layer Architecture
 
 ## Overview
 

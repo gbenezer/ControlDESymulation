@@ -1,11 +1,9 @@
 ---
-title: "Title Here"
+title: "Control Framework Architecture"
 format:
   html:
     toc: true
 ---
-
-# Control Framework Architecture
 
 ## Overview
 
