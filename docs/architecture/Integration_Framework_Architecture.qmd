@@ -58,23 +58,19 @@ Track 2: Stochastic SDE Integration
 - TypedDict-based IntegrationResult
 
 **Abstract Methods:**
-```{python}
-#| output: false
-- step(x, u, dt) → x_next          # Single integration step
+
+- step(x, u, dt) → x_next                            # Single integration step
 - integrate(x0, u_func, t_span) → IntegrationResult  # Multi-step
-- name: str                         # Integrator identifier
-```
+- name: str                                          # Integrator identifier
 
 **Attributes:**
-```{python}
-#| output: false
+
 - system: ContinuousSystemBase     # System to integrate
 - dt: float                        # Time step (or initial guess)
 - step_mode: StepMode              # FIXED or ADAPTIVE
 - backend: Backend                 # 'numpy', 'torch', 'jax'
 - rtol, atol: float                # Error tolerances (adaptive)
 - _stats: dict                     # Performance tracking
-```
 
 ---
 
@@ -91,14 +87,12 @@ Track 2: Stochastic SDE Integration
 - Comprehensive method registry
 
 **Available Backends:**
+
 - **NumPy:** scipy, DiffEqPy (Julia), manual methods
 - **PyTorch:** torchdiffeq
 - **JAX:** diffrax
 
 **Factory Methods:**
-```{python}
-#| output: false
-# Main creation
 
 ```{python}
 #| label: setup-imports
@@ -107,24 +101,48 @@ Track 2: Stochastic SDE Integration
 
 # Setup for all code examples in this document
 import numpy as np
-from cdesym import ContinuousSymbolicSystem
-from cdesym.systems.examples.pendulum import SymbolicPendulum
-```
+import torch
+import jax
+import jax.numpy as jnp
+from diffeqpy import de
+from cdesym import (
+    ContinuousSymbolicSystem,
+    Pendulum,
+    IntegratorFactory,
+    ContinuousStochasticSystem,
+    SDEIntegratorFactory,
+    OrnsteinUhlenbeck,
+)
+SEED = 42
 
-create(system, backend, method, dt, **options) → IntegratorBase
+# Create system (e.g., pendulum)
+system = Pendulum(m_val=1.0, l_val=0.5)
 
-# Convenience methods
-auto(system, backend=None) → IntegratorBase           # Best for backend
-for_production(system) → IntegratorBase               # LSODA or AutoTsit5
-for_optimization(system) → IntegratorBase             # Diffrax tsit5
-for_neural_ode(system) → IntegratorBase              # TorchDiffEq dopri5
-for_julia(system, algorithm='Tsit5') → IntegratorBase # Julia solver
+# Create initial conditions
+x0_pendulum_numpy = np.array([1.0, 0.0])
+x0_pendulum_torch = torch.tensor([1.0, 0.0])
+x0_pendulum_jax = jnp.array([1.0, 0.0])
 
-# Backend-specific
-scipy(system, method='RK45', **opts) → ScipyIntegrator
-julia(system, algorithm='Tsit5', **opts) → DiffEqPyIntegrator
-torch(system, method='dopri5', **opts) → TorchDiffEqIntegrator
-jax(system, method='tsit5', **opts) → DiffraxIntegrator
+# Create control function (required for integrate)
+# NOTE:
+# must have the signature u(t, x) -> u
+# Integration of autonomous systems require None output
+# Integration of non-autonomous systems in open loop manner requires
+# 1D zero output
+u_func = lambda t, x: np.zeros(1)
+
+# Create SDE system (e.g., Ornstein-Uhlenbeck)
+sde_system = OrnsteinUhlenbeck(alpha=2.0, sigma=0.3)
+
+# get number of noise variables
+nw = sde_system.nw
+
+# Create SDE initial conditions
+x0_sde_numpy = np.array([0.5])
+x0_sde_torch = torch.tensor([0.5])
+x0_sde_jax = jnp.array([0.5])
+
+# same u_func will work for SDE
 ```
 
 **Method Registry:**
@@ -171,13 +189,14 @@ jax(system, method='tsit5', **opts) → DiffraxIntegrator
 **Example:**
 ```{python}
 #| output: false
+from cdesym.systems.base.numerical_integration.scipy_integrator import ScipyIntegrator
 integrator = ScipyIntegrator(
     system,
     method='RK45',
     rtol=1e-6,
     atol=1e-8
 )
-result = integrator.integrate(x0, u_func, t_span=(0, 10))
+result = integrator.integrate(x0_pendulum_numpy, u_func, t_span=(0, 10))
 ```
 
 ---
@@ -206,13 +225,14 @@ result = integrator.integrate(x0, u_func, t_span=(0, 10))
 **Example:**
 ```{python}
 #| output: false
+from cdesym.systems.base.numerical_integration.torchdiffeq_integrator import TorchDiffEqIntegrator
 integrator = TorchDiffEqIntegrator(
     system,
     method='dopri5',
     backend='torch',
     device='cuda:0'
 )
-result = integrator.integrate(x0, u_func, t_span=(0, 10))
+result = integrator.integrate(x0_pendulum_torch, u_func, t_span=(0, 10))
 ```
 
 ---
@@ -241,12 +261,13 @@ result = integrator.integrate(x0, u_func, t_span=(0, 10))
 **Example:**
 ```{python}
 #| output: false
+from cdesym.systems.base.numerical_integration.diffrax_integrator import DiffraxIntegrator
 integrator = DiffraxIntegrator(
     system,
     method='tsit5',
     backend='jax'
 )
-result = integrator.integrate(x0, u_func, t_span=(0, 10))
+result = integrator.integrate(x0_pendulum_jax, u_func, t_span=(0, 10))
 ```
 
 ---
@@ -259,6 +280,7 @@ result = integrator.integrate(x0, u_func, t_span=(0, 10))
 **Supported Methods:**
 
 Extensive Julia solver ecosystem:
+
 - **Explicit RK:** Tsit5, Vern6, Vern7, Vern8, Vern9, DP5, DP8
 - **Rosenbrock:** Rosenbrock23, Rosenbrock32, Rodas4, Rodas5
 - **BDF:** TRBDF2, KenCarp3, KenCarp4, KenCarp5
@@ -277,6 +299,7 @@ Extensive Julia solver ecosystem:
 **Example:**
 ```{python}
 #| output: false
+from cdesym.systems.base.numerical_integration.diffeqpy_integrator import DiffEqPyIntegrator
 integrator = DiffEqPyIntegrator(
     system,
     algorithm='Vern9',
@@ -284,7 +307,7 @@ integrator = DiffEqPyIntegrator(
     reltol=1e-12,
     abstol=1e-14
 )
-result = integrator.integrate(x0, u_func, t_span=(0, 10))
+result = integrator.integrate(x0_pendulum_numpy, u_func, t_span=(0, 10))
 ```
 
 ---
@@ -310,12 +333,13 @@ result = integrator.integrate(x0, u_func, t_span=(0, 10))
 **Example:**
 ```{python}
 #| output: false
+from cdesym.systems.base.numerical_integration.fixed_step_integrators import RK4Integrator
 integrator = RK4Integrator(
     system,
     dt=0.01,
     backend='numpy'
 )
-result = integrator.integrate(x0, u_func, t_span=(0, 10))
+result = integrator.integrate(x0_pendulum_numpy, u_func, t_span=(0, 10))
 ```
 
 ---
@@ -332,6 +356,7 @@ result = integrator.integrate(x0, u_func, t_span=(0, 10))
 dx = f(x, u, t)dt + g(x, u, t)dW
 ```
 where:
+
 - f: Drift (deterministic)
 - g: Diffusion (stochastic intensity)
 - dW: Brownian motion increments
@@ -345,30 +370,10 @@ where:
 - Itô vs Stratonovich interpretation
 
 **Abstract Methods:**
-```{python}
-#| output: false
+
 - step(x, u, dt, dW) → x_next      # Single SDE step with noise
 - integrate(x0, u_func, t_span) → SDEIntegrationResult
 - integrate_monte_carlo(x0, u_func, t_span, n_paths) → SDEIntegrationResult
-```
-
-**Result Type:**
-```{python}
-#| output: false
-SDEIntegrationResult = {
-    't': TimePoints,               # Time grid
-    'x': StateVector,              # Trajectory (T, nx) or (n_paths, T, nx)
-    'success': bool,
-    'message': str,
-    'nfev': int,                   # Drift evaluations
-    'diffusion_evals': int,        # Diffusion evaluations
-    'noise_samples': NoiseVector,  # Brownian increments
-    'n_paths': int,                # Number of trajectories
-    'convergence_type': str,       # 'strong' or 'weak'
-    'sde_type': str,               # 'ito' or 'stratonovich'
-    ...
-}
-```
 
 ---
 
@@ -380,9 +385,10 @@ SDEIntegrationResult = {
 **Factory Methods:**
 ```{python}
 #| output: false
-create(sde_system, backend, method, dt, **options) → SDEIntegratorBase
-auto(sde_system, backend=None) → SDEIntegratorBase
-for_monte_carlo(sde_system, n_paths) → SDEIntegratorBase
+#| execute: false
+# create(sde_system, backend, method, dt, **options) → SDEIntegratorBase
+# auto(sde_system, backend=None) → SDEIntegratorBase
+# for_monte_carlo(sde_system, n_paths) → SDEIntegratorBase
 ```
 
 **Available Methods:**
@@ -419,13 +425,14 @@ for_monte_carlo(sde_system, n_paths) → SDEIntegratorBase
 **Example:**
 ```{python}
 #| output: false
+from cdesym.systems.base.numerical_integration.stochastic.torchsde_integrator import TorchSDEIntegrator
 integrator = TorchSDEIntegrator(
     sde_system,
-    method='heun',
+    method='adaptive_heun',
     dt=0.01,
     backend='torch'
 )
-result = integrator.integrate(x0, u_func, t_span=(0, 10))
+result = integrator.integrate(x0_sde_torch, u_func, t_span=(0, 10))
 ```
 
 ---
@@ -451,14 +458,15 @@ result = integrator.integrate(x0, u_func, t_span=(0, 10))
 **Example:**
 ```{python}
 #| output: false
+from cdesym.systems.base.numerical_integration.stochastic.diffrax_sde_integrator import DiffraxSDEIntegrator
 integrator = DiffraxSDEIntegrator(
     sde_system,
     method='euler',
     dt=0.01,
     backend='jax',
-    seed=42
+    seed=SEED
 )
-result = integrator.integrate(x0, u_func, t_span=(0, 10))
+result = integrator.integrate(x0_sde_jax, u_func, t_span=(0, 10))
 ```
 
 ---
@@ -481,6 +489,21 @@ result = integrator.integrate(x0, u_func, t_span=(0, 10))
 - Automatic noise structure detection
 - High-performance algorithms
 
+
+**Example:**
+```{python}
+#| output: false
+from cdesym.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator import DiffEqPySDEIntegrator
+integrator = DiffEqPySDEIntegrator(
+    sde_system,
+    method='EM',
+    dt=0.01,
+    backend='numpy',
+    seed=SEED
+)
+result = integrator.integrate(x0_sde_numpy, u_func, t_span=(0, 10))
+```
+
 ---
 
 #### CustomBrownianPath {#sec-custombrownianpath}
@@ -499,6 +522,13 @@ result = integrator.integrate(x0, u_func, t_span=(0, 10))
 ```{python}
 #| output: false
 # Zero noise for testing
+import jax.numpy as jnp
+from jax import random
+key = random.key(SEED)
+
+from cdesym.systems.base.numerical_integration.stochastic.custom_brownian import (
+    CustomBrownianPath, create_custom_or_random_brownian
+)
 dW = jnp.zeros(1)
 brownian = CustomBrownianPath(0.0, 0.01, dW)
 
@@ -549,11 +579,12 @@ All integrators return TypedDict results:
 Built-in statistics:
 ```{python}
 #| output: false
-integrator._stats = {
-    'total_fev': int,      # Function evaluations
-    'total_steps': int,    # Integration steps
-    'total_time': float,   # Computation time
-}
+#| evaluate: false
+# integrator._stats = {
+#     'total_fev': int,      # Function evaluations
+#     'total_steps': int,    # Integration steps
+#     'total_time': float,   # Computation time
+# }
 ```
 
 ## Integration Result Types {#sec-integration-result-types}
@@ -561,41 +592,43 @@ integrator._stats = {
 ### IntegrationResult (ODE) {#sec-integrationresult-ode}
 ```{python}
 #| output: false
-{
-    't': array,              # Time points (T,)
-    'x': array,              # States (T, nx) - time-major
-    'success': bool,         # Integration succeeded
-    'message': str,          # Status message
-    'nfev': int,             # Function evaluations
-    'nsteps': int,           # Steps taken
-    'integration_time': float,  # Wall time (seconds)
-    'solver': str,           # Integrator name
+#| execute: false
+# {
+#     't': array,              # Time points (T,)
+#     'x': array,              # States (T, nx) - time-major
+#     'success': bool,         # Integration succeeded
+#     'message': str,          # Status message
+#     'nfev': int,             # Function evaluations
+#     'nsteps': int,           # Steps taken
+#     'integration_time': float,  # Wall time (seconds)
+#     'solver': str,           # Integrator name
     
-    # Optional (adaptive methods):
-    'njev': int,             # Jacobian evaluations
-    'nlu': int,              # LU decompositions
-    'status': int,           # Solver status code
-    'sol': object,           # Dense output (if requested)
-    'dense_output': bool,    # Dense output available
-}
+#     # Optional (adaptive methods):
+#     'njev': int,             # Jacobian evaluations
+#     'nlu': int,              # LU decompositions
+#     'status': int,           # Solver status code
+#     'sol': object,           # Dense output (if requested)
+#     'dense_output': bool,    # Dense output available
+# }
 ```
 
 ### SDEIntegrationResult (SDE) {#sec-sdeintegrationresult-sde}
 ```{python}
 #| output: false
-{
-    # All IntegrationResult fields, plus:
-    'diffusion_evals': int,     # Diffusion function calls
-    'noise_samples': array,     # Brownian increments used
-    'n_paths': int,             # Number of trajectories
-    'convergence_type': str,    # 'strong' or 'weak'
-    'sde_type': str,            # 'ito' or 'stratonovich'
-    'noise_type': str,          # 'additive', 'multiplicative', etc.
+#| execute: false
+# {
+#     # All IntegrationResult fields, plus:
+#     'diffusion_evals': int,     # Diffusion function calls
+#     'noise_samples': array,     # Brownian increments used
+#     'n_paths': int,             # Number of trajectories
+#     'convergence_type': str,    # 'strong' or 'weak'
+#     'sde_type': str,            # 'ito' or 'stratonovich'
+#     'noise_type': str,          # 'additive', 'multiplicative', etc.
     
-    # For Monte Carlo (n_paths > 1):
-    'x': array,                 # (n_paths, T, nx)
-    'statistics': dict,         # mean, std, quantiles
-}
+#     # For Monte Carlo (n_paths > 1):
+#     'x': array,                 # (n_paths, T, nx)
+#     'statistics': dict,         # mean, std, quantiles
+# }
 ```
 
 ## Usage Examples {#sec-usage-examples}
@@ -603,13 +636,6 @@ integrator._stats = {
 ### Example 1: Simple ODE Integration (NumPy) {#sec-example-1-simple-ode-integration-numpy}
 ```{python}
 #| output: false
-from src.systems.base import ContinuousSymbolicSystem
-from src.systems.base.numerical_integration import IntegratorFactory
-import numpy as np
-
-# Create system (e.g., pendulum)
-system = Pendulum(m=1.0, l=0.5)
-
 # Create integrator automatically
 integrator = IntegratorFactory.auto(system)
 
@@ -625,33 +651,10 @@ print(f"Steps: {result['nsteps']}")
 print(f"Success: {result['success']}")
 ```
 
-### Example 2: GPU-Accelerated Neural ODE (PyTorch) {#sec-example-2-gpu-accelerated-neural-ode-pytorch}
+### Example 2: High-Accuracy Julia Integration {#sec-example-3-high-accuracy-julia-integration}
 ```{python}
 #| output: false
-import torch
-from src.systems.base.numerical_integration import IntegratorFactory
-
-# Create system and move to GPU
-system = MyNeuralODE()
-system.set_default_backend('torch')
-system.set_default_device('cuda:0')
-
-# Create Neural ODE integrator
-integrator = IntegratorFactory.for_neural_ode(system)
-
-# Integrate on GPU
-x0 = torch.tensor([[1.0, 0.0]], device='cuda:0')
-result = integrator.integrate(
-    x0=x0,
-    u_func=lambda t, x: torch.zeros(1, device='cuda:0'),
-    t_span=(0.0, 10.0)
-)
-```
-
-### Example 3: High-Accuracy Julia Integration {#sec-example-3-high-accuracy-julia-integration}
-```{python}
-#| output: false
-from src.systems.base.numerical_integration import IntegratorFactory
+from cdesym import ContinuousSymbolicSystem, IntegratorFactory
 
 # Create Julia integrator with high accuracy
 integrator = IntegratorFactory.for_julia(
@@ -661,49 +664,42 @@ integrator = IntegratorFactory.for_julia(
     abstol=1e-14
 )
 
-result = integrator.integrate(x0, u_func, t_span=(0, 100))
+result = integrator.integrate(x0_pendulum_numpy, u_func, t_span=(0, 100))
 print(f"Accurate to {result['nfev']} function evaluations")
 ```
 
-### Example 4: Stochastic SDE Integration {#sec-example-4-stochastic-sde-integration}
+### Example 3: Stochastic SDE Integration {#sec-example-4-stochastic-sde-integration}
 ```{python}
 #| output: false
-from src.systems.base import ContinuousStochasticSystem
-from src.systems.base.numerical_integration.stochastic import SDEIntegratorFactory
-
-# Create SDE system (e.g., Ornstein-Uhlenbeck)
-sde_system = OrnsteinUhlenbeck(alpha=2.0, sigma=0.3)
-
 # Create SDE integrator
 integrator = SDEIntegratorFactory.create(
     sde_system,
     backend='torch',
-    method='heun',
+    method='adaptive_heun',
     dt=0.01,
     seed=42
 )
 
 # Single trajectory
-result = integrator.integrate(x0, u_func, t_span=(0, 10))
+result = integrator.integrate(x0_sde_torch, u_func, t_span=(0, 10))
 print(f"Noise type: {result['noise_type']}")
 print(f"SDE type: {result['sde_type']}")
 ```
 
-### Example 5: Monte Carlo SDE Simulation {#sec-example-5-monte-carlo-sde-simulation}
+### Example 4: Monte Carlo SDE Simulation {#sec-example-5-monte-carlo-sde-simulation}
 ```{python}
 #| output: false
 # Multiple trajectories for uncertainty quantification
 result = integrator.integrate_monte_carlo(
     x0=np.array([1.0]),
-    u_func=lambda t, x: None,
+    u_func=lambda t, x: np.zeros(1),
     t_span=(0, 10),
     n_paths=1000
 )
 
 # Get statistics
-from src.systems.base.numerical_integration.sde_integrator_base import (
-    get_trajectory_statistics
-)
+
+from cdesym import get_trajectory_statistics
 stats = get_trajectory_statistics(result)
 
 print(f"Mean at t=10: {stats['mean'][-1]}")
@@ -711,11 +707,11 @@ print(f"Std at t=10: {stats['std'][-1]}")
 print(f"95% CI: [{stats['q25'][-1]}, {stats['q75'][-1]}]")
 ```
 
-### Example 6: Custom Noise (Deterministic Testing) {#sec-example-6-custom-noise-deterministic-testing}
+### Example 5: Custom Noise (Deterministic Testing) {#sec-example-6-custom-noise-deterministic-testing}
 ```{python}
 #| output: false
 import jax.numpy as jnp
-from src.systems.base.numerical_integration.stochastic.custom_brownian import (
+from cdesym.systems.base.numerical_integration.stochastic.custom_brownian import (
     CustomBrownianPath
 )
 
@@ -725,7 +721,7 @@ brownian = CustomBrownianPath(0.0, 0.01, dW)
 
 # Use in integration
 result = integrator.integrate(
-    x0, u_func, t_span=(0, 1),
+    x0_sde_jax, u_func, t_span=(0, 1),
     brownian_path=brownian
 )
 ```
