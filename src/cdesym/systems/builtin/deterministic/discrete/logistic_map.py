@@ -802,7 +802,7 @@ class LogisticMap(DiscreteSymbolicSystem):
                 "eigenvalue": r,
                 "stable": r < 1,
                 "type": "extinction",
-            }
+            },
         )
 
         # Nontrivial (if exists)
@@ -815,7 +815,7 @@ class LogisticMap(DiscreteSymbolicSystem):
                     "eigenvalue": eigenvalue,
                     "stable": abs(eigenvalue) < 1,
                     "type": "nontrivial",
-                }
+                },
             )
 
         return fixed_points

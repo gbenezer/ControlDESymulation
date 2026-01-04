@@ -859,7 +859,7 @@ class DiscreteStochasticDoubleIntegrator(DiscreteStochasticSystem):
             [
                 [L_11, 0],
                 [L_21, L_22],
-            ]
+            ],
         )
 
         self.parameters = {

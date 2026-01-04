@@ -1106,7 +1106,7 @@ class StochasticDoubleIntegrator(ContinuousStochasticSystem):
             [
                 v,
                 u / m_sym,
-            ]
+            ],
         )
 
         self.parameters = {
@@ -1121,7 +1121,7 @@ class StochasticDoubleIntegrator(ContinuousStochasticSystem):
             [
                 [0],
                 [sigma_sym],
-            ]
+            ],
         )
 
         # Itô SDE
@@ -1190,7 +1190,7 @@ class StochasticDoubleIntegrator(ContinuousStochasticSystem):
             [
                 [var_x, cov_xv],
                 [cov_xv, var_v],
-            ]
+            ],
         )
 
     def get_position_std(self, t: float) -> float:

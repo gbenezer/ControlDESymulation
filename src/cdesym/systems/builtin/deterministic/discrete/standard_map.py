@@ -849,7 +849,7 @@ class StandardMap(DiscreteSymbolicSystem):
             [
                 [1 + K * np.cos(theta), 1],
                 [K * np.cos(theta), 1],
-            ]
+            ],
         )
 
         return J

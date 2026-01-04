@@ -743,7 +743,7 @@ class DiscreteVAR1(DiscreteStochasticSystem):
         eigenvals_Sigma = np.linalg.eigvals(Sigma_w)
         if not np.all(eigenvals_Sigma > -1e-10):  # Small tolerance for numerical error
             raise ValueError(
-                f"Sigma_w must be positive definite, got eigenvalues: {eigenvals_Sigma}"
+                f"Sigma_w must be positive definite, got eigenvalues: {eigenvals_Sigma}",
             )
 
         # Check stationarity

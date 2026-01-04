@@ -882,7 +882,7 @@ class StochasticCartPole(ContinuousStochasticSystem):
                 x_ddot,
                 theta_dot,
                 theta_ddot,
-            ]
+            ],
         )
 
         # DIFFUSION (stochastic part)
@@ -893,7 +893,7 @@ class StochasticCartPole(ContinuousStochasticSystem):
                 [sigma_x_sym, 0],  # Noise on cart acceleration
                 [0, 0],  # No noise on dθ/dt = theta_dot
                 [0, sigma_theta_sym],  # Noise on pole acceleration
-            ]
+            ],
         )
 
         # Itô SDE

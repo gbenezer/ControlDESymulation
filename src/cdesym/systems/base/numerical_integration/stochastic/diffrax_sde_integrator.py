@@ -115,11 +115,11 @@ import diffrax as dfx
 import jax
 import jax.numpy as jnp
 
+from cdesym.systems.base.numerical_integration.stochastic.custom_brownian import CustomBrownianPath
 from cdesym.systems.base.numerical_integration.stochastic.sde_integrator_base import (
     SDEIntegratorBase,
     StepMode,
 )
-from cdesym.systems.base.numerical_integration.stochastic.custom_brownian import CustomBrownianPath
 from cdesym.types.backends import Backend, ConvergenceType, Device, SDEType
 
 # Import types from centralized type system
@@ -352,10 +352,10 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
         -----
         Diffrax's VirtualBrownianTree computes Levy areas on-demand when
         accessed by solvers that need them (like Milstein methods).
-        
+
         The levy_area parameter in the integrator constructor tells the
         solver which Levy areas to request, not which Brownian generator to use.
-        
+
         SpaceTimeLevyArea and SpaceTimeTimeLevyArea are data structures that
         hold computed Levy area values, not constructors.
         """
@@ -367,10 +367,10 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
         # It computes Levy areas on-demand based on what the solver requests
         return dfx.VirtualBrownianTree(
             t0=t0,
-            t1=t1, 
+            t1=t1,
             tol=1e-3,
             shape=shape,
-            key=key
+            key=key,
         )
 
     def step(
@@ -588,7 +588,7 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
 
         # Create SDE terms
         drift_term = dfx.ODETerm(drift)
-        
+
         # Use provided brownian_path or generate random one
         if brownian_path is not None:
             # Use custom Brownian path
@@ -596,7 +596,7 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
         else:
             # Generate random Brownian motion
             brownian = self._get_brownian_motion(key, t0, tf, (self.sde_system.nw,))
-        
+
         diffusion_term = dfx.ControlTerm(diffusion, brownian)
         terms = dfx.MultiTerm(drift_term, diffusion_term)
 

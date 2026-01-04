@@ -836,7 +836,7 @@ class StochasticSIR(ContinuousStochasticSystem):
                 -transmission,  # dS/dt
                 transmission - recovery,  # dI/dt
                 recovery,  # dR/dt
-            ]
+            ],
         )
 
         self.parameters = {
@@ -856,7 +856,7 @@ class StochasticSIR(ContinuousStochasticSystem):
                 [sigma_S_sym, 0, 0],
                 [0, sigma_I_sym, 0],
                 [0, 0, sigma_R_sym],
-            ]
+            ],
         )
 
         # Itô SDE

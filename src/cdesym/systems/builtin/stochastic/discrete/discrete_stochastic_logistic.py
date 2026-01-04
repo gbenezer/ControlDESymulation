@@ -926,14 +926,14 @@ class DiscreteStochasticLogisticMap(DiscreteStochasticSystem):
             import warnings
 
             warnings.warn(
-                f"r = {r} > 4: Iterates will escape [0,1]. " f"Bounded dynamics require r ≤ 4.",
+                f"r = {r} > 4: Iterates will escape [0,1]. Bounded dynamics require r ≤ 4.",
                 UserWarning,
             )
         if r < 1:
             import warnings
 
             warnings.warn(
-                f"r = {r} < 1: Extinction regime. " f"Population will converge to x = 0.",
+                f"r = {r} < 1: Extinction regime. Population will converge to x = 0.",
                 UserWarning,
             )
         if x0 < 0 or x0 > 1:

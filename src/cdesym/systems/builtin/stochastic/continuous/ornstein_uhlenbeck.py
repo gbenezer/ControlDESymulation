@@ -2228,7 +2228,7 @@ def create_two_asset_model(
     else:
         # Cholesky-like decomposition to get correlation
         Sigma = np.array(
-            [[sigma1, 0], [sigma2 * correlation, sigma2 * np.sqrt(1 - correlation**2)]]
+            [[sigma1, 0], [sigma2 * correlation, sigma2 * np.sqrt(1 - correlation**2)]],
         )
 
     return MultivariateOrnsteinUhlenbeck(A=A, Sigma=Sigma)

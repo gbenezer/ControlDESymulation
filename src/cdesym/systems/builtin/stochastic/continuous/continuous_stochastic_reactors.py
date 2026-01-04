@@ -715,7 +715,7 @@ class ContinuousStochasticBatchReactor(ContinuousStochasticSystem):
                 [sigma_A_sym, 0, 0],
                 [0, sigma_B_sym, 0],
                 [0, 0, sigma_T_sym],
-            ]
+            ],
         )
 
         # Itô SDE interpretation
@@ -1758,7 +1758,7 @@ class ContinuousStochasticCSTR(ContinuousStochasticSystem):
             [
                 [sigma_C_sym, 0],
                 [0, sigma_T_sym],
-            ]
+            ],
         )
 
         # Itô SDE

@@ -992,7 +992,7 @@ class DiscreteSolowModel(DiscreteSymbolicSystem):
                 mode="lines",
                 name=f"s·f(k) = {self.s}·A·k^{self.alpha}",
                 line=dict(color="blue", width=2),
-            )
+            ),
         )
 
         # Depreciation
@@ -1008,7 +1008,7 @@ class DiscreteSolowModel(DiscreteSymbolicSystem):
                 mode="lines",
                 name=dep_label,
                 line=dict(color="red", width=2),
-            )
+            ),
         )
 
         # Steady state
@@ -1033,7 +1033,7 @@ class DiscreteSolowModel(DiscreteSymbolicSystem):
                     line=dict(width=0),
                     showlegend=False,
                     hoverinfo="skip",
-                )
+                ),
             )
 
         fig.update_layout(

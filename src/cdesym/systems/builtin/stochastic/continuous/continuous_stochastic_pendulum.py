@@ -875,7 +875,7 @@ class ContinuousStochasticPendulum(ContinuousStochasticSystem):
             [
                 omega,
                 -(g_sym / L_sym) * sp.sin(theta) - b_sym * omega + u,
-            ]
+            ],
         )
 
         self.parameters = {
@@ -893,7 +893,7 @@ class ContinuousStochasticPendulum(ContinuousStochasticSystem):
             [
                 [0],
                 [sigma_sym],
-            ]
+            ],
         )
 
         # Itô SDE

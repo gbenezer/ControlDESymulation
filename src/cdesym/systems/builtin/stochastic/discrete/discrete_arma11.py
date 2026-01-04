@@ -991,7 +991,7 @@ class DiscreteARMA11(DiscreteStochasticSystem):
             [
                 [sigma_sym],  # Innovation to X
                 [sigma_sym],  # Innovation becomes w_prev
-            ]
+            ],
         )
 
         self.sde_type = "ito"

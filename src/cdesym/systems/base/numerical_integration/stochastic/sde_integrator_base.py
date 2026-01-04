@@ -117,22 +117,22 @@ def get_trajectory_statistics(result: SDEIntegrationResult) -> Dict[str, Any]:
         }
 
     # Detect backend from array type
-    if hasattr(x, '__array__'):
+    if hasattr(x, "__array__"):
         # NumPy array or convertible
         x_np = np.asarray(x)
-        backend = 'numpy'
-    elif hasattr(x, 'cpu'):
+        backend = "numpy"
+    elif hasattr(x, "cpu"):
         # PyTorch tensor
         x_np = x.detach().cpu().numpy()
-        backend = 'torch'
-    elif hasattr(x, 'device'):
+        backend = "torch"
+    elif hasattr(x, "device"):
         # JAX array
         x_np = np.asarray(x)
-        backend = 'jax'
+        backend = "jax"
     else:
         # Fallback to NumPy conversion
         x_np = np.asarray(x)
-        backend = 'numpy'
+        backend = "numpy"
 
     # Multiple paths: compute statistics on NumPy arrays
     # x_np has shape (n_paths, T, nx)

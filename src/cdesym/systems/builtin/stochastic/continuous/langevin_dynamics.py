@@ -935,7 +935,7 @@ class LangevinDynamics(ContinuousStochasticSystem):
             [
                 v,
                 -(gamma_sym / m_sym) * v + u,
-            ]
+            ],
         )
 
         self.parameters = {
@@ -955,7 +955,7 @@ class LangevinDynamics(ContinuousStochasticSystem):
             [
                 [0],
                 [sigma_thermal],
-            ]
+            ],
         )
 
         # Itô SDE

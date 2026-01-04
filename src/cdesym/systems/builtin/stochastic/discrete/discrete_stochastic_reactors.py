@@ -853,7 +853,7 @@ class DiscreteStochasticBatchReactor(DiscreteStochasticSystem):
                 [sigma_A_sym, 0, 0],
                 [0, sigma_B_sym, 0],
                 [0, 0, sigma_T_sym],
-            ]
+            ],
         )
 
         # Discrete-time SDE
@@ -1928,7 +1928,7 @@ class DiscreteStochasticCSTR(DiscreteStochasticSystem):
             [
                 [sigma_C_sym, 0],
                 [0, sigma_T_sym],
-            ]
+            ],
         )
 
         self.sde_type = "ito"

@@ -924,7 +924,7 @@ class HenonMap(DiscreteSymbolicSystem):
             [
                 [-2 * a * x_val, 1],
                 [b, 0],
-            ]
+            ],
         )
 
         return J

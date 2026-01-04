@@ -616,7 +616,7 @@ class TestBackendConsistency(AnalysisTestCase):
     def test_backend_not_passed_to_controllability(self):
         """Test that controllability method doesn't use backend parameter."""
         with patch(
-            "cdesym.control.classical_control_functions.analyze_controllability"
+            "cdesym.control.classical_control_functions.analyze_controllability",
         ) as mock_func:
             mock_func.return_value = {
                 "controllability_matrix": np.eye(2),
@@ -678,7 +678,7 @@ class TestDelegation(AnalysisTestCase):
     def test_controllability_delegates_correctly(self):
         """Test that controllability delegates with correct arguments."""
         with patch(
-            "cdesym.control.classical_control_functions.analyze_controllability"
+            "cdesym.control.classical_control_functions.analyze_controllability",
         ) as mock_func:
             mock_func.return_value = {
                 "controllability_matrix": np.eye(2),

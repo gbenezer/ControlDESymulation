@@ -779,7 +779,7 @@ class DiscreteStochasticPendulum(DiscreteStochasticSystem):
             [
                 [sigma_theta_sym, 0],
                 [0, sigma_omega_sym],
-            ]
+            ],
         )
 
         self.sde_type = "ito"

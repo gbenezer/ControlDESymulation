@@ -847,7 +847,7 @@ class StochasticLorenz(ContinuousStochasticSystem):
                 sigma_sym * (y - x),
                 x * (rho_sym - z) - y,
                 x * y - beta_sym * z,
-            ]
+            ],
         )
 
         self.parameters = {
@@ -866,7 +866,7 @@ class StochasticLorenz(ContinuousStochasticSystem):
                 [sigma_x_sym, 0, 0],
                 [0, sigma_y_sym, 0],
                 [0, 0, sigma_z_sym],
-            ]
+            ],
         )
 
         # Itô SDE

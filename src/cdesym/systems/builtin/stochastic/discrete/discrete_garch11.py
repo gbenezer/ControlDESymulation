@@ -870,7 +870,7 @@ class DiscreteGARCH11(DiscreteStochasticSystem):
             [
                 [sp.sqrt(sigma_sq)],  # Return innovation scaled by volatility
                 [0],  # Variance has no direct noise
-            ]
+            ],
         )
 
         self.sde_type = "ito"
