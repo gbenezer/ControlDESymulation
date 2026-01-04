@@ -279,7 +279,7 @@ Convert Markdown documentation to EXECUTABLE Quarto format.
 All code blocks are marked as executable by default, with strategic
 use of output control to keep architecture docs readable.
 """
-
+/home/gil/projects/ControlDESymulation/docs/documentation_development_plan
 import re
 from pathlib import Path
 from typing import Dict, List
