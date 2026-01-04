@@ -119,6 +119,7 @@ from cdesym.systems.base.numerical_integration.stochastic.sde_integrator_base im
     SDEIntegratorBase,
     StepMode,
 )
+from cdesym.systems.base.numerical_integration.stochastic.custom_brownian import CustomBrownianPath
 from cdesym.types.backends import Backend, ConvergenceType, Device, SDEType
 
 # Import types from centralized type system
@@ -338,56 +339,39 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
         t1 : ScalarLike
             End time
         shape : tuple
-            Shape of noise (nw,) or similar
+            Shape of noise (nw,)
         dW : Optional[NoiseVector]
-            Custom Brownian increment. If provided, uses this instead
-            of generating random noise. This enables deterministic testing.
+            Custom Brownian increment. If provided, uses CustomBrownianPath.
 
         Returns
         -------
-        Brownian motion object
+        AbstractPath
+            Brownian motion object compatible with Diffrax
 
         Notes
         -----
-        When dW is provided, it uses CustomBrownianPath for deterministic
-        behavior. This is the key feature that enables:
-        - Deterministic testing with dW=0
-        - Quasi-Monte Carlo methods
-        - Antithetic variates
-        - Custom noise patterns
+        Diffrax's VirtualBrownianTree computes Levy areas on-demand when
+        accessed by solvers that need them (like Milstein methods).
+        
+        The levy_area parameter in the integrator constructor tells the
+        solver which Levy areas to request, not which Brownian generator to use.
+        
+        SpaceTimeLevyArea and SpaceTimeTimeLevyArea are data structures that
+        hold computed Levy area values, not constructors.
         """
         # If custom noise provided, use it
         if dW is not None:
-            # Import custom brownian path
-            from cdesym.systems.base.numerical_integration.stochastic.custom_brownian import (
-                CustomBrownianPath,
-            )
-
             return CustomBrownianPath(t0, t1, dW)
 
-        # Otherwise generate random noise based on levy_area setting
-        if self.levy_area == "none":
-            # Standard Brownian motion (no Levy area)
-            return dfx.VirtualBrownianTree(t0, t1, tol=1e-3, shape=shape, key=key)
-        if self.levy_area == "space-time":
-            # Space-time Levy area (for Milstein)
-            try:
-                return dfx.SpaceTimeLevyArea(t0, t1, tol=1e-3, shape=shape, key=key)
-            except TypeError:
-                # Older API without t0/t1
-                return dfx.SpaceTimeLevyArea(tol=1e-3, shape=shape, key=key)
-        elif self.levy_area == "full":
-            # Full Levy area approximation
-            try:
-                return dfx.SpaceTimeTimeLevyArea(t0, t1, tol=1e-3, shape=shape, key=key)
-            except (TypeError, AttributeError):
-                # May not exist in all versions
-                return dfx.VirtualBrownianTree(t0, t1, tol=1e-3, shape=shape, key=key)
-        else:
-            raise ValueError(
-                f"Invalid levy_area '{self.levy_area}'. "
-                f"Choose from: 'none', 'space-time', 'full'",
-            )
+        # For random noise, always use VirtualBrownianTree
+        # It computes Levy areas on-demand based on what the solver requests
+        return dfx.VirtualBrownianTree(
+            t0=t0,
+            t1=t1, 
+            tol=1e-3,
+            shape=shape,
+            key=key
+        )
 
     def step(
         self,
@@ -510,7 +494,8 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
         u_func: Callable[[ScalarLike, StateVector], Optional[ControlVector]],
         t_span: TimeSpan,
         t_eval: Optional[TimePoints] = None,
-        dense_output: bool = False,
+        dense_output: Optional[bool] = False,
+        brownian_path: Optional[CustomBrownianPath] = None,
     ) -> SDEIntegrationResult:
         """
         Integrate SDE over time interval.
@@ -527,6 +512,10 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
             Specific times at which to save solution
         dense_output : bool
             If True, enable dense output (not supported for SDEs in Diffrax)
+        brownian_path : Optional[CustomBrownianPath]
+            Custom Brownian path object (CustomBrownianPath or None)
+            If provided, uses deterministic custom noise instead of random.
+            Must be compatible with Diffrax's AbstractPath interface.
 
         Returns
         -------
@@ -535,11 +524,24 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
 
         Examples
         --------
-        >>> # Autonomous SDE
+        >>> # Autonomous SDE with random noise
         >>> result = integrator.integrate(
         ...     x0=jnp.array([1.0]),
         ...     u_func=lambda t, x: None,
         ...     t_span=(0.0, 10.0)
+        ... )
+        >>>
+        >>> # With custom Brownian path (deterministic)
+        >>> from cdesym.systems.base.numerical_integration.stochastic.custom_brownian import (
+        ...     CustomBrownianPath
+        ... )
+        >>> dW = jnp.zeros(nw)  # Zero noise
+        >>> brownian = CustomBrownianPath(0.0, 10.0, dW)
+        >>> result = integrator.integrate(
+        ...     x0=jnp.array([1.0]),
+        ...     u_func=lambda t, x: None,
+        ...     t_span=(0.0, 10.0),
+        ...     brownian_path=brownian
         ... )
         >>>
         >>> # Controlled SDE
@@ -559,14 +561,14 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
                 f"End time must be greater than start time. Got t_span=({t0}, {tf})",
             )
 
-        # Generate random key
+        # Generate random key (only used if brownian_path is None)
         if self.seed is not None:
             key = jax.random.PRNGKey(self.seed)
         else:
             key = jax.random.PRNGKey(0)
 
         # Define drift and diffusion
-        def drift(t, y, args):
+        def drift(t, y):
             u = u_func(t, y)
             if u is not None and not isinstance(u, jnp.ndarray):
                 u = jnp.asarray(u)
@@ -575,7 +577,7 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
             self._stats["total_fev"] += 1
             return dx
 
-        def diffusion(t, y, args):
+        def diffusion(t, y):
             u = u_func(t, y)
             if u is not None and not isinstance(u, jnp.ndarray):
                 u = jnp.asarray(u)
@@ -585,9 +587,16 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
             return g
 
         # Create SDE terms
-        # Note: integrate() doesn't support custom dW (only step() does)
         drift_term = dfx.ODETerm(drift)
-        brownian = self._get_brownian_motion(key, t0, tf, (self.sde_system.nw,))
+        
+        # Use provided brownian_path or generate random one
+        if brownian_path is not None:
+            # Use custom Brownian path
+            brownian = brownian_path
+        else:
+            # Generate random Brownian motion
+            brownian = self._get_brownian_motion(key, t0, tf, (self.sde_system.nw,))
+        
         diffusion_term = dfx.ControlTerm(diffusion, brownian)
         terms = dfx.MultiTerm(drift_term, diffusion_term)
 
