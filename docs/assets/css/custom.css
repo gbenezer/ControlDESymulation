@@ -1,0 +1,34 @@
+/* Custom styling for ControlDESymulation docs */
+
+/* Code blocks */
+pre.sourceCode {
+  border-left: 3px solid #0173B2;
+  padding-left: 1em;
+}
+
+/* Callout boxes */
+.callout-warning {
+  border-left-color: #DE8F05;
+}
+
+.callout-tip {
+  border-left-color: #029E73;
+}
+
+/* Tables */
+table {
+  font-size: 0.9em;
+}
+
+/* Figure captions */
+.figure-caption {
+  font-style: italic;
+  font-size: 0.9em;
+  color: #555;
+}
+
+/* Reduce whitespace for compact display */
+.cell-output-display {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
