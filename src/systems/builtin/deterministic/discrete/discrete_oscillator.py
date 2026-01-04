@@ -1405,10 +1405,10 @@ class DiscreteOscillator(DiscreteSymbolicSystem):
             characteristics['peak_time'] = t_p
 
             # Percent overshoot
-            overshoot = 100 * np.exp(-self._zeta_val
-                                     # Settling time (2% criterion)
-                                     np.pi / np.sqrt(1 - self._zeta_val**2))
+            overshoot = 100 * np.exp(-self._zeta_val * np.pi / np.sqrt(1 - self._zeta_val**2))
             characteristics['overshoot'] = overshoot
+
+            # Settling time (2% criterion)
             t_s = 4.0 / (self._zeta_val * self._omega_n_val)
             characteristics['settling_time'] = t_s
 
