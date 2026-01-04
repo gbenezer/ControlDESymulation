@@ -1,0 +1,9 @@
+execute:
+  eval: true       # Execute all tutorial code
+  cache: true
+  warning: false
+  output: true     # Show outputs by default
+  
+format:
+  html:
+    code-fold: false  # Always show code in tutorials

@@ -1,0 +1,10 @@
+execute:
+  eval: true       # Execute all examples
+  cache: true
+  warning: false
+  output: true     # Show all outputs
+  
+format:
+  html:
+    code-fold: false
+    code-tools: true

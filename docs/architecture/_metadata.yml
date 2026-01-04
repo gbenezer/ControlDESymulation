@@ -1,0 +1,9 @@
+execute:
+  eval: true       # ← EXECUTE architecture code!
+  cache: true      # Cache for speed
+  warning: false
+  output: false    # Default: validate but don't show output (override per-block)
+  
+format:
+  html:
+    code-fold: show  # Show code, allow folding
