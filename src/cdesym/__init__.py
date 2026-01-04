@@ -38,7 +38,7 @@ from .systems.builtin.deterministic.continuous import (
     CartPoleSystem,
     LinearSystem,
     Lorenz,
-    PendulumSystem,
+    Pendulum,
     VanDerPolOscillator,
 )
 from .systems.builtin.deterministic.discrete import (
@@ -138,7 +138,7 @@ __all__ = [
     "discretize",
     # Builtin deterministic continuous
     "LinearSystem",
-    "PendulumSystem",
+    "Pendulum",
     "CartPoleSystem",
     "Lorenz",
     "VanDerPolOscillator",
