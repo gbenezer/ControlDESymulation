@@ -41,9 +41,9 @@ Refactoring Changes
 import numpy as np
 import pytest
 
-from src.systems.base.numerical_integration.fixed_step_integrators import RK4Integrator
-from src.systems.base.numerical_integration.integrator_base import StepMode
-from src.systems.base.numerical_integration.scipy_integrator import ScipyIntegrator
+from cdesym.systems.base.numerical_integration.fixed_step_integrators import RK4Integrator
+from cdesym.systems.base.numerical_integration.integrator_base import StepMode
+from cdesym.systems.base.numerical_integration.scipy_integrator import ScipyIntegrator
 
 # Check if scipy is available
 scipy_available = True

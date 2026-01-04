@@ -72,13 +72,13 @@ import pytest
 import sympy as sp
 
 # Import the class under test
-from src.systems.base.core.symbolic_system_base import SymbolicSystemBase
+from cdesym.systems.base.core.symbolic_system_base import SymbolicSystemBase
 
 # Import utilities
-from src.systems.base.utils.backend_manager import BackendManager
-from src.systems.base.utils.code_generator import CodeGenerator
-from src.systems.base.utils.equilibrium_handler import EquilibriumHandler
-from src.systems.base.utils.symbolic_validator import (
+from cdesym.systems.base.utils.backend_manager import BackendManager
+from cdesym.systems.base.utils.code_generator import CodeGenerator
+from cdesym.systems.base.utils.equilibrium_handler import EquilibriumHandler
+from cdesym.systems.base.utils.symbolic_validator import (
     SymbolicValidator,
     ValidationError,
 )

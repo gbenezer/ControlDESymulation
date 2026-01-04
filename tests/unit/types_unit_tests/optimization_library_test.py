@@ -29,7 +29,7 @@ import numpy as np
 import pytest
 
 # Import optimization types
-from src.types.optimization import (
+from cdesym.types.optimization import (
     ConstrainedOptimizationResult,
     ConvexOptimizationResult,
     OptimizationBounds,
@@ -583,7 +583,7 @@ class TestCasADiIntegration:
         solve_time = stats.get("t_wall_total", stats.get("t_proc_total", 0.0))
 
         # Convert to our type (similar to MPC)
-        from src.types.control_advanced import MPCResult
+        from cdesym.types.control_advanced import MPCResult
 
         result: MPCResult = {
             "control_sequence": u_traj,

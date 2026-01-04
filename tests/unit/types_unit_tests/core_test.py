@@ -48,7 +48,7 @@ try:
 except ImportError:
     JAX_AVAILABLE = False
 
-from src.types.core import (  # Arrays; Vectors; Matrices; Dimensions; Equilibria; Functions; Callbacks; Type variables
+from cdesym.types.core import (  # Arrays; Vectors; Matrices; Dimensions; Equilibria; Functions; Callbacks; Type variables
     ArrayLike,
     C,
     Constraint,
@@ -1030,7 +1030,7 @@ class TestImportPatterns:
 
     def test_import_multiple_types(self):
         """Test importing multiple types together."""
-        from src.types.core import (
+        from cdesym.types.core import (
             ControlVector,
             GainMatrix,
             StateMatrix,
@@ -1044,7 +1044,7 @@ class TestImportPatterns:
 
     def test_import_all_from_core(self):
         """Test importing all from core."""
-        from src.types import core
+        from cdesym.types import core
 
         # Should have all exported types
         assert hasattr(core, "StateVector")

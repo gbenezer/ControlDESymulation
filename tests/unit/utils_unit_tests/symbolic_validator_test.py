@@ -33,11 +33,11 @@ import numpy as np
 import pytest
 import sympy as sp
 
-from src.systems.base.utils.symbolic_validator import (
+from cdesym.systems.base.utils.symbolic_validator import (
     SymbolicValidator,
     ValidationError,
 )
-from src.types.utilities import SymbolicValidationResult, ValidationResult
+from cdesym.types.utilities import SymbolicValidationResult, ValidationResult
 
 # ============================================================================
 # Mock System Classes for Testing

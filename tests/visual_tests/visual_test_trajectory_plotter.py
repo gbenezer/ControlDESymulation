@@ -37,7 +37,7 @@ from pathlib import Path
 
 import numpy as np
 
-from src.visualization.trajectory_plotter import TrajectoryPlotter
+from cdesym.visualization.trajectory_plotter import TrajectoryPlotter
 
 
 def setup_output_directory():

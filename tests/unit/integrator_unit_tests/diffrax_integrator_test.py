@@ -30,8 +30,8 @@ Tests cover:
 
 Design Note
 -----------
-This test suite uses TypedDict-based result types from src.types.trajectories
-and semantic types from src.types.core, following the project design principles:
+This test suite uses TypedDict-based result types from cdesym.types.trajectories
+and semantic types from cdesym.types.core, following the project design principles:
 - Result access via dictionary syntax: result["x"], result["success"]
 - Type-safe semantic types for states and controls
 """
@@ -53,16 +53,16 @@ except ImportError:
     JAX_AVAILABLE = False
     pytest.skip("JAX not available", allow_module_level=True)
 
-from src.systems.base.numerical_integration.diffrax_integrator import DiffraxIntegrator
-from src.systems.base.numerical_integration.integrator_base import StepMode
+from cdesym.systems.base.numerical_integration.diffrax_integrator import DiffraxIntegrator
+from cdesym.systems.base.numerical_integration.integrator_base import StepMode
 
 # Import types from centralized type system
-from src.types.core import (
+from cdesym.types.core import (
     ControlVector,
     ScalarLike,
     StateVector,
 )
-from src.types.trajectories import (
+from cdesym.types.trajectories import (
     IntegrationResult,
     TimePoints,
     TimeSpan,

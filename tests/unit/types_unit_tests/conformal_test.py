@@ -23,7 +23,7 @@ and uncertainty quantification types.
 import numpy as np
 import pytest
 
-from src.types.conformal import (
+from cdesym.types.conformal import (
     AdaptiveConformalResult,
     ConformalCalibrationResult,
     ConformalPredictionResult,

@@ -55,7 +55,7 @@ Run specific category:
     pytest test_continuous_symbolic_system.py::TestIntegration -v
 
 Run with coverage:
-    pytest test_continuous_symbolic_system.py --cov=src.systems.base.core.continuous_symbolic_system
+    pytest test_continuous_symbolic_system.py --cov=cdesym.systems.base.core.continuous_symbolic_system
 
 Notes
 -----
@@ -85,14 +85,14 @@ try:
 except ImportError:
     jax_available = False
 
-from src.systems.base.core.continuous_symbolic_system import (
+from cdesym.systems.base.core.continuous_symbolic_system import (
     ContinuousDynamicalSystem,
     ContinuousSymbolicSystem,
     SymbolicDynamicalSystem,
 )
-from src.systems.base.core.continuous_system_base import ContinuousSystemBase
-from src.systems.base.core.symbolic_system_base import SymbolicSystemBase
-from src.systems.base.utils.symbolic_validator import ValidationError
+from cdesym.systems.base.core.continuous_system_base import ContinuousSystemBase
+from cdesym.systems.base.core.symbolic_system_base import SymbolicSystemBase
+from cdesym.systems.base.utils.symbolic_validator import ValidationError
 
 # ============================================================================
 # Test System Implementations
@@ -1141,7 +1141,7 @@ class TestRealComponentIntegration:
 
     def test_integrator_factory_creates_integrator(self):
         """IntegratorFactory creates integrator for system."""
-        from src.systems.base.numerical_integration.integrator_factory import IntegratorFactory
+        from cdesym.systems.base.numerical_integration.integrator_factory import IntegratorFactory
 
         system = LinearContinuous()
 
@@ -1534,7 +1534,7 @@ class TestMultiComponentIntegration:
 
     def test_integration_uses_factory(self):
         """integrate() uses IntegratorFactory."""
-        from src.systems.base.numerical_integration.integrator_factory import IntegratorFactory
+        from cdesym.systems.base.numerical_integration.integrator_factory import IntegratorFactory
 
         system = LinearContinuous()
 
@@ -1629,7 +1629,7 @@ class TestCodeReduction:
             "get_backend_info",
         ]
 
-        continuous_code = open("src/systems/base/core/continuous_symbolic_system.py").read()
+        continuous_code = open("src/cdesym/systems/base/core/continuous_symbolic_system.py").read()
 
         # These methods should NOT be defined in ContinuousSymbolicSystem
         for method in base_methods:

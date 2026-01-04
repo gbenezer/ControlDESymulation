@@ -61,12 +61,12 @@ import numpy as np
 import pytest
 import sympy as sp
 
-from src.systems.base.core.discrete_symbolic_system import (
+from cdesym.systems.base.core.discrete_symbolic_system import (
     DiscreteDynamicalSystem,
     DiscreteSymbolicSystem,
 )
-from src.systems.base.core.discrete_system_base import DiscreteSystemBase
-from src.systems.base.core.symbolic_system_base import SymbolicSystemBase
+from cdesym.systems.base.core.discrete_system_base import DiscreteSystemBase
+from cdesym.systems.base.core.symbolic_system_base import SymbolicSystemBase
 
 # Conditional imports for backends
 torch_available = True
@@ -1025,7 +1025,7 @@ class TestContinuousVsDiscrete:
 
     def test_both_use_time_major(self):
         """Both continuous and discrete use time-major convention."""
-        from src.systems.base.core.continuous_symbolic_system import ContinuousSymbolicSystem
+        from cdesym.systems.base.core.continuous_symbolic_system import ContinuousSymbolicSystem
 
         # Continuous system
         class SimpleContinuous(ContinuousSymbolicSystem):

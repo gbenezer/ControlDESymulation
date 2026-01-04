@@ -60,11 +60,11 @@ import numpy as np
 import pytest
 import sympy as sp
 
-from src.systems.base.core.continuous_symbolic_system import ContinuousSymbolicSystem
-from src.systems.base.core.discrete_symbolic_system import DiscreteSymbolicSystem
-from src.types.core import ControlVector, StateVector
-from src.types.linearization import DiscreteLinearization
-from src.types.protocols import (
+from cdesym.systems.base.core.continuous_symbolic_system import ContinuousSymbolicSystem
+from cdesym.systems.base.core.discrete_symbolic_system import DiscreteSymbolicSystem
+from cdesym.types.core import ControlVector, StateVector
+from cdesym.types.linearization import DiscreteLinearization
+from cdesym.types.protocols import (
     CompilableSystemProtocol,
     ContinuousSystemProtocol,
     DiscreteSystemProtocol,
@@ -75,7 +75,7 @@ from src.types.protocols import (
     SymbolicContinuousProtocol,
     SymbolicDiscreteProtocol,
 )
-from src.types.trajectories import DiscreteSimulationResult
+from cdesym.types.trajectories import DiscreteSimulationResult
 
 # ============================================================================
 # Mock Implementations for Testing Protocols
@@ -829,8 +829,8 @@ class TestRealSystemIntegration:
         try:
             import sympy as sp
 
-            from src.systems.base.core.continuous_symbolic_system import ContinuousSymbolicSystem
-            from src.systems.base.core.discretized_system import DiscretizedSystem
+            from cdesym.systems.base.core.continuous_symbolic_system import ContinuousSymbolicSystem
+            from cdesym.systems.base.core.discretized_system import DiscretizedSystem
 
             # Create continuous system
             class SimpleContinuous(ContinuousSymbolicSystem):

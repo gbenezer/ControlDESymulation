@@ -35,7 +35,7 @@ sys.path.insert(0, str(project_root))
 
 import numpy as np
 
-from src.visualization.phase_portrait import PhasePortraitPlotter
+from cdesym.visualization.phase_portrait import PhasePortraitPlotter
 
 
 def setup_output_directory():

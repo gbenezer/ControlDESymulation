@@ -52,13 +52,13 @@ try:
 except ImportError:
     DIFFEQPY_AVAILABLE = False
 
-from src.systems.base.core.continuous_stochastic_system import StochasticDynamicalSystem
-from src.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator import (
+from cdesym.systems.base.core.continuous_stochastic_system import StochasticDynamicalSystem
+from cdesym.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator import (
     DiffEqPySDEIntegrator,
     create_diffeqpy_sde_integrator,
     list_julia_sde_algorithms,
 )
-from src.systems.base.numerical_integration.stochastic.sde_integrator_base import (
+from cdesym.systems.base.numerical_integration.stochastic.sde_integrator_base import (
     StepMode,
 )
 

@@ -35,15 +35,15 @@ Tests the abstract base class for SDE integrators, including:
 import numpy as np
 import pytest
 
-from src.systems.base.core.continuous_stochastic_system import StochasticDynamicalSystem
-from src.systems.base.numerical_integration.stochastic.sde_integrator_base import (
+from cdesym.systems.base.core.continuous_stochastic_system import StochasticDynamicalSystem
+from cdesym.systems.base.numerical_integration.stochastic.sde_integrator_base import (
     ConvergenceType,
     SDEIntegrationResult,
     SDEIntegratorBase,
     StepMode,
     get_trajectory_statistics,
 )
-from src.types.backends import SDEType
+from cdesym.types.backends import SDEType
 
 # ============================================================================
 # Helper Functions
@@ -449,7 +449,7 @@ class TestSDEIntegratorInitialization:
 
     def test_initialization_invalid_system_type(self):
         """Test that non-SDE systems raise TypeError."""
-        from src.systems.base.core.continuous_symbolic_system import SymbolicDynamicalSystem
+        from cdesym.systems.base.core.continuous_symbolic_system import SymbolicDynamicalSystem
 
         class MockODESystem(SymbolicDynamicalSystem):
             def define_system(self):

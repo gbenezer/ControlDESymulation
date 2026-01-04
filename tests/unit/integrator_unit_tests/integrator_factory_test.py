@@ -27,7 +27,7 @@ Tests the factory class for creating numerical integrators, including:
 Design Note
 -----------
 This test suite validates the IntegratorFactory, which uses semantic types
-from src.types.core (ScalarLike for time steps) following the project
+from cdesym.types.core (ScalarLike for time steps) following the project
 design principles. The factory creates integrators that use the centralized
 type framework for consistency across the codebase.
 
@@ -58,10 +58,10 @@ try:
 except ImportError:
     JULIA_AVAILABLE = False
 
-from src.systems.base.numerical_integration.integrator_base import IntegratorBase, StepMode
+from cdesym.systems.base.numerical_integration.integrator_base import IntegratorBase, StepMode
 
 # Import the factory
-from src.systems.base.numerical_integration.integrator_factory import (
+from cdesym.systems.base.numerical_integration.integrator_factory import (
     IntegratorFactory,
     IntegratorType,
     auto_integrator,
@@ -69,7 +69,7 @@ from src.systems.base.numerical_integration.integrator_factory import (
 )
 
 # Import semantic types for clarity (though not heavily used in factory tests)
-from src.types.core import ScalarLike
+from cdesym.types.core import ScalarLike
 
 # ============================================================================
 # Mock System Fixture

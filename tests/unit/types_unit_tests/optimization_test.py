@@ -23,7 +23,7 @@ result types.
 import numpy as np
 import pytest
 
-from src.types.optimization import (
+from cdesym.types.optimization import (
     ConstrainedOptimizationResult,
     ConvexOptimizationResult,
     OptimizationBounds,

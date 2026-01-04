@@ -41,12 +41,12 @@ from unittest.mock import Mock
 
 import numpy as np
 
-from src.control.control_synthesis import ControlSynthesis
-from src.control.system_analysis import SystemAnalysis
+from cdesym.control.control_synthesis import ControlSynthesis
+from cdesym.control.system_analysis import SystemAnalysis
 
 # Import the base class we're testing
-from src.systems.base.core.continuous_system_base import ContinuousSystemBase
-from src.types.backends import Backend
+from cdesym.systems.base.core.continuous_system_base import ContinuousSystemBase
+from cdesym.types.backends import Backend
 
 torch_available = True
 try:

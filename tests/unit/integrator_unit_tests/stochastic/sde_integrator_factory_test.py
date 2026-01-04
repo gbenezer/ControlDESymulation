@@ -23,8 +23,8 @@ Design Note
 -----------
 This test suite uses types from the centralized type system to ensure
 consistency with the refactored factory implementation:
-- SDEType, ConvergenceType, NoiseType from src.types.backends
-- SDEIntegrationResult from src.types.trajectories
+- SDEType, ConvergenceType, NoiseType from cdesym.types.backends
+- SDEIntegrationResult from cdesym.types.trajectories
 - Backend type for backend specifications
 - ScalarLike for time and parameter values
 
@@ -39,30 +39,30 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from src.systems.base.core.continuous_stochastic_system import StochasticDynamicalSystem
+from cdesym.systems.base.core.continuous_stochastic_system import StochasticDynamicalSystem
 
 # Import base classes and utilities
-from src.systems.base.numerical_integration.integrator_base import StepMode
-from src.systems.base.numerical_integration.stochastic.sde_integrator_base import (
+from cdesym.systems.base.numerical_integration.integrator_base import StepMode
+from cdesym.systems.base.numerical_integration.stochastic.sde_integrator_base import (
     SDEIntegratorBase,
 )
 
 # Import factory and base classes
-from src.systems.base.numerical_integration.stochastic.sde_integrator_factory import (
+from cdesym.systems.base.numerical_integration.stochastic.sde_integrator_factory import (
     SDEIntegratorFactory,
     auto_sde_integrator,
     create_sde_integrator,
 )
 
 # Import from centralized type system
-from src.types.backends import (
+from cdesym.types.backends import (
     Backend,
     ConvergenceType,
     NoiseType,
     SDEType,
 )
-from src.types.core import ControlVector, ScalarLike, StateVector
-from src.types.trajectories import SDEIntegrationResult
+from cdesym.types.core import ControlVector, ScalarLike, StateVector
+from cdesym.types.trajectories import SDEIntegrationResult
 
 # ============================================================================
 # Mock SDE Systems for Testing
@@ -411,7 +411,7 @@ class TestFactoryBasics:
         mock_integrator = MockSDEIntegrator(controlled_sde_system)
 
         with patch(
-            "src.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator.DiffEqPySDEIntegrator",
+            "cdesym.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator.DiffEqPySDEIntegrator",
             return_value=mock_integrator,
         ) as mock_class:
             integrator = SDEIntegratorFactory.create(controlled_sde_system)
@@ -426,7 +426,7 @@ class TestFactoryBasics:
         mock_integrator = MockSDEIntegrator(controlled_sde_system)
 
         with patch(
-            "src.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator.DiffEqPySDEIntegrator",
+            "cdesym.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator.DiffEqPySDEIntegrator",
             return_value=mock_integrator,
         ) as mock_class:
             integrator = SDEIntegratorFactory.create(
@@ -443,7 +443,7 @@ class TestFactoryBasics:
         mock_integrator = MockSDEIntegrator(controlled_sde_system, backend="torch")
 
         with patch(
-            "src.systems.base.numerical_integration.stochastic.torchsde_integrator.TorchSDEIntegrator",
+            "cdesym.systems.base.numerical_integration.stochastic.torchsde_integrator.TorchSDEIntegrator",
             return_value=mock_integrator,
         ) as mock_class:
             integrator = SDEIntegratorFactory.create(controlled_sde_system, backend="torch")
@@ -458,7 +458,7 @@ class TestFactoryBasics:
         mock_integrator = MockSDEIntegrator(controlled_sde_system, backend="jax")
 
         with patch(
-            "src.systems.base.numerical_integration.stochastic.diffrax_sde_integrator.DiffraxSDEIntegrator",
+            "cdesym.systems.base.numerical_integration.stochastic.diffrax_sde_integrator.DiffraxSDEIntegrator",
             return_value=mock_integrator,
         ) as mock_class:
             integrator = SDEIntegratorFactory.create(controlled_sde_system, backend="jax")
@@ -503,7 +503,7 @@ class TestMethodRouting:
 
         # NumPy + Julia method
         with patch(
-            "src.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator.DiffEqPySDEIntegrator",
+            "cdesym.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator.DiffEqPySDEIntegrator",
             return_value=mock_integrator,
         ):
             integrator = SDEIntegratorFactory.create(
@@ -515,7 +515,7 @@ class TestMethodRouting:
 
         # Torch + TorchSDE method
         with patch(
-            "src.systems.base.numerical_integration.stochastic.torchsde_integrator.TorchSDEIntegrator",
+            "cdesym.systems.base.numerical_integration.stochastic.torchsde_integrator.TorchSDEIntegrator",
             return_value=mock_integrator,
         ):
             integrator = SDEIntegratorFactory.create(
@@ -527,7 +527,7 @@ class TestMethodRouting:
 
         # JAX + Diffrax method
         with patch(
-            "src.systems.base.numerical_integration.stochastic.diffrax_sde_integrator.DiffraxSDEIntegrator",
+            "cdesym.systems.base.numerical_integration.stochastic.diffrax_sde_integrator.DiffraxSDEIntegrator",
             return_value=mock_integrator,
         ):
             integrator = SDEIntegratorFactory.create(
@@ -552,7 +552,7 @@ class TestUseCaseHelpers:
 
         # Mock all backends as unavailable except numpy
         with patch(
-            "src.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator.DiffEqPySDEIntegrator",
+            "cdesym.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator.DiffEqPySDEIntegrator",
             return_value=mock_integrator,
         ):
             integrator = SDEIntegratorFactory.auto(controlled_sde_system)
@@ -563,7 +563,7 @@ class TestUseCaseHelpers:
         mock_integrator = MockSDEIntegrator(controlled_sde_system, backend="jax")
 
         with patch(
-            "src.systems.base.numerical_integration.stochastic.diffrax_sde_integrator.DiffraxSDEIntegrator",
+            "cdesym.systems.base.numerical_integration.stochastic.diffrax_sde_integrator.DiffraxSDEIntegrator",
             return_value=mock_integrator,
         ):
             integrator = SDEIntegratorFactory.for_optimization(controlled_sde_system)
@@ -574,7 +574,7 @@ class TestUseCaseHelpers:
         mock_integrator = MockSDEIntegrator(controlled_sde_system, backend="torch")
 
         with patch(
-            "src.systems.base.numerical_integration.stochastic.torchsde_integrator.TorchSDEIntegrator",
+            "cdesym.systems.base.numerical_integration.stochastic.torchsde_integrator.TorchSDEIntegrator",
             return_value=mock_integrator,
         ) as mock_class:
             integrator = SDEIntegratorFactory.for_neural_sde(controlled_sde_system)
@@ -589,7 +589,7 @@ class TestUseCaseHelpers:
         mock_integrator = MockSDEIntegrator(controlled_sde_system)
 
         with patch(
-            "src.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator.DiffEqPySDEIntegrator",
+            "cdesym.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator.DiffEqPySDEIntegrator",
             return_value=mock_integrator,
         ) as mock_class:
             integrator = SDEIntegratorFactory.for_julia(controlled_sde_system, algorithm="SRIW1")
@@ -603,7 +603,7 @@ class TestUseCaseHelpers:
         mock_integrator = MockSDEIntegrator(additive_noise_system)
 
         with patch(
-            "src.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator.DiffEqPySDEIntegrator",
+            "cdesym.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator.DiffEqPySDEIntegrator",
             return_value=mock_integrator,
         ) as mock_class:
             integrator = SDEIntegratorFactory.for_monte_carlo(
@@ -629,7 +629,7 @@ class TestAutonomousSystems:
         mock_integrator = MockSDEIntegrator(autonomous_sde_system)
 
         with patch(
-            "src.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator.DiffEqPySDEIntegrator",
+            "cdesym.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator.DiffEqPySDEIntegrator",
             return_value=mock_integrator,
         ):
             integrator = SDEIntegratorFactory.create(autonomous_sde_system)
@@ -640,7 +640,7 @@ class TestAutonomousSystems:
         mock_integrator = MockSDEIntegrator(autonomous_sde_system)
 
         with patch(
-            "src.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator.DiffEqPySDEIntegrator",
+            "cdesym.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator.DiffEqPySDEIntegrator",
             return_value=mock_integrator,
         ):
             integrator = SDEIntegratorFactory.auto(autonomous_sde_system)
@@ -760,7 +760,7 @@ class TestConvenienceFunctions:
         mock_integrator = MockSDEIntegrator(controlled_sde_system)
 
         with patch(
-            "src.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator.DiffEqPySDEIntegrator",
+            "cdesym.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator.DiffEqPySDEIntegrator",
             return_value=mock_integrator,
         ) as mock_class:
             integrator = create_sde_integrator(controlled_sde_system)
@@ -773,7 +773,7 @@ class TestConvenienceFunctions:
         mock_integrator = MockSDEIntegrator(controlled_sde_system)
 
         with patch(
-            "src.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator.DiffEqPySDEIntegrator",
+            "cdesym.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator.DiffEqPySDEIntegrator",
             return_value=mock_integrator,
         ):
             # Make jax and torch unavailable for predictable behavior
@@ -812,7 +812,7 @@ class TestOptionsPropagation:
         mock_integrator = MockSDEIntegrator(controlled_sde_system)
 
         with patch(
-            "src.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator.DiffEqPySDEIntegrator",
+            "cdesym.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator.DiffEqPySDEIntegrator",
             return_value=mock_integrator,
         ) as mock_class:
             integrator = SDEIntegratorFactory.create(
@@ -829,7 +829,7 @@ class TestOptionsPropagation:
         mock_integrator = MockSDEIntegrator(controlled_sde_system)
 
         with patch(
-            "src.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator.DiffEqPySDEIntegrator",
+            "cdesym.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator.DiffEqPySDEIntegrator",
             return_value=mock_integrator,
         ) as mock_class:
             integrator = SDEIntegratorFactory.create(
@@ -846,7 +846,7 @@ class TestOptionsPropagation:
         mock_integrator = MockSDEIntegrator(controlled_sde_system)
 
         with patch(
-            "src.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator.DiffEqPySDEIntegrator",
+            "cdesym.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator.DiffEqPySDEIntegrator",
             return_value=mock_integrator,
         ) as mock_class:
             integrator = SDEIntegratorFactory.create(
@@ -863,7 +863,7 @@ class TestOptionsPropagation:
         mock_integrator = MockSDEIntegrator(controlled_sde_system)
 
         with patch(
-            "src.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator.DiffEqPySDEIntegrator",
+            "cdesym.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator.DiffEqPySDEIntegrator",
             return_value=mock_integrator,
         ) as mock_class:
             integrator = SDEIntegratorFactory.create(
@@ -893,7 +893,7 @@ class TestEndToEndIntegration:
         integrator = MockSDEIntegrator(controlled_sde_system, backend="numpy")
 
         with patch(
-            "src.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator.DiffEqPySDEIntegrator",
+            "cdesym.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator.DiffEqPySDEIntegrator",
             return_value=integrator,
         ):
             # Create via factory
@@ -927,7 +927,7 @@ class TestEndToEndIntegration:
         integrator = MockSDEIntegrator(autonomous_sde_system, backend="numpy")
 
         with patch(
-            "src.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator.DiffEqPySDEIntegrator",
+            "cdesym.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator.DiffEqPySDEIntegrator",
             return_value=integrator,
         ):
             # Create via factory
@@ -952,7 +952,7 @@ class TestEndToEndIntegration:
         integrator = MockSDEIntegrator(pure_diffusion_system, backend="numpy")
 
         with patch(
-            "src.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator.DiffEqPySDEIntegrator",
+            "cdesym.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator.DiffEqPySDEIntegrator",
             return_value=integrator,
         ):
             # Create via factory

@@ -22,7 +22,7 @@ design result types.
 
 import numpy as np
 
-from src.types.control_classical import (
+from cdesym.types.control_classical import (
     ControllabilityInfo,
     KalmanFilterResult,
     LQGResult,

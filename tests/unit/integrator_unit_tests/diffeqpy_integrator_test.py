@@ -43,14 +43,14 @@ except ImportError:
     DIFFEQPY_AVAILABLE = False
     de = None
 
-from src.systems.base.numerical_integration.diffeqpy_integrator import (
+from cdesym.systems.base.numerical_integration.diffeqpy_integrator import (
     DiffEqPyIntegrator,
     create_diffeqpy_integrator,
     get_algorithm_info,
     list_algorithms,
     print_algorithm_recommendations,
 )
-from src.systems.base.numerical_integration.integrator_base import StepMode
+from cdesym.systems.base.numerical_integration.integrator_base import StepMode
 
 # Skip all tests if diffeqpy not available
 pytestmark = pytest.mark.skipif(

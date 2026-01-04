@@ -44,11 +44,11 @@ try:
 except ImportError:
     jax_available = False
 
-from src.systems.base.utils.backend_manager import BackendManager
-from src.systems.base.utils.code_generator import CodeGenerator
-from src.systems.base.utils.observation_engine import ObservationEngine
-from src.types.backends import Backend
-from src.types.core import OutputMatrix, OutputVector, StateVector
+from cdesym.systems.base.utils.backend_manager import BackendManager
+from cdesym.systems.base.utils.code_generator import CodeGenerator
+from cdesym.systems.base.utils.observation_engine import ObservationEngine
+from cdesym.types.backends import Backend
+from cdesym.types.core import OutputMatrix, OutputVector, StateVector
 
 # ============================================================================
 # Mock Systems

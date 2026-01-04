@@ -66,8 +66,8 @@ try:
 except ImportError:
     HAS_JAX = False
 
-from src.control.system_analysis import SystemAnalysis
-from src.types.control_classical import (
+from cdesym.control.system_analysis import SystemAnalysis
+from cdesym.types.control_classical import (
     ControllabilityInfo,
     ObservabilityInfo,
     StabilityInfo,
@@ -595,7 +595,7 @@ class TestBackendConsistency(AnalysisTestCase):
     def test_backend_not_passed_to_stability(self):
         """Test that stability method doesn't use backend parameter."""
         # Note: analyze_stability doesn't take backend parameter
-        with patch("src.control.classical_control_functions.analyze_stability") as mock_func:
+        with patch("cdesym.control.classical_control_functions.analyze_stability") as mock_func:
             mock_func.return_value = {
                 "eigenvalues": np.array([-1, -2]),
                 "magnitudes": np.array([1, 2]),
@@ -615,7 +615,9 @@ class TestBackendConsistency(AnalysisTestCase):
 
     def test_backend_not_passed_to_controllability(self):
         """Test that controllability method doesn't use backend parameter."""
-        with patch("src.control.classical_control_functions.analyze_controllability") as mock_func:
+        with patch(
+            "cdesym.control.classical_control_functions.analyze_controllability"
+        ) as mock_func:
             mock_func.return_value = {
                 "controllability_matrix": np.eye(2),
                 "rank": 2,
@@ -655,7 +657,7 @@ class TestDelegation(AnalysisTestCase):
 
     def test_stability_delegates_correctly(self):
         """Test that stability delegates with correct arguments."""
-        with patch("src.control.classical_control_functions.analyze_stability") as mock_func:
+        with patch("cdesym.control.classical_control_functions.analyze_stability") as mock_func:
             mock_func.return_value = {
                 "eigenvalues": np.array([-1, -2]),
                 "magnitudes": np.array([1, 2]),
@@ -675,7 +677,9 @@ class TestDelegation(AnalysisTestCase):
 
     def test_controllability_delegates_correctly(self):
         """Test that controllability delegates with correct arguments."""
-        with patch("src.control.classical_control_functions.analyze_controllability") as mock_func:
+        with patch(
+            "cdesym.control.classical_control_functions.analyze_controllability"
+        ) as mock_func:
             mock_func.return_value = {
                 "controllability_matrix": np.eye(2),
                 "rank": 2,
@@ -691,7 +695,7 @@ class TestDelegation(AnalysisTestCase):
 
     def test_observability_delegates_correctly(self):
         """Test that observability delegates with correct arguments."""
-        with patch("src.control.classical_control_functions.analyze_observability") as mock_func:
+        with patch("cdesym.control.classical_control_functions.analyze_observability") as mock_func:
             mock_func.return_value = {
                 "observability_matrix": np.eye(2),
                 "rank": 2,

@@ -23,7 +23,7 @@ and trajectory planning types.
 import numpy as np
 import pytest
 
-from src.types.flatness import (
+from cdesym.types.flatness import (
     DifferentialFlatnessResult,
     FlatnessOutput,
     TrajectoryPlanningResult,

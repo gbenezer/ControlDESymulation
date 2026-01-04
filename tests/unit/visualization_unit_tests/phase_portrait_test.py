@@ -24,7 +24,7 @@ import numpy as np
 import plotly.graph_objects as go
 import pytest
 
-from src.visualization.phase_portrait import PhasePortraitPlotter
+from cdesym.visualization.phase_portrait import PhasePortraitPlotter
 
 # ============================================================================
 # Fixtures

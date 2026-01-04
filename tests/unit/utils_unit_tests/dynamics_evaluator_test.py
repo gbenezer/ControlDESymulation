@@ -36,10 +36,10 @@ import pytest
 import sympy as sp
 
 # Type system imports
-from src.types import ArrayLike
-from src.types.backends import Backend
-from src.types.core import ControlVector, StateVector
-from src.types.utilities import ExecutionStats
+from cdesym.types import ArrayLike
+from cdesym.types.backends import Backend
+from cdesym.types.core import ControlVector, StateVector
+from cdesym.types.utilities import ExecutionStats
 
 # Conditional imports
 torch_available = True
@@ -55,9 +55,9 @@ try:
 except ImportError:
     jax_available = False
 
-from src.systems.base.utils.backend_manager import BackendManager
-from src.systems.base.utils.code_generator import CodeGenerator
-from src.systems.base.utils.dynamics_evaluator import DynamicsEvaluator
+from cdesym.systems.base.utils.backend_manager import BackendManager
+from cdesym.systems.base.utils.code_generator import CodeGenerator
+from cdesym.systems.base.utils.dynamics_evaluator import DynamicsEvaluator
 
 # ============================================================================
 # Mock Systems for Testing

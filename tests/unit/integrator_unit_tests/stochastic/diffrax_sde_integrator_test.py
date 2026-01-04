@@ -29,10 +29,10 @@ Tests JAX-based SDE integration via Diffrax, including:
 Type System Integration
 -----------------------
 Tests verify integration with the centralized type system:
-- ConvergenceType and SDEType enums from src.types.backends
-- StateVector, ControlVector, NoiseVector from src.types.core
-- SDEIntegrationResult TypedDict from src.types.trajectories
-- TimeSpan and TimePoints from src.types.trajectories
+- ConvergenceType and SDEType enums from cdesym.types.backends
+- StateVector, ControlVector, NoiseVector from cdesym.types.core
+- SDEIntegrationResult TypedDict from cdesym.types.trajectories
+- TimeSpan and TimePoints from cdesym.types.trajectories
 
 NOTE: JAX has good seed control, so reproducibility is possible.
 Tests leverage this for deterministic validation.
@@ -55,18 +55,18 @@ try:
 except ImportError:
     JAX_AVAILABLE = False
 
-from src.systems.base.core.continuous_stochastic_system import StochasticDynamicalSystem
-from src.systems.base.numerical_integration.stochastic.diffrax_sde_integrator import (
+from cdesym.systems.base.core.continuous_stochastic_system import StochasticDynamicalSystem
+from cdesym.systems.base.numerical_integration.stochastic.diffrax_sde_integrator import (
     DiffraxSDEIntegrator,
     create_diffrax_sde_integrator,
     list_diffrax_sde_solvers,
 )
-from src.systems.base.numerical_integration.stochastic.sde_integrator_base import (
+from cdesym.systems.base.numerical_integration.stochastic.sde_integrator_base import (
     StepMode,
 )
 
 # Import types from centralized type system
-from src.types.backends import SDEType
+from cdesym.types.backends import SDEType
 
 # ============================================================================
 # Skip Tests if JAX/Diffrax Not Available

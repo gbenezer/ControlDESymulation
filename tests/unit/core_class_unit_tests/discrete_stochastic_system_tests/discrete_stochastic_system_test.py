@@ -45,10 +45,10 @@ import unittest
 import numpy as np
 import sympy as sp
 
-from src.systems.base.core.discrete_stochastic_system import DiscreteStochasticSystem
-from src.systems.base.utils.stochastic.noise_analysis import NoiseType
-from src.systems.base.utils.stochastic.sde_validator import ValidationError
-from src.types.backends import SDEType
+from cdesym.systems.base.core.discrete_stochastic_system import DiscreteStochasticSystem
+from cdesym.systems.base.utils.stochastic.noise_analysis import NoiseType
+from cdesym.systems.base.utils.stochastic.sde_validator import ValidationError
+from cdesym.types.backends import SDEType
 
 # ============================================================================
 # Test System Definitions

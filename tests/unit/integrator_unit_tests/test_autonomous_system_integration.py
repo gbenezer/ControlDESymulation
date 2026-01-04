@@ -44,9 +44,9 @@ import numpy as np
 import pytest
 import sympy as sp
 
-from src.systems.base.core.continuous_symbolic_system import SymbolicDynamicalSystem
-from src.systems.base.numerical_integration.integrator_base import StepMode
-from src.systems.base.numerical_integration.integrator_factory import IntegratorFactory
+from cdesym.systems.base.core.continuous_symbolic_system import SymbolicDynamicalSystem
+from cdesym.systems.base.numerical_integration.integrator_base import StepMode
+from cdesym.systems.base.numerical_integration.integrator_factory import IntegratorFactory
 
 # Check optional dependencies
 try:

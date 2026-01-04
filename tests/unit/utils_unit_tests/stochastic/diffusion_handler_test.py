@@ -25,11 +25,11 @@ import numpy as np
 import pytest
 import sympy as sp
 
-from src.systems.base.utils.stochastic.diffusion_handler import (
+from cdesym.systems.base.utils.stochastic.diffusion_handler import (
     DiffusionHandler,
     create_diffusion_handler,
 )
-from src.systems.base.utils.stochastic.noise_analysis import NoiseType
+from cdesym.systems.base.utils.stochastic.noise_analysis import NoiseType
 
 # ============================================================================
 # Fixtures - Test Systems

@@ -71,7 +71,7 @@ from pathlib import Path
 import numpy as np
 from scipy import linalg
 
-from src.systems.base.core.discrete_system_base import DiscreteSystemBase
+from cdesym.systems.base.core.discrete_system_base import DiscreteSystemBase
 
 # Conditional imports for backends
 torch_available = True

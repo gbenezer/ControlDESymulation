@@ -59,7 +59,7 @@ try:
 except ImportError:
     HAS_JAX = False
 
-from src.control.classical_control_functions import (
+from cdesym.control.classical_control_functions import (
     analyze_controllability,
     analyze_observability,
     analyze_stability,

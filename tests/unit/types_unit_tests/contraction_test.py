@@ -23,7 +23,7 @@ and control types.
 import numpy as np
 import pytest
 
-from src.types.contraction import (
+from cdesym.types.contraction import (
     CCMResult,
     ContractionAnalysisResult,
     ContractionMetric,

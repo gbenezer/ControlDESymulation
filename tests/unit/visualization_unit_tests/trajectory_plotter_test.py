@@ -24,7 +24,7 @@ import numpy as np
 import plotly.graph_objects as go
 import pytest
 
-from src.visualization.trajectory_plotter import TrajectoryPlotter
+from cdesym.visualization.trajectory_plotter import TrajectoryPlotter
 
 # ============================================================================
 # Fixtures

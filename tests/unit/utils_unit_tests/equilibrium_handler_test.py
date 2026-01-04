@@ -18,7 +18,7 @@ import warnings
 import numpy as np
 import pytest
 
-from src.systems.base.utils.equilibrium_handler import EquilibriumHandler
+from cdesym.systems.base.utils.equilibrium_handler import EquilibriumHandler
 
 
 class TestEquilibriumHandlerInit:

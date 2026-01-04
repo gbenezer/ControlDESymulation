@@ -33,7 +33,7 @@ Classification Priority (CORRECTED):
 import pytest
 import sympy as sp
 
-from src.systems.base.utils.stochastic.noise_analysis import (
+from cdesym.systems.base.utils.stochastic.noise_analysis import (
     NoiseCharacteristics,
     NoiseCharacterizer,
     NoiseType,

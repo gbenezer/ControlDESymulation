@@ -43,10 +43,10 @@ try:
 except ImportError:
     jax_available = False
 
-from src.systems.base.utils.code_generator import CodeGenerator
+from cdesym.systems.base.utils.code_generator import CodeGenerator
 
 # Import from centralized type system
-from src.types.backends import Backend
+from cdesym.types.backends import Backend
 
 # ============================================================================
 # Mock System for Testing

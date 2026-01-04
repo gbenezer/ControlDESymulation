@@ -48,10 +48,10 @@ try:
 except ImportError:
     jax_available = False
 
-from src.systems.base.utils.backend_manager import BackendManager
+from cdesym.systems.base.utils.backend_manager import BackendManager
 
 # Import types for type safety tests
-from src.types.backends import (
+from cdesym.types.backends import (
     DEFAULT_BACKEND,
     DEFAULT_DEVICE,
     VALID_BACKENDS,

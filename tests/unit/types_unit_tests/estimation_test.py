@@ -23,7 +23,7 @@ result types (EKF, UKF, Particle Filter).
 import numpy as np
 import pytest
 
-from src.types.estimation import (
+from cdesym.types.estimation import (
     EKFResult,
     ParticleFilterResult,
     UKFResult,

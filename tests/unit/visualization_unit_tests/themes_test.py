@@ -22,7 +22,7 @@ Tests color schemes, plot themes, and color manipulation utilities.
 import plotly.graph_objects as go
 import pytest
 
-from src.visualization.themes import (
+from cdesym.visualization.themes import (
     ColorSchemes,
     PlotThemes,
     hex_to_rgb,

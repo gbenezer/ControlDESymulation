@@ -23,7 +23,7 @@ result types.
 import numpy as np
 import pytest
 
-from src.types.identification import (
+from cdesym.types.identification import (
     DMDResult,
     ERAResult,
     HankelMatrix,

@@ -41,10 +41,10 @@ import time
 import numpy as np
 import pytest
 
-from src.systems.base.core.continuous_stochastic_system import ContinuousStochasticSystem
-from src.systems.base.core.continuous_symbolic_system import ContinuousSymbolicSystem
-from src.systems.base.core.continuous_system_base import ContinuousSystemBase
-from src.systems.base.core.discretized_system import (
+from cdesym.systems.base.core.continuous_stochastic_system import ContinuousStochasticSystem
+from cdesym.systems.base.core.continuous_symbolic_system import ContinuousSymbolicSystem
+from cdesym.systems.base.core.continuous_system_base import ContinuousSystemBase
+from cdesym.systems.base.core.discretized_system import (
     DiscretizationMode,
     DiscretizedSystem,
     analyze_discretization_error,
@@ -75,8 +75,8 @@ def _has_full_sde_support():
     try:
         import sympy
 
-        from src.systems.base.core.continuous_stochastic_system import ContinuousStochasticSystem
-        from src.systems.base.numerical_integration.stochastic.sde_integrator_factory import (
+        from cdesym.systems.base.core.continuous_stochastic_system import ContinuousStochasticSystem
+        from cdesym.systems.base.numerical_integration.stochastic.sde_integrator_factory import (
             SDEIntegratorFactory,
         )
 
@@ -1186,7 +1186,7 @@ class TestProtocolSatisfaction:
     def test_satisfies_discrete_system_protocol(self):
         """DiscretizedSystem satisfies DiscreteSystemProtocol."""
         try:
-            from src.types.protocols import DiscreteSystemProtocol
+            from cdesym.types.protocols import DiscreteSystemProtocol
 
             continuous = MockContinuousSystem()
             discrete = DiscretizedSystem(continuous, dt=0.01)
@@ -1199,7 +1199,7 @@ class TestProtocolSatisfaction:
     def test_satisfies_linearizable_discrete_protocol(self):
         """DiscretizedSystem satisfies LinearizableDiscreteProtocol."""
         try:
-            from src.types.protocols import LinearizableDiscreteProtocol
+            from cdesym.types.protocols import LinearizableDiscreteProtocol
 
             continuous = MockContinuousSystem()
             discrete = DiscretizedSystem(continuous, dt=0.01)
@@ -1212,7 +1212,7 @@ class TestProtocolSatisfaction:
     def test_does_not_satisfy_symbolic_protocol(self):
         """DiscretizedSystem does NOT satisfy SymbolicDiscreteProtocol."""
         try:
-            from src.types.protocols import SymbolicDiscreteProtocol
+            from cdesym.types.protocols import SymbolicDiscreteProtocol
 
             continuous = MockContinuousSystem()
             discrete = DiscretizedSystem(continuous, dt=0.01)
@@ -1226,7 +1226,7 @@ class TestProtocolSatisfaction:
     def test_works_in_function_expecting_linearizable(self):
         """Can be used in functions expecting LinearizableDiscreteProtocol."""
         try:
-            from src.types.protocols import LinearizableDiscreteProtocol
+            from cdesym.types.protocols import LinearizableDiscreteProtocol
 
             def dummy_lqr(system: LinearizableDiscreteProtocol):
                 """Mock LQR needing linearization."""

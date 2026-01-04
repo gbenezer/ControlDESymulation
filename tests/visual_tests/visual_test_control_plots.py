@@ -38,7 +38,7 @@ from pathlib import Path
 import numpy as np
 from scipy.linalg import solve_continuous_are
 
-from src.visualization.control_plots import ControlPlotter
+from cdesym.visualization.control_plots import ControlPlotter
 
 
 def setup_output_directory():

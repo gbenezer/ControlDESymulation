@@ -17,9 +17,9 @@ import unittest
 
 import numpy as np
 
-from src.systems.base.core.continuous_system_base import ContinuousSystemBase
-from src.types.core import StateVector
-from src.types.trajectories import IntegrationResult
+from cdesym.systems.base.core.continuous_system_base import ContinuousSystemBase
+from cdesym.types.core import StateVector
+from cdesym.types.trajectories import IntegrationResult
 
 # Conditional imports for backends
 torch_available = True

@@ -34,14 +34,14 @@ Tests cover:
 import numpy as np
 import pytest
 
-from src.types.core import (
+from cdesym.types.core import (
     ControlMatrix,
     DiffusionMatrix,
     FeedthroughMatrix,
     OutputMatrix,
     StateMatrix,
 )
-from src.types.linearization import (  # Main result types; Time-domain specific aliases; Full linearization; Jacobian-specific; Cache
+from cdesym.types.linearization import (  # Main result types; Time-domain specific aliases; Full linearization; Jacobian-specific; Cache
     ContinuousLinearization,
     ContinuousStochasticLinearization,
     ControlJacobian,

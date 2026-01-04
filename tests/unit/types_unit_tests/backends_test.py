@@ -32,7 +32,7 @@ Tests cover:
 import numpy as np
 import pytest
 
-from src.types.backends import (  # Backend types; Method types; Noise types; Configuration; Constants; Utilities
+from cdesym.types.backends import (  # Backend types; Method types; Noise types; Configuration; Constants; Utilities
     DEFAULT_BACKEND,
     DEFAULT_DEVICE,
     DEFAULT_DTYPE,

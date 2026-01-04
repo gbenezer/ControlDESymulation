@@ -40,11 +40,11 @@ import warnings
 import numpy as np
 import pytest
 
-from src.systems.base.numerical_integration.integrator_base import (
+from cdesym.systems.base.numerical_integration.integrator_base import (
     IntegratorBase,
     StepMode,
 )
-from src.types.trajectories import IntegrationResult
+from cdesym.types.trajectories import IntegrationResult
 
 # ============================================================================
 # Helper Functions

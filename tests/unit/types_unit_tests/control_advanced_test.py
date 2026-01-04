@@ -23,7 +23,7 @@ design result types (MPC, H∞, adaptive, sliding mode, etc.).
 import numpy as np
 import pytest
 
-from src.types.control_advanced import (
+from cdesym.types.control_advanced import (
     AdaptiveControlResult,
     H2ControlResult,
     HInfControlResult,

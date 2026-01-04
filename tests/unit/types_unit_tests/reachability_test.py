@@ -23,7 +23,7 @@ safety verification, and barrier certificate methods.
 import numpy as np
 import pytest
 
-from src.types.reachability import (
+from cdesym.types.reachability import (
     BarrierCertificateResult,
     CBFResult,
     CLFResult,

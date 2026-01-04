@@ -34,8 +34,8 @@ from typing import Optional
 import numpy as np
 import pytest
 
-from src.types.core import ControlVector, StateVector
-from src.types.utilities import (  # Protocols; Type guards; Converters; Validators; Cache and metadata; Validation and performance
+from cdesym.types.core import ControlVector, StateVector
+from cdesym.types.utilities import (  # Protocols; Type guards; Converters; Validators; Cache and metadata; Validation and performance
     ArrayConverter,
     CacheKey,
     CacheStatistics,

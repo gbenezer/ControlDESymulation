@@ -41,15 +41,15 @@ except ImportError:
     TORCH_AVAILABLE = False
     CUDA_AVAILABLE = False
 
-from src.systems.base.core.continuous_stochastic_system import StochasticDynamicalSystem
-from src.systems.base.numerical_integration.stochastic.torchsde_integrator import (
+from cdesym.systems.base.core.continuous_stochastic_system import StochasticDynamicalSystem
+from cdesym.systems.base.numerical_integration.stochastic.torchsde_integrator import (
     TorchSDEIntegrator,
     create_torchsde_integrator,
     list_torchsde_methods,
 )
 
 # Import from centralized type system
-from src.types.backends import SDEType
+from cdesym.types.backends import SDEType
 
 # ============================================================================
 # Skip Tests if PyTorch/torchsde Not Available

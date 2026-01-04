@@ -23,7 +23,7 @@ and balanced realization types.
 import numpy as np
 import pytest
 
-from src.types.model_reduction import (
+from cdesym.types.model_reduction import (
     BalancedRealizationResult,
     ReducedOrderModelResult,
 )

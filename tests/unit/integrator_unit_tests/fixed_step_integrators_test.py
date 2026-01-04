@@ -38,13 +38,13 @@ Refactoring Changes
 import numpy as np
 import pytest
 
-from src.systems.base.numerical_integration.fixed_step_integrators import (
+from cdesym.systems.base.numerical_integration.fixed_step_integrators import (
     ExplicitEulerIntegrator,
     MidpointIntegrator,
     RK4Integrator,
     create_fixed_step_integrator,
 )
-from src.systems.base.numerical_integration.integrator_base import StepMode
+from cdesym.systems.base.numerical_integration.integrator_base import StepMode
 
 # Conditional imports
 torch_available = True

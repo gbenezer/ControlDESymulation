@@ -40,9 +40,9 @@ import pytest
 import sympy as sp
 from scipy.integrate import solve_ivp
 
-from src.systems.base.core.continuous_system_base import ContinuousSystemBase
-from src.systems.base.core.discrete_system_base import DiscreteSystemBase
-from src.systems.base.core.symbolic_system_base import SymbolicSystemBase
+from cdesym.systems.base.core.continuous_system_base import ContinuousSystemBase
+from cdesym.systems.base.core.discrete_system_base import DiscreteSystemBase
+from cdesym.systems.base.core.symbolic_system_base import SymbolicSystemBase
 
 # Conditional imports for backends
 torch_available = True
@@ -836,7 +836,7 @@ class TestTypeCheckingCompatibility:
 
     def test_polymorphic_function_works(self):
         """Polymorphic functions work with both system types."""
-        from src.types.utilities import LinearizableProtocol
+        from cdesym.types.utilities import LinearizableProtocol
 
         def analyze_stability(system: LinearizableProtocol):
             """Works with any linearizable system."""

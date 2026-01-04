@@ -39,17 +39,17 @@ import numpy as np
 import pytest
 import sympy as sp
 
-from src.systems.base.core.continuous_stochastic_system import (
+from cdesym.systems.base.core.continuous_stochastic_system import (
     StochasticDynamicalSystem,  # Backward compatibility alias
 )
-from src.systems.base.core.continuous_stochastic_system import (
+from cdesym.systems.base.core.continuous_stochastic_system import (
     ContinuousStochasticSystem,
 )
-from src.systems.base.utils.stochastic.noise_analysis import NoiseType
+from cdesym.systems.base.utils.stochastic.noise_analysis import NoiseType
 
-# from src.systems.base.utils.symbolic_validator import
-from src.systems.base.utils.stochastic.sde_validator import ValidationError
-from src.types.backends import SDEType
+# from cdesym.systems.base.utils.symbolic_validator import
+from cdesym.systems.base.utils.stochastic.sde_validator import ValidationError
+from cdesym.types.backends import SDEType
 
 # Conditional imports for backends
 torch_available = True

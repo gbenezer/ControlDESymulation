@@ -23,7 +23,7 @@ reinforcement learning, and adaptive control types.
 import numpy as np
 import pytest
 
-from src.types.learning import (
+from cdesym.types.learning import (
     Dataset,
     ImitationLearningResult,
     NeuralDynamicsResult,

@@ -66,8 +66,8 @@ try:
 except ImportError:
     HAS_JAX = False
 
-from src.control.control_synthesis import ControlSynthesis
-from src.types.control_classical import (
+from cdesym.control.control_synthesis import ControlSynthesis
+from cdesym.types.control_classical import (
     KalmanFilterResult,
     LQGResult,
     LQRResult,
@@ -264,7 +264,7 @@ class TestUnifiedLQRMethod(SynthesisTestCase):
 
     def test_design_lqr_backend_propagation(self):
         """Test that backend is passed to unified LQR function."""
-        with patch("src.control.classical_control_functions.design_lqr") as mock_func:
+        with patch("cdesym.control.classical_control_functions.design_lqr") as mock_func:
             mock_func.return_value = {
                 "gain": np.zeros((1, 2)),
                 "cost_to_go": np.eye(2),
@@ -453,7 +453,7 @@ class TestBackendConsistency(SynthesisTestCase):
 
     def test_backend_passed_to_unified_lqr(self):
         """Test that backend is passed to unified LQR function."""
-        with patch("src.control.classical_control_functions.design_lqr") as mock_func:
+        with patch("cdesym.control.classical_control_functions.design_lqr") as mock_func:
             mock_func.return_value = {
                 "gain": np.zeros((1, 2)),
                 "cost_to_go": np.eye(2),
@@ -476,7 +476,7 @@ class TestBackendConsistency(SynthesisTestCase):
 
     def test_backend_passed_to_kalman(self):
         """Test that backend is passed to Kalman filter."""
-        with patch("src.control.classical_control_functions.design_kalman_filter") as mock_func:
+        with patch("cdesym.control.classical_control_functions.design_kalman_filter") as mock_func:
             mock_func.return_value = {
                 "gain": np.zeros((2, 1)),
                 "error_covariance": np.eye(2),
@@ -492,7 +492,7 @@ class TestBackendConsistency(SynthesisTestCase):
 
     def test_backend_passed_to_lqg(self):
         """Test that backend is passed to LQG."""
-        with patch("src.control.classical_control_functions.design_lqg") as mock_func:
+        with patch("cdesym.control.classical_control_functions.design_lqg") as mock_func:
             mock_func.return_value = {
                 "controller_gain": np.zeros((1, 2)),
                 "estimator_gain": np.zeros((2, 1)),
@@ -559,7 +559,7 @@ class TestDelegation(SynthesisTestCase):
 
     def test_unified_lqr_delegates_correctly(self):
         """Test that design_lqr delegates with correct arguments."""
-        with patch("src.control.classical_control_functions.design_lqr") as mock_func:
+        with patch("cdesym.control.classical_control_functions.design_lqr") as mock_func:
             mock_func.return_value = {
                 "gain": np.zeros((1, 2)),
                 "cost_to_go": np.eye(2),
@@ -592,7 +592,7 @@ class TestDelegation(SynthesisTestCase):
 
     def test_kalman_delegates_correctly(self):
         """Test that design_kalman delegates with correct arguments."""
-        with patch("src.control.classical_control_functions.design_kalman_filter") as mock_func:
+        with patch("cdesym.control.classical_control_functions.design_kalman_filter") as mock_func:
             mock_func.return_value = {
                 "gain": np.zeros((2, 1)),
                 "error_covariance": np.eye(2),
@@ -621,7 +621,7 @@ class TestDelegation(SynthesisTestCase):
 
     def test_lqg_delegates_correctly(self):
         """Test that design_lqg delegates with correct arguments."""
-        with patch("src.control.classical_control_functions.design_lqg") as mock_func:
+        with patch("cdesym.control.classical_control_functions.design_lqg") as mock_func:
             mock_func.return_value = {
                 "controller_gain": np.zeros((1, 2)),
                 "estimator_gain": np.zeros((2, 1)),

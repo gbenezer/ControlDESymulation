@@ -24,11 +24,11 @@ import numpy as np
 import pytest
 import sympy as sp
 
-from src.systems.base.utils.stochastic.sde_validator import (
+from cdesym.systems.base.utils.stochastic.sde_validator import (
     SDEValidator,
     ValidationError,
 )
-from src.types.utilities import SymbolicValidationResult
+from cdesym.types.utilities import SymbolicValidationResult
 
 # ============================================================================
 # Fixtures - Test Systems

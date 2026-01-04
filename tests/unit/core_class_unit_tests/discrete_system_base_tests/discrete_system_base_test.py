@@ -19,9 +19,9 @@ from typing import Callable, Optional, Union
 
 import numpy as np
 
-from src.systems.base.core.discrete_system_base import DiscreteSystemBase
-from src.types.core import ControlVector, StateVector
-from src.types.linearization import DiscreteLinearization
+from cdesym.systems.base.core.discrete_system_base import DiscreteSystemBase
+from cdesym.types.core import ControlVector, StateVector
+from cdesym.types.linearization import DiscreteLinearization
 
 # Conditional imports for backends
 torch_available = True

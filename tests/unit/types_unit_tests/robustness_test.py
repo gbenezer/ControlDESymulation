@@ -23,7 +23,7 @@ and uncertainty quantification types.
 import numpy as np
 import pytest
 
-from src.types.robustness import (
+from cdesym.types.robustness import (
     RiskSensitiveResult,
     RobustStabilityResult,
     StochasticMPCResult,

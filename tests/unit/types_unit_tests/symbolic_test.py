@@ -23,7 +23,7 @@ for the symbolic mathematics module.
 import numpy as np
 import sympy as sp
 
-from src.types.symbolic import (
+from cdesym.types.symbolic import (
     ParameterDict,
     SubstitutionDict,
     SymbolDict,

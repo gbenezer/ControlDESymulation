@@ -66,7 +66,7 @@ import unittest
 import numpy as np
 import pytest
 
-from src.systems.base.core.discrete_system_base import DiscreteSystemBase
+from cdesym.systems.base.core.discrete_system_base import DiscreteSystemBase
 
 # Conditional imports for backends
 torch_available = True

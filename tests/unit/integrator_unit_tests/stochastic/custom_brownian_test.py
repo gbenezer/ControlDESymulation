@@ -52,7 +52,7 @@ pytestmark = pytest.mark.skipif(
     reason="JAX or Diffrax not installed. Install: pip install jax diffrax",
 )
 
-from src.systems.base.numerical_integration.stochastic.custom_brownian import (
+from cdesym.systems.base.numerical_integration.stochastic.custom_brownian import (
     CustomBrownianPath,
     create_custom_or_random_brownian,
 )

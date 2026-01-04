@@ -31,7 +31,7 @@ import numpy as np
 import pytest
 import sympy as sp
 
-from src.systems.base.utils.codegen_utils import (
+from cdesym.systems.base.utils.codegen_utils import (
     _jax_matrix_handler,
     _jax_max,
     _jax_min,
@@ -48,8 +48,8 @@ from src.systems.base.utils.codegen_utils import (
 )
 
 # Import from centralized type system
-from src.types.backends import Backend
-from src.types.symbolic import SymbolicExpressionInput
+from cdesym.types.backends import Backend
+from cdesym.types.symbolic import SymbolicExpressionInput
 
 # Conditional imports
 torch_available = False

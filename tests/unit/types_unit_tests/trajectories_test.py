@@ -33,7 +33,7 @@ Tests cover:
 import numpy as np
 import pytest
 
-from src.types.trajectories import (  # Trajectory types; Time types; Result types; Analysis types
+from cdesym.types.trajectories import (  # Trajectory types; Time types; Result types; Analysis types
     ControlSequence,
     IntegrationResult,
     NoiseSequence,
