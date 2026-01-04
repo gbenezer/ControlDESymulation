@@ -17,187 +17,289 @@
 Geometric Brownian Motion - Multiplicative Noise Stochastic System
 ===================================================================
 
-Geometric Brownian Motion (GBM) is the canonical model for processes that
-exhibit exponential growth with proportional noise. It's the foundation of
-the Black-Scholes option pricing model.
+This module provides implementations of Geometric Brownian Motion (GBM),
+the fundamental model for processes exhibiting exponential growth with
+multiplicative (proportional) noise. GBM is distinguished by:
 
-Mathematical Form
------------------
-Continuous-time SDE:
-    dx = μ*x*dt + σ*x*dW
+- The canonical stochastic process in mathematical finance
+- Foundation of the Black-Scholes-Merton option pricing model (Nobel Prize 1997)
+- Standard model for asset price dynamics
+- Ensures positivity and naturally expresses percentage changes
+- Bridge between continuous-time stochastic calculus and discrete returns
+
+GBM represents the continuous-time limit of discrete compound returns,
+making it natural for modeling processes where percentage changes (not
+absolute changes) are the fundamental random quantity.
+
+Mathematical Background
+-----------------------
+Geometric Brownian Motion differs fundamentally from arithmetic Brownian
+motion by having multiplicative (state-dependent) rather than additive
+(state-independent) noise.
+
+**Why Multiplicative Noise?**
+Consider a $100 stock with $10 volatility (additive):
+- At S=$100: 10% volatility (reasonable)
+- At S=$10: 100% volatility (unrealistic)
+- Can become negative
+
+With multiplicative noise σ·S:
+- Percentage volatility constant at all price levels
+- Dollar volatility scales appropriately
+- Always positive if started positive
+
+Mathematical Formulation
+------------------------
+**Stochastic Differential Equation:**
+    dX = μ·X·dt + σ·X·dW
 
 where:
-    - μ: Drift coefficient (expected return rate)
-    - σ > 0: Volatility (proportional to state)
-    - W(t): Standard Wiener process (Brownian motion)
-    - x > 0: State (typically a price or population)
+    - X(t): State variable (price, population) > 0
+    - μ ∈ ℝ: Drift (expected growth rate, dimension: 1/time)
+    - σ > 0: Volatility (noise intensity, dimension: 1/√time)
+    - W(t): Standard Wiener process
+    - dW ~ N(0, dt)
 
-With control input u:
-    dx = (μ*x + u)*dt + σ*x*dW
+**With Control:**
+    dX = (μ·X + u)·dt + σ·X·dW
 
-Properties
-----------
-- **Multiplicative Noise**: σ*x (state-dependent)
-- **Log-Normal Distribution**: X(t) is log-normally distributed
-- **Positive States**: If x(0) > 0, then x(t) > 0 for all t
-- **Exponential Growth**: E[X(t)] = x₀*exp(μt) for u=0
-- **Non-Stationary**: Variance grows without bound
+**Itô vs Stratonovich:**
+Itô form (standard in finance):
+    dX = μ·X·dt + σ·X·dW
+
+Stratonovich equivalent:
+    dX = (μ - σ²/2)·X·dt + σ·X∘dW
+
+The drift differs by the Itô correction -σ²/2·X.
 
 Analytical Solution
 -------------------
-For constant u=0 and initial condition x(0) = x₀:
-    x(t) = x₀ * exp((μ - σ²/2)*t + σ*W(t))
+For autonomous case (u=0) with X(0)=X₀>0:
 
-The solution is log-normal:
-    ln(x(t)) ~ N(ln(x₀) + (μ - σ²/2)*t, σ²*t)
+**Explicit Solution:**
+    X(t) = X₀·exp((μ - σ²/2)·t + σ·W(t))
 
-Mean and Variance:
-    E[x(t)] = x₀*exp(μ*t)
-    Var[x(t)] = x₀²*exp(2μt)*(exp(σ²t) - 1)
+**Log Process:**
+    ln(X(t)) = ln(X₀) + (μ - σ²/2)·t + σ·W(t)
+    ln(X(t)/X₀) ~ N((μ - σ²/2)·t, σ²·t)
 
-As t → ∞:
-    E[x(t)] → ∞ (for μ ≥ 0)
-    Var[x(t)] → ∞
+Therefore X(t) is **log-normally distributed**.
 
-Itô vs Stratonovich
--------------------
-This implementation uses Itô calculus. The Stratonovich equivalent would be:
-    dx = μ*x*dt + σ*x∘dW
+**The Itô Correction:**
+The drift in ln(X) is μ - σ²/2, not μ. This -σ²/2 term arises
+from quadratic variation (dW)² = dt.
 
-where ∘ denotes Stratonovich product. The drift differs by +σ²*x/2.
+**Moments:**
+Mean: E[X(t)] = X₀·exp(μ·t)
+Variance: Var[X(t)] = X₀²·exp(2μ·t)·(exp(σ²·t) - 1)
+Median: Median[X(t)] = X₀·exp((μ - σ²/2)·t) < E[X(t)]
+
+**Asymptotic Behavior:**
+- If μ > σ²/2: X(t) → ∞ almost surely (growth)
+- If μ = σ²/2: X(t) oscillates (critical)
+- If μ < σ²/2: X(t) → 0 almost surely (extinction)
+
+Key Properties
+--------------
+1. **Positivity:** X(t) > 0 for all t if X₀ > 0
+2. **Log-Normality:** X(t) ~ LogNormal (right-skewed, heavy tails)
+3. **Markov Property:** Future independent of past given present
+4. **Martingale:** e^(-μt)·X(t) is martingale
+5. **Scale Invariance:** Dynamics independent of price level
+6. **Multiplicative Noise:** Percentage volatility constant
+
+Physical Interpretation
+-----------------------
+**Drift μ:**
+- Expected continuous compound growth rate [1/time]
+- μ=0.10: 10% annual growth
+- μ=0: Fair game (martingale)
+- μ<0: Expected decay
+
+**Volatility σ:**
+- Standard deviation of log returns [1/√time]
+- σ=0.20: 20% annual volatility (typical stock)
+- σ=0.50: High volatility
+- Time scaling: σ_daily = σ_annual/√252
+
+**Sharpe Ratio:**
+Risk-adjusted return: S = (μ - r)/σ
+Typical values: 0.3-0.5
 
 Applications
 ------------
-- **Finance**: Stock prices, currency exchange rates
-- **Biology**: Population dynamics with environmental stochasticity
-- **Physics**: Multiplicative noise processes
-- **Economics**: GDP growth models
+1. **Finance:** Stock prices, option pricing, portfolio dynamics
+2. **Biology:** Population with environmental noise, extinction analysis
+3. **Economics:** GDP growth, commodity prices
+4. **Physics:** Multiplicative noise processes
+5. **Engineering:** Component degradation models
 
-Examples
---------
->>> # Standard GBM (finance)
->>> stock = GeometricBrownianMotion(mu=0.05, sigma=0.2)
->>> # 5% annual drift, 20% annual volatility (typical stock)
->>>
->>> # Check noise type
->>> stock.is_multiplicative_noise()
-True
->>> stock.is_additive_noise()
-False
->>>
->>> # Evaluate at x=100 (stock price)
->>> x = np.array([100.0])
->>> u = np.array([0.0])
->>> f = stock.drift(x, u)  # μ*x = 0.05*100 = 5
->>> g = stock.diffusion(x, u)  # σ*x = 0.2*100 = 20
->>>
->>> # Recommended solvers (multiplicative noise)
->>> stock.recommend_solvers('torch')
-['euler', 'milstein', 'srk']
->>>
->>> # Population growth with noise
->>> population = GeometricBrownianMotion(mu=0.02, sigma=0.1)
->>> # 2% growth rate, 10% environmental stochasticity
->>>
->>> # Analytical expected value
->>> E_1yr = stock.get_expected_value(x0=100, t=1.0)
->>> print(f"Expected price after 1 year: ${E_1yr:.2f}")
-Expected price after 1 year: $105.13
+Numerical Simulation
+--------------------
+**Exact Discretization (Preferred):**
+    X[k+1] = X[k]·exp((μ - σ²/2)·Δt + σ·√Δt·Z[k])
+
+where Z ~ N(0,1). This is **exact** with no discretization error.
+
+**Advantages:**
+- Always positive
+- Matches all moments exactly
+- Can use large Δt
+
+**Euler-Maruyama (Not Recommended):**
+    X[k+1] = X[k]·(1 + μ·Δt + σ·√Δt·Z[k])
+
+Can become negative; biased for finite Δt.
+
+Limitations
+-----------
+Real financial data often shows:
+- Fat tails (excess kurtosis beyond log-normal)
+- Volatility clustering (time-varying σ)
+- Leverage effect (σ increases when price falls)
+- Mean reversion (especially commodities)
+- Jumps (discontinuous movements)
+
+**Extensions:** Stochastic volatility (Heston), jump diffusion (Merton),
+local volatility, regime-switching models.
 """
 
 import numpy as np
 import sympy as sp
 
-from src.systems.base.stochastic_dynamical_system import StochasticDynamicalSystem
+from src.systems.base.core.continuous_stochastic_system import ContinuousStochasticSystem
 
 
-class GeometricBrownianMotion(StochasticDynamicalSystem):
+class GeometricBrownianMotion(ContinuousStochasticSystem):
     """
-    Geometric Brownian motion with multiplicative noise.
+    Geometric Brownian motion with multiplicative (state-dependent) noise.
 
-    Stochastic differential equation:
-        dx = (μ*x + u)*dt + σ*x*dW
+    Foundation of Black-Scholes model. Ensures positive states and
+    naturally expresses percentage returns.
+
+    Stochastic Differential Equation
+    ---------------------------------
+    dX = (μ·X + u)·dt + σ·X·dW
 
     where:
-        - x ∈ ℝ₊: State (price, population, etc.)
-        - u ∈ ℝ: Control input
-        - μ: Drift rate (expected growth)
-        - σ: Volatility (proportional to state)
-        - W(t): Standard Wiener process
+        X(t) ∈ ℝ₊: State (price, population)
+        μ: Drift (expected growth rate)
+        σ > 0: Volatility (noise intensity)
+        u: Control (optional, additive)
+        W(t): Standard Wiener process
+
+    Key Features
+    ------------
+    - **Multiplicative Noise:** σ·X scales with state
+    - **Positivity:** X(t) > 0 if X₀ > 0
+    - **Log-Normality:** X(t) ~ LogNormal
+    - **Exponential Growth:** E[X(t)] = X₀·exp(μ·t)
+
+    Mathematical Properties
+    -----------------------
+    **Exact Solution (u=0):**
+        X(t) = X₀·exp((μ - σ²/2)·t + σ·W(t))
+
+    **Moments:**
+    - Mean: E[X(t)] = X₀·exp(μ·t)
+    - Variance: Var[X(t)] = X₀²·exp(2μ·t)·(exp(σ²·t) - 1)
+    - Median: X₀·exp((μ - σ²/2)·t)
+
+    **Asymptotic Behavior:**
+    - μ > σ²/2: Growth to ∞
+    - μ = σ²/2: Oscillates
+    - μ < σ²/2: Decay to 0
 
     Parameters
     ----------
     mu : float, default=0.1
         Drift coefficient (expected growth rate)
-        Can be positive (growth) or negative (decay)
+        Typical: -0.1 to 0.3 for stocks
+        
     sigma : float, default=0.2
         Volatility (must be positive)
-        Typical stocks: 0.15-0.30 (15%-30% annual vol)
+        Typical stocks: 0.15-0.30 (15-30% annual)
 
-    Attributes
-    ----------
-    nx : int
-        Always 1 (scalar state)
-    nu : int
-        1 (controlled system)
-    nw : int
-        1 (single Wiener process)
+    State Space
+    -----------
+    State: x ∈ ℝ₊ = (0, ∞)
+    Control: u ∈ ℝ (optional)
 
-    Examples
+    Stochastic Properties
+    ---------------------
+    - Noise Type: MULTIPLICATIVE
+    - Diffusion: g(x) = σ·x (state-dependent)
+    - SDE Type: Itô (standard)
+    - Noise Dimension: nw = 1
+
+    Applications
+    ------------
+    **Finance:** Stock prices, Black-Scholes model
+    **Biology:** Population dynamics with noise
+    **Economics:** GDP growth models
+    **Physics:** Multiplicative noise processes
+
+    Numerical Simulation
+    --------------------
+    **Exact Scheme (Recommended):**
+        X[k+1] = X[k]·exp((μ - σ²/2)·Δt + σ·√Δt·Z[k])
+    
+    Always positive, no discretization error.
+
+    Limitations
+    -----------
+    - Assumes constant volatility
+    - No jumps (continuous paths only)
+    - No mean reversion
+    - Empirical returns show fat tails
+
+    See Also
     --------
-    >>> # Stock price model
-    >>> stock = GeometricBrownianMotion(mu=0.05, sigma=0.2)
-    >>>
-    >>> # Evaluate at price $100
-    >>> x = np.array([100.0])
-    >>> u = np.array([0.0])
-    >>> drift = stock.drift(x, u)  # 5 $/year
-    >>> diffusion = stock.diffusion(x, u)  # 20 $/√year
-    >>>
-    >>> # Population model
-    >>> pop = GeometricBrownianMotion(mu=0.02, sigma=0.1)
-    >>>
-    >>> # Decaying process
-    >>> decay = GeometricBrownianMotion(mu=-0.1, sigma=0.05)
+    BrownianMotion : Additive noise version
+    OrnsteinUhlenbeck : Mean-reverting process
+    CoxIngersollRoss : Mean-reverting with multiplicative noise
     """
 
     def define_system(self, mu: float = 0.1, sigma: float = 0.2):
         """
-        Define geometric Brownian motion.
+        Define geometric Brownian motion dynamics.
 
         Parameters
         ----------
-        mu : float
+        mu : float, default=0.1
             Drift coefficient (growth rate)
-        sigma : float
+            μ > 0: Growth, μ = 0: Fair game, μ < 0: Decay
+            
+        sigma : float, default=0.2
             Volatility (must be positive)
+            Typical stocks: 0.15-0.30
+
+        Raises
+        ------
+        ValueError
+            If sigma ≤ 0
 
         Notes
         -----
-        **Parameter Interpretation:**
-
-        μ (drift):
-        - μ > 0: Expected growth (stock appreciation)
-        - μ = 0: Pure diffusion with multiplicative noise
-        - μ < 0: Expected decay (radioactive-like with noise)
-
-        σ (volatility):
-        - Small σ (< 0.1): Low uncertainty, smooth paths
-        - Medium σ (0.1-0.3): Typical for stocks
-        - Large σ (> 0.5): High uncertainty, wild fluctuations
+        **Parameter Guidelines:**
+        - Large cap stocks: μ≈0.08, σ≈0.15-0.25
+        - Small cap stocks: μ≈0.12, σ≈0.30-0.50
+        - Sharpe ratio: (μ-r)/σ ≈ 0.3-0.5
 
         **State Positivity:**
-        If x(0) > 0, then x(t) > 0 for all t (almost surely).
-        Do not use with x(0) ≤ 0.
+        Multiplicative noise g(x) = σ·x ensures X(t) > 0
+        for all t if X(0) > 0.
+
+        **Itô Correction:**
+        Expected log-return is μ - σ²/2, not μ, due to
+        quadratic variation.
         """
         if sigma <= 0:
             raise ValueError(f"sigma must be positive, got {sigma}")
 
-        # Define symbolic variables
-        x = sp.symbols("x", positive=True)  # Positive state
+        # Symbolic variables
+        x = sp.symbols("x", positive=True)
         u = sp.symbols("u", real=True)
-
-        # Define symbolic parameters
         mu_sym = sp.symbols("mu", real=True)
         sigma_sym = sp.symbols("sigma", positive=True)
 
@@ -205,29 +307,29 @@ class GeometricBrownianMotion(StochasticDynamicalSystem):
         self.state_vars = [x]
         self.control_vars = [u]
 
-        # Drift: f(x, u) = μ*x + u
+        # Drift: f(x,u) = μ·x + u
         self._f_sym = sp.Matrix([[mu_sym * x + u]])
 
         self.parameters = {mu_sym: mu, sigma_sym: sigma}
         self.order = 1
 
-        # Diffusion: g(x, u) = σ*x (multiplicative!)
+        # Diffusion: g(x,u) = σ·x (multiplicative!)
         self.diffusion_expr = sp.Matrix([[sigma_sym * x]])
         self.sde_type = "ito"
 
     def get_expected_value(self, x0: float, t: float, u: float = 0.0) -> float:
         """
-        Get analytical expected value at time t.
+        Compute analytical expected value E[X(t)].
 
-        For u=0: E[X(t)] = x₀*exp(μ*t)
+        For u=0: E[X(t)] = X₀·exp(μ·t)
 
         Parameters
         ----------
         x0 : float
             Initial state (must be positive)
         t : float
-            Time (must be non-negative)
-        u : float
+            Time (non-negative)
+        u : float, default=0.0
             Control (assumed constant)
 
         Returns
@@ -235,86 +337,78 @@ class GeometricBrownianMotion(StochasticDynamicalSystem):
         float
             Expected value E[X(t)]
 
+        Notes
+        -----
+        Mean grows exponentially at rate μ:
+        - Doubling time: ln(2)/μ (if μ > 0)
+        - Half-life: ln(2)/|μ| (if μ < 0)
+
         Examples
         --------
-        >>> gbm = GeometricBrownianMotion(mu=0.05, sigma=0.2)
+        >>> gbm = GeometricBrownianMotion(mu=0.10, sigma=0.20)
         >>> E_1yr = gbm.get_expected_value(x0=100, t=1.0)
-        >>> print(f"Expected: ${E_1yr:.2f}")
-        Expected: $105.13
+        >>> print(f"Expected: ${E_1yr:.2f}")  # $110.52
         """
         if x0 <= 0:
-            raise ValueError(f"Initial state must be positive, got {x0}")
+            raise ValueError(f"x0 must be positive, got {x0}")
         if t < 0:
-            raise ValueError(f"Time must be non-negative, got {t}")
+            raise ValueError(f"t must be non-negative, got {t}")
 
-        # Extract mu
-        mu = None
-        for key, val in self.parameters.items():
-            if str(key) == "mu":
-                mu = val
-                break
+        mu = next(val for key, val in self.parameters.items() if str(key) == "mu")
 
         if u == 0:
-            # Simple exponential growth
             return x0 * np.exp(mu * t)
-        # With constant control (approximate)
-        # This is approximate; exact solution with u is more complex
         return x0 * np.exp(mu * t) + u * t * np.exp(mu * t)
 
     def get_variance(self, x0: float, t: float) -> float:
         """
-        Get analytical variance at time t (for u=0).
+        Compute analytical variance Var[X(t)].
 
-        Var[X(t)] = x₀²*exp(2μt)*(exp(σ²t) - 1)
+        Var[X(t)] = X₀²·exp(2μ·t)·(exp(σ²·t) - 1)
 
         Parameters
         ----------
         x0 : float
-            Initial state (must be positive)
+            Initial state (positive)
         t : float
-            Time (must be non-negative)
+            Time (non-negative)
 
         Returns
         -------
         float
             Variance Var[X(t)]
 
+        Notes
+        -----
+        Coefficient of variation grows unboundedly:
+            CV = √(exp(σ²·t) - 1) → ∞ as t → ∞
+
         Examples
         --------
-        >>> gbm = GeometricBrownianMotion(mu=0.05, sigma=0.2)
-        >>> var_1yr = gbm.get_variance(x0=100, t=1.0)
-        >>> std_1yr = np.sqrt(var_1yr)
-        >>> print(f"Std dev: ${std_1yr:.2f}")
-        Std dev: $22.36
+        >>> gbm = GeometricBrownianMotion(mu=0.05, sigma=0.20)
+        >>> var = gbm.get_variance(x0=100, t=1.0)
+        >>> std = np.sqrt(var)
+        >>> print(f"Std Dev: ${std:.2f}")
         """
         if x0 <= 0:
-            raise ValueError(f"Initial state must be positive, got {x0}")
+            raise ValueError(f"x0 must be positive, got {x0}")
         if t < 0:
-            raise ValueError(f"Time must be non-negative, got {t}")
+            raise ValueError(f"t must be non-negative, got {t}")
 
-        # Extract parameters
-        mu = None
-        sigma = None
-        for key, val in self.parameters.items():
-            if str(key) == "mu":
-                mu = val
-            elif str(key) == "sigma":
-                sigma = val
+        mu = next(val for key, val in self.parameters.items() if str(key) == "mu")
+        sigma = next(val for key, val in self.parameters.items() if str(key) == "sigma")
 
         return x0**2 * np.exp(2 * mu * t) * (np.exp(sigma**2 * t) - 1)
 
 
-# ============================================================================
-# Specialized GBM Variants
-# ============================================================================
-
-
 class BrownianMotionWithDrift(GeometricBrownianMotion):
     """
-    Alias for GBM - sometimes called Brownian motion with drift.
+    Alias for GeometricBrownianMotion.
 
-    Mathematically identical to GeometricBrownianMotion.
+    Alternative name sometimes used in literature.
+    Mathematically identical to GBM.
     """
+    pass
 
 
 def create_stock_price_model(
@@ -324,12 +418,17 @@ def create_stock_price_model(
     """
     Create GBM model for stock price dynamics.
 
+    Uses financial conventions: annual parameters, time in years.
+
     Parameters
     ----------
-    expected_return : float
+    expected_return : float, default=0.07
         Expected annual return (e.g., 0.07 = 7%)
-    annual_volatility : float
+        Typical: 0.05-0.15
+        
+    annual_volatility : float, default=0.20
         Annual volatility (e.g., 0.20 = 20%)
+        Typical: 0.15-0.50
 
     Returns
     -------
@@ -338,10 +437,16 @@ def create_stock_price_model(
 
     Examples
     --------
-    >>> # S&P 500 typical statistics
+    >>> # S&P 500 typical
     >>> sp500 = create_stock_price_model(
     ...     expected_return=0.10,
     ...     annual_volatility=0.18
+    ... )
+    >>> 
+    >>> # Conservative large cap
+    >>> large_cap = create_stock_price_model(
+    ...     expected_return=0.08,
+    ...     annual_volatility=0.15
     ... )
     """
     return GeometricBrownianMotion(mu=expected_return, sigma=annual_volatility)
