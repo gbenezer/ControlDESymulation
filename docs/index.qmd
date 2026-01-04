@@ -2,11 +2,12 @@
 title: "ControlDESymulation"
 ---
 
-# Welcome to ControlDESymulation
+## Welcome to ControlDESymulation
 
 A comprehensive control systems simulation framework with symbolic dynamical systems and multi-backend numerical execution.
+*documentation is currently under construction*
 
-## Key Benefits
+### Key Benefits
 
 1. **Write Once, Run Anywhere**: Define systems symbolically, execute on any backend (NumPy/PyTorch/JAX)
 2. **No Backend Lock-in**: Switch between CPU, GPU, or TPU without changing your code
@@ -14,7 +15,7 @@ A comprehensive control systems simulation framework with symbolic dynamical sys
 4. **Type-Safe**: Comprehensive type hints for better IDE support and fewer bugs
 5. **Research to Production**: Prototype in NumPy, scale with JAX, integrate with PyTorch models
 
-## Features
+### Features
 
 - **Symbolic Specification**: Define systems using SymPy with automatic code generation
 - **Multi-Backend Support**: Seamlessly switch between NumPy, PyTorch, JAX, and Julia
@@ -26,7 +27,7 @@ A comprehensive control systems simulation framework with symbolic dynamical sys
 - **Zero Code Duplication**: Clean 4-layer architecture with composition over inheritance
 - **Production Ready**: Extensive test coverage, comprehensive documentation, CI/CD workflows
 
-## Design Principles
+### Design Principles
 
 1. **Composition Over Inheritance** - Delegate to specialized utilities
 2. **Backend Agnosticism** - Write once, run on NumPy/PyTorch/JAX/Julia
@@ -35,12 +36,12 @@ A comprehensive control systems simulation framework with symbolic dynamical sys
 5. **Mathematical Rigor** - Proper handling of ODEs, SDEs, difference equations
 6. **Performance First** - Multi-backend support enables GPU and XLA acceleration
 
-## Getting Started
+### Getting Started
 
 - [Installation Guide](tutorials/installation.qmd) *(not yet written)*
 - [Basic Tutorial](tutorials/basic-usage.qmd) *(not yet written)*
 - [SDE Integration](tutorials/sde-integration.qmd) *(not yet written)*
 
-## Examples
+### Examples
 
 Browse our [examples gallery](examples/index.qmd) *(not yet written)* to see ControlDESymulation in action.

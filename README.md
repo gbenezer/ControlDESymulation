@@ -9,6 +9,10 @@ A Python library for defining, analyzing, and simulating nonlinear dynamical sys
 [![CI](https://img.shields.io/badge/CI-passing-brightgreen)](https://github.com/gbenezer/ControlDESymulation/actions)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
+## Documentation
+
+[Read the docs](https://gbenezer.github.io/ControlDESymulation/)
+
 ---
 
 ## Why ControlDESymulation?
@@ -161,29 +165,6 @@ dx_jax = pendulum(x_jax, jnp.array([0.0]))
 ```
 
 **Backend detection is automatic** - the same system object works with all three!
-
----
-
-## Documentation Structure
-
-### Quick Reference Guides
-
-- **[UI Framework Quick Reference](docs/api/ui_framework/UI_Framework_Quick_Reference.md)** - System definition and usage patterns
-- **[Integration Framework Quick Reference](docs/api/integration_framework/Integration_Framework_Quick_Reference.md)** - Solver selection and configuration
-- **[Type System Quick Reference](docs/api/type_system/Type_System_Quick_Reference.md)** - TypedDict definitions and type safety
-- **[Visualization Framework Quick Reference](docs/api/visualization_framework/Visualization_Framework_Quick_Reference.md)** - Plotting and analysis
-- **[Control Framework Quick Reference](docs/api/control_framework/Control_Framework_Quick_Reference.md)** - Controller design
-- **[Delegation Layer Quick Reference](docs/api/delegation_layer/Delegation_Layer_Quick_Reference.md)** - Low-level numerical operations
-
-### Architecture Documentation
-
-- **[UI Framework Architecture](docs/api/ui_framework/UI_Framework_Architecture.md)** - System class hierarchy and design
-- **[Integration Framework Architecture](docs/api/integration_framework/Integration_Framework_Architecture.md)** - Numerical integration infrastructure
-- **[Type System Architecture](docs/api/type_system/Type_System_Architecture.md)** - Type definitions and validation
-- **[Visualization Framework Architecture](docs/api/visualization_framework/Visualization_Framework_Architecture.md)** - Plotting and analysis
-- **[Control Framework Architecture](docs/api/control_framework/Control_Framework_Architecture.md)** - Control system utilities
-- **[Delegation Layer Architecture](docs/api/delegation_layer/Delegation_Layer_Architecture.md)** - Backend abstraction layer
-- **[Design Philosophy](docs/api/ControlDESymulation_Design_Philosophy.md)** - Core design principles
 
 ---
 
