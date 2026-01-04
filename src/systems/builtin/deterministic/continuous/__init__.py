@@ -29,6 +29,9 @@ from .continuous_reactors import ContinuousBatchReactor, ContinuousCSTR
 
 # Aliases for convenience
 PendulumSystem = SymbolicPendulum
+ContinuousPendulum = SymbolicPendulum
+ContinuousPendulum2ndOrder = SymbolicPendulum2ndOrder
+Pendulum = SymbolicPendulum
 CartPoleSystem = CartPole
 
 __all__ = [
@@ -40,6 +43,9 @@ __all__ = [
     "SymbolicPendulum",
     "SymbolicPendulum2ndOrder",
     "PendulumSystem",
+    "ContinuousPendulum",
+    "ContinuousPendulum2ndOrder",
+    "Pendulum",
     # Cart-pole
     "CartPole",
     "CartPoleSystem",
