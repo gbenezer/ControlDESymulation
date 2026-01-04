@@ -6,7 +6,6 @@ date: today
 format:
   html:
     toc: true
-    toc-depth: 3
     code-fold: false
     code-tools: true
     theme: cosmo

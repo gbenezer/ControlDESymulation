@@ -3,7 +3,6 @@ title: "Installation Guide"
 format:
   html:
     toc: true
-    toc-depth: 3
     code-overflow: wrap
 ---
 
