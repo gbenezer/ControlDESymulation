@@ -44,6 +44,8 @@ Most control and dynamics libraries force you to choose between **symbolic elega
 - **Zero Code Duplication**: Clean 4-layer architecture with composition over inheritance
 - **Production Ready**: Extensive test coverage, comprehensive documentation, CI/CD workflows
 
+---
+
 ## Quick Start
 
 ### Installation
@@ -131,6 +133,8 @@ A, B = system.linearize(x, u)
 print(f"A matrix:\n{A}")
 ```
 
+---
+
 ### Multi-Backend Execution
 
 **Same definition, different backends - no code changes required!**
@@ -158,6 +162,8 @@ dx_jax = pendulum(x_jax, jnp.array([0.0]))
 
 **Backend detection is automatic** - the same system object works with all three!
 
+---
+
 ## Documentation Structure
 
 ### Quick Reference Guides
@@ -178,6 +184,8 @@ dx_jax = pendulum(x_jax, jnp.array([0.0]))
 - **[Control Framework Architecture](docs/api/control_framework/Control_Framework_Architecture.md)** - Control system utilities
 - **[Delegation Layer Architecture](docs/api/delegation_layer/Delegation_Layer_Architecture.md)** - Backend abstraction layer
 - **[Design Philosophy](docs/api/ControlDESymulation_Design_Philosophy.md)** - Core design principles
+
+---
 
 ## Architecture Overview
 
@@ -212,6 +220,8 @@ ControlDESymulation follows a clean 4-layer architecture:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+---
 
 ### Design Principles
 
@@ -270,74 +280,6 @@ ControlDESymulation supports multiple numerical backends with automatic detectio
 | `milstein` | 1.0 (strong) | Diagonal |
 | `srk` | Various | Specific structures |
 
-## Advanced Features
-
-- **Automatic Linearization**
-- **Stability, Controllability, and Observability Analysis**
-- **Management of Multiple Equilibria**
-- **Arbitrary-Order Systems**
-- **Classical Closed-Loop Control Design Tools**
-- **SDE Monte Carlo Analysis**
-- **And more**
-
-## Testing
-
-ControlDESymulation includes comprehensive test suites:
-
-```bash
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=src --cov-report=html
-```
-
-## Installation Options
-
-### Basic (Core Only)
-```bash
-pip install -e .
-```
-
-**Includes**: NumPy, SymPy, SciPy, pydantic
-
-### With PyTorch
-```bash
-pip install -e ".[torch]"
-```
-
-**Adds**: PyTorch, torchdiffeq, torchsde
-
-### With JAX
-```bash
-pip install -e ".[jax]"
-```
-
-**Adds**: JAX, jaxlib, diffrax
-
-### With Visualization
-```bash
-pip install -e ".[viz]"
-```
-
-**Adds**: Plotly, Matplotlib
-
-### Development
-```bash
-pip install -e ".[dev]"
-```
-
-**Adds**: pytest, black, ruff, mypy, pre-commit, coverage
-
-### Everything
-```bash
-pip install -e ".[all]"
-```
-
-**Includes all backends, visualization, and development tools**
-
----
-
 ## Contributing
 
 Repository is not currently ready for other contributors. Once all files are fully documented, initial example notebooks and/or more formal tutorials, all warnings addressed, and all mypy/ruff/pylint issues are resolved, then contributions are welcome. Some examples of future help would be:
@@ -348,35 +290,6 @@ Repository is not currently ready for other contributors. Once all files are ful
 4. **Additional Backends** - TensorFlow, CuPy, etc.
 5. **Visualization Tools** - Enhanced plotting capabilities
 6. **Control Algorithms** - MPC, LQG, H-infinity, etc.
-
-### Development Setup
-
-```bash
-# Clone and install
-git clone https://github.com/gbenezer/ControlDESymulation.git
-cd ControlDESymulation
-pip install -e ".[dev]"
-
-# Install pre-commit hooks
-pre-commit install
-
-# Run tests
-pytest tests/
-
-# Format code
-black src/ tests/
-isort src/ tests/
-
-# Type check
-mypy src/
-
-# Lint
-ruff check src/ tests/
-```
-
-Please see `CONTRIBUTING.md` for detailed guidelines. *(not yet written given lack of preparation)*
-
----
 
 ## Citation
 
@@ -391,7 +304,6 @@ If you use this library in your research, please cite:
   version = {1.0.0}
 }
 ```
-
 ---
 
 ## License
