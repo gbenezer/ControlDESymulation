@@ -1,464 +1,654 @@
 ---
 title: "ControlDESymulation Numerical Integration Framework Architecture"
-subtitle: "ControlDESymulation Architecture Documentation"
+subtitle: "Multi-Backend Integration for ODEs and SDEs"
 author: "Gil Benezer"
 date: today
 format:
   html:
     toc: true
+    toc-depth: 3
     code-fold: show
     code-tools: true
+    theme: cosmo
 execute:
-  eval: true      # Execute all code blocks
-  cache: true     # Cache results
-  warning: false  # Suppress warnings
+  eval: true
+  cache: true
+  warning: false
 ---
 
 ## Overview {#sec-overview}
 
-The numerical integration framework provides **multi-backend**, **multi-method** support for integrating both **deterministic ODEs** and **stochastic SDEs**. The framework consists of **13 core files** organized into a clean 2-track architecture: deterministic and stochastic.
+The ControlDESymulation numerical integration framework provides **multi-backend**, **multi-method** support for integrating both **deterministic ordinary differential equations (ODEs)** and **stochastic differential equations (SDEs)**. The framework consists of 13 core files organized into a clean two-track architecture.
 
-## Architecture Tracks {#sec-architecture-tracks}
+**Key capabilities:**
+
+- **Backend agnostic**: Seamless switching between NumPy, PyTorch, and JAX
+- **40+ integration methods**: From simple Euler to high-order adaptive schemes
+- **Stochastic support**: Full SDE integration with noise structure exploitation
+- **Factory pattern**: Automatic method selection based on system properties
+- **Production ready**: Professional-grade error control and performance tracking
+
+::: {.callout-important}
+## User Interface
+
+**Most users should NOT directly instantiate integrators or factories.** Instead, use the high-level system interface:
+
+```python
+# Recommended: Use system.integrate() - delegates to appropriate integrator
+system = Pendulum(m_val=1.0, l_val=0.5)
+result = system.integrate(
+    x0=np.array([1.0, 0.0]),
+    method='RK45',  # Optional: framework selects automatically
+    t_span=(0, 10)
+)
+
+# Advanced: Direct integrator access (only when needed for fine control)
+integrator = IntegratorFactory.auto(system)
+result = integrator.integrate(x0, u_func, t_span=(0, 10))
+```
+
+The system's `integrate()` method automatically handles backend selection, method routing, and integrator lifecycle. Direct integrator instantiation is only needed for advanced use cases requiring explicit integrator reuse or fine-grained control.
+:::
+
+## Architecture Overview {#sec-architecture}
+
+The framework follows a dual-track design separating deterministic and stochastic integration:
 
 ```
 Track 1: Deterministic ODE Integration
-├── IntegratorBase (abstract)
-├── IntegratorFactory (creates integrators)
+├── IntegratorBase (abstract interface)
+├── IntegratorFactory (method selection and creation)
 ├── Backend-Specific Implementations:
-│   ├── ScipyIntegrator (NumPy)
-│   ├── TorchDiffEqIntegrator (PyTorch)
-│   ├── DiffraxIntegrator (JAX)
-│   └── DiffEqPyIntegrator (Julia)
+│   ├── ScipyIntegrator (NumPy/SciPy)
+│   ├── TorchDiffEqIntegrator (PyTorch with GPU)
+│   ├── DiffraxIntegrator (JAX with XLA)
+│   └── DiffEqPyIntegrator (Julia via Python)
 └── FixedStepIntegrators (RK4, Euler, Midpoint)
 
 Track 2: Stochastic SDE Integration
 ├── SDEIntegratorBase (extends IntegratorBase)
-├── SDEIntegratorFactory (creates SDE integrators)
+├── SDEIntegratorFactory (SDE-specific creation)
 ├── Backend-Specific Implementations:
-│   ├── TorchSDEIntegrator (PyTorch)
-│   ├── DiffraxSDEIntegrator (JAX)
-│   └── DiffEqPySDEIntegrator (Julia)
-└── CustomBrownianPath (custom noise support)
+│   ├── TorchSDEIntegrator (PyTorch SDEs)
+│   ├── DiffraxSDEIntegrator (JAX SDEs)
+│   └── DiffEqPySDEIntegrator (Julia SDEs)
+└── CustomBrownianPath (deterministic noise for testing)
 ```
-
-## File Breakdown {#sec-file-breakdown}
-
-### Track 1: Deterministic ODE Integration {#sec-track-1-deterministic-ode-integration}
-
-#### IntegratorBase {#sec-integratorbase}
-**File:** `integrator_base.py` (512 lines)
-
-**Purpose:** Abstract base class for all numerical integrators
-
-**Key Features:**
-
-- Defines unified interface for all integrators
-- StepMode enum (FIXED vs ADAPTIVE)
-- Performance statistics tracking
-- TypedDict-based IntegrationResult
-
-**Abstract Methods:**
-
-- step(x, u, dt) → x_next                            # Single integration step
-- integrate(x0, u_func, t_span) → IntegrationResult  # Multi-step
-- name: str                                          # Integrator identifier
-
-**Attributes:**
-
-- system: ContinuousSystemBase     # System to integrate
-- dt: float                        # Time step (or initial guess)
-- step_mode: StepMode              # FIXED or ADAPTIVE
-- backend: Backend                 # 'numpy', 'torch', 'jax'
-- rtol, atol: float                # Error tolerances (adaptive)
-- _stats: dict                     # Performance tracking
-
----
-
-#### IntegratorFactory {#sec-integratorfactory}
-**File:** `integrator_factory.py` (1,267 lines)
-
-**Purpose:** Factory for creating appropriate integrators
-
-**Key Features:**
-
-- Automatic backend/method selection
-- Method-to-backend routing
-- Use case-specific helpers
-- Comprehensive method registry
-
-**Available Backends:**
-
-- **NumPy:** scipy, DiffEqPy (Julia), manual methods
-- **PyTorch:** torchdiffeq
-- **JAX:** diffrax
-
-**Factory Methods:**
 
 ```{python}
 #| label: setup-imports
-#| output: false
 #| echo: false
+#| output: false
 
-# Setup for all code examples in this document
+# Global setup for all code examples
 import numpy as np
 import torch
 import jax
 import jax.numpy as jnp
-from diffeqpy import de
 from cdesym import (
-    ContinuousSymbolicSystem,
     Pendulum,
     IntegratorFactory,
-    ContinuousStochasticSystem,
-    SDEIntegratorFactory,
     OrnsteinUhlenbeck,
+    SDEIntegratorFactory,
 )
+
 SEED = 42
 
-# Create system (e.g., pendulum)
-system = Pendulum(m_val=1.0, l_val=0.5)
-
-# Create initial conditions
-x0_pendulum_numpy = np.array([1.0, 0.0])
-x0_pendulum_torch = torch.tensor([1.0, 0.0])
-x0_pendulum_jax = jnp.array([1.0, 0.0])
-
-# Create control function (required for integrate)
-# NOTE:
-# must have the signature u(t, x) -> u
-# Integration of autonomous systems require None output
-# Integration of non-autonomous systems in open loop manner requires
-# 1D zero output
-u_func = lambda t, x: np.zeros(1)
-
-# Create SDE system (e.g., Ornstein-Uhlenbeck)
-sde_system = OrnsteinUhlenbeck(alpha=2.0, sigma=0.3)
-
-# get number of noise variables
-nw = sde_system.nw
-
-# Create SDE initial conditions
-x0_sde_numpy = np.array([0.5])
-x0_sde_torch = torch.tensor([0.5])
-x0_sde_jax = jnp.array([0.5])
-
-# same u_func will work for SDE
+# Suppress JAX GPU warnings
+import warnings
+warnings.filterwarnings('ignore', category=UserWarning, module='jax')
 ```
 
-**Method Registry:**
+## Track 1: Deterministic ODE Integration {#sec-track-1}
 
-| Method | Backend | Type | Best For |
-|--------|---------|------|----------|
-| LSODA | NumPy (scipy) | Adaptive | General (auto-stiffness) |
-| RK45 | NumPy (scipy) | Adaptive | Non-stiff ODEs |
-| Radau | NumPy (scipy) | Adaptive | Stiff ODEs |
-| BDF | NumPy (scipy) | Adaptive | Very stiff ODEs |
-| Tsit5 | NumPy (Julia) | Adaptive | High performance |
-| Vern9 | NumPy (Julia) | Adaptive | High accuracy |
-| Rodas5 | NumPy (Julia) | Adaptive | Stiff (Rosenbrock) |
-| dopri5 | PyTorch/JAX | Adaptive | Neural ODEs |
-| dopri8 | PyTorch/JAX | Adaptive | High accuracy |
-| tsit5 | JAX (diffrax) | Adaptive | Optimization |
-| euler | Any | Fixed | Educational |
-| rk4 | Any | Fixed | Simple systems |
+### IntegratorBase: Abstract Interface {#sec-integratorbase}
 
----
+**File:** `integrator_base.py` (512 lines)
 
-#### ScipyIntegrator {#sec-scipyintegrator}
-**File:** `scipy_integrator.py** (~620 lines estimate)
+The `IntegratorBase` class defines the unified interface that all numerical integrators must implement. This abstraction enables backend-agnostic integration while maintaining consistent behavior across implementations.
 
-**Purpose:** Adaptive integration using scipy.integrate.solve_ivp
+**Core responsibilities:**
 
-**Supported Methods:**
+- Define integration contract through abstract methods
+- Track performance statistics (function evaluations, steps, timing)
+- Manage integration parameters (time step, tolerances, backend)
+- Provide consistent result format via `IntegrationResult` TypedDict
 
-- **RK45** (default): Dormand-Prince 5(4) - general purpose
-- **RK23**: Bogacki-Shampine 3(2) - fast, low accuracy
-- **DOP853**: Dormand-Prince 8(5,3) - high accuracy
-- **Radau**: Implicit RK - stiff systems
-- **BDF**: Backward differentiation - very stiff
-- **LSODA**: Auto stiffness detection
+**Key attributes:**
 
-**Key Features:**
+```python
+system: ContinuousSystemBase     # Dynamical system to integrate
+dt: float                        # Time step (or initial guess for adaptive)
+step_mode: StepMode              # FIXED or ADAPTIVE
+backend: Backend                 # 'numpy', 'torch', or 'jax'
+rtol: float                      # Relative error tolerance (adaptive methods)
+atol: float                      # Absolute error tolerance (adaptive methods)
+_stats: dict                     # Performance tracking
+```
 
-- Professional-grade adaptive stepping
-- Error control (rtol/atol)
-- Dense output (interpolation)
-- Event detection
-- Both controlled and autonomous systems
+**Abstract methods required by all implementations:**
 
-**Example:**
+```python
+def step(self, x: Array, u: Array, dt: float) -> Array:
+    """Single integration step: x(t) -> x(t + dt)"""
+    
+def integrate(
+    self, 
+    x0: Array, 
+    u_func: Callable, 
+    t_span: tuple[float, float]
+) -> IntegrationResult:
+    """Multi-step integration over time interval"""
+    
+@property
+def name(self) -> str:
+    """Unique identifier for this integrator"""
+```
+
+**StepMode enumeration:**
+
+- `FIXED`: Constant time step (euler, rk4, midpoint)
+- `ADAPTIVE`: Variable time step with error control (RK45, dopri5, tsit5)
+
+### IntegratorFactory: Smart Creation {#sec-integratorfactory}
+
+**File:** `integrator_factory.py` (1,267 lines)
+
+The `IntegratorFactory` provides intelligent integrator creation with automatic backend and method selection. It encapsulates the complexity of choosing appropriate integration methods based on system properties and use case requirements.
+
+**Factory methods:**
+
+```python
+# Automatic selection based on system and backend
+IntegratorFactory.auto(system, backend=None)
+
+# Production use with auto-stiffness detection
+IntegratorFactory.for_production(system, **options)
+
+# High-performance Julia integration
+IntegratorFactory.for_julia(system, algorithm='Tsit5', **options)
+
+# Neural ODE training with adjoint gradients
+IntegratorFactory.for_neural_ode(system, **options)
+
+# JAX optimization workflows
+IntegratorFactory.for_optimization(system, **options)
+
+# Direct method specification
+IntegratorFactory.create(system, backend, method, **options)
+```
+
+**Method registry:**
+
+The factory maintains a comprehensive registry mapping method names to backends and capabilities:
+
+| Method | Backend | Type | Order | Best For |
+|--------|---------|------|-------|----------|
+| LSODA | NumPy (scipy) | Adaptive | Variable | Automatic stiffness detection |
+| RK45 | NumPy (scipy) | Adaptive | 5(4) | General non-stiff ODEs |
+| DOP853 | NumPy (scipy) | Adaptive | 8(5,3) | High-accuracy requirements |
+| Radau | NumPy (scipy) | Adaptive | 5 | Stiff systems (implicit) |
+| BDF | NumPy (scipy) | Adaptive | Variable | Very stiff systems |
+| Tsit5 | NumPy (Julia) | Adaptive | 5(4) | High performance |
+| Vern9 | NumPy (Julia) | Adaptive | 9(8) | Maximum accuracy |
+| Rodas5 | NumPy (Julia) | Adaptive | 5(4) | Stiff (Rosenbrock method) |
+| dopri5 | PyTorch/JAX | Adaptive | 5(4) | Neural ODEs, GPU acceleration |
+| dopri8 | PyTorch/JAX | Adaptive | 8 | High-accuracy neural ODEs |
+| tsit5 | JAX (diffrax) | Adaptive | 5(4) | Optimization, XLA compilation |
+| euler | Any | Fixed | 1 | Simple systems, education |
+| rk4 | Any | Fixed | 4 | Moderate accuracy, fixed step |
+
+### ScipyIntegrator: Adaptive NumPy Integration {#sec-scipyintegrator}
+
+**File:** `scipy_integrator.py` (~620 lines)
+
+Wraps `scipy.integrate.solve_ivp` to provide professional-grade adaptive integration with comprehensive error control. This is the recommended starting point for most NumPy-based applications.
+
+**Supported methods:**
+
+- **RK45** (default): Dormand-Prince 5(4) — general purpose, good balance
+- **RK23**: Bogacki-Shampine 3(2) — fast, lower accuracy
+- **DOP853**: Dormand-Prince 8(5,3) — very high accuracy
+- **Radau**: Implicit Runge-Kutta — stiff systems
+- **BDF**: Backward differentiation formulas — very stiff systems
+- **LSODA**: Automatic stiffness detection — adapts to problem
+
+**Key features:**
+
+- Professional adaptive time stepping with embedded error estimation
+- Configurable error tolerances (`rtol`, `atol`)
+- Dense output via continuous extension (interpolation between steps)
+- Event detection for state-dependent conditions
+- Support for both controlled and autonomous systems
+
+**Usage example:**
+
 ```{python}
-#| output: false
+#| label: ex-scipy
+
 from cdesym.systems.base.numerical_integration.scipy_integrator import ScipyIntegrator
+
+# Create system
+system = Pendulum(m_val=1.0, l_val=0.5)
+
+# Create adaptive integrator with tight tolerances
 integrator = ScipyIntegrator(
     system,
     method='RK45',
     rtol=1e-6,
     atol=1e-8
 )
-result = integrator.integrate(x0_pendulum_numpy, u_func, t_span=(0, 10))
+
+# Integrate over time span
+x0 = np.array([1.0, 0.0])  # [angle, angular_velocity]
+u_func = lambda t, x: np.zeros(1)  # No control input
+result = integrator.integrate(x0, u_func, t_span=(0, 10))
+
+print(f"Success: {result['success']}")
+print(f"Function evaluations: {result['nfev']}")
+print(f"Steps taken: {result['nsteps']}")
 ```
 
----
+**When to use:**
 
-#### TorchDiffEqIntegrator {#sec-torchdiffeqintegrator}
-**File:** `torchdiffeq_integrator.py` (estimated ~800 lines)
+- General-purpose NumPy applications
+- When you need reliable adaptive stepping
+- Systems with unknown stiffness (use LSODA)
+- When dense output is required
 
-**Purpose:** PyTorch integration with GPU acceleration and autograd
+### TorchDiffEqIntegrator: GPU-Accelerated PyTorch {#sec-torchdiffeqintegrator}
 
-**Supported Methods:**
+**File:** `torchdiffeq_integrator.py** (~800 lines)
 
-- **dopri5**: Dormand-Prince 5(4)
-- **dopri8**: Dormand-Prince 8
-- **adaptive_heun**: Heun's method
-- **bosh3**: Bogacki-Shampine 3
-- **fehlberg2**: Fehlberg 2(1)
+Provides PyTorch integration with GPU acceleration and automatic differentiation support. Essential for neural ODE applications and gradient-based optimization.
+
+**Supported methods:**
+
+- **dopri5**: Dormand-Prince 5(4) — recommended default
+- **dopri8**: Dormand-Prince 8 — high accuracy
+- **adaptive_heun**: Heun's method — good for moderately stiff
+- **bosh3**: Bogacki-Shampine 3 — fast, lower accuracy
+- **fehlberg2**: Fehlberg 2(1) — very fast, low accuracy
 - **explicit_adams**, **implicit_adams**: Multi-step methods
 
-**Key Features:**
+**Key features:**
 
-- GPU acceleration
-- Automatic differentiation
-- Adjoint method for memory efficiency
-- Neural ODE support
+- **GPU acceleration**: Automatic CUDA support for large-scale problems
+- **Automatic differentiation**: Seamless gradient computation through dynamics
+- **Adjoint method**: Memory-efficient backpropagation for neural ODEs
+- **Batch processing**: Vectorized integration of multiple trajectories
 
-**Example:**
+**Usage example:**
+
 ```{python}
-#| output: false
+#| label: ex-torch
+
 from cdesym.systems.base.numerical_integration.torchdiffeq_integrator import TorchDiffEqIntegrator
+
+system = Pendulum(m_val=1.0, l_val=0.5)
+
+# Create GPU-accelerated integrator
 integrator = TorchDiffEqIntegrator(
     system,
     method='dopri5',
     backend='torch',
-    device='cuda:0'
+    device='cpu',  # Use 'cuda:0' for GPU
+    rtol=1e-6,
+    atol=1e-8
 )
-result = integrator.integrate(x0_pendulum_torch, u_func, t_span=(0, 10))
+
+x0 = torch.tensor([1.0, 0.0], requires_grad=True)
+u_func = lambda t, x: torch.zeros(1)
+result = integrator.integrate(x0, u_func, t_span=(0, 10))
+
+print(f"Solver: {result['solver']}")
+print(f"Integration time: {result['integration_time']:.4f}s")
 ```
 
----
+**When to use:**
 
-#### DiffraxIntegrator {#sec-diffraxintegrator}
-**File:** `diffrax_integrator.py` (estimated ~700 lines)
+- Neural ODE training
+- GPU-accelerated simulations
+- Gradient-based optimization
+- Large-scale batch processing
 
-**Purpose:** JAX integration with XLA compilation and autograd
+### DiffraxIntegrator: JAX with XLA Compilation {#sec-diffraxintegrator}
 
-**Supported Methods:**
+**File:** `diffrax_integrator.py` (~700 lines)
 
-- **tsit5**: Tsitouras 5(4) - recommended
-- **dopri5**: Dormand-Prince 5(4)
-- **dopri8**: Dormand-Prince 8
-- **heun**: Heun's method
-- **ralston**: Ralston's method
-- **reversible_heun**: Reversible Heun
+Leverages JAX's diffrax library for high-performance integration with XLA compilation. Ideal for optimization workflows requiring extensive JIT compilation and functional transformations.
 
-**Key Features:**
+**Supported methods:**
 
-- XLA compilation
-- JAX transformations (jit, vmap, grad)
-- Efficient for optimization
-- Functional programming style
+- **tsit5**: Tsitouras 5(4) — recommended, efficient
+- **dopri5**: Dormand-Prince 5(4) — standard reference
+- **dopri8**: Dormand-Prince 8 — high accuracy
+- **heun**: Heun's method — simple, robust
+- **ralston**: Ralston's method — improved stability
+- **reversible_heun**: Time-reversible integration
 
-**Example:**
+**Key features:**
+
+- **XLA compilation**: Near-C++ performance via just-in-time compilation
+- **JAX transformations**: `jit`, `vmap`, `grad`, `pmap` all work seamlessly
+- **Functional style**: Pure functions enable advanced optimizations
+- **Efficient for optimization**: Fast repeated evaluations with parameter sweeps
+
+**Usage example:**
+
 ```{python}
-#| output: false
+#| label: ex-jax
+
 from cdesym.systems.base.numerical_integration.diffrax_integrator import DiffraxIntegrator
+
+system = Pendulum(m_val=1.0, l_val=0.5)
+
+# Create JAX integrator
 integrator = DiffraxIntegrator(
     system,
     method='tsit5',
-    backend='jax'
+    backend='jax',
+    rtol=1e-6,
+    atol=1e-8
 )
-result = integrator.integrate(x0_pendulum_jax, u_func, t_span=(0, 10))
+
+x0 = jnp.array([1.0, 0.0])
+u_func = lambda t, x: jnp.zeros(1)
+result = integrator.integrate(x0, u_func, t_span=(0, 10))
+
+print(f"Method: {result['solver']}")
+print(f"Success: {result['success']}")
 ```
 
----
+**When to use:**
 
-#### DiffEqPyIntegrator {#sec-diffeqpyintegrator}
-**File:** `diffeqpy_integrator.py` (estimated ~900 lines)
+- Parameter optimization requiring many integrations
+- When you need `vmap` for batch parameter sweeps
+- Gradient-based control optimization
+- Maximum computational efficiency
 
-**Purpose:** Julia's DifferentialEquations.jl via Python bindings
+### DiffEqPyIntegrator: Julia's Solver Ecosystem {#sec-diffeqpyintegrator}
 
-**Supported Methods:**
+**File:** `diffeqpy_integrator.py` (~900 lines)
 
-Extensive Julia solver ecosystem:
+Accesses Julia's extensive DifferentialEquations.jl ecosystem through Python bindings. Provides the most comprehensive method library with production-grade performance.
 
-- **Explicit RK:** Tsit5, Vern6, Vern7, Vern8, Vern9, DP5, DP8
-- **Rosenbrock:** Rosenbrock23, Rosenbrock32, Rodas4, Rodas5
-- **BDF:** TRBDF2, KenCarp3, KenCarp4, KenCarp5
-- **Radau:** RadauIIA5
-- **Stabilized:** ROCK2, ROCK4
-- **Symplectic:** VelocityVerlet, SymplecticEuler
-- **Auto-switching:** AutoTsit5(Rosenbrock23()), AutoVern7(Rodas5())
+**Supported method families:**
 
-**Key Features:**
+**Explicit Runge-Kutta:**
+- Tsit5, Vern6, Vern7, Vern8, Vern9 — variable order adaptive
+- DP5, DP8 — Dormand-Prince variants
 
-- Highest performance
-- Automatic stiffness detection
-- Extensive method library
-- Production-grade reliability
+**Rosenbrock (implicit for stiff):**
+- Rosenbrock23, Rosenbrock32, Rodas4, Rodas5
 
-**Example:**
+**BDF methods:**
+- TRBDF2, KenCarp3, KenCarp4, KenCarp5
+
+**Specialized:**
+- RadauIIA5 — implicit Runge-Kutta
+- ROCK2, ROCK4 — stabilized methods
+- VelocityVerlet, SymplecticEuler — symplectic integrators
+
+**Auto-switching (composite):**
+- AutoTsit5(Rosenbrock23()) — switches based on stiffness
+- AutoVern7(Rodas5()) — high accuracy with stiffness handling
+
+**Key features:**
+
+- **Highest performance**: Often 2-10× faster than SciPy
+- **Automatic stiffness detection**: Seamlessly switches solvers
+- **Extensive method library**: 100+ algorithms available
+- **Production reliability**: Battle-tested in scientific computing
+
+**Usage example:**
+
 ```{python}
-#| output: false
+#| label: ex-julia
+
 from cdesym.systems.base.numerical_integration.diffeqpy_integrator import DiffEqPyIntegrator
+
+system = Pendulum(m_val=1.0, l_val=0.5)
+
+# Ultra-high accuracy Julia integration
 integrator = DiffEqPyIntegrator(
     system,
-    algorithm='Vern9',
+    algorithm='Vern9',  # 9th order method
     backend='numpy',
     reltol=1e-12,
     abstol=1e-14
 )
-result = integrator.integrate(x0_pendulum_numpy, u_func, t_span=(0, 10))
+
+x0 = np.array([1.0, 0.0])
+u_func = lambda t, x: np.zeros(1)
+result = integrator.integrate(x0, u_func, t_span=(0, 100))
+
+print(f"Function evaluations: {result['nfev']}")
+print(f"Achieved accuracy: reltol={1e-12}, abstol={1e-14}")
 ```
 
----
+**When to use:**
 
-#### FixedStepIntegrators {#sec-fixedstepintegrators}
-**File:** `fixed_step_integrators.py` (estimated ~600 lines)
+- Maximum performance requirements
+- Very stiff systems needing automatic detection
+- High-accuracy applications (>8 digits)
+- Production environments with reliability requirements
 
-**Purpose:** Manual implementation of fixed-step methods
+### FixedStepIntegrators: Educational and Simple Systems {#sec-fixedstepintegrators}
 
-**Supported Methods:**
+**File:** `fixed_step_integrators.py` (~600 lines)
 
-- **euler**: Forward Euler (order 1)
-- **midpoint**: Midpoint method (order 2)
-- **rk4**: Runge-Kutta 4 (order 4)
+Manual implementations of classic fixed-step methods. These provide transparent, backend-agnostic integration suitable for education and simple systems where adaptive stepping is unnecessary.
 
-**Key Features:**
+**Available methods:**
 
-- Backend-agnostic (NumPy, PyTorch, JAX)
-- Simple, transparent implementations
-- Educational value
-- Constant time step
+- **EulerIntegrator**: Forward Euler (order 1) — simplest method
+- **MidpointIntegrator**: Midpoint method (order 2) — improved accuracy
+- **RK4Integrator**: Classic Runge-Kutta 4 (order 4) — excellent balance
 
-**Example:**
+**Key features:**
+
+- **Backend agnostic**: Work with NumPy, PyTorch, and JAX arrays
+- **Transparent implementation**: Clear, readable code for learning
+- **Constant time step**: Predictable computational cost
+- **No external dependencies**: Pure Python implementations
+
+**Usage example:**
+
 ```{python}
-#| output: false
+#| label: ex-fixed
+
 from cdesym.systems.base.numerical_integration.fixed_step_integrators import RK4Integrator
+
+system = Pendulum(m_val=1.0, l_val=0.5)
+
+# Simple RK4 with fixed time step
 integrator = RK4Integrator(
     system,
-    dt=0.01,
+    dt=0.01,  # 10ms time step
     backend='numpy'
 )
-result = integrator.integrate(x0_pendulum_numpy, u_func, t_span=(0, 10))
+
+x0 = np.array([1.0, 0.0])
+u_func = lambda t, x: np.zeros(1)
+result = integrator.integrate(x0, u_func, t_span=(0, 10))
+
+print(f"Time step: {integrator.dt}")
+print(f"Number of steps: {result['nsteps']}")
 ```
 
----
+**When to use:**
 
-### Track 2: Stochastic SDE Integration {#sec-track-2-stochastic-sde-integration}
+- Educational purposes and learning
+- Simple systems with smooth dynamics
+- Real-time applications requiring predictable timing
+- Debugging with deterministic stepping
 
-#### SDEIntegratorBase {#sec-sdeintegratorbase}
+## Track 2: Stochastic SDE Integration {#sec-track-2}
+
+### SDEIntegratorBase: Stochastic Abstract Interface {#sec-sdeintegratorbase}
+
 **File:** `sde_integrator_base.py` (1,080 lines)
 
-**Purpose:** Abstract base for SDE integrators
+Extends `IntegratorBase` to handle stochastic differential equations of the form:
 
-**Mathematical Form:**
-```
-dx = f(x, u, t)dt + g(x, u, t)dW
-```
+$$dx = f(x, u, t)dt + g(x, u, t)dW$$
+
 where:
 
-- f: Drift (deterministic)
-- g: Diffusion (stochastic intensity)
-- dW: Brownian motion increments
+- $f(x, u, t)$: Drift term (deterministic dynamics)
+- $g(x, u, t)$: Diffusion term (stochastic intensity)
+- $dW$: Brownian motion increments (Wiener process)
 
-**Key Differences from ODE:**
+**Key differences from deterministic integration:**
 
-- Random noise generation
-- Weak vs strong convergence
-- Noise structure exploitation
-- Monte Carlo simulation support
-- Itô vs Stratonovich interpretation
+1. **Random noise generation**: Requires proper Brownian motion sampling
+2. **Convergence types**: 
+   - **Strong convergence**: Pathwise accuracy (Monte Carlo, control)
+   - **Weak convergence**: Distribution accuracy (statistics)
+3. **Noise structure exploitation**: Additive, diagonal, scalar, or general
+4. **Multiple realizations**: Monte Carlo simulation support
+5. **Interpretation**: Itô vs Stratonovich calculus
 
-**Abstract Methods:**
+**Additional abstract methods:**
 
-- step(x, u, dt, dW) → x_next      # Single SDE step with noise
-- integrate(x0, u_func, t_span) → SDEIntegrationResult
-- integrate_monte_carlo(x0, u_func, t_span, n_paths) → SDEIntegrationResult
-
----
-
-#### SDEIntegratorFactory {#sec-sdeintegratorfactory}
-**File:** `sde_integrator_factory.py` (estimated ~1,000 lines)
-
-**Purpose:** Factory for creating SDE integrators
-
-**Factory Methods:**
-```{python}
-#| output: false
-#| execute: false
-# create(sde_system, backend, method, dt, **options) → SDEIntegratorBase
-# auto(sde_system, backend=None) → SDEIntegratorBase
-# for_monte_carlo(sde_system, n_paths) → SDEIntegratorBase
+```python
+def step(
+    self, 
+    x: Array, 
+    u: Array, 
+    dt: float, 
+    dW: Array
+) -> Array:
+    """Single SDE step with provided noise"""
+    
+def integrate_monte_carlo(
+    self,
+    x0: Array,
+    u_func: Callable,
+    t_span: tuple[float, float],
+    n_paths: int
+) -> SDEIntegrationResult:
+    """Multiple trajectory simulation for statistics"""
 ```
 
-**Available Methods:**
+### SDEIntegratorFactory: SDE-Specific Creation {#sec-sdeintegratorfactory}
 
-| Method | Backend | Convergence | Noise Type |
-|--------|---------|-------------|------------|
-| euler-maruyama | NumPy/PyTorch/JAX | Strong (0.5) | General |
-| milstein | NumPy | Strong (1.0) | Diagonal |
-| heun | PyTorch/JAX | Strong (1.0) | Additive |
-| srk | PyTorch | Strong | General |
-| reversible_heun | PyTorch | Strong | Additive |
+**File:** `sde_integrator_factory.py` (~1,000 lines)
 
----
+Provides intelligent SDE integrator creation with automatic noise structure detection and method selection.
 
-#### TorchSDEIntegrator {#sec-torchsdeintegrator}
-**File:** `torchsde_integrator.py` (estimated ~800 lines)
+**Factory methods:**
 
-**Purpose:** PyTorch SDE integration with torchsde
+```python
+# Automatic selection based on noise structure
+SDEIntegratorFactory.auto(sde_system, backend=None)
 
-**Supported Methods:**
+# Direct method specification
+SDEIntegratorFactory.create(
+    sde_system, backend, method, dt, **options
+)
 
-- **euler**: Euler-Maruyama (strong order 0.5)
-- **heun**: Heun's method (strong order 1.0 for additive)
-- **srk**: Stochastic Runge-Kutta
-- **reversible_heun**: Reversible Heun (strong order 1.0)
+# Optimized for Monte Carlo simulations (backend selected automatically)
+SDEIntegratorFactory.for_monte_carlo(
+    sde_system, n_paths, **options
+)
+```
 
-**Key Features:**
+**Available SDE methods:**
 
-- GPU acceleration
-- Adaptive stepping
-- Noise structure exploitation
-- Adjoint method for gradients
+| Method | Backend | Convergence | Noise Type | Order |
+|--------|---------|-------------|------------|-------|
+| euler-maruyama | All | Strong 0.5 | General | 0.5 |
+| milstein | PyTorch/NumPy | Strong 1.0 | Diagonal | 1.0 |
+| reversible_heun | PyTorch/JAX | Strong 1.0 | Additive | 1.0 |
+| adaptive_heun | PyTorch | Strong 1.0 | Additive | 1.0 (adaptive) |
+| srk | PyTorch | Strong | General | Variable |
+| midpoint | PyTorch | Strong | General | Variable |
 
-**Example:**
+**Noise structure types:**
+
+- **Additive**: $g(x, u, t) = g(t)$ — diffusion independent of state
+- **Diagonal**: $g$ is diagonal matrix — independent noise channels
+- **Scalar**: $g$ is scalar — single noise source
+- **General**: Full matrix $g$ — correlated noise
+
+### TorchSDEIntegrator: PyTorch SDE Integration {#sec-torchsdeintegrator}
+
+**File:** `torchsde_integrator.py` (~800 lines)
+
+GPU-accelerated SDE integration using the `torchsde` library. Supports automatic differentiation through stochastic dynamics.
+
+**Supported methods:**
+
+- **euler**: Euler-Maruyama (strong order 0.5) — Itô and Stratonovich
+- **milstein**: Milstein method (strong order 1.0 for diagonal noise) — Itô only
+- **srk**: Stochastic Runge-Kutta (general noise) — Itô and Stratonovich
+- **midpoint**: Midpoint method — Stratonovich only
+- **reversible_heun**: Reversible Heun (strong order 1.0 for additive noise) — Stratonovich only
+- **adaptive_heun**: Adaptive Heun with error control — Itô and Stratonovich
+
+**Key features:**
+
+- GPU acceleration for large-scale stochastic simulations
+- Adaptive stepping with stochastic error control
+- Noise structure exploitation for efficiency
+- Adjoint method for memory-efficient gradients through SDEs
+- **SDE type compatibility**: Most methods support either Itô or Stratonovich (see method list)
+
+**Usage example:**
+
 ```{python}
-#| output: false
+#| label: ex-torchsde
+
 from cdesym.systems.base.numerical_integration.stochastic.torchsde_integrator import TorchSDEIntegrator
+
+# Create Ornstein-Uhlenbeck process: dx = -α*x*dt + σ*dW
+sde_system = OrnsteinUhlenbeck(alpha=2.0, sigma=0.3)
+
 integrator = TorchSDEIntegrator(
     sde_system,
-    method='adaptive_heun',
+    method='euler',  # Euler-Maruyama for Itô SDEs
     dt=0.01,
     backend='torch'
 )
-result = integrator.integrate(x0_sde_torch, u_func, t_span=(0, 10))
+
+x0 = torch.tensor([0.5])
+u_func = lambda t, x: torch.zeros(1)
+result = integrator.integrate(x0, u_func, t_span=(0, 10))
+
+print(f"Convergence type: {result['convergence_type']}")
+print(f"SDE type: {result['sde_type']}")
 ```
 
----
+### DiffraxSDEIntegrator: JAX SDE Integration {#sec-diffraxsdeintegrator}
 
-#### DiffraxSDEIntegrator {#sec-diffraxsdeintegrator}
-**File:** `diffrax_sde_integrator.py` (estimated ~750 lines)
+**File:** `diffrax_sde_integrator.py` (~750 lines)
 
-**Purpose:** JAX SDE integration with diffrax
+JAX-based SDE integration with XLA compilation and functional transformations. Excellent for optimization involving stochastic dynamics.
 
-**Supported Methods:**
+**Supported methods:**
 
 - **euler**: Euler-Maruyama
-- **heun**: Heun's method
-- **reversible_heun**: Reversible Heun
+- **heun**: Heun's method (if supported by diffrax)
+- **reversible_heun**: Time-reversible stochastic integration
 
-**Key Features:**
+**Key features:**
 
-- JAX transformations
-- XLA compilation
-- Custom noise support
-- Efficient for optimization
+- XLA compilation for near-C++ performance
+- JAX transformations (`jit`, `vmap`, `grad`) work seamlessly
+- Custom noise support for deterministic testing
+- Efficient for stochastic optimization
 
-**Example:**
+**Usage example:**
+
 ```{python}
-#| output: false
+#| label: ex-diffraxsde
+
 from cdesym.systems.base.numerical_integration.stochastic.diffrax_sde_integrator import DiffraxSDEIntegrator
+
+sde_system = OrnsteinUhlenbeck(alpha=2.0, sigma=0.3)
+
 integrator = DiffraxSDEIntegrator(
     sde_system,
     method='euler',
@@ -466,183 +656,189 @@ integrator = DiffraxSDEIntegrator(
     backend='jax',
     seed=SEED
 )
-result = integrator.integrate(x0_sde_jax, u_func, t_span=(0, 10))
+
+x0 = jnp.array([0.5])
+u_func = lambda t, x: jnp.zeros(1)
+result = integrator.integrate(x0, u_func, t_span=(0, 10))
+
+print(f"Method: {result['solver']}")
+print(f"Steps: {result['nsteps']}")
 ```
 
----
+### DiffEqPySDEIntegrator: Julia SDE Integration {#sec-diffeqpysdeintegrator}
 
-#### DiffEqPySDEIntegrator {#sec-diffeqpysdeintegrator}
-**File:** `diffeqpy_sde_integrator.py` (estimated ~850 lines)
+**File:** `diffeqpy_sde_integrator.py` (~850 lines)
 
-**Purpose:** Julia SDE solvers via DiffEqPy
+Access to Julia's comprehensive SDE solver ecosystem through Python bindings.
 
-**Supported Methods:**
+**Supported methods:**
 
 - Euler-Maruyama variants
-- Milstein
-- Stochastic Rosenbrock
-- Advanced Julia SDE methods
+- Milstein method
+- Stochastic Rosenbrock methods
+- Advanced Julia SDE algorithms
 
-**Key Features:**
+**Key features:**
 
 - Production-grade SDE solvers
 - Automatic noise structure detection
 - High-performance algorithms
+- Extensive method library
 
+**Usage example:**
 
-**Example:**
 ```{python}
-#| output: false
+#| label: ex-diffeqpysde
+
 from cdesym.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator import DiffEqPySDEIntegrator
+
+sde_system = OrnsteinUhlenbeck(alpha=2.0, sigma=0.3)
+
 integrator = DiffEqPySDEIntegrator(
     sde_system,
-    method='EM',
+    method='EM',  # Euler-Maruyama
     dt=0.01,
     backend='numpy',
     seed=SEED
 )
-result = integrator.integrate(x0_sde_numpy, u_func, t_span=(0, 10))
+
+x0 = np.array([0.5])
+u_func = lambda t, x: np.zeros(1)
+result = integrator.integrate(x0, u_func, t_span=(0, 10))
+
+print(f"Diffusion evaluations: {result['diffusion_evals']}")
 ```
 
----
+### CustomBrownianPath: Deterministic Noise for Testing {#sec-custombrownianpath}
 
-#### CustomBrownianPath {#sec-custombrownianpath}
 **File:** `custom_brownian.py` (160 lines)
 
-**Purpose:** Custom Brownian motion for deterministic testing
+Provides custom Brownian motion paths for deterministic testing and reproducibility. Implements diffrax's `AbstractPath` interface.
 
-**Key Features:**
+**Key features:**
 
 - User-provided noise increments
-- Diffrax AbstractPath interface
 - Deterministic testing support
-- Custom noise patterns
+- Custom noise patterns (e.g., zero noise, specific realizations)
+- Compatible with diffrax integrators
 
-**Example:**
+**Usage example:**
+
 ```{python}
-#| output: false
-# Zero noise for testing
-import jax.numpy as jnp
-from jax import random
-key = random.key(SEED)
+#| label: ex-custombrown
 
+from jax import random
 from cdesym.systems.base.numerical_integration.stochastic.custom_brownian import (
     CustomBrownianPath, create_custom_or_random_brownian
 )
-dW = jnp.zeros(1)
-brownian = CustomBrownianPath(0.0, 0.01, dW)
+from cdesym.systems.base.numerical_integration.stochastic.diffrax_sde_integrator import DiffraxSDEIntegrator
 
-# Or random noise
-brownian = create_custom_or_random_brownian(
-    key, 0.0, 0.01, shape=(nw,), dW=None
+sde_system = OrnsteinUhlenbeck(alpha=2.0, sigma=0.3)
+nw = sde_system.nw
+
+# Zero noise for deterministic testing
+dW = jnp.zeros((nw,))
+brownian = CustomBrownianPath(t0=0.0, t1=10.0, dW=dW)
+
+# Or generate random noise
+key = random.key(SEED)
+brownian_random = create_custom_or_random_brownian(
+    key, t0=0.0, t1=10.0, shape=(nw,), dW=None
 )
-```
 
----
+# Use in integration
+integrator = DiffraxSDEIntegrator(sde_system, method='euler', dt=0.01, backend='jax')
+x0 = jnp.array([0.5])
+u_func = lambda t, x: jnp.zeros(1)
 
-## Design Principles {#sec-design-principles}
-
-### 1. Backend Abstraction {#sec-1-backend-abstraction}
-
-All integrators work across backends:
-
-- **NumPy:** CPU, scipy, Julia integration
-- **PyTorch:** GPU, autograd, neural ODEs
-- **JAX:** XLA, functional, optimization
-
-### 2. Factory Pattern {#sec-2-factory-pattern}
-
-IntegratorFactory and SDEIntegratorFactory provide:
-
-- Automatic method selection
-- Backend-specific routing
-- Convenience constructors
-- Use case optimization
-
-### 3. Unified Result Types {#sec-3-unified-result-types}
-
-All integrators return TypedDict results:
-
-- **IntegrationResult** for ODEs
-- **SDEIntegrationResult** for SDEs
-- Consistent fields across backends
-- Optional fields for extra diagnostics
-
-### 4. Composition Not Inheritance {#sec-4-composition-not-inheritance}
-
-- Integrators compose with systems
-- No deep inheritance hierarchies
-- Clear separation of concerns
-- Easy to extend
-
-### 5. Performance Tracking {#sec-5-performance-tracking}
-Built-in statistics:
-```{python}
-#| output: false
-#| evaluate: false
-# integrator._stats = {
-#     'total_fev': int,      # Function evaluations
-#     'total_steps': int,    # Integration steps
-#     'total_time': float,   # Computation time
-# }
-```
-
-## Integration Result Types {#sec-integration-result-types}
-
-### IntegrationResult (ODE) {#sec-integrationresult-ode}
-```{python}
-#| output: false
-#| execute: false
-# {
-#     't': array,              # Time points (T,)
-#     'x': array,              # States (T, nx) - time-major
-#     'success': bool,         # Integration succeeded
-#     'message': str,          # Status message
-#     'nfev': int,             # Function evaluations
-#     'nsteps': int,           # Steps taken
-#     'integration_time': float,  # Wall time (seconds)
-#     'solver': str,           # Integrator name
-    
-#     # Optional (adaptive methods):
-#     'njev': int,             # Jacobian evaluations
-#     'nlu': int,              # LU decompositions
-#     'status': int,           # Solver status code
-#     'sol': object,           # Dense output (if requested)
-#     'dense_output': bool,    # Dense output available
-# }
-```
-
-### SDEIntegrationResult (SDE) {#sec-sdeintegrationresult-sde}
-```{python}
-#| output: false
-#| execute: false
-# {
-#     # All IntegrationResult fields, plus:
-#     'diffusion_evals': int,     # Diffusion function calls
-#     'noise_samples': array,     # Brownian increments used
-#     'n_paths': int,             # Number of trajectories
-#     'convergence_type': str,    # 'strong' or 'weak'
-#     'sde_type': str,            # 'ito' or 'stratonovich'
-#     'noise_type': str,          # 'additive', 'multiplicative', etc.
-    
-#     # For Monte Carlo (n_paths > 1):
-#     'x': array,                 # (n_paths, T, nx)
-#     'statistics': dict,         # mean, std, quantiles
-# }
-```
-
-## Usage Examples {#sec-usage-examples}
-
-### Example 1: Simple ODE Integration (NumPy) {#sec-example-1-simple-ode-integration-numpy}
-```{python}
-#| output: false
-# Create integrator automatically
-integrator = IntegratorFactory.auto(system)
-
-# Integrate
 result = integrator.integrate(
-    x0=np.array([0.1, 0.0]),
-    u_func=lambda t, x: np.zeros(1),
+    x0, u_func, t_span=(0, 10), brownian_path=brownian
+)
+
+print("Deterministic SDE integration (zero noise)")
+```
+
+**Important notes:**
+
+1. **Time span matching**: `CustomBrownianPath(t0, t1, dW)` must match `t_span`
+2. **Single dW for entire integration**: Unlike `step()`, provide one `dW` for the full interval
+3. **Automatic interpolation**: Diffrax handles internal time queries
+
+## Integration Result Types {#sec-result-types}
+
+### IntegrationResult (Deterministic ODEs) {#sec-integrationresult}
+
+All ODE integrators return a TypedDict with consistent fields:
+
+```python
+{
+    't': array,              # Time points (T,)
+    'x': array,              # States (T, nx) - time-major format
+    'success': bool,         # Integration succeeded
+    'message': str,          # Status message
+    'nfev': int,             # Function evaluations
+    'nsteps': int,           # Steps taken
+    'integration_time': float,  # Wall clock time (seconds)
+    'solver': str,           # Integrator name
+    
+    # Optional (adaptive methods only):
+    'njev': int,             # Jacobian evaluations
+    'nlu': int,              # LU decompositions
+    'status': int,           # Solver-specific status code
+    'sol': object,           # Dense output object (if requested)
+    'dense_output': bool,    # Dense output available
+}
+```
+
+### SDEIntegrationResult (Stochastic SDEs) {#sec-sdeintegrationresult}
+
+SDE integrators extend `IntegrationResult` with stochastic-specific fields:
+
+```python
+{
+    # All IntegrationResult fields, plus:
+    'diffusion_evals': int,     # Diffusion function calls
+    'noise_samples': array,     # Brownian increments used
+    'n_paths': int,             # Number of trajectories
+    'convergence_type': str,    # 'strong' or 'weak'
+    'sde_type': str,            # 'ito' or 'stratonovich'
+    'noise_type': str,          # 'additive', 'diagonal', 'scalar', 'general'
+    
+    # For Monte Carlo (n_paths > 1):
+    'x': array,                 # (n_paths, T, nx)
+    'statistics': dict,         # {'mean', 'std', 'q25', 'q50', 'q75'}
+}
+```
+
+## Practical Usage Examples {#sec-usage-examples}
+
+::: {.callout-note}
+## Recommended Usage Pattern
+
+The examples below show **direct integrator instantiation for documentation purposes**. In practice, most users should use the system's `integrate()` method which delegates to the appropriate integrator automatically:
+
+```python
+# Recommended approach
+result = system.integrate(x0=x0, method='RK45', t_span=(0, 10))
+
+# Advanced approach (shown in examples below)
+integrator = IntegratorFactory.auto(system)
+result = integrator.integrate(x0, u_func, t_span=(0, 10))
+```
+:::
+
+### Example 1: Recommended High-Level Interface
+
+```{python}
+#| label: ex-recommended
+
+system = Pendulum(m_val=1.0, l_val=0.5)
+
+# Most users should use this approach - system handles delegation
+x0 = np.array([0.1, 0.0])
+result = system.integrate(
+    x0=x0,
+    method='RK45',  # Optional: auto-selected if not specified
     t_span=(0.0, 10.0)
 )
 
@@ -651,158 +847,241 @@ print(f"Steps: {result['nsteps']}")
 print(f"Success: {result['success']}")
 ```
 
-### Example 2: High-Accuracy Julia Integration {#sec-example-3-high-accuracy-julia-integration}
+### Example 2: Advanced - Direct Integrator Access
+
 ```{python}
-#| output: false
-from cdesym import ContinuousSymbolicSystem, IntegratorFactory
+#| label: ex-quickstart
 
-# Create Julia integrator with high accuracy
-integrator = IntegratorFactory.for_julia(
-    system,
-    algorithm='Vern9',  # 9th order
-    reltol=1e-12,
-    abstol=1e-14
-)
+# Advanced: Direct integrator instantiation for reuse or fine control
+system = Pendulum(m_val=1.0, l_val=0.5)
+integrator = IntegratorFactory.auto(system)
 
-result = integrator.integrate(x0_pendulum_numpy, u_func, t_span=(0, 100))
-print(f"Accurate to {result['nfev']} function evaluations")
+# Can reuse integrator for multiple integrations
+x0 = np.array([0.1, 0.0])
+u_func = lambda t, x: np.zeros(1)
+result = integrator.integrate(x0, u_func, t_span=(0.0, 10.0))
+
+print(f"Method: {result['solver']}")
+print(f"Steps: {result['nsteps']}")
 ```
 
-### Example 3: Stochastic SDE Integration {#sec-example-4-stochastic-sde-integration}
+### Example 3: High-Accuracy Julia Integration
+
 ```{python}
-#| output: false
-# Create SDE integrator
-integrator = SDEIntegratorFactory.create(
-    sde_system,
-    backend='torch',
-    method='adaptive_heun',
-    dt=0.01,
-    seed=SEED
+#| label: ex-julia-accuracy
+
+# Recommended: System-level interface
+system = Pendulum(m_val=1.0, l_val=0.5)
+x0 = np.array([1.0, 0.0])
+
+result = system.integrate(
+    x0=x0,
+    method='Vern9',  # Julia's 9th order method
+    rtol=1e-12,
+    atol=1e-14,
+    t_span=(0, 100)
 )
 
-# Single trajectory
-result = integrator.integrate(x0_sde_torch, u_func, t_span=(0, 10))
-# Integrators do not return noise type, only sde_system.integrate() would
-# print(f"Noise type: {result['noise_type']}")
-print(f"SDE type: {result['sde_type']}")
+print(f"Function evaluations: {result['nfev']}")
+print(f"Integration time: {result['integration_time']:.4f}s")
+```
 
-# typical UI (also demonstrating temporary backend switching)
-with sde_system.use_backend('torch'):
-    result = sde_system.integrate(
-        x0=x0_sde_torch,
-        method='adaptive_heun',
-        dt=0.01,
-        seed=SEED
+### Example 4: GPU-Accelerated Neural ODE
+
+```{python}
+#| label: ex-neural-ode
+
+system = Pendulum(m_val=1.0, l_val=0.5)
+
+# Switch to PyTorch backend for gradients
+with system.use_backend('torch'):
+    x0 = torch.tensor([1.0, 0.0], requires_grad=True)
+    
+    result = system.integrate(
+        x0=x0,
+        method='dopri5',
+        device='cpu',  # Use 'cuda:0' for GPU
+        t_span=(0, 10)
     )
-
-print(f"Noise type: {result['noise_type']}")
-print(f"SDE type: {result['sde_type']}")
+    
+    # Gradient computation works seamlessly
+    final_state = result['x'][-1]
+    loss = final_state.sum()
+    loss.backward()
+    
+    print(f"Gradient w.r.t. x0: {x0.grad}")
 ```
 
-### Example 4: Monte Carlo SDE Simulation {#sec-example-5-monte-carlo-sde-simulation}
-```{python}
-#| output: false
-# Multiple trajectories for uncertainty quantification
-result = integrator.integrate_monte_carlo(
-    x0=np.array([1.0]),
-    u_func=lambda t, x: np.zeros(1),
-    t_span=(0, 10),
-    n_paths=1000
-)
+### Example 5: Stochastic Simulation with Monte Carlo
 
-# Get statistics
+```{python}
+#| label: ex-monte-carlo
 
 from cdesym.systems.base.numerical_integration.stochastic import get_trajectory_statistics
-stats = get_trajectory_statistics(result)
 
-print(f"Mean at t=10: {stats['mean'][-1]}")
-print(f"Std at t=10: {stats['std'][-1]}")
-print(f"95% CI: [{stats['q25'][-1]}, {stats['q75'][-1]}]")
-```
+# Create stochastic system
+sde_system = OrnsteinUhlenbeck(alpha=2.0, sigma=0.3)
 
-### Example 5: Custom Noise (Deterministic Testing) {#sec-example-6-custom-noise-deterministic-testing}
-```{python}
-#| output: false
-import jax.numpy as jnp
-from cdesym.systems.base.numerical_integration.stochastic.custom_brownian import (
-    CustomBrownianPath
+# Use integrator for Monte Carlo (don't specify backend, it's handled internally)
+integrator = SDEIntegratorFactory.for_monte_carlo(
+    sde_system, n_paths=1000
 )
 
-# Zero noise for deterministic testing
-# NOTE: For integrate(), provide ONE dW that spans the ENTIRE integration
-# This is different from step() which uses per-step dW
-dW = jnp.zeros((nw,))
-brownian = CustomBrownianPath(0.0, 1.0, dW)  # t0=0, t1=1 matching t_span
+x0 = np.array([1.0])
+u_func = lambda t, x: np.zeros(1)
+result = integrator.integrate_monte_carlo(
+    x0, u_func, t_span=(0, 10), n_paths=1000
+)
 
-# need an integrator in JAX for this
+# Extract statistics
+stats = get_trajectory_statistics(result)
+
+# Extract scalar values from arrays
+mean_final = float(stats['mean'][-1].flat[0])
+std_final = float(stats['std'][-1].flat[0])
+
+print(f"Mean at t=10: {mean_final:.4f}")
+print(f"Std at t=10: {std_final:.4f}")
+```
+
+### Example 6: Deterministic Testing with Custom Noise
+
+```{python}
+#| label: ex-custom-noise
+
+from cdesym.systems.base.numerical_integration.stochastic.custom_brownian import CustomBrownianPath
+
+sde_system = OrnsteinUhlenbeck(alpha=2.0, sigma=0.3)
+nw = sde_system.nw
+
+# Zero noise for deterministic testing
+dW = jnp.zeros((nw,))
+brownian = CustomBrownianPath(t0=0.0, t1=10.0, dW=dW)
+
+# Create JAX integrator
 integrator = SDEIntegratorFactory.create(
     sde_system,
     backend='jax',
-    method='Heun',  # Use 'Euler' not 'Heun' (check available methods)
+    method='Euler',
     dt=0.01,
     seed=SEED
 )
 
-# Use in integration with custom Brownian path
+# Integrate with custom noise
+x0 = jnp.array([0.5])
+u_func = lambda t, x: jnp.zeros(1)
 result = integrator.integrate(
-    x0_sde_jax, 
-    u_func, 
-    t_span=(0, 1),
-    brownian_path=brownian  # Pass the custom path
+    x0, u_func, t_span=(0, 10), brownian_path=brownian
 )
+
+print(f"Deterministic integration complete")
+print(f"Final state: {result['x'][-1]}")
 ```
 
-**Important notes for custom Brownian paths:**
+## Integrator Selection Guide {#sec-selection-guide}
 
-1. **Time span matching**: The `CustomBrownianPath(t0, t1, dW)` should have `t0` and `t1` matching your integration `t_span`
-2. **Single dW for entire integration**: Unlike `step()` where you provide per-step `dW`, for `integrate()` you provide ONE `dW` representing the entire interval
-3. **Diffrax handles interpolation**: Diffrax will internally query the Brownian path at different times using the `evaluate()` method
+### By Use Case
 
-## Integrator Selection Guide {#sec-integrator-selection-guide}
+| Use Case | Recommended Approach | Rationale |
+|----------|---------------------|-----------|
+| General ODE | `IntegratorFactory.for_production(system)` | LSODA auto-stiffness detection |
+| Neural ODE | `IntegratorFactory.for_neural_ode(system)` | Adjoint method for memory efficiency |
+| Optimization | `IntegratorFactory.for_optimization(system)` | JAX with XLA compilation |
+| High Accuracy | `IntegratorFactory.for_julia(system, 'Vern9')` | Julia 9th order methods |
+| Stiff ODE | `ScipyIntegrator(system, method='BDF')` | Backward differentiation |
+| Simple ODE | `RK4Integrator(system, dt=0.01)` | Classic fixed-step |
+| General SDE | `SDEIntegratorFactory.auto(sde_system)` | Automatic noise detection |
+| Monte Carlo | `SDEIntegratorFactory.for_monte_carlo(...)` | Parallelized trajectories |
 
-### By Use Case {#sec-by-use-case}
+### By Backend Capabilities
 
-| Use Case | Recommended Integrator | Reason |
-|----------|----------------------|---------|
-| General ODE | `IntegratorFactory.for_production(system)` | LSODA auto-stiffness |
-| Neural ODE | `IntegratorFactory.for_neural_ode(system)` | TorchDiffEq adjoint |
-| Optimization | `IntegratorFactory.for_optimization(system)` | Diffrax JAX |
-| High Accuracy | `IntegratorFactory.for_julia(system, 'Vern9')` | Julia 9th order |
-| Stiff ODE | `ScipyIntegrator(system, method='BDF')` | Implicit BDF |
-| Simple ODE | `RK4Integrator(system, dt=0.01)` | Classic RK4 |
-| SDE (general) | `SDEIntegratorFactory.auto(sde_system)` | Best for noise type |
-| Monte Carlo | `SDEIntegratorFactory.for_monte_carlo(...)` | Parallelized |
+| Backend | ODE Integrator | SDE Integrator | Best For |
+|---------|---------------|----------------|----------|
+| NumPy | ScipyIntegrator, DiffEqPyIntegrator | DiffEqPySDEIntegrator | General purpose, highest compatibility |
+| PyTorch | TorchDiffEqIntegrator | TorchSDEIntegrator | GPU acceleration, neural networks |
+| JAX | DiffraxIntegrator | DiffraxSDEIntegrator | Optimization, functional programming |
 
-### By Backend {#sec-by-backend}
+### By System Properties
 
-| Backend | ODE Integrator | SDE Integrator |
-|---------|---------------|----------------|
-| NumPy | ScipyIntegrator, DiffEqPyIntegrator | (limited support) |
-| PyTorch | TorchDiffEqIntegrator | TorchSDEIntegrator |
-| JAX | DiffraxIntegrator | DiffraxSDEIntegrator |
+| System Type | Best Method | Convergence Order | Notes |
+|-------------|-------------|-------------------|-------|
+| Non-stiff | RK45, Tsit5, dopri5 | 5(4) | General purpose |
+| Stiff | BDF, Radau, Rodas5 | Variable | Implicit methods required |
+| Very stiff | BDF, LSODA | Variable | Automatic stiffness detection |
+| High accuracy | Vern9, DOP853 | 9(8) or 8(5,3) | For precision-critical applications |
+| Real-time | RK4, euler | 4 or 1 | Fixed step, predictable timing |
+| Additive noise SDE | reversible_heun, adaptive_heun | 1.0 (strong) | Exploits simplified noise structure |
+| General SDE | Euler-Maruyama | 0.5 (strong) | Robust for any noise type |
+| Diagonal noise SDE | Milstein | 1.0 (strong) | Higher order for independent channels |
 
-### By System Properties {#sec-by-system-properties}
+## Design Principles {#sec-design-principles}
 
-| System Type | Best Integrator |
-|-------------|-----------------|
-| Non-stiff | RK45, Tsit5, dopri5 |
-| Stiff | BDF, Radau, Rodas5 |
-| High accuracy | Vern9, DOP853 |
-| Real-time | RK4, euler (fixed-step) |
-| Additive noise SDE | Heun (strong order 1.0) |
-| General SDE | Euler-Maruyama |
+### Backend Abstraction
 
-## Key Strengths {#sec-key-strengths}
+All integrators provide consistent interfaces across computational backends. Switch between NumPy, PyTorch, and JAX without changing integration code:
 
-1. **Multi-Backend Support** - Seamless NumPy/PyTorch/JAX switching
-2. **Extensive Method Library** - 40+ integration methods
-3. **Factory Pattern** - Automatic method selection
-4. **Type Safety** - TypedDict results with IDE support
-5. **Performance** - GPU acceleration, XLA compilation, Julia performance
-6. **Flexibility** - Fixed and adaptive stepping
-7. **Stochastic Support** - Full SDE integration framework
-8. **Noise Structure** - Exploits additive/diagonal/scalar noise
-9. **Monte Carlo** - Built-in multi-trajectory simulation
-10. **Testing** - Custom noise for deterministic testing
+```python
+# Same interface, different backends
+integrator_numpy = IntegratorFactory.auto(system, backend='numpy')
+integrator_torch = IntegratorFactory.auto(system, backend='torch')
+integrator_jax = IntegratorFactory.auto(system, backend='jax')
+```
 
-This framework enables state-of-the-art numerical integration for control theory and machine learning applications!
+### Factory Pattern for Complexity Management
+
+Factories encapsulate the complexity of choosing appropriate integrators:
+
+```python
+# User specifies intent, factory handles details
+IntegratorFactory.for_production(system)  # → LSODA
+IntegratorFactory.for_neural_ode(system)  # → dopri5 with adjoint
+IntegratorFactory.for_optimization(system)  # → tsit5 with JAX
+```
+
+### Unified Result Types
+
+TypedDict results provide consistent structure with IDE support:
+
+```python
+result: IntegrationResult = integrator.integrate(...)
+# IDE knows 'success', 'nfev', 'x', 't' are available
+```
+
+### Composition Over Inheritance
+
+Integrators compose with systems rather than inheriting deeply:
+
+```python
+class Integrator:
+    def __init__(self, system: ContinuousSystemBase):
+        self.system = system  # Composition
+```
+
+### Built-in Performance Tracking
+
+All integrators track statistics automatically:
+
+```python
+print(f"Function evaluations: {integrator._stats['total_fev']}")
+print(f"Integration steps: {integrator._stats['total_steps']}")
+print(f"Computation time: {integrator._stats['total_time']:.4f}s")
+```
+
+## Key Strengths {#sec-strengths}
+
+1. **Multi-backend support**: Seamless NumPy/PyTorch/JAX switching
+2. **Extensive method library**: 40+ integration methods across ODE and SDE
+3. **Intelligent factories**: Automatic method selection based on system properties
+4. **Type safety**: TypedDict results with full IDE support
+5. **GPU acceleration**: First-class support via PyTorch and JAX
+6. **XLA compilation**: Near-native performance with JAX
+7. **Julia integration**: Access to world-class DifferentialEquations.jl ecosystem
+8. **SDE support**: Comprehensive stochastic integration framework
+9. **Noise exploitation**: Automatic detection and optimization for noise structure
+10. **Monte Carlo**: Built-in multi-trajectory simulation
+11. **Custom noise**: Deterministic testing with user-provided Brownian paths
+12. **Production ready**: Professional error control and performance tracking
+
+## Summary
+
+The ControlDESymulation integration framework provides a comprehensive, production-ready solution for numerical integration across deterministic and stochastic systems. With support for multiple backends, extensive method libraries, and intelligent automation through factory patterns, it enables efficient development of control theory and machine learning applications requiring state-of-the-art numerical integration.
