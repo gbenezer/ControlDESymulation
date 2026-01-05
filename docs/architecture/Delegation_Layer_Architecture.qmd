@@ -319,6 +319,7 @@ The `SymbolicValidator` performs comprehensive validation of symbolic system def
 **Validation checks (automatic during system creation):**
 
 **Required validations:**
+
 - ✓ `state_vars` is list of `sp.Symbol`
 - ✓ `control_vars` is list of `sp.Symbol`
 - ✓ `_f_sym` is `sp.Matrix` with correct dimensions
@@ -326,6 +327,7 @@ The `SymbolicValidator` performs comprehensive validation of symbolic system def
 - ✓ `order` divides `nx` evenly (nx % order == 0)
 
 **Output function validations (if defined):**
+
 - ✓ `_h_sym` is `sp.Matrix`
 - ✓ `_h_sym` only depends on `state_vars` (not control)
 - ✓ `output_vars` matches `_h_sym` dimensions
@@ -408,13 +410,16 @@ The `LinearizationEngine` computes system linearizations (Jacobians) at equilibr
 **Mathematical forms:**
 
 **Continuous systems:**
+
 $$\delta\dot{x} = A\delta x + B\delta u$$
 
 where:
+
 - $A = \frac{\partial f}{\partial x}\bigg|_{(x_{eq}, u_{eq})} \in \mathbb{R}^{n_x \times n_x}$
 - $B = \frac{\partial f}{\partial u}\bigg|_{(x_{eq}, u_{eq})} \in \mathbb{R}^{n_x \times n_u}$
 
 **Discrete systems:**
+
 $$\delta x[k+1] = A_d\delta x[k] + B_d\delta u[k]$$
 
 **User-facing interface:**
@@ -459,9 +464,12 @@ The `ObservationEngine` handles output function evaluation (y = h(x)) and output
 $$y = h(x)$$
 
 Output linearization:
+
 $$\delta y = C\delta x$$
 
-where $C = \frac{\partial h}{\partial x}\bigg|_{x_{eq}} \in \mathbb{R}^{n_y \times n_x}$
+where
+
+$C = \frac{\partial h}{\partial x}\bigg|_{x_{eq}} \in \mathbb{R}^{n_y \times n_x}$
 
 **User-facing interface:**
 
@@ -507,7 +515,10 @@ The `DiffusionHandler` generates and caches diffusion functions for stochastic s
 
 $$dx = f(x, u)dt + g(x, u)dW$$
 
-Diffusion matrix $g(x, u) \in \mathbb{R}^{n_x \times n_w}$ where:
+Diffusion matrix 
+
+$g(x, u) \in \mathbb{R}^{n_x \times n_w}$ where:
+
 - $n_x$: state dimension
 - $n_w$: number of independent Wiener processes
 
