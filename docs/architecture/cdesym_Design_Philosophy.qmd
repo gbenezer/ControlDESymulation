@@ -30,14 +30,14 @@ The library consists of **~36,500 lines** across **39 core files** organized int
 
 **Principle:** *Types are not just annotations—they are the architecture.*
 
-The entire framework is built on a **foundational type system** (6,500 lines, 200+ types) that provides:
+The entire framework is built on a **foundational type system** (200+ types) that provides:
 
 - **Semantic Clarity:** `StateVector`, `GainMatrix` instead of `np.ndarray`
 - **Type Safety:** Static checking via mypy/pyright catches errors before runtime
 - **IDE Support:** Autocomplete knows `result['t']` exists and is `TimePoints`
 - **Self-Documentation:** Type signatures encode mathematical constraints
 
-```{python}
+```python
 # Compare:
 def bad(x, u):  # What are these? What dimensions? What backend?
     return x + u
@@ -58,7 +58,7 @@ def good(x: StateVector, u: ControlVector) -> StateVector:
 
 Traditional OOP would create deep inheritance hierarchies. We rejected this in favor of **composition via delegation**:
 
-```{python}
+```python
 # NOT this (deep inheritance):
 class System(BackendManager, CodeGenerator, DynamicsEvaluator, ...):
     pass  # 50 methods, unclear responsibilities
@@ -74,6 +74,7 @@ class System:
 ```
 
 **Benefits:**
+
 - **Single Responsibility:** Each utility does one thing well
 - **Testability:** Test utilities in isolation
 - **Reusability:** Use BackendManager anywhere
@@ -90,7 +91,7 @@ class System:
 
 Supporting multiple backends is not a feature—it's a **design constraint** that forces better architecture:
 
-```{python}
+```python
 # Same code works with all backends
 def dynamics(x: StateVector, u: ControlVector) -> StateVector:
     # x can be np.ndarray, torch.Tensor, or jax.Array
@@ -102,6 +103,7 @@ system.set_default_device('cuda:0')
 ```
 
 **Architectural Implications:**
+
 1. **ArrayLike Union Type:** All array types accept `Union[np.ndarray, torch.Tensor, jnp.ndarray]`
 2. **BackendManager Utility:** Centralized backend detection and conversion
 3. **Per-Backend Caching:** Code generated once per backend, then cached
@@ -118,13 +120,15 @@ system.set_default_device('cuda:0')
 We eliminated ~1,800 lines of duplication between continuous and discrete systems through **strategic abstraction**:
 
 **Before:** Continuous and discrete systems each had:
-- Parameter handling (200 lines × 2)
-- Backend management (250 lines × 2)
-- Code generation (300 lines × 2)
-- Symbolic validation (350 lines × 2)
-- Configuration persistence (200 lines × 2)
+
+- Parameter handling
+- Backend management
+- Code generation
+- Symbolic validation
+- Configuration persistence
 
 **After:** SymbolicSystemBase provides shared functionality:
+
 - All parameter logic: **ONE** implementation
 - All backend logic: **ONE** BackendManager
 - All code generation: **ONE** CodeGenerator
@@ -145,7 +149,7 @@ This isn't inheritance for convenience—it's **strategic abstraction to elimina
 
 **Principle:** *Never return plain dictionaries—use TypedDict for structure and safety.*
 
-```{python}
+```python
 # BAD: Plain dict (no IDE support, no type checking)
 def integrate() -> dict:
     return {'t': t, 'x': x, 'success': True}
@@ -163,6 +167,7 @@ def integrate() -> IntegrationResult:
 ```
 
 **Benefits:**
+
 - Type checker ensures all required fields present
 - IDE autocompletes field names
 - Documentation embedded in type definition
@@ -170,6 +175,7 @@ def integrate() -> IntegrationResult:
 - Refactoring safe (rename propagates)
 
 **Used Throughout:**
+
 - `IntegrationResult` - ODE integration
 - `SDEIntegrationResult` - SDE integration  
 - `ExecutionStats` - Performance metrics
@@ -184,7 +190,7 @@ def integrate() -> IntegrationResult:
 
 Protocols enable **duck typing with type safety**:
 
-```{python}
+```python
 from typing import Protocol
 
 class DynamicalSystemProtocol(Protocol):
@@ -215,6 +221,7 @@ system: DynamicalSystemProtocol = MySystem()  # Type checker approves!
 ```
 
 **Benefits:**
+
 - No inheritance coupling
 - Structural subtyping (like Go interfaces)
 - Easy to implement interfaces
@@ -229,7 +236,7 @@ system: DynamicalSystemProtocol = MySystem()  # Type checker approves!
 
 Creating integrators involves choosing backends, methods, and configurations. Factories simplify:
 
-```{python}
+```python
 # Instead of this complexity:
 if backend == 'numpy':
     if method == 'RK45':
@@ -249,6 +256,7 @@ integrator = IntegratorFactory.for_neural_ode(system)
 ```
 
 **Factory Methods:**
+
 - `auto()` - Best for system/backend
 - `for_production()` - LSODA/AutoTsit5
 - `for_optimization()` - JAX tsit5
@@ -265,12 +273,14 @@ integrator = IntegratorFactory.for_neural_ode(system)
 **Principle:** *Names should convey mathematical meaning, not implementation details.*
 
 **Good Semantic Names:**
+
 - `StateVector` not `ArrayLike` - conveys it's a state
 - `GainMatrix` not `Matrix` - conveys it's for feedback control
 - `DynamicsEvaluator` not `FunctionCaller` - conveys purpose
 - `LinearizationEngine` not `JacobianComputer` - conveys operation
 
 **Bad Implementation Names:**
+
 - `data` - what data?
 - `arr1`, `arr2` - meaningless
 - `compute()` - compute what?
@@ -285,15 +295,15 @@ integrator = IntegratorFactory.for_neural_ode(system)
 **Principle:** *Simple things should be simple, complex things should be possible.*
 
 **Level 1 - Simple (Beginner):**
-```{python}
+```python
 from controldesymulation.examples import Pendulum
 
 system = Pendulum()
-result = system.simulate(x0, u=None, t_span=(0, 10))
+result = system.simulate(x0, u=np.zeros(1), t_span=(0, 10))
 ```
 
 **Level 2 - Intermediate:**
-```{python}
+```python
 from controldesymulation import ContinuousSymbolicSystem
 import sympy as sp
 
@@ -308,10 +318,10 @@ class MySystem(ContinuousSymbolicSystem):
 ```
 
 **Level 3 - Advanced (Expert):**
-```{python}
+```python
 # Multi-backend, custom integrator, GPU acceleration
 system.set_default_backend('torch')
-system.set_default_device('cuda:0')
+system.to_device('cuda:0')
 
 integrator = IntegratorFactory.create(
     system,
@@ -331,6 +341,7 @@ result = integrator.integrate(
 ```
 
 **Principle Applied:**
+
 - Default arguments for common cases
 - Progressive power through optional parameters
 - Expert features available but not mandatory
@@ -345,9 +356,10 @@ The library consists of 4 distinct architectural layers, each with clear respons
 
 **Purpose:** Foundational types and structured results
 
-**Files:** 7 modules, 6,481 lines, 200+ types
+**Files:** 7 modules, 200+ types
 
 **Key Components:**
+
 - `core.py` - Vectors, matrices, functions
 - `backends.py` - Backend enums, configs
 - `trajectories.py` - Time series results
@@ -357,6 +369,7 @@ The library consists of 4 distinct architectural layers, each with clear respons
 - `utilities.py` - Type guards, helpers
 
 **Design Principles:**
+
 - Semantic over structural naming
 - Backend-agnostic unions
 - TypedDict for all results
@@ -370,30 +383,35 @@ The library consists of 4 distinct architectural layers, each with clear respons
 
 **Purpose:** Specialized utilities via composition
 
-**Files:** 11 modules, 7,198 lines
+**Files:** 11 modules
 
 **Key Components:**
 
 **Core Utilities:**
-- `BackendManager` (545 lines) - Multi-backend support
-- `CodeGenerator` (565 lines) - Symbolic → numerical
-- `EquilibriumHandler` (221 lines) - Named equilibria
-- `SymbolicValidator` (718 lines) - System validation
+
+- `BackendManager` - Multi-backend support
+- `CodeGenerator` - Symbolic → numerical
+- `EquilibriumHandler` - Named equilibria
+- `SymbolicValidator` - System validation
 
 **Deterministic Services:**
-- `DynamicsEvaluator` (576 lines) - Forward dynamics
-- `LinearizationEngine` (907 lines) - Jacobians
-- `ObservationEngine` (628 lines) - Output evaluation
+
+- `DynamicsEvaluator` - Forward dynamics
+- `LinearizationEngine` - Jacobians
+- `ObservationEngine` - Output evaluation
 
 **Stochastic Services:**
-- `DiffusionHandler` (1,069 lines) - SDE diffusion
-- `NoiseCharacterizer` (692 lines) - Noise analysis
-- `SDEValidator` (544 lines) - SDE validation
+
+- `DiffusionHandler` - SDE diffusion
+- `NoiseCharacterizer` - Noise analysis
+- `SDEValidator` - SDE validation
 
 **Low-Level:**
-- `codegen_utils` (733 lines) - SymPy code generation
+
+- `codegen_utils` - SymPy code generation
 
 **Design Principles:**
+
 - Single responsibility per utility
 - Composition not inheritance
 - Dependency injection
@@ -407,28 +425,31 @@ The library consists of 4 distinct architectural layers, each with clear respons
 
 **Purpose:** Multi-backend numerical integration
 
-**Files:** 13 modules, ~10,000 lines
+**Files:** 13 modules
 
 **Key Components:**
 
 **Deterministic (ODE):**
-- `IntegratorBase` (512 lines) - Abstract interface
-- `IntegratorFactory` (1,267 lines) - Creation
-- `ScipyIntegrator` (~620 lines) - NumPy scipy
-- `TorchDiffEqIntegrator` (~800 lines) - PyTorch GPU
-- `DiffraxIntegrator` (~700 lines) - JAX XLA
-- `DiffEqPyIntegrator` (~900 lines) - Julia solvers
-- `FixedStepIntegrators` (~600 lines) - Manual methods
+
+- `IntegratorBase` - Abstract interface
+- `IntegratorFactory` - Creation
+- `ScipyIntegrator` - NumPy scipy
+- `TorchDiffEqIntegrator` - PyTorch GPU
+- `DiffraxIntegrator` - JAX XLA
+- `DiffEqPyIntegrator` - Julia solvers
+- `FixedStepIntegrators` - Manual methods
 
 **Stochastic (SDE):**
-- `SDEIntegratorBase` (1,080 lines) - SDE interface
-- `SDEIntegratorFactory` (~1,000 lines) - SDE creation
-- `TorchSDEIntegrator` (~800 lines) - PyTorch SDE
-- `DiffraxSDEIntegrator` (~750 lines) - JAX SDE
-- `DiffEqPySDEIntegrator` (~850 lines) - Julia SDE
-- `CustomBrownianPath` (160 lines) - Custom noise
+
+- `SDEIntegratorBase` - SDE interface
+- `SDEIntegratorFactory` - SDE creation
+- `TorchSDEIntegrator` - PyTorch SDE
+- `DiffraxSDEIntegrator` - JAX SDE
+- `DiffEqPySDEIntegrator` - Julia SDE
+- `CustomBrownianPath` - Custom noise
 
 **Design Principles:**
+
 - Factory pattern for creation
 - Unified result types (TypedDict)
 - Backend abstraction
@@ -444,12 +465,14 @@ The library consists of 4 distinct architectural layers, each with clear respons
 
 **Purpose:** Symbolic system definition and high-level interface
 
-**Files:** 8 modules, 12,820 lines
+**Files:** 8 modules
 
 **Key Components:**
 
 **Layer 0 - Foundation:**
-- `SymbolicSystemBase` (1,678 lines) - Time-agnostic base
+
+- `SymbolicSystemBase` - Time-agnostic base
+
   - Symbolic variables/parameters
   - Code generation orchestration
   - Backend management
@@ -457,21 +480,26 @@ The library consists of 4 distinct architectural layers, each with clear respons
   - Config persistence
 
 **Layer 1 - Time-Domain Bases:**
-- `ContinuousSystemBase` (915 lines) - Continuous interface
-- `DiscreteSystemBase` (487 lines) - Discrete interface
+
+- `ContinuousSystemBase` - Continuous interface
+- `DiscreteSystemBase` - Discrete interface
 
 **Layer 2 - Concrete Implementations:**
-- `ContinuousSymbolicSystem` (1,318 lines) - Continuous ODE
-- `DiscreteSymbolicSystem` (1,020 lines) - Discrete map
+
+- `ContinuousSymbolicSystem` - Continuous ODE
+- `DiscreteSymbolicSystem` - Discrete map
 
 **Layer 3 - Stochastic Extensions:**
-- `ContinuousStochasticSystem` (1,103 lines) - Continuous SDE
-- `DiscreteStochasticSystem` (1,383 lines) - Discrete stochastic
+
+- `ContinuousStochasticSystem` - Continuous SDE
+- `DiscreteStochasticSystem` - Discrete stochastic
 
 **Special:**
-- `DiscretizedSystem` (4,916 lines) - Continuous → discrete
+
+- `DiscretizedSystem` - Continuous → discrete
 
 **Design Principles:**
+
 - Cooperative multiple inheritance (strategic, not arbitrary)
 - Zero code duplication
 - Template method pattern
@@ -489,7 +517,7 @@ The library consists of 4 distinct architectural layers, each with clear respons
 
 **How:** Base class defines workflow, subclasses fill in details
 
-```{python}
+```python
 class SymbolicSystemBase(ABC):
     def __init__(self, *args, **kwargs):
         # 1. Call user's define_system()
@@ -520,7 +548,7 @@ class SymbolicSystemBase(ABC):
 
 **How:** Factory methods create appropriate concrete classes
 
-```{python}
+```python
 class IntegratorFactory:
     @classmethod
     def create(cls, system, backend, method, **opts):
@@ -552,7 +580,7 @@ class IntegratorFactory:
 
 **How:** Different algorithms (strategies) with same interface
 
-```{python}
+```python
 # All integrators implement same interface
 class IntegratorBase(ABC):
     @abstractmethod
@@ -577,7 +605,7 @@ result = integrator.integrate(x0, u_func, t_span)
 
 **How:** Dependencies injected via constructor
 
-```{python}
+```python
 class DynamicsEvaluator:
     def __init__(
         self,
@@ -601,7 +629,7 @@ class DynamicsEvaluator:
 
 **How:** Generate/compile on first use, cache result
 
-```{python}
+```python
 class CodeGenerator:
     def generate_dynamics(self, backend):
         # Check cache first
@@ -626,7 +654,7 @@ class CodeGenerator:
 
 **How:** Utilities track events and report statistics
 
-```{python}
+```python
 class DynamicsEvaluator:
     def evaluate(self, x, u):
         start = time.time()
@@ -634,7 +662,7 @@ class DynamicsEvaluator:
         elapsed = time.time() - start
         
         # Update statistics
-        self._stats['count'] += 1
+        self._stats['calls'] += 1
         self._stats['total_time'] += elapsed
         
         return result
@@ -696,18 +724,21 @@ Noise types:
 ### Numerical Methods {#sec-numerical-methods}
 
 **ODE Solvers (40+ methods):**
+
 - Explicit RK: RK45, Tsit5, Vern9, dopri5
 - Implicit: Radau, BDF, Rodas5
 - Auto-stiffness: LSODA, AutoTsit5
 - Fixed-step: Euler, RK4, Midpoint
 
 **SDE Solvers:**
+
 - Euler-Maruyama (strong 0.5)
 - Milstein (strong 1.0, diagonal)
 - Heun (strong 1.0, additive)
 - Stochastic RK methods
 
 **Discretization:**
+
 - Exact (matrix exponential)
 - Tustin (bilinear transform)
 - Forward/backward Euler
@@ -720,33 +751,37 @@ Noise types:
 ### 1. Caching Strategy {#sec-1-caching-strategy}
 
 **Three-Level Cache:**
+
 1. **Symbolic Cache:** Jacobians computed once symbolically
 2. **Per-Backend Cache:** Compiled functions per backend
 3. **Equilibrium Cache:** Linearizations at equilibria
 
 **Example:**
-```{python}
+```python
 # First call: symbolic computation + compilation
-A, B = system.linearize(x_eq, u_eq)  # ~100ms
+A, B = system.linearize(x_eq, u_eq)
 
 # Second call: cached
-A, B = system.linearize(x_eq, u_eq)  # ~0.001ms (100,000x faster!)
+A, B = system.linearize(x_eq, u_eq)
 ```
 
 ### 2. Backend Optimization {#sec-2-backend-optimization}
 
 **NumPy:**
+
 - Common subexpression elimination (CSE)
 - Fast numerical modules
 - Vectorized operations
 
 **PyTorch:**
+
 - Symbolic simplification before codegen
 - GPU tensor operations
 - Automatic differentiation
 - Adjoint method for memory
 
 **JAX:**
+
 - JIT compilation via `jax.jit`
 - XLA optimization
 - Pure functional style
@@ -756,11 +791,11 @@ A, B = system.linearize(x_eq, u_eq)  # ~0.001ms (100,000x faster!)
 
 All evaluators support batched operations:
 
-```{python}
+```python
 # Single evaluation
 dx = system(x, u)  # x: (nx,), u: (nu,) → dx: (nx,)
 
-# Batched evaluation (100x speedup over loop)
+# Batched evaluation (possible 100x speedup over loop)
 dx_batch = system(x_batch, u_batch)  
 # x: (100, nx), u: (100, nu) → dx: (100, nx)
 ```
@@ -768,20 +803,21 @@ dx_batch = system(x_batch, u_batch)
 ### 4. GPU Acceleration {#sec-4-gpu-acceleration}
 
 **PyTorch:**
-```{python}
+```python
 system.set_default_backend('torch')
-system.set_default_device('cuda:0')
+system.to_device('cuda:0')
 
 x = torch.tensor([[1.0, 0.0]], device='cuda:0')
 dx = system(x, u)  # Computed on GPU
 ```
 
 **JAX:**
-```{python}
+```python
 system.set_default_backend('jax')
+system.to_device('cuda:0')
 
 x = jnp.array([1.0, 0.0])
-dx = jax.jit(system)(x, u)  # XLA compiled, GPU if available
+dx = jax.jit(system)(x, u)  # XLA compiled, GPU enabled
 ```
 
 ---
@@ -792,7 +828,7 @@ dx = jax.jit(system)(x, u)  # XLA compiled, GPU if available
 
 Types guide what to test:
 
-```{python}
+```python
 def test_dynamics_signature():
     """Type annotations specify contract."""
     x: StateVector = np.array([1.0, 0.0])
@@ -808,7 +844,7 @@ def test_dynamics_signature():
 
 Test mathematical properties:
 
-```{python}
+```python
 def test_linearization_is_linear():
     """Linearization should be linear in δx and δu."""
     A, B = system.linearize(x_eq, u_eq)
@@ -829,7 +865,7 @@ def test_linearization_is_linear():
 
 Same results across backends:
 
-```{python}
+```python
 def test_backend_consistency():
     """NumPy, PyTorch, JAX should agree."""
     x_np = np.array([1.0, 0.0])
@@ -867,7 +903,7 @@ def test_pendulum_energy_conservation():
 
 Code should be readable without comments:
 
-```{python}
+```python
 # Bad
 def f(x, u, m):  # What is this?
     return x[1], -m*x[0] + u
@@ -899,7 +935,7 @@ def compute_dynamics(
 
 Every public function has usage examples:
 
-```{python}
+```python
 def linearize(
     self,
     x_eq: EquilibriumState,
@@ -930,7 +966,7 @@ def linearize(
 
 Explain theory behind code:
 
-```{python}
+```python
 """
 Linearization Engine for Dynamical Systems
 
@@ -966,7 +1002,7 @@ High-level guides (like this one!) explain design philosophy and patterns.
 
 Detect errors as early as possible with clear messages:
 
-```{python}
+```python
 # Bad
 def compute(x):
     return x[5]  # IndexError: vague
@@ -985,7 +1021,7 @@ def compute(state: StateVector) -> float:
 
 Catch errors during `__init__`, not during use:
 
-```{python}
+```python
 class System(SymbolicSystemBase):
     def define_system(self):
         # Bad parameter type
@@ -1011,7 +1047,7 @@ expected "ndarray[Any, dtype[Any]]"
 
 Include context and solutions:
 
-```{python}
+```python
 if x.shape[0] != self.nx:
     raise ValueError(
         f"State dimension mismatch.\n"
@@ -1030,7 +1066,7 @@ The architecture provides clear extension points:
 
 ### 1. Add New System Type {#sec-1-add-new-system-type}
 
-```{python}
+```python
 class MyCustomSystem(SymbolicSystemBase):
     """Just implement define_system()."""
     def define_system(self, **params):
@@ -1038,11 +1074,17 @@ class MyCustomSystem(SymbolicSystemBase):
         self.state_vars = [...]
         self._f_sym = sp.Matrix([...])
         self.parameters = {...}
+
+    # optionally implement setup equilibria to
+    # auto-set system equilibria with custom code
+    # upon instantiation
+    def setup_equilibria(self, *args, **kwargs):
+        # define how equilibria should be set up
 ```
 
 ### 2. Add New Integrator {#sec-2-add-new-integrator}
 
-```{python}
+```python
 class MyIntegrator(IntegratorBase):
     """Implement abstract methods."""
     def step(self, x, u, dt):
@@ -1056,7 +1098,7 @@ class MyIntegrator(IntegratorBase):
 
 ### 3. Add New Utility {#sec-3-add-new-utility}
 
-```{python}
+```python
 class MyUtility:
     """Independent utility via composition."""
     def __init__(self, system):
@@ -1072,7 +1114,7 @@ system._my_utility = MyUtility(system)
 
 ### 4. Add New Backend {#sec-4-add-new-backend}
 
-```{python}
+```python
 # 1. Add to Backend type
 Backend = Literal["numpy", "torch", "jax", "my_backend"]
 
@@ -1099,6 +1141,7 @@ def generate_function(expr, vars, backend):
 **Decision:** Use cooperative multiple inheritance ONLY in UI framework Layer 2
 
 **Rationale:**
+
 - **Pro:** Eliminates ~1,800 lines of duplication
 - **Pro:** Clean interfaces (ContinuousSymbolicSystem has both symbolic and continuous capabilities)
 - **Pro:** Python's MRO handles it correctly with `super()`
@@ -1112,6 +1155,7 @@ def generate_function(expr, vars, backend):
 **Decision:** Use TypedDict for results, not dataclass
 
 **Rationale:**
+
 - **Pro:** Compatible with plain dictionaries (gradual typing)
 - **Pro:** No runtime overhead
 - **Pro:** Works with JSON serialization
@@ -1257,7 +1301,7 @@ The result is a library where:
 - **Students** find gentle learning curves
 - **Experts** find power and flexibility
 
-**36,500 lines of code organized into 4 architectural layers, implementing 200+ types and 40+ integration methods—all serving a single vision: symbolic dynamical systems done right.**
+**Code organized into 4 architectural layers, implementing 200+ types and 40+ integration methods—all serving a single vision: symbolic dynamical systems done right.**
 
 ---
 
