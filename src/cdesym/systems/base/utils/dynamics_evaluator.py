@@ -26,6 +26,12 @@ Responsibilities:
 - Performance tracking
 - Backend dispatch
 - Support for both controlled and autonomous systems
+- Automatic type conversion for control inputs (handles None, numpy arrays, etc.)
+
+IMPORTANT: Backend-specific methods (_evaluate_torch, _evaluate_jax) now include
+automatic type conversion for control inputs. This is critical for SDE integration
+and other cases where control functions may return numpy arrays instead of
+backend-native tensors.
 
 This class manages the evaluation of the system dynamics using
 generated functions from CodeGenerator.
@@ -313,6 +319,23 @@ class DynamicsEvaluator:
 
         start_time = time.time()
 
+        # CRITICAL FIX: Convert inputs to torch tensors if needed
+        # This handles cases where control functions return numpy arrays or None
+        import torch
+        import numpy as np
+        
+        # Convert x if it's a numpy array
+        if isinstance(x, np.ndarray):
+            x = torch.from_numpy(x).float()
+        
+        # Convert u if it's a numpy array, or create empty tensor if None
+        if u is None:
+            # Autonomous system: create empty tensor
+            u = torch.tensor([], dtype=x.dtype, device=x.device)
+        elif isinstance(u, np.ndarray):
+            # Convert numpy array to torch tensor with same dtype and device as x
+            u = torch.from_numpy(u).to(dtype=x.dtype, device=x.device)
+
         # Input validation
         if len(x.shape) == 0:
             raise ValueError("State tensor must be at least 1D")
@@ -414,8 +437,22 @@ class DynamicsEvaluator:
         """
         import jax
         import jax.numpy as jnp
+        import numpy as np
 
         start_time = time.time()
+
+        # CRITICAL FIX: Convert inputs to jax arrays if needed
+        # This handles cases where control functions return numpy arrays or None
+        if isinstance(x, np.ndarray):
+            x = jnp.array(x)
+        
+        # Convert u if it's a numpy array, or create empty array if None
+        if u is None:
+            # Autonomous system: create empty array
+            u = jnp.array([])
+        elif isinstance(u, np.ndarray):
+            # Convert numpy array to jax array
+            u = jnp.array(u)
 
         # Input validation
         if x.ndim == 0:
