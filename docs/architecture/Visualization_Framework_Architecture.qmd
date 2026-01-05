@@ -511,7 +511,11 @@ Visualize impact of different noise intensities:
 
 # Create systems with different noise levels
 noise_levels = [0.1, 0.3, 0.5]
-results_noise = {}
+trajectories_noise = {}
+
+# Use common time grid for comparison
+dt = 0.01
+t_common = np.arange(0, 15 + dt, dt)
 
 for sigma in noise_levels:
     sys_i = ContinuousStochasticPendulum(g=9.81, L=1.0, b=0.5, sigma=sigma)
@@ -520,16 +524,17 @@ for sigma in noise_levels:
     
     result = sys_i.integrate(
         x0, u=None, t_span=(0, 15), 
-        method='euler', dt=0.01, seed=42
+        method='euler', dt=dt, seed=42
     )
     
     # Convert to numpy for plotting
     x_np = result['x'].cpu().numpy() if hasattr(result['x'], 'cpu') else result['x']
-    results_noise[f'σ={sigma}'] = {'t': result['t'], 'x': x_np}
+    trajectories_noise[f'σ={sigma}'] = x_np
 
-# Compare trajectories
+# Compare trajectories (pass t and trajectories separately)
 fig = stochastic_system.plotter.plot_comparison(
-    results_noise,
+    t_common,
+    trajectories_noise,
     state_names=['θ (rad)', 'ω (rad/s)']
 )
 fig.update_layout(title='Effect of Noise Intensity on Stochastic Pendulum')
