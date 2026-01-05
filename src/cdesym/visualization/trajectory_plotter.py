@@ -312,6 +312,7 @@ class TrajectoryPlotter:
             title=title,
             showlegend=show_legend,  # Always respect user's show_legend parameter
             height=max(400, 300 * n_rows),  # Increased from 250 to 300 per row
+            margin=dict(t=100),  # Add top margin for title spacing
         )
 
         # Update axes
@@ -490,6 +491,7 @@ class TrajectoryPlotter:
             title=title,
             showlegend=show_legend,  # Always respect show_legend parameter
             height=max(500, 300 * n_rows),  # Increased base and per-row height
+            margin=dict(t=100),  # Add top margin for title spacing
         )
 
         # Update axes
@@ -641,6 +643,7 @@ class TrajectoryPlotter:
             title=title,
             showlegend=True,  # Always show legend for comparison
             height=max(500, 300 * n_rows),  # Increased base and per-row height
+            margin=dict(t=100),  # Add top margin for title spacing
         )
 
         # Update axes
