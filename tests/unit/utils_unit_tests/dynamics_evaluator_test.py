@@ -27,6 +27,17 @@ Tests cover:
 8. Error handling
 9. Autonomous system support
 10. Type system integration
+11. **Type conversion regression tests** (CRITICAL BUG FIX)
+    - PyTorch backend with numpy array control inputs
+    - JAX backend with numpy array control inputs
+    - None control inputs for autonomous systems
+    - Mixed type scenarios (state=tensor, control=numpy)
+    - GPU tensor with numpy control inputs
+    - Batched evaluation with mixed types
+
+The regression tests in TestTypeConversionRegression ensure that a critical
+bug (where evaluator crashed when control functions returned numpy arrays)
+does not resurface. This bug broke all SDE integration with PyTorch/JAX.
 """
 
 from typing import Optional
@@ -1134,6 +1145,285 @@ class TestIntegration:
         # All should give same result
         assert np.allclose(dx_np, np.array(dx_torch))
         assert np.allclose(dx_np, np.array(dx_jax))
+
+
+# ============================================================================
+# Type Conversion Regression Tests (Critical Bug Fix)
+# ============================================================================
+
+
+class TestTypeConversionRegression:
+    """
+    Regression tests for type conversion bug that broke PyTorch/JAX backends.
+    
+    CRITICAL BUG (Fixed): When using PyTorch or JAX backends, if control
+    functions returned numpy arrays (or None), the evaluator would crash
+    with AttributeError when trying to call .unsqueeze() on numpy arrays.
+    
+    These tests ensure the fix remains in place and catches similar issues.
+    
+    The bug affected:
+    - SDE integration with PyTorch backend
+    - Any torch/JAX usage with numpy control functions
+    - Autonomous systems passing None for control
+    
+    Root cause: _evaluate_torch() and _evaluate_jax() assumed inputs were
+    already backend-native tensors, but control functions naturally return
+    numpy arrays or None.
+    """
+
+    @pytest.mark.skipif(not torch_available, reason="PyTorch required")
+    def test_torch_with_numpy_control_input(self):
+        """
+        REGRESSION TEST: Torch backend must handle numpy array control inputs.
+        
+        This was the primary bug - control functions return numpy arrays,
+        but _evaluate_torch() tried to call .unsqueeze() without converting.
+        """
+        system = MockLinearSystem(a=2.0)
+        code_gen = CodeGenerator(system)
+        backend_mgr = BackendManager()
+        evaluator = DynamicsEvaluator(system, code_gen, backend_mgr)
+
+        # State as torch tensor (typical for torch backend)
+        x_torch = torch.tensor([1.0])
+        
+        # Control as NUMPY ARRAY (what control functions return!)
+        u_numpy = np.array([0.5])
+        
+        # This should NOT crash with AttributeError
+        dx = evaluator.evaluate(x_torch, u_numpy, backend="torch")
+        
+        # Verify result
+        assert isinstance(dx, torch.Tensor)
+        assert dx.shape == (1,)
+        
+        # Check value is correct: dx/dt = -2*x + u = -2*1.0 + 0.5 = -1.5
+        assert torch.allclose(dx, torch.tensor([-1.5]))
+
+    @pytest.mark.skipif(not torch_available, reason="PyTorch required")
+    def test_torch_autonomous_with_none_control(self):
+        """
+        REGRESSION TEST: Torch backend must handle None control input.
+        
+        Autonomous systems pass None for control, which must be converted
+        to an empty torch tensor.
+        """
+        system = MockAutonomousSystem(a=2.0)
+        code_gen = CodeGenerator(system)
+        backend_mgr = BackendManager()
+        evaluator = DynamicsEvaluator(system, code_gen, backend_mgr)
+
+        x_torch = torch.tensor([1.0])
+        
+        # Autonomous: u is None
+        dx = evaluator.evaluate(x_torch, u=None, backend="torch")
+        
+        assert isinstance(dx, torch.Tensor)
+        assert dx.shape == (1,)
+        
+        # Check value: dx/dt = -2*x = -2*1.0 = -2.0
+        assert torch.allclose(dx, torch.tensor([-2.0]))
+
+    @pytest.mark.skipif(not torch_available, reason="PyTorch required")
+    def test_torch_both_numpy_inputs(self):
+        """
+        REGRESSION TEST: Torch backend must convert both state and control.
+        
+        Even if state is numpy (e.g., from integration wrapper), should work.
+        """
+        system = MockLinearSystem(a=2.0)
+        code_gen = CodeGenerator(system)
+        backend_mgr = BackendManager()
+        evaluator = DynamicsEvaluator(system, code_gen, backend_mgr)
+
+        # Both inputs as numpy arrays
+        x_numpy = np.array([1.0])
+        u_numpy = np.array([0.5])
+        
+        dx = evaluator.evaluate(x_numpy, u_numpy, backend="torch")
+        
+        assert isinstance(dx, torch.Tensor)
+        assert torch.allclose(dx, torch.tensor([-1.5]))
+
+    @pytest.mark.skipif(not jax_available, reason="JAX required")
+    def test_jax_with_numpy_control_input(self):
+        """
+        REGRESSION TEST: JAX backend must handle numpy array control inputs.
+        
+        Same issue as torch - control functions return numpy arrays.
+        """
+        system = MockLinearSystem(a=2.0)
+        code_gen = CodeGenerator(system)
+        backend_mgr = BackendManager()
+        evaluator = DynamicsEvaluator(system, code_gen, backend_mgr)
+
+        # State as jax array
+        x_jax = jnp.array([1.0])
+        
+        # Control as NUMPY ARRAY
+        u_numpy = np.array([0.5])
+        
+        # Should not crash
+        dx = evaluator.evaluate(x_jax, u_numpy, backend="jax")
+        
+        assert isinstance(dx, jnp.ndarray)
+        assert dx.shape == (1,)
+        assert np.allclose(dx, np.array([-1.5]))
+
+    @pytest.mark.skipif(not jax_available, reason="JAX required")
+    def test_jax_autonomous_with_none_control(self):
+        """
+        REGRESSION TEST: JAX backend must handle None control input.
+        """
+        system = MockAutonomousSystem(a=2.0)
+        code_gen = CodeGenerator(system)
+        backend_mgr = BackendManager()
+        evaluator = DynamicsEvaluator(system, code_gen, backend_mgr)
+
+        x_jax = jnp.array([1.0])
+        
+        dx = evaluator.evaluate(x_jax, u=None, backend="jax")
+        
+        assert isinstance(dx, jnp.ndarray)
+        assert np.allclose(dx, np.array([-2.0]))
+
+    @pytest.mark.skipif(not torch_available, reason="PyTorch required")
+    def test_torch_batched_with_numpy_control(self):
+        """
+        REGRESSION TEST: Batched evaluation with numpy control arrays.
+        
+        Critical for SDE Monte Carlo simulations.
+        """
+        system = MockLinearSystem(a=2.0)
+        code_gen = CodeGenerator(system)
+        backend_mgr = BackendManager()
+        evaluator = DynamicsEvaluator(system, code_gen, backend_mgr)
+
+        # Batched state (torch)
+        x_batch = torch.tensor([[1.0], [2.0], [3.0]])
+        
+        # Batched control (numpy!)
+        u_batch = np.array([[0.5], [1.0], [1.5]])
+        
+        dx = evaluator.evaluate(x_batch, u_batch, backend="torch")
+        
+        assert isinstance(dx, torch.Tensor)
+        assert dx.shape == (3, 1)
+        
+        # Check each result
+        expected = torch.tensor([[-1.5], [-3.0], [-4.5]])
+        assert torch.allclose(dx, expected)
+
+    @pytest.mark.skipif(not torch_available, reason="PyTorch required")
+    def test_torch_gpu_with_numpy_control(self):
+        """
+        REGRESSION TEST: GPU tensors with numpy control inputs.
+        
+        Control conversion should preserve device.
+        """
+        if not torch.cuda.is_available():
+            pytest.skip("CUDA not available")
+            
+        system = MockLinearSystem(a=2.0)
+        code_gen = CodeGenerator(system)
+        backend_mgr = BackendManager()
+        evaluator = DynamicsEvaluator(system, code_gen, backend_mgr)
+
+        # State on GPU
+        x_gpu = torch.tensor([1.0], device='cuda')
+        
+        # Control as numpy (CPU)
+        u_numpy = np.array([0.5])
+        
+        # Should convert u to GPU automatically
+        dx = evaluator.evaluate(x_gpu, u_numpy, backend="torch")
+        
+        assert isinstance(dx, torch.Tensor)
+        assert dx.device.type == 'cuda'
+        assert torch.allclose(dx.cpu(), torch.tensor([-1.5]))
+
+    @pytest.mark.skipif(not torch_available, reason="PyTorch required")
+    def test_torch_control_function_returning_numpy(self):
+        """
+        REGRESSION TEST: Simulate actual SDE integration scenario.
+        
+        This mimics what happens in TorchSDEIntegrator where control
+        functions naturally return numpy arrays.
+        """
+        system = MockLinearSystem(a=2.0)
+        code_gen = CodeGenerator(system)
+        backend_mgr = BackendManager()
+        evaluator = DynamicsEvaluator(system, code_gen, backend_mgr)
+
+        # Define control function that returns numpy (natural for users)
+        def control_func(t, x):
+            # User writes numpy code
+            return np.array([0.5 * np.sin(t)])
+        
+        # State is torch tensor (from integrator)
+        x_torch = torch.tensor([1.0])
+        
+        # Get control from user's function
+        t = 1.0
+        u = control_func(t, x_torch.numpy())  # Returns numpy!
+        
+        # This was the exact failure case
+        dx = evaluator.evaluate(x_torch, u, backend="torch")
+        
+        assert isinstance(dx, torch.Tensor)
+        expected = -2.0 * 1.0 + 0.5 * np.sin(1.0)
+        assert torch.allclose(dx, torch.tensor([expected]))
+
+    @pytest.mark.skipif(not torch_available, reason="PyTorch required")
+    def test_torch_type_preservation_after_conversion(self):
+        """
+        REGRESSION TEST: Converted inputs should match state's dtype and device.
+        """
+        system = MockLinearSystem(a=2.0)
+        code_gen = CodeGenerator(system)
+        backend_mgr = BackendManager()
+        evaluator = DynamicsEvaluator(system, code_gen, backend_mgr)
+
+        # State as float64 torch tensor
+        x_torch = torch.tensor([1.0], dtype=torch.float64)
+        
+        # Control as numpy float32
+        u_numpy = np.array([0.5], dtype=np.float32)
+        
+        # After conversion, u should match x's dtype
+        dx = evaluator.evaluate(x_torch, u_numpy, backend="torch")
+        
+        assert dx.dtype == torch.float64
+        assert torch.allclose(dx, torch.tensor([-1.5], dtype=torch.float64))
+
+    @pytest.mark.skipif(not (torch_available and jax_available), reason="Both backends required")
+    def test_cross_backend_control_type_consistency(self):
+        """
+        REGRESSION TEST: Both backends should handle numpy controls consistently.
+        
+        Ensures the fix is properly implemented in both _evaluate_torch()
+        and _evaluate_jax().
+        """
+        system = MockLinearSystem(a=2.0)
+        code_gen = CodeGenerator(system)
+        backend_mgr = BackendManager()
+        evaluator = DynamicsEvaluator(system, code_gen, backend_mgr)
+
+        # Test same scenario with both backends
+        x_np = np.array([1.0])
+        u_np = np.array([0.5])
+        
+        # Both should handle numpy control without crashing
+        dx_torch = evaluator.evaluate(x_np, u_np, backend="torch")
+        dx_jax = evaluator.evaluate(x_np, u_np, backend="jax")
+        
+        # Results should be identical
+        dx_torch_np = dx_torch.cpu().numpy() if hasattr(dx_torch, 'cpu') else np.array(dx_torch)
+        dx_jax_np = np.array(dx_jax)
+        
+        assert np.allclose(dx_torch_np, dx_jax_np)
+        assert np.allclose(dx_torch_np, np.array([-1.5]))
 
 
 # ============================================================================
