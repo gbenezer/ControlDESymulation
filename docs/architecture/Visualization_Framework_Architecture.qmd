@@ -254,50 +254,187 @@ Automatically handles multiple trajectories with mean ± std visualization. This
 
 ```{python}
 #| label: demo-trajectory-batch
-#| fig-cap: "Monte Carlo simulation showing 20 stochastic trajectories with mean and standard deviation bands"
+#| fig-cap: "Monte Carlo simulation of stochastic pendulum showing 20 independent noise realizations"
 
-# Use stochastic pendulum with additive noise
-# σ = 0.3 gives moderate noise (visible but not overwhelming)
+# DIAGNOSTIC: Test integration first
+print("="*60)
+print("DIAGNOSTIC - Testing SDE integration")
+print("="*60)
 
-# Switch to torch backend for SDE integration (required for euler method)
+# Test 1: Simple integration
 stochastic_system.set_default_backend('torch')
+x0 = np.array([0.5, 0.0])
+t_eval_test = np.linspace(0, 10, 1001)
 
-# Run Monte Carlo simulation
-n_trials = 20
-x0 = np.array([0.5, 0.0])  # Start from same initial condition
+print("\nTest 1: Basic integration with t_eval")
+test_result = stochastic_system.integrate(
+    x0,
+    u=None,
+    t_span=(0, 10),
+    method='euler',
+    dt=0.01,
+    t_eval=t_eval_test,
+    seed=0
+)
 
-# Collect results
-results = []
-for i in range(n_trials):
-    # Each trajectory gets different random noise realization
-    result = stochastic_system.integrate(
-        x0, 
-        u=None, 
+print(f"  Result keys: {list(test_result.keys())}")
+print(f"  t type: {type(test_result['t'])}")
+print(f"  t shape: {test_result['t'].shape}")
+print(f"  x shape: {test_result['x'].shape}")
+
+# Test 2: Without t_eval
+print("\nTest 2: Integration WITHOUT t_eval")
+test_result2 = stochastic_system.integrate(
+    x0,
+    u=None,
+    t_span=(0, 10),
+    method='euler',
+    dt=0.01,
+    seed=0
+)
+print(f"  t shape: {test_result2['t'].shape}")
+print(f"  x shape: {test_result2['x'].shape}")
+
+# Convert and check
+t_np_test = test_result['t'].cpu().numpy() if hasattr(test_result['t'], 'cpu') else test_result['t']
+x_np_test = test_result['x'].cpu().numpy() if hasattr(test_result['x'], 'cpu') else test_result['x']
+
+print(f"\nAfter numpy conversion:")
+print(f"  t_np shape: {t_np_test.shape}")
+print(f"  x_np shape: {x_np_test.shape}")
+print(f"  t range: [{t_np_test.min():.2f}, {t_np_test.max():.2f}]")
+
+if len(t_np_test) < 100:
+    print(f"\n❌ ERROR: Only {len(t_np_test)} time points!")
+    print("  Integration not working as expected")
+    print("  Switching to n_paths parameter instead...")
+    
+    # Alternative: Use n_paths for Monte Carlo
+    print("\nTest 3: Using n_paths parameter for Monte Carlo")
+    mc_result = stochastic_system.integrate(
+        x0,
+        u=None,
         t_span=(0, 10),
         method='euler',
         dt=0.01,
-        seed=i  # Different seed for each trial
+        n_paths=20,  # Monte Carlo directly
+        seed=0
     )
-    # Convert torch tensor to numpy for plotting
-    x_np = result['x'].cpu().numpy() if hasattr(result['x'], 'cpu') else result['x']
-    results.append(x_np)
+    print(f"  Result with n_paths:")
+    print(f"    t shape: {mc_result['t'].shape}")
+    print(f"    x shape: {mc_result['x'].shape}")
+    
+    # Convert
+    t_mc = mc_result['t'].cpu().numpy() if hasattr(mc_result['t'], 'cpu') else mc_result['t']
+    x_mc = mc_result['x'].cpu().numpy() if hasattr(mc_result['x'], 'cpu') else mc_result['x']
+    
+    print(f"    After conversion:")
+    print(f"      t_mc shape: {t_mc.shape}")
+    print(f"      x_mc shape: {x_mc.shape}")
+    
+    if x_mc.ndim == 3 and x_mc.shape[1] > 100:
+        print(f"  ✅ SUCCESS with n_paths!")
+        use_n_paths = True
+    else:
+        print(f"  ❌ Still not working")
+        use_n_paths = False
+else:
+    print(f"  ✅ t_eval working: {len(t_np_test)} points")
+    use_n_paths = False
 
-# Stack into batch: (n_trials, T, nx)
-x_batch = np.stack(results)
+print("="*60)
+print("END DIAGNOSTIC")
+print("="*60 + "\n")
 
-# Convert time to numpy
-t_np = result['t'].cpu().numpy() if hasattr(result['t'], 'cpu') else result['t']
+# Now do actual Monte Carlo based on what works
+if use_n_paths:
+    # Use n_paths parameter
+    result = stochastic_system.integrate(
+        x0,
+        u=None,
+        t_span=(0, 10),
+        method='euler',
+        dt=0.01,
+        n_paths=20,
+        seed=42
+    )
+    t_np = result['t'].cpu().numpy() if hasattr(result['t'], 'cpu') else result['t']
+    x_batch = result['x'].cpu().numpy() if hasattr(result['x'], 'cpu') else result['x']
+    n_trials = x_batch.shape[0]
+else:
+    # Use loop with individual integrations
+    n_trials = 20
+    t_eval = np.linspace(0, 10, 1001)
+    results = []
+    
+    for i in range(n_trials):
+        result = stochastic_system.integrate(
+            x0,
+            u=None,
+            t_span=(0, 10),
+            method='euler',
+            dt=0.01,
+            t_eval=t_eval,
+            seed=i
+        )
+        x_np = result['x'].cpu().numpy() if hasattr(result['x'], 'cpu') else result['x']
+        results.append(x_np)
+    
+    x_batch = np.stack(results)
+    t_np = result['t'].cpu().numpy() if hasattr(result['t'], 'cpu') else result['t']
 
-# Plot automatically shows mean ± std
+print(f"Final batch shape: {x_batch.shape} (n_trials={n_trials}, T={len(t_np)}, nx=2)")
+
+# Plot
 fig = stochastic_system.plotter.plot_trajectory(
     t_np,
     x_batch,
     state_names=['θ (rad)', 'ω (rad/s)'],
     title=f'Stochastic Pendulum Monte Carlo (n={n_trials}, σ=0.3)',
-    show_std=True
+    color_scheme='colorblind_safe'
 )
 fig
 ```
+
+::: {.callout-note}
+## Stochastic Monte Carlo Visualization
+
+This demonstrates **true stochastic dynamics** from Wiener process noise:
+
+**What you see:**
+- **Individual trajectories**: Each colored line shows one noise realization
+- **Stochastic spread**: Trajectories diverge over time from accumulated noise
+- **Nonlinear dynamics**: Damping limits growth but uncertainty remains
+
+**Key insight**: Starting from identical initial conditions (θ=0.5, ω=0), the 20 trajectories spread due to different noise realizations. This visualizes inherent stochastic uncertainty.
+:::
+
+::: {.callout-tip}
+## SDE Integration: Output Time Points
+
+For PyTorch SDE integration, use **`t_eval`** to get dense output:
+
+```python
+# Define output times
+t_eval = np.linspace(0, 10, 1001)  # 1001 uniformly spaced points
+
+result = system.integrate(
+    x0,
+    u=None,
+    t_span=(0, 10),
+    method='euler',    # PyTorch torchsde method
+    dt=0.01,          # Integration time step
+    t_eval=t_eval,    # Output time points (dense)
+    seed=42
+)
+```
+
+**Why this matters:**
+- `dt=0.01` controls integration accuracy (internal time step)
+- `t_eval` controls which points are returned in the output
+- Without `t_eval`, may only return start/end points
+- For plotting, always use `t_eval` for dense, uniform output
+:::
 
 
 ::: {.callout-note}
