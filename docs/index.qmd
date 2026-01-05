@@ -43,7 +43,7 @@ simulation, and control of dynamical systems.
 ### Documentation Structure {#sec-documentation-structure}
 
 - **[Architecture Guides](architecture/index.qmd)**: Deep dives into framework design with working examples
-- **[Quick References](tutorials/index.qmd)**: Practical how-to guides with executable code
+- **[Tutorials](tutorials/index.qmd)**: Practical how-to guides with executable code
 - **[Examples Gallery](examples/index.qmd)**: Complete interactive demonstrations
 
 ### Installation {#sec-installation}

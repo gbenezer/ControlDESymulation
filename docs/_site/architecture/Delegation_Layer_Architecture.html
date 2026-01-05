@@ -206,30 +206,9 @@ window.Quarto = {
     </a>
     <ul class="dropdown-menu" aria-labelledby="nav-menu-tutorials">    
         <li>
-    <a class="dropdown-item" href="../tutorials/quick_reference/UI_Framework_Quick_Reference.html">
- <span class="dropdown-text">ControlDESymulation UI Framework Quick Reference</span></a>
+    <a class="dropdown-item" href="../tutorials/basic_usage.html">
+ <span class="dropdown-text">Basic Usage</span></a>
   </li>  
-        <li>
-    <a class="dropdown-item" href="../tutorials/quick_reference/Type_System_Quick_Reference.html">
- <span class="dropdown-text">Type System Quick Reference</span></a>
-  </li>  
-        <li>
-    <a class="dropdown-item" href="../tutorials/quick_reference/Integration_Framework_Quick_Reference.html">
- <span class="dropdown-text">Numerical Integration Framework Quick Reference</span></a>
-  </li>  
-        <li>
-    <a class="dropdown-item" href="../tutorials/quick_reference/Control_Framework_Quick_Reference.html">
- <span class="dropdown-text">Control Framework Quick Reference</span></a>
-  </li>  
-        <li>
-    <a class="dropdown-item" href="../tutorials/quick_reference/Visualization_Framework_Quick_Reference.html">
- <span class="dropdown-text">Visualization Framework Quick Reference</span></a>
-  </li>  
-        <li>
-    <a class="dropdown-item" href="../tutorials/quick_reference/Delegation_Layer_Quick_Reference.html">
- <span class="dropdown-text">Delegation Layer Quick Reference</span></a>
-  </li>  
-        <li class="dropdown-header">tutorials/quick_reference/Example_Systems_Quick_Reference.qmd</li>
     </ul>
   </li>
   <li class="nav-item dropdown ">
@@ -455,7 +434,7 @@ window.Quarto = {
 
 <section id="sec-overview" class="level2">
 <h2 class="anchored" data-anchor-id="sec-overview">Overview</h2>
-<p>The <strong>Delegation Layer</strong> (also called the <strong>Support Framework</strong>) provides <strong>specialized internal services</strong> to the UI framework through <strong>composition rather than inheritance</strong>. This layer consists of <strong>11 focused utility classes</strong> totaling ~7,200 lines that handle backend management, code generation, dynamics evaluation, and stochastic analysis.</p>
+<p>The <strong>Delegation Layer</strong> (also called the <strong>Support Framework</strong>) provides <strong>specialized internal services</strong> to the UI framework through <strong>composition rather than inheritance</strong>. This layer consists of <strong>11 focused utility classes</strong> that handle backend management, code generation, dynamics evaluation, and stochastic analysis.</p>
 <div class="callout callout-style-default callout-important callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -518,9 +497,9 @@ window.Quarto = {
 <section id="sec-architecture-layers" class="level2">
 <h2 class="anchored" data-anchor-id="sec-architecture-layers">Architecture Layers</h2>
 <pre><code>┌─────────────────────────────────────────────────────────────┐
-│                     UI FRAMEWORK                             │
-│  (SymbolicSystemBase, ContinuousSymbolicSystem, etc.)        │
-│                                                              │
+│                     UI FRAMEWORK                            │
+│  (SymbolicSystemBase, ContinuousSymbolicSystem, etc.)       │
+│                                                             │
 │  User-facing methods that delegate to utilities:            │
 │  • system(x, u) → delegates to DynamicsEvaluator            │
 │  • system.linearize() → delegates to LinearizationEngine    │
@@ -532,30 +511,30 @@ window.Quarto = {
 │                  DELEGATION LAYER (Internal)                │
 │                                                             │
 │  ┌───────────────────────────────────────────────────────┐  │
-│  │  CORE UTILITIES (Universal)                         │  │
-│  │  • BackendManager      - Multi-backend support      │  │
-│  │  • CodeGenerator       - Symbolic → numerical       │  │
-│  │  • EquilibriumHandler  - Equilibrium management     │  │
-│  │  • SymbolicValidator   - System validation          │  │
+│  │  CORE UTILITIES (Universal)                           │  │
+│  │  • BackendManager      - Multi-backend support        │  │
+│  │  • CodeGenerator       - Symbolic → numerical         │  │
+│  │  • EquilibriumHandler  - Equilibrium management       │  │
+│  │  • SymbolicValidator   - System validation            │  │
 │  └───────────────────────────────────────────────────────┘  │
 │                                                             │
 │  ┌───────────────────────────────────────────────────────┐  │
-│  │  DETERMINISTIC EVALUATION (ODE Systems)             │  │
-│  │  • DynamicsEvaluator    - Forward dynamics          │  │
-│  │  • LinearizationEngine  - Jacobian computation      │  │
-│  │  • ObservationEngine    - Output evaluation         │  │
+│  │  DETERMINISTIC EVALUATION (ODE Systems)               │  │
+│  │  • DynamicsEvaluator    - Forward dynamics            │  │
+│  │  • LinearizationEngine  - Jacobian computation        │  │
+│  │  • ObservationEngine    - Output evaluation           │  │
 │  └───────────────────────────────────────────────────────┘  │
 │                                                             │
 │  ┌───────────────────────────────────────────────────────┐  │
-│  │  STOCHASTIC SUPPORT (SDE Systems)                   │  │
-│  │  • DiffusionHandler    - Diffusion generation       │  │
-│  │  • NoiseCharacterizer  - Noise analysis             │  │
-│  │  • SDEValidator        - SDE validation             │  │
+│  │  STOCHASTIC SUPPORT (SDE Systems)                     │  │
+│  │  • DiffusionHandler    - Diffusion generation         │  │
+│  │  • NoiseCharacterizer  - Noise analysis               │  │
+│  │  • SDEValidator        - SDE validation               │  │
 │  └───────────────────────────────────────────────────────┘  │
 │                                                             │
 │  ┌───────────────────────────────────────────────────────┐  │
-│  │  LOW-LEVEL UTILITIES                                │  │
-│  │  • codegen_utils       - SymPy code generation      │  │
+│  │  LOW-LEVEL UTILITIES                                  │  │
+│  │  • codegen_utils       - SymPy code generation        │  │
 │  └───────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘</code></pre>
 </section>
@@ -563,7 +542,7 @@ window.Quarto = {
 <h2 class="anchored" data-anchor-id="sec-core-utilities">Core Utilities (Universal)</h2>
 <section id="sec-backendmanager" class="level3">
 <h3 class="anchored" data-anchor-id="sec-backendmanager">BackendManager: Multi-Backend Array Handling</h3>
-<p><strong>File:</strong> <code>backend_manager.py</code> (545 lines)</p>
+<p><strong>File:</strong> <code>backend_manager.py</code></p>
 <p>The <code>BackendManager</code> handles all backend-specific array operations and device management. Users interact with this functionality through system-level methods, never directly.</p>
 <p><strong>Internal responsibilities:</strong></p>
 <ul>
@@ -638,7 +617,7 @@ window.Quarto = {
 </section>
 <section id="sec-codegenerator" class="level3">
 <h3 class="anchored" data-anchor-id="sec-codegenerator">CodeGenerator: Symbolic to Numerical Compilation</h3>
-<p><strong>File:</strong> <code>code_generator.py</code> (565 lines)</p>
+<p><strong>File:</strong> <code>code_generator.py</code></p>
 <p>The <code>CodeGenerator</code> orchestrates the symbolic-to-numerical code generation pipeline with intelligent caching. This is completely internal—users simply call system methods that trigger code generation when needed.</p>
 <p><strong>Internal responsibilities:</strong></p>
 <ul>
@@ -691,7 +670,7 @@ window.Quarto = {
 </section>
 <section id="sec-equilibriumhandler" class="level3">
 <h3 class="anchored" data-anchor-id="sec-equilibriumhandler">EquilibriumHandler: Named Equilibrium Management</h3>
-<p><strong>File:</strong> <code>equilibrium_handler.py</code> (221 lines)</p>
+<p><strong>File:</strong> <code>equilibrium_handler.py</code></p>
 <p>The <code>EquilibriumHandler</code> manages multiple named equilibrium points with automatic backend conversion. Users interact through system methods.</p>
 <p><strong>Internal responsibilities:</strong></p>
 <ul>
@@ -742,7 +721,7 @@ window.Quarto = {
 </section>
 <section id="sec-symbolicvalidator" class="level3">
 <h3 class="anchored" data-anchor-id="sec-symbolicvalidator">SymbolicValidator: System Definition Validation</h3>
-<p><strong>File:</strong> <code>symbolic_validator.py</code> (718 lines)</p>
+<p><strong>File:</strong> <code>symbolic_validator.py</code></p>
 <p>The <code>SymbolicValidator</code> performs comprehensive validation of symbolic system definitions during initialization. Users benefit from clear error messages without directly interacting with the validator.</p>
 <p><strong>Validation checks (automatic during system creation):</strong></p>
 <p><strong>Required validations:</strong></p>
@@ -778,7 +757,7 @@ window.Quarto = {
 <h2 class="anchored" data-anchor-id="sec-deterministic-evaluation">Deterministic Evaluation Components</h2>
 <section id="sec-dynamicsevaluator" class="level3">
 <h3 class="anchored" data-anchor-id="sec-dynamicsevaluator">DynamicsEvaluator: Forward Dynamics Computation</h3>
-<p><strong>File:</strong> <code>dynamics_evaluator.py</code> (576 lines)</p>
+<p><strong>File:</strong> <code>dynamics_evaluator.py</code></p>
 <p>The <code>DynamicsEvaluator</code> handles forward dynamics evaluation (dx/dt = f(x, u)) across all backends. Users call <code>system(x, u)</code> which internally delegates to this evaluator.</p>
 <p><strong>Internal responsibilities:</strong></p>
 <ul>
@@ -825,7 +804,7 @@ window.Quarto = {
 </section>
 <section id="sec-linearizationengine" class="level3">
 <h3 class="anchored" data-anchor-id="sec-linearizationengine">LinearizationEngine: Jacobian Computation</h3>
-<p><strong>File:</strong> <code>linearization_engine.py</code> (907 lines)</p>
+<p><strong>File:</strong> <code>linearization_engine.py</code></p>
 <p>The <code>LinearizationEngine</code> computes system linearizations (Jacobians) at equilibrium points. Users access this through <code>system.linearize()</code>.</p>
 <p><strong>Mathematical forms:</strong></p>
 <p><strong>Continuous systems:</strong></p>
@@ -867,7 +846,7 @@ window.Quarto = {
 </section>
 <section id="sec-observationengine" class="level3">
 <h3 class="anchored" data-anchor-id="sec-observationengine">ObservationEngine: Output Function Evaluation</h3>
-<p><strong>File:</strong> <code>observation_engine.py</code> (628 lines)</p>
+<p><strong>File:</strong> <code>observation_engine.py</code></p>
 <p>The <code>ObservationEngine</code> handles output function evaluation (y = h(x)) and output Jacobian computation. Users access through <code>system.output()</code> and <code>system.output_jacobian()</code>.</p>
 <p><strong>Mathematical form:</strong></p>
 <p><span class="math display">\[y = h(x)\]</span></p>
@@ -912,7 +891,7 @@ window.Quarto = {
 <h2 class="anchored" data-anchor-id="sec-stochastic-support">Stochastic Support Components</h2>
 <section id="sec-diffusionhandler" class="level3">
 <h3 class="anchored" data-anchor-id="sec-diffusionhandler">DiffusionHandler: SDE Diffusion Management</h3>
-<p><strong>File:</strong> <code>diffusion_handler.py</code> (1,069 lines)</p>
+<p><strong>File:</strong> <code>diffusion_handler.py</code></p>
 <p>The <code>DiffusionHandler</code> generates and caches diffusion functions for stochastic systems. Users interact through <code>system.diffusion()</code> method.</p>
 <p><strong>Mathematical form:</strong></p>
 <p><span class="math display">\[dx = f(x, u)dt + g(x, u)dW\]</span></p>
@@ -991,7 +970,7 @@ window.Quarto = {
 </section>
 <section id="sec-sdevalidator" class="level3">
 <h3 class="anchored" data-anchor-id="sec-sdevalidator">SDEValidator: SDE-Specific Validation</h3>
-<p><strong>File:</strong> <code>sde_validator.py</code> (544 lines)</p>
+<p><strong>File:</strong> <code>sde_validator.py</code></p>
 <p>The <code>SDEValidator</code> performs SDE-specific validation during system creation. Validation happens automatically with clear error messages.</p>
 <p><strong>Validation checks (automatic):</strong></p>
 <ul>
@@ -1019,7 +998,7 @@ window.Quarto = {
 <h2 class="anchored" data-anchor-id="sec-low-level-utilities">Low-Level Utilities</h2>
 <section id="sec-codegenutils" class="level3">
 <h3 class="anchored" data-anchor-id="sec-codegenutils">codegen_utils: SymPy Code Generation</h3>
-<p><strong>File:</strong> <code>codegen_utils.py</code> (733 lines)</p>
+<p><strong>File:</strong> <code>codegen_utils.py</code></p>
 <p>Low-level utilities for converting SymPy expressions to executable functions. This is completely internal to the framework.</p>
 <p><strong>Optimization strategies (internal):</strong></p>
 <p><strong>NumPy:</strong> - Common subexpression elimination (CSE) - Fast numerical modules (‘numpy’, ‘scipy’) - Matrix operation optimization</p>
@@ -1812,7 +1791,7 @@ window.Quarto = {
 <span id="cb26-18"><a href="#cb26-18" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb26-19"><a href="#cb26-19" aria-hidden="true" tabindex="-1"></a><span class="fu">## Overview {#sec-overview}</span></span>
 <span id="cb26-20"><a href="#cb26-20" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-21"><a href="#cb26-21" aria-hidden="true" tabindex="-1"></a>The **Delegation Layer** (also called the **Support Framework**) provides **specialized internal services** to the UI framework through **composition rather than inheritance**. This layer consists of **11 focused utility classes** totaling ~7,200 lines that handle backend management, code generation, dynamics evaluation, and stochastic analysis.</span>
+<span id="cb26-21"><a href="#cb26-21" aria-hidden="true" tabindex="-1"></a>The **Delegation Layer** (also called the **Support Framework**) provides **specialized internal services** to the UI framework through **composition rather than inheritance**. This layer consists of **11 focused utility classes** that handle backend management, code generation, dynamics evaluation, and stochastic analysis.</span>
 <span id="cb26-22"><a href="#cb26-22" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb26-23"><a href="#cb26-23" aria-hidden="true" tabindex="-1"></a>::: {.callout-important}</span>
 <span id="cb26-24"><a href="#cb26-24" aria-hidden="true" tabindex="-1"></a><span class="fu">## Internal Framework - Not for Direct Use</span></span>
@@ -1895,9 +1874,9 @@ window.Quarto = {
 <span id="cb26-105"><a href="#cb26-105" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb26-106"><a href="#cb26-106" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
 <span id="cb26-107"><a href="#cb26-107" aria-hidden="true" tabindex="-1"></a><span class="in">┌─────────────────────────────────────────────────────────────┐</span></span>
-<span id="cb26-108"><a href="#cb26-108" aria-hidden="true" tabindex="-1"></a><span class="in">│                     UI FRAMEWORK                             │</span></span>
-<span id="cb26-109"><a href="#cb26-109" aria-hidden="true" tabindex="-1"></a><span class="in">│  (SymbolicSystemBase, ContinuousSymbolicSystem, etc.)        │</span></span>
-<span id="cb26-110"><a href="#cb26-110" aria-hidden="true" tabindex="-1"></a><span class="in">│                                                              │</span></span>
+<span id="cb26-108"><a href="#cb26-108" aria-hidden="true" tabindex="-1"></a><span class="in">│                     UI FRAMEWORK                            │</span></span>
+<span id="cb26-109"><a href="#cb26-109" aria-hidden="true" tabindex="-1"></a><span class="in">│  (SymbolicSystemBase, ContinuousSymbolicSystem, etc.)       │</span></span>
+<span id="cb26-110"><a href="#cb26-110" aria-hidden="true" tabindex="-1"></a><span class="in">│                                                             │</span></span>
 <span id="cb26-111"><a href="#cb26-111" aria-hidden="true" tabindex="-1"></a><span class="in">│  User-facing methods that delegate to utilities:            │</span></span>
 <span id="cb26-112"><a href="#cb26-112" aria-hidden="true" tabindex="-1"></a><span class="in">│  • system(x, u) → delegates to DynamicsEvaluator            │</span></span>
 <span id="cb26-113"><a href="#cb26-113" aria-hidden="true" tabindex="-1"></a><span class="in">│  • system.linearize() → delegates to LinearizationEngine    │</span></span>
@@ -1909,30 +1888,30 @@ window.Quarto = {
 <span id="cb26-119"><a href="#cb26-119" aria-hidden="true" tabindex="-1"></a><span class="in">│                  DELEGATION LAYER (Internal)                │</span></span>
 <span id="cb26-120"><a href="#cb26-120" aria-hidden="true" tabindex="-1"></a><span class="in">│                                                             │</span></span>
 <span id="cb26-121"><a href="#cb26-121" aria-hidden="true" tabindex="-1"></a><span class="in">│  ┌───────────────────────────────────────────────────────┐  │</span></span>
-<span id="cb26-122"><a href="#cb26-122" aria-hidden="true" tabindex="-1"></a><span class="in">│  │  CORE UTILITIES (Universal)                         │  │</span></span>
-<span id="cb26-123"><a href="#cb26-123" aria-hidden="true" tabindex="-1"></a><span class="in">│  │  • BackendManager      - Multi-backend support      │  │</span></span>
-<span id="cb26-124"><a href="#cb26-124" aria-hidden="true" tabindex="-1"></a><span class="in">│  │  • CodeGenerator       - Symbolic → numerical       │  │</span></span>
-<span id="cb26-125"><a href="#cb26-125" aria-hidden="true" tabindex="-1"></a><span class="in">│  │  • EquilibriumHandler  - Equilibrium management     │  │</span></span>
-<span id="cb26-126"><a href="#cb26-126" aria-hidden="true" tabindex="-1"></a><span class="in">│  │  • SymbolicValidator   - System validation          │  │</span></span>
+<span id="cb26-122"><a href="#cb26-122" aria-hidden="true" tabindex="-1"></a><span class="in">│  │  CORE UTILITIES (Universal)                           │  │</span></span>
+<span id="cb26-123"><a href="#cb26-123" aria-hidden="true" tabindex="-1"></a><span class="in">│  │  • BackendManager      - Multi-backend support        │  │</span></span>
+<span id="cb26-124"><a href="#cb26-124" aria-hidden="true" tabindex="-1"></a><span class="in">│  │  • CodeGenerator       - Symbolic → numerical         │  │</span></span>
+<span id="cb26-125"><a href="#cb26-125" aria-hidden="true" tabindex="-1"></a><span class="in">│  │  • EquilibriumHandler  - Equilibrium management       │  │</span></span>
+<span id="cb26-126"><a href="#cb26-126" aria-hidden="true" tabindex="-1"></a><span class="in">│  │  • SymbolicValidator   - System validation            │  │</span></span>
 <span id="cb26-127"><a href="#cb26-127" aria-hidden="true" tabindex="-1"></a><span class="in">│  └───────────────────────────────────────────────────────┘  │</span></span>
 <span id="cb26-128"><a href="#cb26-128" aria-hidden="true" tabindex="-1"></a><span class="in">│                                                             │</span></span>
 <span id="cb26-129"><a href="#cb26-129" aria-hidden="true" tabindex="-1"></a><span class="in">│  ┌───────────────────────────────────────────────────────┐  │</span></span>
-<span id="cb26-130"><a href="#cb26-130" aria-hidden="true" tabindex="-1"></a><span class="in">│  │  DETERMINISTIC EVALUATION (ODE Systems)             │  │</span></span>
-<span id="cb26-131"><a href="#cb26-131" aria-hidden="true" tabindex="-1"></a><span class="in">│  │  • DynamicsEvaluator    - Forward dynamics          │  │</span></span>
-<span id="cb26-132"><a href="#cb26-132" aria-hidden="true" tabindex="-1"></a><span class="in">│  │  • LinearizationEngine  - Jacobian computation      │  │</span></span>
-<span id="cb26-133"><a href="#cb26-133" aria-hidden="true" tabindex="-1"></a><span class="in">│  │  • ObservationEngine    - Output evaluation         │  │</span></span>
+<span id="cb26-130"><a href="#cb26-130" aria-hidden="true" tabindex="-1"></a><span class="in">│  │  DETERMINISTIC EVALUATION (ODE Systems)               │  │</span></span>
+<span id="cb26-131"><a href="#cb26-131" aria-hidden="true" tabindex="-1"></a><span class="in">│  │  • DynamicsEvaluator    - Forward dynamics            │  │</span></span>
+<span id="cb26-132"><a href="#cb26-132" aria-hidden="true" tabindex="-1"></a><span class="in">│  │  • LinearizationEngine  - Jacobian computation        │  │</span></span>
+<span id="cb26-133"><a href="#cb26-133" aria-hidden="true" tabindex="-1"></a><span class="in">│  │  • ObservationEngine    - Output evaluation           │  │</span></span>
 <span id="cb26-134"><a href="#cb26-134" aria-hidden="true" tabindex="-1"></a><span class="in">│  └───────────────────────────────────────────────────────┘  │</span></span>
 <span id="cb26-135"><a href="#cb26-135" aria-hidden="true" tabindex="-1"></a><span class="in">│                                                             │</span></span>
 <span id="cb26-136"><a href="#cb26-136" aria-hidden="true" tabindex="-1"></a><span class="in">│  ┌───────────────────────────────────────────────────────┐  │</span></span>
-<span id="cb26-137"><a href="#cb26-137" aria-hidden="true" tabindex="-1"></a><span class="in">│  │  STOCHASTIC SUPPORT (SDE Systems)                   │  │</span></span>
-<span id="cb26-138"><a href="#cb26-138" aria-hidden="true" tabindex="-1"></a><span class="in">│  │  • DiffusionHandler    - Diffusion generation       │  │</span></span>
-<span id="cb26-139"><a href="#cb26-139" aria-hidden="true" tabindex="-1"></a><span class="in">│  │  • NoiseCharacterizer  - Noise analysis             │  │</span></span>
-<span id="cb26-140"><a href="#cb26-140" aria-hidden="true" tabindex="-1"></a><span class="in">│  │  • SDEValidator        - SDE validation             │  │</span></span>
+<span id="cb26-137"><a href="#cb26-137" aria-hidden="true" tabindex="-1"></a><span class="in">│  │  STOCHASTIC SUPPORT (SDE Systems)                     │  │</span></span>
+<span id="cb26-138"><a href="#cb26-138" aria-hidden="true" tabindex="-1"></a><span class="in">│  │  • DiffusionHandler    - Diffusion generation         │  │</span></span>
+<span id="cb26-139"><a href="#cb26-139" aria-hidden="true" tabindex="-1"></a><span class="in">│  │  • NoiseCharacterizer  - Noise analysis               │  │</span></span>
+<span id="cb26-140"><a href="#cb26-140" aria-hidden="true" tabindex="-1"></a><span class="in">│  │  • SDEValidator        - SDE validation               │  │</span></span>
 <span id="cb26-141"><a href="#cb26-141" aria-hidden="true" tabindex="-1"></a><span class="in">│  └───────────────────────────────────────────────────────┘  │</span></span>
 <span id="cb26-142"><a href="#cb26-142" aria-hidden="true" tabindex="-1"></a><span class="in">│                                                             │</span></span>
 <span id="cb26-143"><a href="#cb26-143" aria-hidden="true" tabindex="-1"></a><span class="in">│  ┌───────────────────────────────────────────────────────┐  │</span></span>
-<span id="cb26-144"><a href="#cb26-144" aria-hidden="true" tabindex="-1"></a><span class="in">│  │  LOW-LEVEL UTILITIES                                │  │</span></span>
-<span id="cb26-145"><a href="#cb26-145" aria-hidden="true" tabindex="-1"></a><span class="in">│  │  • codegen_utils       - SymPy code generation      │  │</span></span>
+<span id="cb26-144"><a href="#cb26-144" aria-hidden="true" tabindex="-1"></a><span class="in">│  │  LOW-LEVEL UTILITIES                                  │  │</span></span>
+<span id="cb26-145"><a href="#cb26-145" aria-hidden="true" tabindex="-1"></a><span class="in">│  │  • codegen_utils       - SymPy code generation        │  │</span></span>
 <span id="cb26-146"><a href="#cb26-146" aria-hidden="true" tabindex="-1"></a><span class="in">│  └───────────────────────────────────────────────────────┘  │</span></span>
 <span id="cb26-147"><a href="#cb26-147" aria-hidden="true" tabindex="-1"></a><span class="in">└─────────────────────────────────────────────────────────────┘</span></span>
 <span id="cb26-148"><a href="#cb26-148" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
@@ -1941,7 +1920,7 @@ window.Quarto = {
 <span id="cb26-151"><a href="#cb26-151" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb26-152"><a href="#cb26-152" aria-hidden="true" tabindex="-1"></a><span class="fu">### BackendManager: Multi-Backend Array Handling {#sec-backendmanager}</span></span>
 <span id="cb26-153"><a href="#cb26-153" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-154"><a href="#cb26-154" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`backend_manager.py`</span> (545 lines)</span>
+<span id="cb26-154"><a href="#cb26-154" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`backend_manager.py`</span></span>
 <span id="cb26-155"><a href="#cb26-155" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb26-156"><a href="#cb26-156" aria-hidden="true" tabindex="-1"></a>The <span class="in">`BackendManager`</span> handles all backend-specific array operations and device management. Users interact with this functionality through system-level methods, never directly.</span>
 <span id="cb26-157"><a href="#cb26-157" aria-hidden="true" tabindex="-1"></a></span>
@@ -1998,7 +1977,7 @@ window.Quarto = {
 <span id="cb26-210"><a href="#cb26-210" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb26-211"><a href="#cb26-211" aria-hidden="true" tabindex="-1"></a><span class="fu">### CodeGenerator: Symbolic to Numerical Compilation {#sec-codegenerator}</span></span>
 <span id="cb26-212"><a href="#cb26-212" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-213"><a href="#cb26-213" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`code_generator.py`</span> (565 lines)</span>
+<span id="cb26-213"><a href="#cb26-213" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`code_generator.py`</span></span>
 <span id="cb26-214"><a href="#cb26-214" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb26-215"><a href="#cb26-215" aria-hidden="true" tabindex="-1"></a>The <span class="in">`CodeGenerator`</span> orchestrates the symbolic-to-numerical code generation pipeline with intelligent caching. This is completely internal—users simply call system methods that trigger code generation when needed.</span>
 <span id="cb26-216"><a href="#cb26-216" aria-hidden="true" tabindex="-1"></a></span>
@@ -2053,7 +2032,7 @@ window.Quarto = {
 <span id="cb26-267"><a href="#cb26-267" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb26-268"><a href="#cb26-268" aria-hidden="true" tabindex="-1"></a><span class="fu">### EquilibriumHandler: Named Equilibrium Management {#sec-equilibriumhandler}</span></span>
 <span id="cb26-269"><a href="#cb26-269" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-270"><a href="#cb26-270" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`equilibrium_handler.py`</span> (221 lines)</span>
+<span id="cb26-270"><a href="#cb26-270" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`equilibrium_handler.py`</span></span>
 <span id="cb26-271"><a href="#cb26-271" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb26-272"><a href="#cb26-272" aria-hidden="true" tabindex="-1"></a>The <span class="in">`EquilibriumHandler`</span> manages multiple named equilibrium points with automatic backend conversion. Users interact through system methods.</span>
 <span id="cb26-273"><a href="#cb26-273" aria-hidden="true" tabindex="-1"></a></span>
@@ -2106,7 +2085,7 @@ window.Quarto = {
 <span id="cb26-322"><a href="#cb26-322" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb26-323"><a href="#cb26-323" aria-hidden="true" tabindex="-1"></a><span class="fu">### SymbolicValidator: System Definition Validation {#sec-symbolicvalidator}</span></span>
 <span id="cb26-324"><a href="#cb26-324" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-325"><a href="#cb26-325" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`symbolic_validator.py`</span> (718 lines)</span>
+<span id="cb26-325"><a href="#cb26-325" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`symbolic_validator.py`</span></span>
 <span id="cb26-326"><a href="#cb26-326" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb26-327"><a href="#cb26-327" aria-hidden="true" tabindex="-1"></a>The <span class="in">`SymbolicValidator`</span> performs comprehensive validation of symbolic system definitions during initialization. Users benefit from clear error messages without directly interacting with the validator.</span>
 <span id="cb26-328"><a href="#cb26-328" aria-hidden="true" tabindex="-1"></a></span>
@@ -2148,7 +2127,7 @@ window.Quarto = {
 <span id="cb26-364"><a href="#cb26-364" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb26-365"><a href="#cb26-365" aria-hidden="true" tabindex="-1"></a><span class="fu">### DynamicsEvaluator: Forward Dynamics Computation {#sec-dynamicsevaluator}</span></span>
 <span id="cb26-366"><a href="#cb26-366" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-367"><a href="#cb26-367" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`dynamics_evaluator.py`</span> (576 lines)</span>
+<span id="cb26-367"><a href="#cb26-367" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`dynamics_evaluator.py`</span></span>
 <span id="cb26-368"><a href="#cb26-368" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb26-369"><a href="#cb26-369" aria-hidden="true" tabindex="-1"></a>The <span class="in">`DynamicsEvaluator`</span> handles forward dynamics evaluation (dx/dt = f(x, u)) across all backends. Users call <span class="in">`system(x, u)`</span> which internally delegates to this evaluator.</span>
 <span id="cb26-370"><a href="#cb26-370" aria-hidden="true" tabindex="-1"></a></span>
@@ -2197,7 +2176,7 @@ window.Quarto = {
 <span id="cb26-415"><a href="#cb26-415" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb26-416"><a href="#cb26-416" aria-hidden="true" tabindex="-1"></a><span class="fu">### LinearizationEngine: Jacobian Computation {#sec-linearizationengine}</span></span>
 <span id="cb26-417"><a href="#cb26-417" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-418"><a href="#cb26-418" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`linearization_engine.py`</span> (907 lines)</span>
+<span id="cb26-418"><a href="#cb26-418" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`linearization_engine.py`</span></span>
 <span id="cb26-419"><a href="#cb26-419" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb26-420"><a href="#cb26-420" aria-hidden="true" tabindex="-1"></a>The <span class="in">`LinearizationEngine`</span> computes system linearizations (Jacobians) at equilibrium points. Users access this through <span class="in">`system.linearize()`</span>.</span>
 <span id="cb26-421"><a href="#cb26-421" aria-hidden="true" tabindex="-1"></a></span>
@@ -2250,7 +2229,7 @@ window.Quarto = {
 <span id="cb26-470"><a href="#cb26-470" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb26-471"><a href="#cb26-471" aria-hidden="true" tabindex="-1"></a><span class="fu">### ObservationEngine: Output Function Evaluation {#sec-observationengine}</span></span>
 <span id="cb26-472"><a href="#cb26-472" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-473"><a href="#cb26-473" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`observation_engine.py`</span> (628 lines)</span>
+<span id="cb26-473"><a href="#cb26-473" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`observation_engine.py`</span></span>
 <span id="cb26-474"><a href="#cb26-474" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb26-475"><a href="#cb26-475" aria-hidden="true" tabindex="-1"></a>The <span class="in">`ObservationEngine`</span> handles output function evaluation (y = h(x)) and output Jacobian computation. Users access through <span class="in">`system.output()`</span> and <span class="in">`system.output_jacobian()`</span>.</span>
 <span id="cb26-476"><a href="#cb26-476" aria-hidden="true" tabindex="-1"></a></span>
@@ -2302,7 +2281,7 @@ window.Quarto = {
 <span id="cb26-524"><a href="#cb26-524" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb26-525"><a href="#cb26-525" aria-hidden="true" tabindex="-1"></a><span class="fu">### DiffusionHandler: SDE Diffusion Management {#sec-diffusionhandler}</span></span>
 <span id="cb26-526"><a href="#cb26-526" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-527"><a href="#cb26-527" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`diffusion_handler.py`</span> (1,069 lines)</span>
+<span id="cb26-527"><a href="#cb26-527" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`diffusion_handler.py`</span></span>
 <span id="cb26-528"><a href="#cb26-528" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb26-529"><a href="#cb26-529" aria-hidden="true" tabindex="-1"></a>The <span class="in">`DiffusionHandler`</span> generates and caches diffusion functions for stochastic systems. Users interact through <span class="in">`system.diffusion()`</span> method.</span>
 <span id="cb26-530"><a href="#cb26-530" aria-hidden="true" tabindex="-1"></a></span>
@@ -2358,7 +2337,7 @@ window.Quarto = {
 <span id="cb26-582"><a href="#cb26-582" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb26-583"><a href="#cb26-583" aria-hidden="true" tabindex="-1"></a><span class="fu">### SDEValidator: SDE-Specific Validation {#sec-sdevalidator}</span></span>
 <span id="cb26-584"><a href="#cb26-584" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-585"><a href="#cb26-585" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`sde_validator.py`</span> (544 lines)</span>
+<span id="cb26-585"><a href="#cb26-585" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`sde_validator.py`</span></span>
 <span id="cb26-586"><a href="#cb26-586" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb26-587"><a href="#cb26-587" aria-hidden="true" tabindex="-1"></a>The <span class="in">`SDEValidator`</span> performs SDE-specific validation during system creation. Validation happens automatically with clear error messages.</span>
 <span id="cb26-588"><a href="#cb26-588" aria-hidden="true" tabindex="-1"></a></span>
@@ -2390,7 +2369,7 @@ window.Quarto = {
 <span id="cb26-614"><a href="#cb26-614" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb26-615"><a href="#cb26-615" aria-hidden="true" tabindex="-1"></a><span class="fu">### codegen_utils: SymPy Code Generation {#sec-codegenutils}</span></span>
 <span id="cb26-616"><a href="#cb26-616" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-617"><a href="#cb26-617" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`codegen_utils.py`</span> (733 lines)</span>
+<span id="cb26-617"><a href="#cb26-617" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`codegen_utils.py`</span></span>
 <span id="cb26-618"><a href="#cb26-618" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb26-619"><a href="#cb26-619" aria-hidden="true" tabindex="-1"></a>Low-level utilities for converting SymPy expressions to executable functions. This is completely internal to the framework.</span>
 <span id="cb26-620"><a href="#cb26-620" aria-hidden="true" tabindex="-1"></a></span>

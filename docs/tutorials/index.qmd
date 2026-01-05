@@ -9,10 +9,8 @@ title: "Tutorials"
 
 ## Core Concepts {#sec-core-concepts}
 
-- [Dynamical Systems](dynamical-systems.qmd)
-- [SDE Integration](sde-integration.qmd)
-- [Backend Selection](backends.qmd)
+- TODO: Plan and make these
 
 ## Advanced Topics {#sec-advanced-topics}
 
-- [Visualization Guide](visualization.qmd)
+- TODO: Plan and make these

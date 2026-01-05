@@ -28,13 +28,7 @@ website:
           - architecture/Example_Systems_Architecture.qmd
       - text: "Tutorials"
         menu:
-          - tutorials/quick_reference/UI_Framework_Quick_Reference.qmd
-          - tutorials/quick_reference/Type_System_Quick_Reference.qmd
-          - tutorials/quick_reference/Integration_Framework_Quick_Reference.qmd
-          - tutorials/quick_reference/Control_Framework_Quick_Reference.qmd
-          - tutorials/quick_reference/Visualization_Framework_Quick_Reference.qmd
-          - tutorials/quick_reference/Delegation_Layer_Quick_Reference.qmd
-          - tutorials/quick_reference/Example_Systems_Quick_Reference.qmd
+          - tutorials/basic_usage.qmd
       - text: "Examples"
         menu:
           - examples/pendulum_control.qmd
@@ -70,15 +64,9 @@ website:
     
     - title: "Tutorials"
       contents:
-        - section: "Quick Start Guides"
+        - section: "Small Demonstrations of Basic Functionality"
           contents:
-            - tutorials/quick_reference/UI_Framework_Quick_Reference.qmd
-            - tutorials/quick_reference/Type_System_Quick_Reference.qmd
-            - tutorials/quick_reference/Integration_Framework_Quick_Reference.qmd
-            - tutorials/quick_reference/Control_Framework_Quick_Reference.qmd
-            - tutorials/quick_reference/Visualization_Framework_Quick_Reference.qmd
-            - tutorials/quick_reference/Delegation_Layer_Quick_Reference.qmd
-            - tutorials/quick_reference/Example_Systems_Quick_Reference.qmd
+          - tutorials/basic_usage.qmd
     
     - title: "Examples"
       contents:

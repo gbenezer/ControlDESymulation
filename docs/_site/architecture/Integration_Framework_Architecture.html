@@ -206,30 +206,9 @@ window.Quarto = {
     </a>
     <ul class="dropdown-menu" aria-labelledby="nav-menu-tutorials">    
         <li>
-    <a class="dropdown-item" href="../tutorials/quick_reference/UI_Framework_Quick_Reference.html">
- <span class="dropdown-text">ControlDESymulation UI Framework Quick Reference</span></a>
+    <a class="dropdown-item" href="../tutorials/basic_usage.html">
+ <span class="dropdown-text">Basic Usage</span></a>
   </li>  
-        <li>
-    <a class="dropdown-item" href="../tutorials/quick_reference/Type_System_Quick_Reference.html">
- <span class="dropdown-text">Type System Quick Reference</span></a>
-  </li>  
-        <li>
-    <a class="dropdown-item" href="../tutorials/quick_reference/Integration_Framework_Quick_Reference.html">
- <span class="dropdown-text">Numerical Integration Framework Quick Reference</span></a>
-  </li>  
-        <li>
-    <a class="dropdown-item" href="../tutorials/quick_reference/Control_Framework_Quick_Reference.html">
- <span class="dropdown-text">Control Framework Quick Reference</span></a>
-  </li>  
-        <li>
-    <a class="dropdown-item" href="../tutorials/quick_reference/Visualization_Framework_Quick_Reference.html">
- <span class="dropdown-text">Visualization Framework Quick Reference</span></a>
-  </li>  
-        <li>
-    <a class="dropdown-item" href="../tutorials/quick_reference/Delegation_Layer_Quick_Reference.html">
- <span class="dropdown-text">Delegation Layer Quick Reference</span></a>
-  </li>  
-        <li class="dropdown-header">tutorials/quick_reference/Example_Systems_Quick_Reference.qmd</li>
     </ul>
   </li>
   <li class="nav-item dropdown ">
@@ -513,7 +492,7 @@ Track 2: Stochastic SDE Integration
 <h2 class="anchored" data-anchor-id="sec-track-1">Track 1: Deterministic ODE Integration</h2>
 <section id="sec-integratorbase" class="level3">
 <h3 class="anchored" data-anchor-id="sec-integratorbase">IntegratorBase: Abstract Interface</h3>
-<p><strong>File:</strong> <code>integrator_base.py</code> (512 lines)</p>
+<p><strong>File:</strong> <code>integrator_base.py</code></p>
 <p>The <code>IntegratorBase</code> class defines the unified interface that all numerical integrators must implement. This abstraction enables backend-agnostic integration while maintaining consistent behavior across implementations.</p>
 <p><strong>Core responsibilities:</strong></p>
 <ul>
@@ -553,7 +532,7 @@ Track 2: Stochastic SDE Integration
 </section>
 <section id="sec-integratorfactory" class="level3">
 <h3 class="anchored" data-anchor-id="sec-integratorfactory">IntegratorFactory: Smart Creation</h3>
-<p><strong>File:</strong> <code>integrator_factory.py</code> (1,267 lines)</p>
+<p><strong>File:</strong> <code>integrator_factory.py</code></p>
 <p>The <code>IntegratorFactory</code> provides intelligent integrator creation with automatic backend and method selection. It encapsulates the complexity of choosing appropriate integration methods based on system properties and use case requirements.</p>
 <p><strong>Factory methods:</strong></p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Automatic selection based on system and backend</span></span>
@@ -689,7 +668,7 @@ Track 2: Stochastic SDE Integration
 </section>
 <section id="sec-scipyintegrator" class="level3">
 <h3 class="anchored" data-anchor-id="sec-scipyintegrator">ScipyIntegrator: Adaptive NumPy Integration</h3>
-<p><strong>File:</strong> <code>scipy_integrator.py</code> (~620 lines)</p>
+<p><strong>File:</strong> <code>scipy_integrator.py</code></p>
 <p>Wraps <code>scipy.integrate.solve_ivp</code> to provide professional-grade adaptive integration with comprehensive error control. This is the recommended starting point for most NumPy-based applications.</p>
 <p><strong>Supported methods:</strong></p>
 <ul>
@@ -745,7 +724,7 @@ Track 2: Stochastic SDE Integration
 </section>
 <section id="sec-torchdiffeqintegrator" class="level3">
 <h3 class="anchored" data-anchor-id="sec-torchdiffeqintegrator">TorchDiffEqIntegrator: GPU-Accelerated PyTorch</h3>
-<p><strong>File:</strong> `torchdiffeq_integrator.py** (~800 lines)</p>
+<p><strong>File:</strong> `torchdiffeq_integrator.py**</p>
 <p>Provides PyTorch integration with GPU acceleration and automatic differentiation support. Essential for neural ODE applications and gradient-based optimization.</p>
 <p><strong>Supported methods:</strong></p>
 <ul>
@@ -799,7 +778,7 @@ Track 2: Stochastic SDE Integration
 </section>
 <section id="sec-diffraxintegrator" class="level3">
 <h3 class="anchored" data-anchor-id="sec-diffraxintegrator">DiffraxIntegrator: JAX with XLA Compilation</h3>
-<p><strong>File:</strong> <code>diffrax_integrator.py</code> (~700 lines)</p>
+<p><strong>File:</strong> <code>diffrax_integrator.py</code></p>
 <p>Leverages JAX’s diffrax library for high-performance integration with XLA compilation. Ideal for optimization workflows requiring extensive JIT compilation and functional transformations.</p>
 <p><strong>Supported methods:</strong></p>
 <ul>
@@ -852,7 +831,7 @@ Track 2: Stochastic SDE Integration
 </section>
 <section id="sec-diffeqpyintegrator" class="level3">
 <h3 class="anchored" data-anchor-id="sec-diffeqpyintegrator">DiffEqPyIntegrator: Julia’s Solver Ecosystem</h3>
-<p><strong>File:</strong> <code>diffeqpy_integrator.py</code> (~900 lines)</p>
+<p><strong>File:</strong> <code>diffeqpy_integrator.py</code></p>
 <p>Accesses Julia’s extensive DifferentialEquations.jl ecosystem through Python bindings. Provides the most comprehensive method library with production-grade performance.</p>
 <p><strong>Supported method families:</strong></p>
 <p><strong>Explicit Runge-Kutta:</strong> - Tsit5, Vern6, Vern7, Vern8, Vern9 — variable order adaptive - DP5, DP8 — Dormand-Prince variants</p>
@@ -902,7 +881,7 @@ Track 2: Stochastic SDE Integration
 </section>
 <section id="sec-fixedstepintegrators" class="level3">
 <h3 class="anchored" data-anchor-id="sec-fixedstepintegrators">FixedStepIntegrators: Educational and Simple Systems</h3>
-<p><strong>File:</strong> <code>fixed_step_integrators.py</code> (~600 lines)</p>
+<p><strong>File:</strong> <code>fixed_step_integrators.py</code></p>
 <p>Manual implementations of classic fixed-step methods. These provide transparent, backend-agnostic integration suitable for education and simple systems where adaptive stepping is unnecessary.</p>
 <p><strong>Available methods:</strong></p>
 <ul>
@@ -953,7 +932,7 @@ Track 2: Stochastic SDE Integration
 <h2 class="anchored" data-anchor-id="sec-track-2">Track 2: Stochastic SDE Integration</h2>
 <section id="sec-sdeintegratorbase" class="level3">
 <h3 class="anchored" data-anchor-id="sec-sdeintegratorbase">SDEIntegratorBase: Stochastic Abstract Interface</h3>
-<p><strong>File:</strong> <code>sde_integrator_base.py</code> (1,080 lines)</p>
+<p><strong>File:</strong> <code>sde_integrator_base.py</code></p>
 <p>Extends <code>IntegratorBase</code> to handle stochastic differential equations of the form:</p>
 <p><span class="math display">\[dx = f(x, u, t)dt + g(x, u, t)dW\]</span></p>
 <p>where:</p>
@@ -995,7 +974,7 @@ Track 2: Stochastic SDE Integration
 </section>
 <section id="sec-sdeintegratorfactory" class="level3">
 <h3 class="anchored" data-anchor-id="sec-sdeintegratorfactory">SDEIntegratorFactory: SDE-Specific Creation</h3>
-<p><strong>File:</strong> <code>sde_integrator_factory.py</code> (~1,000 lines)</p>
+<p><strong>File:</strong> <code>sde_integrator_factory.py</code></p>
 <p>Provides intelligent SDE integrator creation with automatic noise structure detection and method selection.</p>
 <p><strong>Factory methods:</strong></p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Automatic selection based on noise structure</span></span>
@@ -1076,7 +1055,7 @@ Track 2: Stochastic SDE Integration
 </section>
 <section id="sec-torchsdeintegrator" class="level3">
 <h3 class="anchored" data-anchor-id="sec-torchsdeintegrator">TorchSDEIntegrator: PyTorch SDE Integration</h3>
-<p><strong>File:</strong> <code>torchsde_integrator.py</code> (~800 lines)</p>
+<p><strong>File:</strong> <code>torchsde_integrator.py</code></p>
 <p>GPU-accelerated SDE integration using the <code>torchsde</code> library. Supports automatic differentiation through stochastic dynamics.</p>
 <p><strong>Supported methods:</strong></p>
 <ul>
@@ -1122,7 +1101,7 @@ Track 2: Stochastic SDE Integration
 </section>
 <section id="sec-diffraxsdeintegrator" class="level3">
 <h3 class="anchored" data-anchor-id="sec-diffraxsdeintegrator">DiffraxSDEIntegrator: JAX SDE Integration</h3>
-<p><strong>File:</strong> <code>diffrax_sde_integrator.py</code> (~750 lines)</p>
+<p><strong>File:</strong> <code>diffrax_sde_integrator.py</code></p>
 <p>JAX-based SDE integration with XLA compilation and functional transformations. Excellent for optimization involving stochastic dynamics.</p>
 <p><strong>Supported methods:</strong></p>
 <ul>
@@ -1164,7 +1143,7 @@ Track 2: Stochastic SDE Integration
 </section>
 <section id="sec-diffeqpysdeintegrator" class="level3">
 <h3 class="anchored" data-anchor-id="sec-diffeqpysdeintegrator">DiffEqPySDEIntegrator: Julia SDE Integration</h3>
-<p><strong>File:</strong> <code>diffeqpy_sde_integrator.py</code> (~850 lines)</p>
+<p><strong>File:</strong> <code>diffeqpy_sde_integrator.py</code></p>
 <p>Access to Julia’s comprehensive SDE solver ecosystem through Python bindings.</p>
 <p><strong>Supported methods:</strong></p>
 <ul>
@@ -1206,7 +1185,7 @@ Track 2: Stochastic SDE Integration
 </section>
 <section id="sec-custombrownianpath" class="level3">
 <h3 class="anchored" data-anchor-id="sec-custombrownianpath">CustomBrownianPath: Deterministic Noise for Testing</h3>
-<p><strong>File:</strong> <code>custom_brownian.py</code> (160 lines)</p>
+<p><strong>File:</strong> <code>custom_brownian.py</code></p>
 <p>Provides custom Brownian motion paths for deterministic testing and reproducibility. Implements diffrax’s <code>AbstractPath</code> interface.</p>
 <p><strong>Key features:</strong></p>
 <ul>
@@ -2270,7 +2249,7 @@ Track 2: Stochastic SDE Integration
 <span id="cb31-105"><a href="#cb31-105" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb31-106"><a href="#cb31-106" aria-hidden="true" tabindex="-1"></a><span class="fu">### IntegratorBase: Abstract Interface {#sec-integratorbase}</span></span>
 <span id="cb31-107"><a href="#cb31-107" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb31-108"><a href="#cb31-108" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`integrator_base.py`</span> (512 lines)</span>
+<span id="cb31-108"><a href="#cb31-108" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`integrator_base.py`</span></span>
 <span id="cb31-109"><a href="#cb31-109" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb31-110"><a href="#cb31-110" aria-hidden="true" tabindex="-1"></a>The <span class="in">`IntegratorBase`</span> class defines the unified interface that all numerical integrators must implement. This abstraction enables backend-agnostic integration while maintaining consistent behavior across implementations.</span>
 <span id="cb31-111"><a href="#cb31-111" aria-hidden="true" tabindex="-1"></a></span>
@@ -2319,7 +2298,7 @@ Track 2: Stochastic SDE Integration
 <span id="cb31-154"><a href="#cb31-154" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb31-155"><a href="#cb31-155" aria-hidden="true" tabindex="-1"></a><span class="fu">### IntegratorFactory: Smart Creation {#sec-integratorfactory}</span></span>
 <span id="cb31-156"><a href="#cb31-156" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb31-157"><a href="#cb31-157" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`integrator_factory.py`</span> (1,267 lines)</span>
+<span id="cb31-157"><a href="#cb31-157" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`integrator_factory.py`</span></span>
 <span id="cb31-158"><a href="#cb31-158" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb31-159"><a href="#cb31-159" aria-hidden="true" tabindex="-1"></a>The <span class="in">`IntegratorFactory`</span> provides intelligent integrator creation with automatic backend and method selection. It encapsulates the complexity of choosing appropriate integration methods based on system properties and use case requirements.</span>
 <span id="cb31-160"><a href="#cb31-160" aria-hidden="true" tabindex="-1"></a></span>
@@ -2367,7 +2346,7 @@ Track 2: Stochastic SDE Integration
 <span id="cb31-202"><a href="#cb31-202" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb31-203"><a href="#cb31-203" aria-hidden="true" tabindex="-1"></a><span class="fu">### ScipyIntegrator: Adaptive NumPy Integration {#sec-scipyintegrator}</span></span>
 <span id="cb31-204"><a href="#cb31-204" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb31-205"><a href="#cb31-205" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`scipy_integrator.py`</span> (~620 lines)</span>
+<span id="cb31-205"><a href="#cb31-205" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`scipy_integrator.py`</span></span>
 <span id="cb31-206"><a href="#cb31-206" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb31-207"><a href="#cb31-207" aria-hidden="true" tabindex="-1"></a>Wraps <span class="in">`scipy.integrate.solve_ivp`</span> to provide professional-grade adaptive integration with comprehensive error control. This is the recommended starting point for most NumPy-based applications.</span>
 <span id="cb31-208"><a href="#cb31-208" aria-hidden="true" tabindex="-1"></a></span>
@@ -2425,7 +2404,7 @@ Track 2: Stochastic SDE Integration
 <span id="cb31-262"><a href="#cb31-262" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb31-263"><a href="#cb31-263" aria-hidden="true" tabindex="-1"></a><span class="fu">### TorchDiffEqIntegrator: GPU-Accelerated PyTorch {#sec-torchdiffeqintegrator}</span></span>
 <span id="cb31-264"><a href="#cb31-264" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb31-265"><a href="#cb31-265" aria-hidden="true" tabindex="-1"></a>**File:** `torchdiffeq_integrator.py** (~800 lines)</span>
+<span id="cb31-265"><a href="#cb31-265" aria-hidden="true" tabindex="-1"></a>**File:** `torchdiffeq_integrator.py**</span>
 <span id="cb31-266"><a href="#cb31-266" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb31-267"><a href="#cb31-267" aria-hidden="true" tabindex="-1"></a>Provides PyTorch integration with GPU acceleration and automatic differentiation support. Essential for neural ODE applications and gradient-based optimization.</span>
 <span id="cb31-268"><a href="#cb31-268" aria-hidden="true" tabindex="-1"></a></span>
@@ -2481,7 +2460,7 @@ Track 2: Stochastic SDE Integration
 <span id="cb31-320"><a href="#cb31-320" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb31-321"><a href="#cb31-321" aria-hidden="true" tabindex="-1"></a><span class="fu">### DiffraxIntegrator: JAX with XLA Compilation {#sec-diffraxintegrator}</span></span>
 <span id="cb31-322"><a href="#cb31-322" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb31-323"><a href="#cb31-323" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`diffrax_integrator.py`</span> (~700 lines)</span>
+<span id="cb31-323"><a href="#cb31-323" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`diffrax_integrator.py`</span></span>
 <span id="cb31-324"><a href="#cb31-324" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb31-325"><a href="#cb31-325" aria-hidden="true" tabindex="-1"></a>Leverages JAX's diffrax library for high-performance integration with XLA compilation. Ideal for optimization workflows requiring extensive JIT compilation and functional transformations.</span>
 <span id="cb31-326"><a href="#cb31-326" aria-hidden="true" tabindex="-1"></a></span>
@@ -2536,7 +2515,7 @@ Track 2: Stochastic SDE Integration
 <span id="cb31-377"><a href="#cb31-377" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb31-378"><a href="#cb31-378" aria-hidden="true" tabindex="-1"></a><span class="fu">### DiffEqPyIntegrator: Julia's Solver Ecosystem {#sec-diffeqpyintegrator}</span></span>
 <span id="cb31-379"><a href="#cb31-379" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb31-380"><a href="#cb31-380" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`diffeqpy_integrator.py`</span> (~900 lines)</span>
+<span id="cb31-380"><a href="#cb31-380" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`diffeqpy_integrator.py`</span></span>
 <span id="cb31-381"><a href="#cb31-381" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb31-382"><a href="#cb31-382" aria-hidden="true" tabindex="-1"></a>Accesses Julia's extensive DifferentialEquations.jl ecosystem through Python bindings. Provides the most comprehensive method library with production-grade performance.</span>
 <span id="cb31-383"><a href="#cb31-383" aria-hidden="true" tabindex="-1"></a></span>
@@ -2603,7 +2582,7 @@ Track 2: Stochastic SDE Integration
 <span id="cb31-446"><a href="#cb31-446" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb31-447"><a href="#cb31-447" aria-hidden="true" tabindex="-1"></a><span class="fu">### FixedStepIntegrators: Educational and Simple Systems {#sec-fixedstepintegrators}</span></span>
 <span id="cb31-448"><a href="#cb31-448" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb31-449"><a href="#cb31-449" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`fixed_step_integrators.py`</span> (~600 lines)</span>
+<span id="cb31-449"><a href="#cb31-449" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`fixed_step_integrators.py`</span></span>
 <span id="cb31-450"><a href="#cb31-450" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb31-451"><a href="#cb31-451" aria-hidden="true" tabindex="-1"></a>Manual implementations of classic fixed-step methods. These provide transparent, backend-agnostic integration suitable for education and simple systems where adaptive stepping is unnecessary.</span>
 <span id="cb31-452"><a href="#cb31-452" aria-hidden="true" tabindex="-1"></a></span>
@@ -2655,7 +2634,7 @@ Track 2: Stochastic SDE Integration
 <span id="cb31-500"><a href="#cb31-500" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb31-501"><a href="#cb31-501" aria-hidden="true" tabindex="-1"></a><span class="fu">### SDEIntegratorBase: Stochastic Abstract Interface {#sec-sdeintegratorbase}</span></span>
 <span id="cb31-502"><a href="#cb31-502" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb31-503"><a href="#cb31-503" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`sde_integrator_base.py`</span> (1,080 lines)</span>
+<span id="cb31-503"><a href="#cb31-503" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`sde_integrator_base.py`</span></span>
 <span id="cb31-504"><a href="#cb31-504" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb31-505"><a href="#cb31-505" aria-hidden="true" tabindex="-1"></a>Extends <span class="in">`IntegratorBase`</span> to handle stochastic differential equations of the form:</span>
 <span id="cb31-506"><a href="#cb31-506" aria-hidden="true" tabindex="-1"></a></span>
@@ -2701,7 +2680,7 @@ Track 2: Stochastic SDE Integration
 <span id="cb31-546"><a href="#cb31-546" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb31-547"><a href="#cb31-547" aria-hidden="true" tabindex="-1"></a><span class="fu">### SDEIntegratorFactory: SDE-Specific Creation {#sec-sdeintegratorfactory}</span></span>
 <span id="cb31-548"><a href="#cb31-548" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb31-549"><a href="#cb31-549" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`sde_integrator_factory.py`</span> (~1,000 lines)</span>
+<span id="cb31-549"><a href="#cb31-549" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`sde_integrator_factory.py`</span></span>
 <span id="cb31-550"><a href="#cb31-550" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb31-551"><a href="#cb31-551" aria-hidden="true" tabindex="-1"></a>Provides intelligent SDE integrator creation with automatic noise structure detection and method selection.</span>
 <span id="cb31-552"><a href="#cb31-552" aria-hidden="true" tabindex="-1"></a></span>
@@ -2742,7 +2721,7 @@ Track 2: Stochastic SDE Integration
 <span id="cb31-587"><a href="#cb31-587" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb31-588"><a href="#cb31-588" aria-hidden="true" tabindex="-1"></a><span class="fu">### TorchSDEIntegrator: PyTorch SDE Integration {#sec-torchsdeintegrator}</span></span>
 <span id="cb31-589"><a href="#cb31-589" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb31-590"><a href="#cb31-590" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`torchsde_integrator.py`</span> (~800 lines)</span>
+<span id="cb31-590"><a href="#cb31-590" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`torchsde_integrator.py`</span></span>
 <span id="cb31-591"><a href="#cb31-591" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb31-592"><a href="#cb31-592" aria-hidden="true" tabindex="-1"></a>GPU-accelerated SDE integration using the <span class="in">`torchsde`</span> library. Supports automatic differentiation through stochastic dynamics.</span>
 <span id="cb31-593"><a href="#cb31-593" aria-hidden="true" tabindex="-1"></a></span>
@@ -2790,7 +2769,7 @@ Track 2: Stochastic SDE Integration
 <span id="cb31-637"><a href="#cb31-637" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb31-638"><a href="#cb31-638" aria-hidden="true" tabindex="-1"></a><span class="fu">### DiffraxSDEIntegrator: JAX SDE Integration {#sec-diffraxsdeintegrator}</span></span>
 <span id="cb31-639"><a href="#cb31-639" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb31-640"><a href="#cb31-640" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`diffrax_sde_integrator.py`</span> (~750 lines)</span>
+<span id="cb31-640"><a href="#cb31-640" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`diffrax_sde_integrator.py`</span></span>
 <span id="cb31-641"><a href="#cb31-641" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb31-642"><a href="#cb31-642" aria-hidden="true" tabindex="-1"></a>JAX-based SDE integration with XLA compilation and functional transformations. Excellent for optimization involving stochastic dynamics.</span>
 <span id="cb31-643"><a href="#cb31-643" aria-hidden="true" tabindex="-1"></a></span>
@@ -2834,7 +2813,7 @@ Track 2: Stochastic SDE Integration
 <span id="cb31-683"><a href="#cb31-683" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb31-684"><a href="#cb31-684" aria-hidden="true" tabindex="-1"></a><span class="fu">### DiffEqPySDEIntegrator: Julia SDE Integration {#sec-diffeqpysdeintegrator}</span></span>
 <span id="cb31-685"><a href="#cb31-685" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb31-686"><a href="#cb31-686" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`diffeqpy_sde_integrator.py`</span> (~850 lines)</span>
+<span id="cb31-686"><a href="#cb31-686" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`diffeqpy_sde_integrator.py`</span></span>
 <span id="cb31-687"><a href="#cb31-687" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb31-688"><a href="#cb31-688" aria-hidden="true" tabindex="-1"></a>Access to Julia's comprehensive SDE solver ecosystem through Python bindings.</span>
 <span id="cb31-689"><a href="#cb31-689" aria-hidden="true" tabindex="-1"></a></span>
@@ -2878,7 +2857,7 @@ Track 2: Stochastic SDE Integration
 <span id="cb31-729"><a href="#cb31-729" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb31-730"><a href="#cb31-730" aria-hidden="true" tabindex="-1"></a><span class="fu">### CustomBrownianPath: Deterministic Noise for Testing {#sec-custombrownianpath}</span></span>
 <span id="cb31-731"><a href="#cb31-731" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb31-732"><a href="#cb31-732" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`custom_brownian.py`</span> (160 lines)</span>
+<span id="cb31-732"><a href="#cb31-732" aria-hidden="true" tabindex="-1"></a>**File:** <span class="in">`custom_brownian.py`</span></span>
 <span id="cb31-733"><a href="#cb31-733" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb31-734"><a href="#cb31-734" aria-hidden="true" tabindex="-1"></a>Provides custom Brownian motion paths for deterministic testing and reproducibility. Implements diffrax's <span class="in">`AbstractPath`</span> interface.</span>
 <span id="cb31-735"><a href="#cb31-735" aria-hidden="true" tabindex="-1"></a></span>
