@@ -1,111 +1,157 @@
 ---
 title: "ControlDESymulation Delegation Layer Architecture"
-subtitle: "ControlDESymulation Architecture Documentation"
+subtitle: "Internal Support Framework for System Components"
 author: "Gil Benezer"
 date: today
 format:
   html:
     toc: true
+    toc-depth: 3
     code-fold: show
     code-tools: true
+    theme: cosmo
 execute:
-  eval: true      # Execute all code blocks
-  cache: true     # Cache results
-  warning: false  # Suppress warnings
+  eval: true
+  cache: true
+  warning: false
 ---
-
 
 ## Overview {#sec-overview}
 
-The **Delegation Layer** (also called the **Support Framework**) provides **specialized services** to the UI framework through **composition rather than inheritance**. This layer consists of **11 focused utility classes** totaling ~7,200 lines that handle backend management, code generation, dynamics evaluation, and stochastic analysis.
+The **Delegation Layer** (also called the **Support Framework**) provides **specialized internal services** to the UI framework through **composition rather than inheritance**. This layer consists of **11 focused utility classes** totaling ~7,200 lines that handle backend management, code generation, dynamics evaluation, and stochastic analysis.
 
-## Architecture Philosophy {#sec-architecture-philosophy}
+::: {.callout-important}
+## Internal Framework - Not for Direct Use
 
-**Composition Over Inheritance** - Instead of creating deep inheritance hierarchies, the UI framework composes these specialized utilities:
+**This documentation describes internal framework components.** Users should NOT directly instantiate or interact with these classes. The delegation layer is an internal implementation detail accessed through the high-level system interface:
 
-```{python}
-#| output: false
-# In ContinuousSymbolicSystem.__init__():
+```python
+# ❌ INCORRECT: Direct delegation layer access
+code_gen = CodeGenerator(system)
+dynamics = DynamicsEvaluator(system, code_gen, backend_mgr)
+
+# ✓ CORRECT: Use system interface (delegation happens automatically)
+system = Pendulum()
+dx = system(x, u)  # DynamicsEvaluator called internally
+A, B = system.linearize(x_eq, u_eq)  # LinearizationEngine called internally
+```
+
+The system classes (e.g., `ContinuousSymbolicSystem`) automatically compose these utilities and expose their functionality through clean, user-facing APIs. This documentation is provided for framework developers and advanced users who need to understand the internal architecture.
+:::
 
 ```{python}
 #| label: setup-imports
-#| output: false
 #| echo: false
+#| output: false
 
-# Setup for all code examples in this document
+# Global setup for all code examples
 import numpy as np
+import torch
+import jax.numpy as jnp
 import sympy as sp
-from cdesym import ContinuousSymbolicSystem
-from cdesym.systems.examples.pendulum import SymbolicPendulum
+from cdesym import ContinuousSymbolicSystem, Pendulum, LangevinDynamics
+from cdesym import ContinuousStochasticSystem
+from cdesym.systems.builtin.deterministic.continuous.pendulum import SymbolicPendulum2ndOrder
+import warnings
+
+# Suppress warnings
+warnings.filterwarnings('ignore', category=UserWarning)
+
+# Create system instances for examples
+continuous_pendulum = Pendulum()
+continuous_pendulum_2 = SymbolicPendulum2ndOrder()
+langevin = LangevinDynamics()
 ```
 
-self.backend = BackendManager(default_backend, default_device)
-self._code_gen = CodeGenerator(self, self.backend)
-self._dynamics = DynamicsEvaluator(self, self._code_gen, self.backend)
-self._linearization = LinearizationEngine(self, self._code_gen, self.backend)
-self._observation = ObservationEngine(self, self._code_gen, self.backend)
-self.equilibria = EquilibriumHandler(nx, nu)
+## Architecture Philosophy {#sec-architecture-philosophy}
+
+### Composition Over Inheritance
+
+Instead of creating deep inheritance hierarchies, the UI framework composes these specialized utilities as private attributes. This internal composition is transparent to users:
+
+```{python}
+#| label: ex-composition-internal
+
+# Internal framework structure (users never access these directly)
+backend_manager = continuous_pendulum.backend  # BackendManager
+code_generator = continuous_pendulum._code_gen  # CodeGenerator
+dynamics_evaluator = continuous_pendulum._dynamics  # DynamicsEvaluator
+linearization_engine = continuous_pendulum._linearization  # LinearizationEngine
+observation_engine = continuous_pendulum._observation  # ObservationEngine
+equilibrium_handler = continuous_pendulum.equilibria  # EquilibriumHandler
+
+# Stochastic systems add additional handlers
+diffusion_handler = langevin.diffusion_handler  # DiffusionHandler
+
+print("✓ Framework internally composed - users interact with system methods only")
 ```
 
-This design provides:
+### Design Benefits
+
+This architecture provides:
 
 - **Single Responsibility** - Each class does one thing well
-- **Reusability** - Utilities can be used independently
+- **Reusability** - Utilities can be composed by different system types
 - **Testability** - Each component tested in isolation
-- **Flexibility** - Easy to swap implementations
+- **Flexibility** - Easy to swap implementations internally
 - **Clarity** - Clear separation of concerns
+- **Encapsulation** - Internal complexity hidden from users
 
 ## Architecture Layers {#sec-architecture-layers}
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                     UI FRAMEWORK                              │
+┌─────────────────────────────────────────────────────────────┐
+│                     UI FRAMEWORK                             │
 │  (SymbolicSystemBase, ContinuousSymbolicSystem, etc.)        │
-└────────────────────┬─────────────────────────────────────────┘
+│                                                              │
+│  User-facing methods that delegate to utilities:            │
+│  • system(x, u) → delegates to DynamicsEvaluator            │
+│  • system.linearize() → delegates to LinearizationEngine    │
+│  • system.set_default_backend() → delegates to BackendMgr   │
+└────────────────────┬────────────────────────────────────────┘
                      │ uses (composition)
                      ↓
-┌──────────────────────────────────────────────────────────────┐
-│                  DELEGATION LAYER                             │
-│                                                                │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │  CORE UTILITIES (Universal)                         │    │
-│  │  • BackendManager      - Multi-backend support      │    │
-│  │  • CodeGenerator       - Symbolic → numerical       │    │
-│  │  • EquilibriumHandler  - Equilibrium management     │    │
-│  │  • SymbolicValidator   - System validation          │    │
-│  └─────────────────────────────────────────────────────┘    │
-│                                                                │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │  DETERMINISTIC EVALUATION (ODE Systems)             │    │
-│  │  • DynamicsEvaluator    - Forward dynamics          │    │
-│  │  • LinearizationEngine  - Jacobian computation      │    │
-│  │  • ObservationEngine    - Output evaluation         │    │
-│  └─────────────────────────────────────────────────────┘    │
-│                                                                │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │  STOCHASTIC SUPPORT (SDE Systems)                   │    │
-│  │  • DiffusionHandler    - Diffusion generation       │    │
-│  │  • NoiseCharacterizer  - Noise analysis             │    │
-│  │  • SDEValidator        - SDE validation             │    │
-│  └─────────────────────────────────────────────────────┘    │
-│                                                                │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │  LOW-LEVEL UTILITIES                                │    │
-│  │  • codegen_utils       - SymPy code generation      │    │
-│  └─────────────────────────────────────────────────────┘    │
-└──────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                  DELEGATION LAYER (Internal)                │
+│                                                             │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │  CORE UTILITIES (Universal)                         │  │
+│  │  • BackendManager      - Multi-backend support      │  │
+│  │  • CodeGenerator       - Symbolic → numerical       │  │
+│  │  • EquilibriumHandler  - Equilibrium management     │  │
+│  │  • SymbolicValidator   - System validation          │  │
+│  └───────────────────────────────────────────────────────┘  │
+│                                                             │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │  DETERMINISTIC EVALUATION (ODE Systems)             │  │
+│  │  • DynamicsEvaluator    - Forward dynamics          │  │
+│  │  • LinearizationEngine  - Jacobian computation      │  │
+│  │  • ObservationEngine    - Output evaluation         │  │
+│  └───────────────────────────────────────────────────────┘  │
+│                                                             │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │  STOCHASTIC SUPPORT (SDE Systems)                   │  │
+│  │  • DiffusionHandler    - Diffusion generation       │  │
+│  │  • NoiseCharacterizer  - Noise analysis             │  │
+│  │  • SDEValidator        - SDE validation             │  │
+│  └───────────────────────────────────────────────────────┘  │
+│                                                             │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │  LOW-LEVEL UTILITIES                                │  │
+│  │  • codegen_utils       - SymPy code generation      │  │
+│  └───────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-## Component Breakdown {#sec-component-breakdown}
+## Core Utilities (Universal) {#sec-core-utilities}
 
-### Core Utilities (Universal) {#sec-core-utilities-universal}
+### BackendManager: Multi-Backend Array Handling {#sec-backendmanager}
 
-#### BackendManager {#sec-backendmanager}
 **File:** `backend_manager.py` (545 lines)
 
-**Purpose:** Multi-backend array handling and device management
+The `BackendManager` handles all backend-specific array operations and device management. Users interact with this functionality through system-level methods, never directly.
 
-**Responsibilities:**
+**Internal responsibilities:**
 
 - Backend detection from array types
 - Array conversion between backends (NumPy ↔ PyTorch ↔ JAX)
@@ -114,47 +160,55 @@ This design provides:
 - Default backend configuration
 - Temporary backend switching (context manager)
 
-**Key Features:**
+**User-facing interface (system-level):**
+
 ```{python}
-#| output: false
-# Detect backend from array
-backend = mgr.detect(array)  # Returns 'numpy', 'torch', or 'jax'
+#| label: ex-backend-manager
 
-# Convert between backends
-x_torch = mgr.to_backend(x_numpy, 'torch')
-x_jax = mgr.to_backend(x_torch, 'jax')
+# ✓ User interacts with system methods
+system = Pendulum()
 
-# Device placement
-x_cuda = mgr.to_device(x, 'cuda:0')
+# Check current backend
+print(f"Default backend: {system.backend.default_backend}")
+
+# Set backend for system
+system.set_default_backend('numpy')
+system.to_device('cpu')
 
 # Temporary backend switching
-with mgr.use_backend('jax'):
-    # Operations use JAX
-    result = compute()
+with system.use_backend('torch'):
+    x_torch = torch.tensor([1.0, 0.0])
+    u_torch = torch.tensor([0.0])
+    dx = system(x_torch, u_torch)
+    print(f"Result type: {type(dx)}")
+
+print("✓ Backend management through system interface")
 ```
 
-**Supported Backends:**
+**Supported backends:**
 
-- **NumPy:** CPU-based, universal compatibility
-- **PyTorch:** GPU acceleration, autograd, neural networks
-- **JAX:** XLA compilation, functional programming, optimization
+| Backend | Execution | Best For |
+|---------|-----------|----------|
+| NumPy | CPU | General purpose, maximum compatibility |
+| PyTorch | CPU/GPU | Neural networks, GPU acceleration, autograd |
+| JAX | CPU/GPU/TPU | Optimization, XLA compilation, functional programming |
 
-**Properties:**
-```{python}
-#| output: false
-mgr.default_backend     # Current default backend
-mgr.preferred_device    # Current device (cpu, cuda:0, etc.)
-mgr.available_backends  # List of available backends
+**Internal capabilities (framework use only):**
+
+```python
+# Framework code (users never write this)
+backend = backend_manager.detect(array)
+x_torch = backend_manager.convert(array, target_backend='torch')
+x_cuda = backend_manager.convert(array, target_backend='torch', device='cuda:0')
 ```
 
----
+### CodeGenerator: Symbolic to Numerical Compilation {#sec-codegenerator}
 
-#### CodeGenerator {#sec-codegenerator}
 **File:** `code_generator.py` (565 lines)
 
-**Purpose:** Orchestrates symbolic → numerical code generation with caching
+The `CodeGenerator` orchestrates the symbolic-to-numerical code generation pipeline with intelligent caching. This is completely internal—users simply call system methods that trigger code generation when needed.
 
-**Responsibilities:**
+**Internal responsibilities:**
 
 - Generate dynamics functions: f(x, u) → dx/dt
 - Generate output functions: h(x) → y
@@ -163,573 +217,421 @@ mgr.available_backends  # List of available backends
 - Compilation and warmup
 - Cache invalidation on parameter changes
 
-**Key Features:**
+**How users benefit (transparent):**
+
 ```{python}
-#| output: false
-# Generate dynamics function (cached)
-f_numpy = code_gen.generate_dynamics('numpy')
-f_torch = code_gen.generate_dynamics('torch')
-f_jax = code_gen.generate_dynamics('jax', jit=True)
+#| label: ex-code-generation
 
-# Generate Jacobians
-A_func = code_gen.generate_jacobian_A('numpy')
-B_func = code_gen.generate_jacobian_B('numpy')
+system = Pendulum()
 
-# Output function
-h_func = code_gen.generate_output('numpy')
-C_func = code_gen.generate_jacobian_C('numpy')
+# First call: Code generated and cached automatically
+x = np.array([1.0, 0.0])
+u = np.array([0.0])
+dx1 = system(x, u)  # CodeGenerator works internally
 
-# Compile all backends at once
-timings = code_gen.compile_all(backends=['numpy', 'torch', 'jax'])
+# Subsequent calls: Use cached compiled function (fast)
+dx2 = system(x, u)  # Instant - cached function reused
+
+# When you change parameters, cache automatically invalidates
+# (parameters are accessed via system.parameters dict)
+m_sym = [k for k in system.parameters.keys() if str(k) == 'm'][0]
+l_sym = [k for k in system.parameters.keys() if str(k) == 'l'][0]
+system.parameters[m_sym] = 2.0
+system.parameters[l_sym] = 1.0
+system.reset_caches()  # Explicitly clear cache after parameter change
+dx3 = system(x, u)  # Uses new parameter values
+
+print("✓ Code generation happens transparently")
 ```
 
-**Caching Strategy:**
+**Caching strategy (internal):**
 
 - Functions cached per backend
 - Symbolic Jacobians computed once, then compiled per backend
-- Cache invalidated on parameter changes
-- Automatic recompilation when needed
+- Automatic cache invalidation on parameter changes
+- Lazy generation (only when first needed)
 
-**Backend-Specific Optimizations:**
+**Backend-specific optimizations (internal):**
 
-- **NumPy:** Uses `lambdify` with CSE (common subexpression elimination)
-- **PyTorch:** Simplifies expressions before generation
+- **NumPy:** Common subexpression elimination (CSE)
+- **PyTorch:** Expression simplification for autograd
 - **JAX:** JIT compilation via `jax.jit`
 
----
+### EquilibriumHandler: Named Equilibrium Management {#sec-equilibriumhandler}
 
-#### EquilibriumHandler {#sec-equilibriumhandler}
 **File:** `equilibrium_handler.py` (221 lines)
 
-**Purpose:** Manages multiple named equilibrium points
+The `EquilibriumHandler` manages multiple named equilibrium points with automatic backend conversion. Users interact through system methods.
 
-**Responsibilities:**
+**Internal responsibilities:**
 
 - Store equilibria as NumPy arrays (backend-neutral)
 - Convert to any backend on demand
 - Named equilibrium management
 - Equilibrium verification
 - Metadata storage (stability, description, etc.)
-- Default equilibrium selection
 
-**Key Features:**
+**User-facing interface:**
+
 ```{python}
-#| output: false
-# Add equilibrium with verification
-equilibria.add(
+#| label: ex-equilibrium
+
+system = Pendulum()
+
+# Add equilibrium (system delegates to EquilibriumHandler)
+system.add_equilibrium(
     'upright',
     x_eq=np.array([np.pi, 0]),
     u_eq=np.zeros(1),
-    verify_fn=lambda x, u: system(x, u),
-    metadata={'stability': 'unstable'}
+    verify=True,
+    metadata={'stability': 'unstable', 'description': 'Inverted pendulum'}
 )
 
-# Get in any backend
-x_eq_numpy = equilibria.get_x('upright', backend='numpy')
-x_eq_torch = equilibria.get_x('upright', backend='torch')
+# Get equilibrium (backend conversion automatic)
+x_eq, u_eq = system.get_equilibrium('upright')
 
-# Set default
-equilibria.set_default('upright')
-
-# Get both state and control
-x_eq, u_eq = equilibria.get_both('upright', backend='jax')
-
-# List all
-names = equilibria.list_names()  # ['origin', 'upright', ...]
+# List all equilibria
+equilibria = system.list_equilibria()
+print(f"Available equilibria: {equilibria}")
 
 # Get metadata
-meta = equilibria.get_metadata('upright')
-print(meta['stability'])  # 'unstable'
+meta = system.get_equilibrium_metadata('upright')
+if meta:
+    print(f"Stability: {meta.get('stability', 'unknown')}")
+else:
+    print("No metadata available")
 ```
 
-**Automatic Features:**
+**Automatic features:**
 
 - Origin equilibrium always present
 - Dimension validation on add
 - Finite value checking (no NaN/Inf)
 - Optional verification with tolerance
+- Backend-agnostic storage with on-demand conversion
 
----
+### SymbolicValidator: System Definition Validation {#sec-symbolicvalidator}
 
-#### SymbolicValidator {#sec-symbolicvalidator}
 **File:** `symbolic_validator.py` (718 lines)
 
-**Purpose:** Validates symbolic system definitions
+The `SymbolicValidator` performs comprehensive validation of symbolic system definitions during initialization. Users benefit from clear error messages without directly interacting with the validator.
 
-**Responsibilities:**
+**Validation checks (automatic during system creation):**
 
-- Check state/control variable consistency
-- Validate symbolic expression dimensions
-- Verify parameter keys (Symbol, not string)
-- Check system order compatibility
-- Ensure output function validity
-- Detect common errors early
+**Required validations:**
+- ✓ `state_vars` is list of `sp.Symbol`
+- ✓ `control_vars` is list of `sp.Symbol`
+- ✓ `_f_sym` is `sp.Matrix` with correct dimensions
+- ✓ `parameters` keys are `sp.Symbol` (not strings)
+- ✓ `order` divides `nx` evenly (nx % order == 0)
 
-**Validation Checks:**
-```{python}
-#| output: false
-# Required validations
-✓ state_vars is list of sp.Symbol
-✓ control_vars is list of sp.Symbol  
-✓ _f_sym is sp.Matrix with correct dimensions
-✓ parameters keys are sp.Symbol (not strings)
-✓ order divides nx evenly (nx % order == 0)
+**Output function validations (if defined):**
+- ✓ `_h_sym` is `sp.Matrix`
+- ✓ `_h_sym` only depends on `state_vars` (not control)
+- ✓ `output_vars` matches `_h_sym` dimensions
 
-# Output function validations (if defined)
-✓ _h_sym is sp.Matrix
-✓ _h_sym only depends on state_vars (not control)
-✓ output_vars matches _h_sym dimensions
+**Example validation (automatic):**
 
-# Error messages are clear and actionable
+```python
+# This validation happens automatically during system creation
+class MySystem(ContinuousSymbolicSystem):
+    def define_system(self):
+        x = sp.Symbol('x')
+        
+        # ❌ This will fail validation with clear error message
+        self.parameters = {'m': 1.0}  # String key instead of Symbol
+        
+        # ✓ Correct - validator passes
+        m = sp.Symbol('m')
+        self.parameters = {m: 1.0}  # Symbol key
 ```
 
-**Example Errors Caught:**
-```{python}
-#| output: false
-# Bad: String keys
-self.parameters = {'m': 1.0}  # ❌ String key
-# Good: Symbol keys  
-self.parameters = {m_sym: 1.0}  # ✓ Symbol key
+Error messages are clear and actionable, helping users fix issues quickly.
 
-# Bad: Wrong dimensions
-self._f_sym = sp.Matrix([x, y])  # nx=2, but system has nx=3
-# Good: Correct dimensions
-self._f_sym = sp.Matrix([x, y, z])  # ✓ nx=3
-```
+## Deterministic Evaluation Components {#sec-deterministic-evaluation}
 
----
+### DynamicsEvaluator: Forward Dynamics Computation {#sec-dynamicsevaluator}
 
-### Deterministic Evaluation {#sec-deterministic-evaluation}
-
-#### DynamicsEvaluator {#sec-dynamicsevaluator}
 **File:** `dynamics_evaluator.py` (576 lines)
 
-**Purpose:** Forward dynamics evaluation across backends
+The `DynamicsEvaluator` handles forward dynamics evaluation (dx/dt = f(x, u)) across all backends. Users call `system(x, u)` which internally delegates to this evaluator.
 
-**Responsibilities:**
+**Internal responsibilities:**
 
 - Evaluate dx/dt = f(x, u) for controlled systems
-- Evaluate dx/dt = f(x) for autonomous systems (u=None)
+- Evaluate dx/dt = f(x) for autonomous systems
 - Handle batched vs single evaluation
 - Backend-specific dispatch
 - Input shape validation
 - Performance tracking
 
-**Key Features:**
+**User-facing interface:**
+
 ```{python}
-#| output: false
-# Single evaluation
-dx = evaluator.evaluate(x, u, backend='numpy')
+#| label: ex-dynamics
 
-# Autonomous system (u=None)
-dx = evaluator.evaluate(x, backend='numpy')
+system = Pendulum()
 
-# Batched evaluation
-x_batch = np.random.randn(100, nx)  # (batch, nx)
-u_batch = np.random.randn(100, nu)  # (batch, nu)
-dx_batch = evaluator.evaluate(x_batch, u_batch)  # (batch, nx)
+# Single evaluation (DynamicsEvaluator called internally)
+x = np.array([1.0, 0.0])
+u = np.array([0.0])
+dx = system(x, u)
+print(f"State derivative shape: {dx.shape}")
 
-# Get performance stats
-stats = evaluator.get_stats()
-print(f"Total evaluations: {stats['count']}")
-print(f"Average time: {stats['avg_time']:.6f}s")
+# Batched evaluation (automatically detected)
+x_batch = np.random.randn(100, 2)
+u_batch = np.zeros((100, 1))
+dx_batch = system(x_batch, u_batch)
+print(f"Batch derivatives shape: {dx_batch.shape}")
+
+# Works seamlessly with different backends
+with system.use_backend('torch'):
+    x_torch = torch.tensor([1.0, 0.0])
+    u_torch = torch.tensor([0.0])
+    dx_torch = system(x_torch, u_torch)
+    print(f"PyTorch result type: {type(dx_torch)}")
 ```
 
-**Backend Dispatch:**
+**Automatic features:**
 
-- Automatically detects input backend
-- Uses cached compiled functions
-- Handles shape mismatches gracefully
-- Converts outputs to match input backend
+- Backend detection from input arrays
+- Shape validation and broadcasting
+- Batched evaluation detection
+- Performance statistics tracking
 
-**Performance Tracking:**
-```{python}
-#| output: false
-{
-    'count': int,        # Number of evaluations
-    'total_time': float, # Total time (seconds)
-    'avg_time': float,   # Average per evaluation
-    'min_time': float,   # Fastest evaluation
-    'max_time': float,   # Slowest evaluation
-}
-```
+### LinearizationEngine: Jacobian Computation {#sec-linearizationengine}
 
----
-
-#### LinearizationEngine {#sec-linearizationengine}
 **File:** `linearization_engine.py` (907 lines)
 
-**Purpose:** Compute linearizations (Jacobians) at equilibria
+The `LinearizationEngine` computes system linearizations (Jacobians) at equilibrium points. Users access this through `system.linearize()`.
 
-**Responsibilities:**
+**Mathematical forms:**
 
-- Compute continuous Jacobians: A = ∂f/∂x, B = ∂f/∂u
-- Compute discrete Jacobians: Ad = ∂f/∂x, Bd = ∂f/∂u
-- Handle higher-order systems (order > 1)
-- Automatic state-space construction
-- Symbolic and numerical Jacobians
-- Backend-agnostic evaluation
-
-**Mathematical Forms:**
-
-**Continuous Systems:**
-```
-Linearization at (x_eq, u_eq):
-δẋ = A·δx + B·δu
+**Continuous systems:**
+$$\delta\dot{x} = A\delta x + B\delta u$$
 
 where:
-A = ∂f/∂x|(x_eq, u_eq)  ∈ ℝ^(nx × nx)
-B = ∂f/∂u|(x_eq, u_eq)  ∈ ℝ^(nx × nu)
-```
+- $A = \frac{\partial f}{\partial x}\bigg|_{(x_{eq}, u_{eq})} \in \mathbb{R}^{n_x \times n_x}$
+- $B = \frac{\partial f}{\partial u}\bigg|_{(x_{eq}, u_{eq})} \in \mathbb{R}^{n_x \times n_u}$
 
-**Discrete Systems:**
-```
-Linearization at (x_eq, u_eq):
-δx[k+1] = Ad·δx[k] + Bd·δu[k]
+**Discrete systems:**
+$$\delta x[k+1] = A_d\delta x[k] + B_d\delta u[k]$$
 
-where:
-Ad = ∂f/∂x|(x_eq, u_eq)  ∈ ℝ^(nx × nx)
-Bd = ∂f/∂u|(x_eq, u_eq)  ∈ ℝ^(nx × nu)
-```
+**User-facing interface:**
 
-**Key Features:**
 ```{python}
-#| output: false
-# Continuous linearization
-A, B = engine.linearize_continuous(x_eq, u_eq, backend='numpy')
+#| label: ex-linearization
 
-# Discrete linearization
-Ad, Bd = engine.linearize_discrete(x_eq, u_eq, backend='numpy')
+system = Pendulum()
 
-# Higher-order systems (automatic state-space)
-# For order=2 system: q̈ = f(q, q̇, u)
-# Automatically constructs: [q̇, q̈]ᵀ = A[q, q̇]ᵀ + Bu
-A, B = engine.linearize_continuous(x_eq, u_eq)
+# Get equilibrium point
+x_eq, u_eq = system.get_equilibrium('origin')
 
-# Get symbolic Jacobians (one-time computation)
-A_sym = engine.get_symbolic_A()
-B_sym = engine.get_symbolic_B()
+# Compute linearization (LinearizationEngine called internally)
+A, B = system.linearize(x_eq, u_eq)
+print(f"A matrix shape: {A.shape}")
+print(f"B matrix shape: {B.shape}")
+
+# Works with any backend
+with system.use_backend('torch'):
+    x_eq_torch = torch.tensor([0.0, 0.0])
+    u_eq_torch = torch.tensor([0.0])
+    A_torch, B_torch = system.linearize(x_eq_torch, u_eq_torch)
+    print(f"PyTorch A type: {type(A_torch)}")
 ```
 
-**Higher-Order Handling:**
+**Higher-order system handling:**
 
-For `order=n` systems where state is `[q, q̇, ..., q^(n-1)]` and only `q^(n)` is returned:
+For `order=n` systems where the state is `[q, q̇, ..., q^(n-1)]` and only `q^(n)` is defined:
 
-1. Automatically constructs full state derivative
-2. Computes Jacobian of full state-space form
-3. Returns proper (nx × nx) and (nx × nu) matrices
+1. Automatically constructs full state-space representation
+2. Computes Jacobian of complete state derivative
+3. Returns proper $(n_x \times n_x)$ and $(n_x \times n_u)$ matrices
 
----
+### ObservationEngine: Output Function Evaluation {#sec-observationengine}
 
-#### ObservationEngine {#sec-observationengine}
 **File:** `observation_engine.py` (628 lines)
 
-**Purpose:** Output function evaluation and linearization
+The `ObservationEngine` handles output function evaluation (y = h(x)) and output Jacobian computation. Users access through `system.output()` and `system.output_jacobian()`.
 
-**Responsibilities:**
+**Mathematical form:**
 
-- Evaluate output: y = h(x)
-- Compute output Jacobian: C = ∂h/∂x
-- Batched output evaluation
-- Multi-backend support
-- Performance tracking
-
-**Mathematical Form:**
-```
-Output equation:
-y = h(x)
+$$y = h(x)$$
 
 Output linearization:
-δy = C·δx
+$$\delta y = C\delta x$$
 
-where:
-C = ∂h/∂x|(x_eq)  ∈ ℝ^(ny × nx)
-```
+where $C = \frac{\partial h}{\partial x}\bigg|_{x_{eq}} \in \mathbb{R}^{n_y \times n_x}$
 
-**Key Features:**
+**User-facing interface:**
+
 ```{python}
-#| output: false
+#| label: ex-observation
+
+# Create system with output function
+class ObservableSystem(ContinuousSymbolicSystem):
+    def define_system(self):
+        x, v = sp.symbols('x v', real=True)
+        u = sp.symbols('u', real=True)
+        
+        self.state_vars = [x, v]
+        self.control_vars = [u]
+        self._f_sym = sp.Matrix([v, -x + u])
+        
+        # Output: only position is measured
+        self._h_sym = sp.Matrix([x])
+        self.output_vars = [sp.Symbol('y')]
+        self.order = 1
+
+system = ObservableSystem()
+
 # Evaluate output
-y = engine.observe(x, backend='numpy')
+x = np.array([1.5, 0.2])
+y = system.h(x)  # h() method evaluates output
+print(f"Output: {y}")
 
-# Batched evaluation
-x_batch = np.random.randn(100, nx)
-y_batch = engine.observe(x_batch)  # (100, ny)
-
-# Output Jacobian
-C = engine.linearize_output(x_eq, backend='numpy')
-
-# Check if output defined
-if engine.has_output():
-    y = engine.observe(x)
+# Compute output Jacobian
+C = system.linearized_observation(x)
+print(f"C matrix shape: {C.shape}")
 ```
 
-**Validation:**
+## Stochastic Support Components {#sec-stochastic-support}
 
-- Ensures h(x) doesn't depend on control u
-- Checks dimension consistency
-- Validates symbolic expressions
+### DiffusionHandler: SDE Diffusion Management {#sec-diffusionhandler}
 
----
-
-### Stochastic Support {#sec-stochastic-support}
-
-#### DiffusionHandler {#sec-diffusionhandler}
 **File:** `diffusion_handler.py` (1,069 lines)
 
-**Purpose:** Generate and cache diffusion functions for SDEs
+The `DiffusionHandler` generates and caches diffusion functions for stochastic systems. Users interact through `system.diffusion()` method.
 
-**Responsibilities:**
+**Mathematical form:**
 
-- Generate diffusion matrix: g(x, u) ∈ ℝ^(nx × nw)
-- Automatic noise structure detection
-- Specialized functions for additive/diagonal/scalar noise
-- Multi-backend diffusion compilation
-- Stratonovich correction computation
-- Performance optimization
+$$dx = f(x, u)dt + g(x, u)dW$$
 
-**Mathematical Form:**
-```
-SDE: dx = f(x, u)dt + g(x, u)dW
+Diffusion matrix $g(x, u) \in \mathbb{R}^{n_x \times n_w}$ where:
+- $n_x$: state dimension
+- $n_w$: number of independent Wiener processes
 
-Diffusion matrix g(x, u):
-- Shape: (nx, nw)
-- nx: state dimension
-- nw: number of independent Wiener processes
+**Noise structure types (auto-detected):**
 
-Noise types (auto-detected):
-- ADDITIVE: g(x, u) = constant
-- MULTIPLICATIVE: g depends on x or u
-- DIAGONAL: g is diagonal (independent noise)
-- SCALAR: nw = 1 (single Wiener process)
-```
+| Type | Structure | Optimization |
+|------|-----------|-------------|
+| Additive | $g(x, u) = \text{constant}$ | Return constant matrix (no recomputation) |
+| Multiplicative Diagonal | $g$ is diagonal | Independent noise channels |
+| Multiplicative Scalar | $n_w = 1$ | Single Wiener process |
+| General | Full matrix coupling | Complete computation |
 
-**Key Features:**
+**User-facing interface:**
+
 ```{python}
-#| output: false
-# Generate diffusion function
-g_func = handler.generate_diffusion('numpy')
+#| label: ex-diffusion
 
-# Evaluate diffusion
-g_matrix = handler.evaluate_diffusion(x, u, backend='numpy')
+# Stochastic system automatically sets up DiffusionHandler
+system = LangevinDynamics()
 
-# Automatic noise detection
-noise_type = handler.get_noise_type()
-# Returns: ADDITIVE, MULTIPLICATIVE_DIAGONAL, etc.
+# Evaluate diffusion (DiffusionHandler called internally)
+# LangevinDynamics has nx=2 (position and velocity)
+x = np.array([1.0, 0.5])
+u = np.array([0.0])
+g = system.diffusion(x, u)
+print(f"Diffusion matrix shape: {g.shape}")
 
-# Stratonovich correction
-correction = handler.compute_stratonovich_correction(x, u)
+# Check noise properties
+print(f"Is additive noise: {system.is_additive_noise()}")
+print(f"Noise dimensions: {system.nw}")
 
-# Optimized for additive noise
-if handler.is_additive():
-    g_const = handler.get_additive_matrix()  # Constant matrix
+# Get solver recommendations based on noise structure
+solvers = system.recommend_solvers('torch')
+print(f"Recommended solvers: {solvers[:3] if len(solvers) > 3 else solvers}")
 ```
 
-**Noise Structure Exploitation:**
+**Automatic optimizations (internal):**
 
-- **Additive (constant):** Returns constant matrix, no recomputation needed
-- **Multiplicative types:**
+- **Additive noise:** Returns constant matrix, no function calls needed
+- **Diagonal noise:** Specialized handling for independent channels
+- **Scalar noise:** Simplified operations for single Wiener process
 
-  - **Diagonal:** Independent noise channels, specialized handling
-  - **Scalar:** Single Wiener process (nw=1), simplified operations
-  - **General:** Full matrix coupling, complete computation
+### SDEValidator: SDE-Specific Validation {#sec-sdevalidator}
 
----
-
-#### NoiseCharacterizer {#sec-noisecharacterizer}
-**File:** `noise_analysis.py` (692 lines)
-
-**Purpose:** Automatic noise structure analysis
-
-**Responsibilities:**
-
-- Detect noise types (additive, multiplicative, etc.)
-- Identify noise structure (diagonal, scalar, general)
-- Recommend optimal SDE solvers
-- Compute noise statistics
-- Validate noise properties
-
-**Noise Classification:**
-```{python}
-#| output: false
-NoiseType:
-├─ ADDITIVE               # g(x,u) = constant
-├─ MULTIPLICATIVE         # g depends on x or u
-│  ├─ DIAGONAL            # Independent noise sources
-│  ├─ SCALAR              # Single Wiener process
-│  └─ GENERAL             # Full coupling
-└─ UNKNOWN                # Cannot determine
-```
-
-**Key Features:**
-```{python}
-#| output: false
-# Automatic characterization
-characteristics = characterizer.analyze()
-
-# Access properties
-noise_type = characteristics.noise_type
-is_additive = characteristics.is_additive
-is_diagonal = characteristics.is_diagonal
-nw = characteristics.nw  # Number of Wiener processes
-
-# Solver recommendations
-solvers = characteristics.recommend_solvers('torch')
-# Returns: ['heun', 'reversible_heun'] for additive
-# Returns: ['euler-maruyama'] for multiplicative
-
-# Validation
-if not characteristics.is_valid:
-    print(characteristics.validation_message)
-```
-
-**Solver Recommendations:**
-
-| Noise Type | Backend | Recommended Solvers |
-|------------|---------|-------------------|
-| Additive | PyTorch | heun, reversible_heun |
-| Additive | JAX | heun, reversible_heun |
-| Multiplicative Diagonal | NumPy | milstein |
-| General | All | euler-maruyama |
-
----
-
-#### SDEValidator {#sec-sdevalidator}
 **File:** `sde_validator.py` (544 lines)
 
-**Purpose:** SDE-specific validation
+The `SDEValidator` performs SDE-specific validation during system creation. Validation happens automatically with clear error messages.
 
-**Responsibilities:**
+**Validation checks (automatic):**
 
-- Validate diffusion matrix dimensions
-- Check SDE type (Itô vs Stratonovich)
-- Ensure compatibility with drift
-- Verify noise structure claims
-- Validate stochastic system definition
+- ✓ `diffusion_expr` is `sp.Matrix`
+- ✓ Dimensions: $(n_x, n_w)$ where $n_w \geq 1$
+- ✓ `diffusion_expr` only uses `state_vars` and `control_vars`
+- ✓ `sde_type` is 'ito' or 'stratonovich'
+- ✓ Compatibility between drift and diffusion
+- ✓ No division by zero in diffusion terms
 
-**Validation Checks:**
-```{python}
-#| output: false
-✓ diffusion_expr is sp.Matrix
-✓ Dimensions: (nx, nw) where nw ≥ 1
-✓ diffusion_expr only uses state_vars and control_vars
-✓ sde_type is 'ito' or 'stratonovich'
-✓ Compatibility with drift _f_sym
-✓ No division by zero in diffusion terms
-✓ Finite symbolic expressions
+**Example validation (automatic):**
+
+```python
+class MyStochasticSystem(ContinuousStochasticSystem):
+    def define_system(self):
+        x = sp.Symbol('x')
+        sigma = sp.Symbol('sigma', positive=True)
+        
+        # ❌ Wrong dimensions - validator catches this
+        self.diffusion_expr = sp.Matrix([[sigma]])  # nx=2 but only 1 row
+        
+        # ✓ Correct dimensions
+        self.diffusion_expr = sp.Matrix([[sigma], [0]])  # (2, 1) ✓
 ```
 
-**Example Errors Caught:**
-```{python}
-#| output: false
-# Bad: Wrong dimensions
-self.diffusion_expr = sp.Matrix([[sigma]])  # nx=2, but only 1 row
-# Good: Correct dimensions
-self.diffusion_expr = sp.Matrix([[sigma], [0]])  # (2, 1)
+## Low-Level Utilities {#sec-low-level-utilities}
 
-# Bad: Invalid SDE type
-self.sde_type = 'unknown'  # ❌
-# Good: Valid type
-self.sde_type = 'ito'  # ✓
-```
+### codegen_utils: SymPy Code Generation {#sec-codegenutils}
 
----
-
-### Low-Level Utilities {#sec-low-level-utilities}
-
-#### codegen_utils {#sec-codegenutils}
 **File:** `codegen_utils.py` (733 lines)
 
-**Purpose:** Low-level SymPy → executable code conversion
+Low-level utilities for converting SymPy expressions to executable functions. This is completely internal to the framework.
 
-**Responsibilities:**
-
-- SymPy Matrix → callable function
-- Backend-specific code generation
-- Common subexpression elimination (CSE)
-- Symbolic simplification strategies
-- NumPy/PyTorch/JAX code generation
-- Function signature handling
-
-**Key Functions:**
-```{python}
-#| eval: false
-# Main generation function
-func = generate_function(
-    expr,           # sp.Matrix symbolic expression
-    input_vars,     # List of sp.Symbol variables
-    backend='numpy', # Target backend
-    simplify=True,  # Apply simplification
-    cse=True,       # Common subexpression elimination
-    jit=False       # JIT compile (JAX only)
-)
-
-# Backend-specific optimizations
-func_numpy = generate_function(expr, vars, backend='numpy', cse=True)
-func_torch = generate_function(expr, vars, backend='torch', simplify=True)
-func_jax = generate_function(expr, vars, backend='jax', jit=True)
-```
-
-**Optimization Strategies:**
+**Optimization strategies (internal):**
 
 **NumPy:**
-
 - Common subexpression elimination (CSE)
 - Fast numerical modules ('numpy', 'scipy')
-- Matrix operations optimization
+- Matrix operation optimization
 
 **PyTorch:**
-
 - Symbolic simplification before generation
 - Automatic differentiation compatibility
-- GPU tensor operations
+- GPU tensor operation support
 
 **JAX:**
-
 - JIT compilation via `jax.jit`
-- Pure functional style
-- XLA optimization
+- Pure functional style for XLA
 - Automatic vectorization
 
-**Generated Function Signatures:**
-```{python}
-#| output: false
-# Dynamics function
-f(x, u) → dx/dt
-# where x: array(nx,), u: array(nu,) → array(nx,)
+## Internal Composition Patterns {#sec-composition-patterns}
 
-# Jacobian function
-A(x, u) → matrix(nx, nx)
-B(x, u) → matrix(nx, nu)
+::: {.callout-note}
+## Framework Implementation Details
 
-# Output function
-h(x) → y
-# where x: array(nx,) → array(ny,)
-```
+These patterns show how the framework internally composes delegation layer components. Users never write this code—it's handled automatically by system classes.
+:::
 
----
+### Pattern 1: Core System Utilities
 
-## Composition Patterns {#sec-composition-patterns}
+Used by all symbolic systems:
 
-### Pattern 1: Core System Utilities {#sec-pattern-1-core-system-utilities}
-**Used by:** All symbolic systems
-
-```{python}
-#| output: false
-# In SymbolicSystemBase.__init__():
+```python
+# Internal framework code (in SymbolicSystemBase.__init__)
 self.backend = BackendManager(default_backend, default_device)
 self._code_gen = CodeGenerator(self, self.backend)
 self._validator = SymbolicValidator()
 self.equilibria = EquilibriumHandler(nx, nu)
 ```
 
-### Pattern 2: Deterministic Extensions {#sec-pattern-2-deterministic-extensions}
-**Used by:** ContinuousSymbolicSystem, DiscreteSymbolicSystem
+### Pattern 2: Deterministic Extensions
 
-```{python}
-#| output: false
-# In ContinuousSymbolicSystem.__init__():
-super().__init__(*args, **kwargs)  # Sets up core utilities
+Added by continuous and discrete systems:
+
+```python
+# Internal framework code (in ContinuousSymbolicSystem.__init__)
+super().__init__(*args, **kwargs)  # Core utilities
 
 # Add deterministic evaluators
 self._dynamics = DynamicsEvaluator(self, self._code_gen, self.backend)
@@ -737,13 +639,13 @@ self._linearization = LinearizationEngine(self, self._code_gen, self.backend)
 self._observation = ObservationEngine(self, self._code_gen, self.backend)
 ```
 
-### Pattern 3: Stochastic Extensions {#sec-pattern-3-stochastic-extensions}
-**Used by:** ContinuousStochasticSystem, DiscreteStochasticSystem
+### Pattern 3: Stochastic Extensions
 
-```{python}
-#| output: false
-# In ContinuousStochasticSystem.__init__():
-super().__init__(*args, **kwargs)  # Sets up deterministic utilities
+Added by stochastic systems:
+
+```python
+# Internal framework code (in ContinuousStochasticSystem.__init__)
+super().__init__(*args, **kwargs)  # Deterministic utilities
 
 # Add stochastic support
 self.diffusion_handler = DiffusionHandler(self, self._code_gen, self.backend)
@@ -753,218 +655,256 @@ self._sde_validator = SDEValidator()
 
 ## Design Principles {#sec-design-principles}
 
-### 1. Single Responsibility {#sec-1-single-responsibility}
+### Single Responsibility Principle
 
-Each class has one clear purpose:
+Each class has one clear, focused purpose:
 
-- BackendManager → Backend management ONLY
-- CodeGenerator → Code generation ONLY
-- DynamicsEvaluator → Dynamics evaluation ONLY
+- `BackendManager` → Backend management **only**
+- `CodeGenerator` → Code generation **only**
+- `DynamicsEvaluator` → Dynamics evaluation **only**
+- `LinearizationEngine` → Linearization **only**
 
-### 2. Composition Not Inheritance {#sec-2-composition-not-inheritance}
-Systems compose utilities rather than inherit:
-```{python}
-#| output: false
-# NOT: class System(BackendManager, CodeGenerator, ...)
-# YES: class System:
-#          self.backend = BackendManager()
-#          self._code_gen = CodeGenerator()
+### Composition Over Inheritance
+
+Systems compose utilities as private attributes rather than inheriting functionality:
+
+```python
+# ❌ NOT: Deep inheritance
+class System(BackendManager, CodeGenerator, DynamicsEvaluator):
+    pass
+
+# ✓ YES: Composition
+class System:
+    def __init__(self):
+        self.backend = BackendManager()
+        self._code_gen = CodeGenerator()
+        self._dynamics = DynamicsEvaluator()
 ```
 
-### 3. Dependency Injection {#sec-3-dependency-injection}
-Utilities receive dependencies via constructor:
-```{python}
-#| output: false
-DynamicsEvaluator(system, code_gen, backend_mgr)
+### Dependency Injection
+
+Utilities receive dependencies explicitly through constructors:
+
+```python
+# Clear dependency chain (internal framework code)
+backend_mgr = BackendManager()
+code_gen = CodeGenerator(system, backend_mgr)
+dynamics = DynamicsEvaluator(system, code_gen, backend_mgr)
 ```
 
-### 4. Interface Segregation {#sec-4-interface-segregation}
+### Interface Segregation
 
-Each utility has focused, minimal interface:
+Each utility exposes a minimal, focused interface:
 
-- BackendManager: detect, convert, to_backend
-- CodeGenerator: generate_dynamics, generate_jacobian_A/B/C
-- DynamicsEvaluator: evaluate
+- `BackendManager`: detect, convert, to_backend
+- `CodeGenerator`: generate_dynamics, generate_jacobians
+- `DynamicsEvaluator`: evaluate
 
-### 5. Lazy Initialization {#sec-5-lazy-initialization}
-Functions generated and cached on first use:
-```{python}
-#| output: false
+### Lazy Initialization
+
+Functions generated and cached only when first needed:
+
+```python
 # First call: generates and caches
 f = code_gen.generate_dynamics('numpy')
 
 # Subsequent calls: returns cached
 f_again = code_gen.generate_dynamics('numpy')
-assert f is f_again  # Same object
+assert f is f_again  # Same function object
 ```
 
-### 6. Backend Agnosticism {#sec-6-backend-agnosticism}
-Utilities work with all backends transparently:
-```{python}
-#| output: false
-# Same interface, different backends
+### Backend Agnosticism
+
+All utilities work transparently across backends:
+
+```python
+# Same interface, different backends (internal)
 dx_numpy = evaluator.evaluate(x_np, u_np, backend='numpy')
 dx_torch = evaluator.evaluate(x_torch, u_torch, backend='torch')
 dx_jax = evaluator.evaluate(x_jax, u_jax, backend='jax')
 ```
 
-## Usage Examples {#sec-usage-examples}
+## Practical Examples {#sec-practical-examples}
 
-### Example 1: Creating a System with Full Delegation {#sec-example-1-creating-a-system-with-full-delegation}
+::: {.callout-note}
+## User-Facing Examples
+
+These examples show how users benefit from the delegation layer through the system interface. Users never directly instantiate delegation layer components.
+:::
+
+### Example 1: Creating a System (Delegation Automatic)
 
 ```{python}
-#| output: false
-from src.systems.base import ContinuousSymbolicSystem
-import sympy as sp
-import numpy as np
+#| label: ex-system-creation
 
-class MySystem(ContinuousSymbolicSystem):
-    def define_system(self, m=1.0, k=10.0):
+class SpringMassDamper(ContinuousSymbolicSystem):
+    def define_system(self, m=1.0, k=10.0, c=0.5):
         x, v = sp.symbols('x v', real=True)
         u = sp.symbols('u', real=True)
-        m_sym, k_sym = sp.symbols('m k', positive=True)
+        m_sym, k_sym, c_sym = sp.symbols('m k c', positive=True)
         
         self.state_vars = [x, v]
         self.control_vars = [u]
-        self._f_sym = sp.Matrix([v, -k_sym*x/m_sym + u/m_sym])
-        self.parameters = {m_sym: m, k_sym: k}
+        self._f_sym = sp.Matrix([
+            v,
+            (-k_sym*x - c_sym*v + u)/m_sym
+        ])
+        self.parameters = {m_sym: m, k_sym: k, c_sym: c}
         self.order = 1
 
-# System automatically sets up:
-system = MySystem()
-# system.backend         (BackendManager)
-# system._code_gen       (CodeGenerator)
-# system._dynamics       (DynamicsEvaluator)
-# system._linearization  (LinearizationEngine)
-# system.equilibria      (EquilibriumHandler)
+# Delegation layer automatically composed internally
+system = SpringMassDamper()
 
-# Use the delegated functionality
+# User interacts with clean system interface
 x = np.array([1.0, 0.0])
 u = np.array([0.5])
+dx = system(x, u)  # DynamicsEvaluator called internally
 
-# Dynamics (via DynamicsEvaluator)
-dx = system(x, u)
-
-# Linearization (via LinearizationEngine)
-A, B = system.linearize(np.zeros(2), np.zeros(1))
-
-# Equilibria (via EquilibriumHandler)
-system.add_equilibrium('test', x_eq=np.zeros(2), u_eq=np.zeros(1))
+A, B = system.linearize(np.zeros(2), np.zeros(1))  # LinearizationEngine
+print(f"System created with automatic delegation")
 ```
 
-### Example 2: Backend Switching {#sec-example-2-backend-switching}
+### Example 2: Multi-Backend Usage (Transparent)
 
 ```{python}
-#| output: false
-import torch
+#| label: ex-multibackend
 
-# Switch backend for entire system
-system.set_default_backend('torch')
-system.set_default_device('cuda:0')
+system = Pendulum()
 
-# Backend manager handles conversions
-x_torch = torch.tensor([[1.0, 0.0]], device='cuda:0')
-u_torch = torch.tensor([[0.5]], device='cuda:0')
+# NumPy computation
+x_np = np.array([1.0, 0.0])
+u_np = np.array([0.0])
+dx_np = system(x_np, u_np)
 
-# Automatically uses PyTorch backend
-dx_torch = system(x_torch, u_torch)
+# PyTorch computation (backend conversion automatic)
+with system.use_backend('torch'):
+    x_torch = torch.tensor([1.0, 0.0])
+    u_torch = torch.tensor([0.0])
+    dx_torch = system(x_torch, u_torch)
+    print(f"PyTorch result: {type(dx_torch)}")
 
-# Equilibria converted on demand
-x_eq_torch = system.equilibria.get_x('origin', backend='torch')
+# JAX computation
+with system.use_backend('jax'):
+    x_jax = jnp.array([1.0, 0.0])
+    u_jax = jnp.array([0.0])
+    dx_jax = system(x_jax, u_jax)
+    print(f"JAX result: {type(dx_jax)}")
+
+print("✓ Backend management completely transparent")
 ```
 
-### Example 3: Code Generation and Caching {#sec-example-3-code-generation-and-caching}
+### Example 3: Stochastic System (Full Delegation)
 
 ```{python}
-#| output: false
-# First call: generates and caches
-import time
+#| label: ex-stochastic-system
 
-start = time.time()
-f_numpy = system._code_gen.generate_dynamics('numpy')
-t1 = time.time() - start
-print(f"First generation: {t1:.3f}s")
-
-# Second call: returns cached (instant)
-start = time.time()
-f_numpy_again = system._code_gen.generate_dynamics('numpy')
-t2 = time.time() - start
-print(f"Cached retrieval: {t2:.6f}s")  # ~0.000001s
-
-assert f_numpy is f_numpy_again  # Same function object
-```
-
-### Example 4: Stochastic System with Full Delegation {#sec-example-4-stochastic-system-with-full-delegation}
-
-```{python}
-#| output: false
-from src.systems.base import ContinuousStochasticSystem
-
-class StochasticOscillator(ContinuousStochasticSystem):
-    def define_system(self, k=10.0, sigma=0.5):
-        x, v = sp.symbols('x v', real=True)
-        u = sp.symbols('u', real=True)
-        k_sym, sigma_sym = sp.symbols('k sigma', positive=True)
+class BrownianMotion(ContinuousStochasticSystem):
+    def define_system(self, mu=0.0, sigma=1.0):
+        x = sp.Symbol('x', real=True)
+        u = sp.Symbol('u', real=True)
+        mu_sym, sigma_sym = sp.symbols('mu sigma', real=True)
         
-        # Drift
-        self.state_vars = [x, v]
+        self.state_vars = [x]
         self.control_vars = [u]
-        self._f_sym = sp.Matrix([v, -k_sym*x + u])
-        self.parameters = {k_sym: k, sigma_sym: sigma}
-        self.order = 1
-        
-        # Diffusion (additive noise)
-        self.diffusion_expr = sp.Matrix([[0], [sigma_sym]])
+        self._f_sym = sp.Matrix([mu_sym + u])
+        self.diffusion_expr = sp.Matrix([[sigma_sym]])
+        self.parameters = {mu_sym: mu, sigma_sym: sigma}
         self.sde_type = 'ito'
+        self.order = 1
 
-# System sets up additional stochastic delegation:
-sde_system = StochasticOscillator()
-# sde_system.diffusion_handler       (DiffusionHandler)
-# sde_system.noise_characteristics   (NoiseCharacteristics)
-# (plus all deterministic utilities)
+# Stochastic delegation automatic
+sde_system = BrownianMotion()
 
-# Use stochastic functionality
-x = np.array([1.0, 0.0])
-u = np.array([0.5])
+# User interacts through clean interface
+x = np.array([0.0])
+u = np.array([0.0])
 
-# Drift (via DynamicsEvaluator)
-f = sde_system.drift(x, u)
+# Drift and diffusion evaluated automatically
+f = sde_system.drift(x, u)  # DynamicsEvaluator
+g = sde_system.diffusion(x, u)  # DiffusionHandler
 
-# Diffusion (via DiffusionHandler)
-g = sde_system.diffusion(x, u)
-
-# Noise analysis (automatic)
-print(f"Noise type: {sde_system.noise_characteristics.noise_type}")
-print(f"Additive: {sde_system.is_additive_noise()}")
-print(f"Recommended solvers: {sde_system.recommend_solvers('torch')}")
+print(f"Noise type: {sde_system.is_additive_noise()}")
+print(f"Recommended methods: {sde_system.recommend_solvers('numpy')[:3]}")
 ```
 
-### Example 5: Performance Tracking {#sec-example-5-performance-tracking}
+### Example 4: Equilibrium Management (Delegated)
 
 ```{python}
-#| output: false
-# DynamicsEvaluator tracks performance
-for i in range(1000):
-    dx = system(np.random.randn(2), np.zeros(1))
+#| label: ex-equilibrium-management
 
-# Get statistics
-stats = system._dynamics.get_stats()
-print(f"Evaluations: {stats['count']}")
-print(f"Average time: {stats['avg_time']:.6f}s")
-print(f"Total time: {stats['total_time']:.3f}s")
+system = Pendulum()
+
+# Add multiple equilibria (delegates to EquilibriumHandler)
+system.add_equilibrium(
+    'upright',
+    x_eq=np.array([np.pi, 0.0]),
+    u_eq=np.zeros(1),
+    verify=True,
+    metadata={'stability': 'unstable'}
+)
+
+system.add_equilibrium(
+    'downright',
+    x_eq=np.array([-np.pi, 0.0]),
+    u_eq=np.zeros(1),
+    metadata={'stability': 'unstable'}
+)
+
+# List and access equilibria
+equilibria = system.list_equilibria()
+print(f"Available: {equilibria}")
+
+# Get equilibrium in any backend
+x_eq_np, u_eq_np = system.get_equilibrium('upright')
+
+with system.use_backend('torch'):
+    x_eq_torch, u_eq_torch = system.get_equilibrium('upright')
+    print(f"Backend conversion automatic: {type(x_eq_torch)}")
+```
+
+### Example 5: Linearization Workflow (Seamless)
+
+```{python}
+#| label: ex-linearization-workflow
+
+system = SpringMassDamper()
+
+# Get equilibrium
+x_eq, u_eq = system.get_equilibrium('origin')
+
+# Linearize (LinearizationEngine called internally)
+A, B = system.linearize(x_eq, u_eq)
+
+# Analyze stability
+eigenvalues = np.linalg.eigvals(A)
+print(f"Eigenvalues: {eigenvalues}")
+print(f"Stable: {np.all(eigenvalues.real < 0)}")
+
+# Linearization works with any backend
+with system.use_backend('torch'):
+    A_torch, B_torch = system.linearize(
+        torch.zeros(2),
+        torch.zeros(1)
+    )
+    print(f"PyTorch linearization: {type(A_torch)}")
 ```
 
 ## Key Strengths {#sec-key-strengths}
 
-1. **Clean Separation** - Each utility has one responsibility
-2. **Reusability** - Can use utilities independently
-3. **Testability** - Easy to test in isolation
-4. **Flexibility** - Easy to add new utilities
-5. **Performance** - Caching and lazy initialization
-6. **Multi-Backend** - Seamless backend switching
-7. **Type Safety** - TypedDict and semantic types
-8. **Documentation** - Clear purpose and interface
-9. **Maintainability** - Easy to understand and modify
-10. **Extensibility** - Composition enables new features
+1. **Clean Separation** - Each utility has one clear responsibility
+2. **Encapsulation** - Internal complexity hidden from users
+3. **Reusability** - Components can be composed by different system types
+4. **Testability** - Easy to test each component in isolation
+5. **Flexibility** - Internal implementation can change without affecting users
+6. **Performance** - Intelligent caching and lazy initialization
+7. **Multi-Backend** - Seamless backend switching without user intervention
+8. **Type Safety** - TypedDict and semantic types throughout
+9. **Documentation** - Clear purpose and interface for each component
+10. **Maintainability** - Easy to understand, modify, and extend
+11. **User-Friendly** - Complex functionality exposed through simple interfaces
 
-This delegation layer is the foundation that makes the UI framework clean, powerful, and maintainable!
+## Summary
+
+The delegation layer provides robust internal services that power the ControlDESymulation framework. Through careful composition and encapsulation, these utilities enable powerful functionality while maintaining a clean, user-friendly system interface.
+
+Users benefit from this architecture without needing to understand its internal workings—they simply interact with intuitive system methods that delegate to the appropriate internal components automatically.
