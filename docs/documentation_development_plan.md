@@ -12,49 +12,6 @@
 
 ---
 
-### Day 2: Conversion Scripts
-
-#### 1.5 Create Metadata Files
-
-**Create `docs_quarto/architecture/_metadata.yml`:**
-```yaml
-execute:
-  eval: true       # ← EXECUTE architecture code!
-  cache: true      # Cache for speed
-  warning: false
-  output: false    # Default: validate but don't show output (override per-block)
-  
-format:
-  html:
-    code-fold: show  # Show code, allow folding
-```
-
-**Create `docs_quarto/tutorials/_metadata.yml`:**
-```yaml
-execute:
-  eval: true       # Execute all tutorial code
-  cache: true
-  warning: false
-  output: true     # Show outputs by default
-  
-format:
-  html:
-    code-fold: false  # Always show code in tutorials
-```
-
-**Create `docs_quarto/examples/_metadata.yml`:**
-```yaml
-execute:
-  eval: true       # Execute all examples
-  cache: true
-  warning: false
-  output: true     # Show all outputs
-  
-format:
-  html:
-    code-fold: false
-    code-tools: true
-```
 
 #### 1.6 Test Initial Build
 
@@ -64,6 +21,8 @@ quarto preview
 ```
 
 **Expected result**: Documentation renders in browser at http://localhost:XXXX
+
+#### 1.7 Fully debug all the documentation
 
 ---
 
