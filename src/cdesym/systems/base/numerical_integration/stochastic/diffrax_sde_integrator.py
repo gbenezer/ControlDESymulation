@@ -297,6 +297,16 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
 
         # Device management
         self._device = "cpu"
+        
+        # Validate levy_area
+        valid_levy_areas = ["none", "space-time", "full"]
+        if levy_area not in valid_levy_areas:
+            raise ValueError(
+                f"Invalid levy_area '{levy_area}'. "
+                f"Must be one of: {valid_levy_areas}"
+            )
+        
+        self.levy_area = levy_area
 
     @property
     def name(self) -> str:
@@ -567,24 +577,17 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
         else:
             key = jax.random.PRNGKey(0)
 
-        # Define drift and diffusion
-        def drift(t, y):
+        def drift(t, y, args):
             u = u_func(t, y)
             if u is not None and not isinstance(u, jnp.ndarray):
                 u = jnp.asarray(u)
+            return self.sde_system.drift(y, u, backend=self.backend)
 
-            dx = self.sde_system.drift(y, u, backend=self.backend)
-            self._stats["total_fev"] += 1
-            return dx
-
-        def diffusion(t, y):
+        def diffusion(t, y, args):
             u = u_func(t, y)
             if u is not None and not isinstance(u, jnp.ndarray):
                 u = jnp.asarray(u)
-
-            g = self.sde_system.diffusion(y, u, backend=self.backend)
-            self._stats["diffusion_evals"] += 1
-            return g
+            return self.sde_system.diffusion(y, u, backend=self.backend)
 
         # Create SDE terms
         drift_term = dfx.ODETerm(drift)
@@ -648,6 +651,13 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
                 adjoint=adjoint,
                 throw=False,
             )
+
+            # Update statistics AFTER solve (not inside JIT-compiled functions)
+            nsteps = int(solution.stats.get("num_steps", len(solution.ts) - 1))
+            nfev = nsteps  # Estimate
+            self._stats["total_steps"] += nsteps
+            self._stats["total_fev"] += nfev
+            self._stats["diffusion_evals"] += nsteps
 
             # Check success
             success = jnp.all(jnp.isfinite(solution.ys))

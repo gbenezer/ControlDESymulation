@@ -1063,13 +1063,14 @@ class TestEdgeCasesErrorHandling:
             integrator.step(jnp.array([1.0]), None)
 
     def test_invalid_levy_area_raises(self, ou_system):
-        """Test that invalid levy_area raises error."""
-        integrator = DiffraxSDEIntegrator(ou_system, dt=0.01, solver="Euler", levy_area="invalid")
-
-        key = jax.random.PRNGKey(0)
-
+        """Test that invalid levy_area raises error during initialization."""
         with pytest.raises(ValueError, match="Invalid levy_area"):
-            integrator._get_brownian_motion(key, 0.0, 1.0, (1,))
+            integrator = DiffraxSDEIntegrator(
+                ou_system, 
+                dt=0.01, 
+                solver="Euler", 
+                levy_area="invalid"
+            )
 
 
 # ============================================================================
