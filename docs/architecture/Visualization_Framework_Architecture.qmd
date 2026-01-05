@@ -145,7 +145,7 @@ schemes = {
 fig = make_subplots(
     rows=len(schemes), cols=1,
     subplot_titles=list(schemes.keys()),
-    vertical_spacing=0.15
+    vertical_spacing=0.20
 )
 
 for i, (name, colors) in enumerate(schemes.items(), 1):
@@ -154,10 +154,24 @@ for i, (name, colors) in enumerate(schemes.items(), 1):
             go.Bar(x=[j], y=[1], marker_color=color, showlegend=False),
             row=i, col=1
         )
-    fig.update_xaxes(title_text="Color Index", row=i, col=1)
+    fig.update_xaxes(showticklabels=False, row=i, col=1)  # Hide x ticks
     fig.update_yaxes(showticklabels=False, row=i, col=1)
 
-fig.update_layout(height=400, title_text="Color Scheme Comparison")
+# Add single x-axis label at bottom
+fig.add_annotation(
+    text="Color Index",
+    xref="paper", yref="paper",
+    x=0.5, y=-0.05,
+    showarrow=False,
+    font=dict(size=12)
+)
+
+fig.update_layout(
+    height=450,
+    title_text="Color Scheme Comparison",
+    showlegend=False,
+    margin=dict(b=60)
+)
 fig
 ```
 
