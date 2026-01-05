@@ -101,9 +101,9 @@ This architecture provides:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     UI FRAMEWORK                             │
-│  (SymbolicSystemBase, ContinuousSymbolicSystem, etc.)        │
-│                                                              │
+│                     UI FRAMEWORK                            │
+│  (SymbolicSystemBase, ContinuousSymbolicSystem, etc.)       │
+│                                                             │
 │  User-facing methods that delegate to utilities:            │
 │  • system(x, u) → delegates to DynamicsEvaluator            │
 │  • system.linearize() → delegates to LinearizationEngine    │
@@ -115,30 +115,30 @@ This architecture provides:
 │                  DELEGATION LAYER (Internal)                │
 │                                                             │
 │  ┌───────────────────────────────────────────────────────┐  │
-│  │  CORE UTILITIES (Universal)                         │  │
-│  │  • BackendManager      - Multi-backend support      │  │
-│  │  • CodeGenerator       - Symbolic → numerical       │  │
-│  │  • EquilibriumHandler  - Equilibrium management     │  │
-│  │  • SymbolicValidator   - System validation          │  │
+│  │  CORE UTILITIES (Universal)                           │  │
+│  │  • BackendManager      - Multi-backend support        │  │
+│  │  • CodeGenerator       - Symbolic → numerical         │  │
+│  │  • EquilibriumHandler  - Equilibrium management       │  │
+│  │  • SymbolicValidator   - System validation            │  │
 │  └───────────────────────────────────────────────────────┘  │
 │                                                             │
 │  ┌───────────────────────────────────────────────────────┐  │
-│  │  DETERMINISTIC EVALUATION (ODE Systems)             │  │
-│  │  • DynamicsEvaluator    - Forward dynamics          │  │
-│  │  • LinearizationEngine  - Jacobian computation      │  │
-│  │  • ObservationEngine    - Output evaluation         │  │
+│  │  DETERMINISTIC EVALUATION (ODE Systems)               │  │
+│  │  • DynamicsEvaluator    - Forward dynamics            │  │
+│  │  • LinearizationEngine  - Jacobian computation        │  │
+│  │  • ObservationEngine    - Output evaluation           │  │
 │  └───────────────────────────────────────────────────────┘  │
 │                                                             │
 │  ┌───────────────────────────────────────────────────────┐  │
-│  │  STOCHASTIC SUPPORT (SDE Systems)                   │  │
-│  │  • DiffusionHandler    - Diffusion generation       │  │
-│  │  • NoiseCharacterizer  - Noise analysis             │  │
-│  │  • SDEValidator        - SDE validation             │  │
+│  │  STOCHASTIC SUPPORT (SDE Systems)                     │  │
+│  │  • DiffusionHandler    - Diffusion generation         │  │
+│  │  • NoiseCharacterizer  - Noise analysis               │  │
+│  │  • SDEValidator        - SDE validation               │  │
 │  └───────────────────────────────────────────────────────┘  │
 │                                                             │
 │  ┌───────────────────────────────────────────────────────┐  │
-│  │  LOW-LEVEL UTILITIES                                │  │
-│  │  • codegen_utils       - SymPy code generation      │  │
+│  │  LOW-LEVEL UTILITIES                                  │  │
+│  │  • codegen_utils       - SymPy code generation        │  │
 │  └───────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
 ```

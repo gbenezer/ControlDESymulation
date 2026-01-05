@@ -54,34 +54,34 @@ result = system.control.design_lqr(A, B, Q, R, system_type='continuous')
 
 ```
 ┌────────────────────────────────────────────────────────────┐
-│                   APPLICATION LAYER                         │
-│              (ContinuousSystemBase, DiscreteSystemBase)     │
-│                                                              │
+│                   APPLICATION LAYER                        │
+│              (ContinuousSystemBase, DiscreteSystemBase)    │
+│                                                            │
 │  system.control   ──────► ControlSynthesis (388 lines)     │
 │  system.analysis  ──────► SystemAnalysis   (431 lines)     │
 └──────────────────┬─────────────────────────────────────────┘
                    │ delegates to
                    ↓
 ┌────────────────────────────────────────────────────────────┐
-│              PURE FUNCTION LAYER                            │
-│          classical_control_functions.py (967 lines)         │
-│                                                              │
-│  Control Design:          System Analysis:                  │
+│              PURE FUNCTION LAYER                           │
+│          classical_control_functions.py (967 lines)        │
+│                                                            │
+│  Control Design:          System Analysis:                 │
 │  • design_lqr()          • analyze_stability()             │
 │  • design_kalman()       • analyze_controllability()       │
 │  • design_lqg()          • analyze_observability()         │
-│                                                              │
+│                                                            │
 │  All functions are stateless, pure, backend-agnostic       │
 └──────────────────┬─────────────────────────────────────────┘
                    │ returns
                    ↓
 ┌────────────────────────────────────────────────────────────┐
-│                   TYPE LAYER                                │
-│             control_classical.py (542 lines)                │
-│                                                              │
-│  • LQRResult           • StabilityInfo                      │
-│  • KalmanFilterResult  • ControllabilityInfo                │
-│  • LQGResult           • ObservabilityInfo                  │
+│                   TYPE LAYER                               │
+│             control_classical.py (542 lines)               │
+│                                                            │
+│  • LQRResult           • StabilityInfo                     │
+│  • KalmanFilterResult  • ControllabilityInfo               │
+│  • LQGResult           • ObservabilityInfo                 │
 └────────────────────────────────────────────────────────────┘
 ```
 
