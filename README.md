@@ -50,6 +50,7 @@ Most control and dynamics libraries force you to choose between **symbolic elega
 
 ### Installation
 
+Currently, the following has to be done
 ```bash
 # Clone the repository
 git clone https://github.com/gbenezer/ControlDESymulation.git
@@ -63,12 +64,18 @@ pip install -e ".[torch]"      # PyTorch support
 pip install -e ".[jax]"        # JAX support
 pip install -e ".[jax,viz]"    # JAX + visualization
 pip install -e ".[all]"        # Everything
+# many others can be found in pyproject.toml
+```
+
+Once the documentation is finished and the package is uploaded to PyPI (soon), the following will work
+```bash
+pip install cdesym
 ```
 
 ### Your First System
 
 ```python
-from src.systems.base.core.continuous_symbolic_system import ContinuousSymbolicSystem
+from cdesym import ContinuousSymbolicSystem
 import sympy as sp
 import numpy as np
 
@@ -262,6 +269,55 @@ ControlDESymulation supports multiple numerical backends with automatic detectio
 Repository is not currently ready for other contributors. Once all files are fully documented, initial example notebooks and/or more formal tutorials, all warnings addressed, and all mypy/ruff/pylint issues are resolved, then contributions are welcome. Some examples of future help would be:
 
 1. **Additional Example Systems** - More application domains
+    - Currently implemented systems
+        - Deterministic
+            - Continuous
+                - Aerial system models (2D quadrotor)
+                - Simple pendulum
+                - CartPole
+                - Continuous chemical reactor (batch and CSTR)
+                - Coupled oscillators
+                - Dubins vehicle model
+                - Duffing oscillator (time varying components not added)
+                - Basic linear systems
+                - Lorenz sytem
+                - Robotic 2-link arm model
+                - Path tracking of car on track
+                - Van der Pol oscillator
+            - Discrete
+                - Differential drive robot model
+                - Discrete version of CartPole
+                - Discrete harmonic oscillator
+                - Discrete double integrator
+                - Discrete pendulum
+                - Discretized chemical reactor (batch and CSTR)
+                - Discrete 1-link robot arm model
+                - Discrete Solow macroeconomic model
+                - Henon, logistic, and standard discrete maps
+        - Stochastic
+            - Continuous
+                - Brownian motion
+                - Geometric Brownian motion
+                - Stochastic Susceptible-Infected-Recovered (SIR) model
+                - Stochastic pendulum
+                - Stochastic chemical reactors with independent reactant and temperature noise
+                - Cox-Ingersoll-Ross process
+                - Langevin dynamics
+                - Ornstein-Uhlenbeck process
+                - Stochastic CartPole
+                - Stochastic double integrator
+                - Stochastic Lorenz system
+            - Discrete
+                - Discrete AR(1) process
+                - Discrete ARMA(1, 1) process
+                - Discrete VAR(1) process
+                - Discrete random walk
+                - Discrete white noise
+                - Discrete stochastic double integrator
+                - Discrete stochastic pendulum
+                - Stochastic logistic map
+                - Euler discretized stochastic chemical reactors with independent noise
+                - Discrete stochastic queue model
 2. **Documentation** - Tutorials, guides, and examples
 3. **Performance Optimization** - Profiling and speedups
 4. **Additional Backends** - TensorFlow, CuPy, etc.
@@ -322,16 +378,19 @@ See [LICENSE](LICENSE) for full terms.
 ### What This Means
 
 **You CAN**:
+
 - Use for research, academic, commercial, and internal purposes
 - Modify and distribute
 - Use in private or internal services
 
 **You MUST**:
+
 - Share modifications if you run modified code as a public/network service
 - Keep the same AGPL-3.0 license for modifications
 - Provide source code to users of your network service
 
 **You DON'T need to**:
+
 - Share your own code that *uses* this library
 - Release internal modifications (unless network-accessible)
 - Open-source your proprietary systems
@@ -343,12 +402,14 @@ See [LICENSE](LICENSE) for full terms.
 ControlDESymulation builds on excellent open-source libraries:
 
 ### Core Dependencies
+
 - **SymPy** - Symbolic mathematics
 - **NumPy/SciPy** - Numerical computing
 - **PyTorch** - Deep learning and automatic differentiation
 - **JAX** - High-performance numerical computing with XLA
 
 ### Integrators
+
 - **scipy.integrate** - ODE/SDE solvers for NumPy backend
 - **torchdiffeq** - PyTorch ODE solver
 - **torchsde** - PyTorch SDE solver
@@ -356,6 +417,7 @@ ControlDESymulation builds on excellent open-source libraries:
 - **DiffEqPy** - Julia DifferentialEquations.jl wrapper (world-class solvers)
 
 ### Other Tools
+
 - **python-control** - Control theory algorithms
 - **Plotly** - Interactive visualization
 - **Matplotlib** - Publication-quality plots
@@ -373,6 +435,7 @@ Original project: [Lyapunov-Stable Neural Controllers](https://github.com/gbenez
 ## Contact
 
 **Gil Benezer**
+
 - **Email**: gil.benezer@gmail.com
 - **GitHub**: [@gbenezer](https://github.com/gbenezer)
 
@@ -389,6 +452,7 @@ For commercial licensing or consulting inquiries, contact via email.
 ## Roadmap
 
 ### v1.0 (Current - Release Candidate)
+
 - [x] Core 4-layer architecture
 - [x] Multi-backend support (NumPy/PyTorch/JAX/Julia)
 - [x] ODE and SDE integration with 40+ methods
@@ -406,6 +470,7 @@ For commercial licensing or consulting inquiries, contact via email.
 - [ ] Verifying constructed documentation
 
 ### v1.1 (Planned)
+
 - [ ] RL Environment Synthesis using Gymnasium
 - [ ] Generation and Standardized Export of Synthetic Data
 - [ ] System Identification and Bayesian Inference
@@ -415,6 +480,7 @@ For commercial licensing or consulting inquiries, contact via email.
 - [ ] Framework for System Coupling and Composition
 
 ### v2.0 (Future)
+
 - [ ] Partial Differential Equations (PDEs)
 - [ ] Hybrid systems (continuous + discrete events)
 - [ ] Distributed Systems
