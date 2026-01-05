@@ -254,7 +254,7 @@ Automatically handles multiple trajectories with mean ± std visualization. This
 
 ```{python}
 #| label: demo-trajectory-batch
-#| fig-cap: "Monte Carlo simulation of stochastic pendulum showing trajectory variability due to random forcing"
+#| fig-cap: "Monte Carlo simulation showing 20 stochastic trajectories with mean and standard deviation bands"
 
 # Use stochastic pendulum with additive noise
 # σ = 0.3 gives moderate noise (visible but not overwhelming)
@@ -266,6 +266,7 @@ stochastic_system.set_default_backend('torch')
 n_trials = 20
 x0 = np.array([0.5, 0.0])  # Start from same initial condition
 
+# Collect results
 results = []
 for i in range(n_trials):
     # Each trajectory gets different random noise realization
@@ -277,16 +278,19 @@ for i in range(n_trials):
         dt=0.01,
         seed=i  # Different seed for each trial
     )
-    # Convert torch tensor to numpy
+    # Convert torch tensor to numpy for plotting
     x_np = result['x'].cpu().numpy() if hasattr(result['x'], 'cpu') else result['x']
     results.append(x_np)
 
-# Stack into batch
-x_batch = np.stack(results)  # (n_trials, T, nx)
+# Stack into batch: (n_trials, T, nx)
+x_batch = np.stack(results)
+
+# Convert time to numpy
+t_np = result['t'].cpu().numpy() if hasattr(result['t'], 'cpu') else result['t']
 
 # Plot automatically shows mean ± std
 fig = stochastic_system.plotter.plot_trajectory(
-    result['t'],
+    t_np,
     x_batch,
     state_names=['θ (rad)', 'ω (rad/s)'],
     title=f'Stochastic Pendulum Monte Carlo (n={n_trials}, σ=0.3)',
@@ -294,6 +298,37 @@ fig = stochastic_system.plotter.plot_trajectory(
 )
 fig
 ```
+
+
+::: {.callout-note}
+## Stochastic vs Deterministic Monte Carlo
+
+This example demonstrates **true stochastic dynamics** from the stochastic pendulum's Wiener process noise. Each trajectory experiences different random realizations of the noise process.
+
+**Key features:**
+- **Batched input**: `x_batch` shape is `(20, 1001, 2)` = (n_trials, T, nx)
+- **Automatic statistics**: Plotter computes mean and std across trials
+- **Visual encoding**: Shaded region shows ±1 standard deviation
+- **Individual trajectories**: Thin lines show each realization (optional)
+
+For deterministic systems, Monte Carlo typically varies initial conditions or parameters rather than having inherent stochasticity.
+:::
+
+::: {.callout-tip}
+## Backend Conversion for Plotting
+
+The plotter requires **NumPy arrays**, but SDE integration used **PyTorch**:
+```python
+# Convert torch tensor to numpy
+x_np = result['x'].cpu().numpy()  # Move to CPU, then numpy
+t_np = result['t'].cpu().numpy()  # Same for time
+```
+
+This conversion happens because:
+- PyTorch SDE solvers work with torch tensors
+- Plotly requires NumPy arrays for visualization
+- The plotter handles this automatically for single trajectories, but for batched data we do it explicitly
+:::
 
 ::: {.callout-note}
 ## Stochastic vs Deterministic Monte Carlo
