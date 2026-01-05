@@ -256,136 +256,39 @@ Automatically handles multiple trajectories with mean ± std visualization. This
 #| label: demo-trajectory-batch
 #| fig-cap: "Monte Carlo simulation of stochastic pendulum showing 20 independent noise realizations"
 
-# DIAGNOSTIC: Test integration first
-print("="*60)
-print("DIAGNOSTIC - Testing SDE integration")
-print("="*60)
-
-# Test 1: Simple integration
+# Use torch backend (now fixed!)
 stochastic_system.set_default_backend('torch')
+
+# Run Monte Carlo simulation
+n_trials = 20
 x0 = np.array([0.5, 0.0])
-t_eval_test = np.linspace(0, 10, 1001)
 
-print("\nTest 1: Basic integration with t_eval")
-test_result = stochastic_system.integrate(
-    x0,
-    u=None,
-    t_span=(0, 10),
-    method='euler',
-    dt=0.01,
-    t_eval=t_eval_test,
-    seed=0
-)
+# Define output times
+t_eval = np.linspace(0, 10, 1001)
 
-print(f"  Result keys: {list(test_result.keys())}")
-print(f"  t type: {type(test_result['t'])}")
-print(f"  t shape: {test_result['t'].shape}")
-print(f"  x shape: {test_result['x'].shape}")
-
-# Test 2: Without t_eval
-print("\nTest 2: Integration WITHOUT t_eval")
-test_result2 = stochastic_system.integrate(
-    x0,
-    u=None,
-    t_span=(0, 10),
-    method='euler',
-    dt=0.01,
-    seed=0
-)
-print(f"  t shape: {test_result2['t'].shape}")
-print(f"  x shape: {test_result2['x'].shape}")
-
-# Convert and check
-t_np_test = test_result['t'].cpu().numpy() if hasattr(test_result['t'], 'cpu') else test_result['t']
-x_np_test = test_result['x'].cpu().numpy() if hasattr(test_result['x'], 'cpu') else test_result['x']
-
-print(f"\nAfter numpy conversion:")
-print(f"  t_np shape: {t_np_test.shape}")
-print(f"  x_np shape: {x_np_test.shape}")
-print(f"  t range: [{t_np_test.min():.2f}, {t_np_test.max():.2f}]")
-
-if len(t_np_test) < 100:
-    print(f"\n❌ ERROR: Only {len(t_np_test)} time points!")
-    print("  Integration not working as expected")
-    print("  Switching to n_paths parameter instead...")
-    
-    # Alternative: Use n_paths for Monte Carlo
-    print("\nTest 3: Using n_paths parameter for Monte Carlo")
-    mc_result = stochastic_system.integrate(
-        x0,
-        u=None,
-        t_span=(0, 10),
-        method='euler',
-        dt=0.01,
-        n_paths=20,  # Monte Carlo directly
-        seed=0
-    )
-    print(f"  Result with n_paths:")
-    print(f"    t shape: {mc_result['t'].shape}")
-    print(f"    x shape: {mc_result['x'].shape}")
-    
-    # Convert
-    t_mc = mc_result['t'].cpu().numpy() if hasattr(mc_result['t'], 'cpu') else mc_result['t']
-    x_mc = mc_result['x'].cpu().numpy() if hasattr(mc_result['x'], 'cpu') else mc_result['x']
-    
-    print(f"    After conversion:")
-    print(f"      t_mc shape: {t_mc.shape}")
-    print(f"      x_mc shape: {x_mc.shape}")
-    
-    if x_mc.ndim == 3 and x_mc.shape[1] > 100:
-        print(f"  ✅ SUCCESS with n_paths!")
-        use_n_paths = True
-    else:
-        print(f"  ❌ Still not working")
-        use_n_paths = False
-else:
-    print(f"  ✅ t_eval working: {len(t_np_test)} points")
-    use_n_paths = False
-
-print("="*60)
-print("END DIAGNOSTIC")
-print("="*60 + "\n")
-
-# Now do actual Monte Carlo based on what works
-if use_n_paths:
-    # Use n_paths parameter
+# Collect trajectories
+results = []
+for i in range(n_trials):
     result = stochastic_system.integrate(
-        x0,
-        u=None,
+        x0, 
+        u=None, 
         t_span=(0, 10),
         method='euler',
         dt=0.01,
-        n_paths=20,
-        seed=42
+        t_eval=t_eval,
+        seed=i
     )
-    t_np = result['t'].cpu().numpy() if hasattr(result['t'], 'cpu') else result['t']
-    x_batch = result['x'].cpu().numpy() if hasattr(result['x'], 'cpu') else result['x']
-    n_trials = x_batch.shape[0]
-else:
-    # Use loop with individual integrations
-    n_trials = 20
-    t_eval = np.linspace(0, 10, 1001)
-    results = []
-    
-    for i in range(n_trials):
-        result = stochastic_system.integrate(
-            x0,
-            u=None,
-            t_span=(0, 10),
-            method='euler',
-            dt=0.01,
-            t_eval=t_eval,
-            seed=i
-        )
-        x_np = result['x'].cpu().numpy() if hasattr(result['x'], 'cpu') else result['x']
-        results.append(x_np)
-    
-    x_batch = np.stack(results)
-    t_np = result['t'].cpu().numpy() if hasattr(result['t'], 'cpu') else result['t']
+    # Convert torch tensor to numpy
+    x_np = result['x'].cpu().numpy() if hasattr(result['x'], 'cpu') else result['x']
+    results.append(x_np)
 
-print(f"Final batch shape: {x_batch.shape} (n_trials={n_trials}, T={len(t_np)}, nx=2)")
+# Stack: (n_trials, T, nx)
+x_batch = np.stack(results)
+t_np = result['t'].cpu().numpy() if hasattr(result['t'], 'cpu') else result['t']
 
-# Plot
+print(f"Batch shape: {x_batch.shape} (n_trials={n_trials}, T={len(t_np)}, nx=2)")
+
+# Plot individual trajectories
 fig = stochastic_system.plotter.plot_trajectory(
     t_np,
     x_batch,
