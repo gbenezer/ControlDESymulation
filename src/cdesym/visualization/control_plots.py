@@ -146,10 +146,13 @@ class ControlPlotter:
 
     def plot_eigenvalue_map(
         self,
-        eigenvalues: np.ndarray,
+        eigenvalues: Union[np.ndarray, Dict[str, np.ndarray]],
         system_type: str = "continuous",
-        title: str = "Closed-Loop Eigenvalues",
+        labels: Optional[Union[List[str], str]] = None,
+        title: str = "Eigenvalue Map",
         show_stability_margin: bool = True,
+        show_stability_region: bool = True,
+        color_scheme: str = "plotly",
         theme: Optional[str] = None,
         **kwargs,
     ) -> go.Figure:
@@ -157,157 +160,417 @@ class ControlPlotter:
         Plot eigenvalues with stability region.
 
         Creates complex plane plot showing eigenvalue locations with
-        stability region highlighted.
+        stability region highlighted. Supports multiple eigenvalue sets
+        for comparative analysis.
 
         Parameters
         ----------
-        eigenvalues : np.ndarray
-            Complex eigenvalues, shape (n,)
-        system_type : str
-            'continuous' or 'discrete'
-            Determines stability criterion:
-            - Continuous: Re(λ) < 0 (left half-plane)
-            - Discrete: |λ| < 1 (inside unit circle)
-        title : str
+        eigenvalues : Union[np.ndarray, Dict[str, np.ndarray]]
+            Complex eigenvalues in one of two formats:
+            
+            **Format 1: Single array**
+                Shape (n,) - single set of eigenvalues
+                Use with `labels` parameter for individual point labels
+            
+            **Format 2: Dictionary** (recommended for multiple sets)
+                Dict mapping set names to eigenvalue arrays
+                Example: {'Open-loop': eigs_ol, 'Closed-loop': eigs_cl}
+                Each array: shape (n_eigs,)
+        
+        system_type : str, default='continuous'
+            System type determining stability criterion:
+            - 'continuous': Re(λ) < 0 (left half-plane stable)
+            - 'discrete': |λ| < 1 (inside unit circle stable)
+        
+        labels : Optional[Union[List[str], str]]
+            Labels for eigenvalues (only used if eigenvalues is array):
+            
+            - **List[str]**: Individual label per eigenvalue, length must match
+            - **str**: Single label for entire set
+            - **None**: Default to "Eigenvalues"
+            
+            Ignored if eigenvalues is Dict (uses dict keys instead)
+        
+        title : str, default='Eigenvalue Map'
             Plot title
-        show_stability_margin : bool
-            If True, annotate stability margin
+        
+        show_stability_margin : bool, default=True
+            If True, annotate stability margin (distance to boundary)
+            - Continuous: margin = -max(Re(λ))
+            - Discrete: margin = 1 - max(|λ|)
+        
+        show_stability_region : bool, default=True
+            If True, shade stability region
+            - Continuous: shade left half-plane (green)
+            - Discrete: draw unit circle
+        
+        color_scheme : str, default='plotly'
+            Color scheme for eigenvalue sets
+            Options: 'plotly', 'd3', 'colorblind_safe', 'tableau', etc.
+            Used when plotting multiple sets (dict format)
+        
         theme : Optional[str]
             Plot theme to apply
             Options: 'default', 'publication', 'dark', 'presentation'
             If None, uses self.default_theme
+        
         **kwargs
-            Additional arguments
+            Additional customization arguments
+            - marker_size : int - Size of eigenvalue markers (default: 12)
+            - show_grid : bool - Show grid lines (default: True)
 
         Returns
         -------
         go.Figure
-            Eigenvalue map with stability region
+            Interactive eigenvalue map with stability region
 
         Examples
         --------
-        >>> # Continuous system with publication theme
+        **Single set of eigenvalues:**
+        
         >>> lqr = system.design_lqr(Q, R)
         >>> fig = plotter.plot_eigenvalue_map(
         ...     lqr['closed_loop_eigenvalues'],
         ...     system_type='continuous',
+        ...     labels='Closed-loop (LQR)',
         ...     theme='publication'
         ... )
-        >>> print(f"Margin: {lqr['stability_margin']:.3f}")
-        >>>
-        >>> # Discrete system with dark theme
-        >>> lqr_d = discrete_system.design_lqr(Q, R)
+        >>> fig.show()
+        
+        **Multiple sets using dictionary (recommended):**
+        
+        >>> eigenvalue_sets = {
+        ...     'Open-loop': eigs_open,
+        ...     'Closed-loop (LQR)': eigs_lqr,
+        ...     'Closed-loop (H∞)': eigs_hinf,
+        ... }
         >>> fig = plotter.plot_eigenvalue_map(
-        ...     lqr_d['closed_loop_eigenvalues'],
+        ...     eigenvalue_sets,
+        ...     system_type='continuous',
+        ...     color_scheme='colorblind_safe',
+        ...     theme='publication'
+        ... )
+        >>> fig.show()
+        
+        **Multiple sets using concatenation + labels:**
+        
+        >>> eigs_all = np.concatenate([eigs_ol, eigs_cl])
+        >>> labels_all = (
+        ...     ['Open-loop'] * len(eigs_ol) + 
+        ...     ['Closed-loop'] * len(eigs_cl)
+        ... )
+        >>> fig = plotter.plot_eigenvalue_map(
+        ...     eigs_all,
+        ...     labels=labels_all,
+        ...     system_type='continuous'
+        ... )
+        
+        **Discrete system:**
+        
+        >>> fig = plotter.plot_eigenvalue_map(
+        ...     discrete_lqr['closed_loop_eigenvalues'],
         ...     system_type='discrete',
         ...     theme='dark'
+        ... )
+        
+        **Custom marker size and grid:**
+        
+        >>> fig = plotter.plot_eigenvalue_map(
+        ...     eigenvalue_sets,
+        ...     marker_size=15,
+        ...     show_grid=True
         ... )
 
         Notes
         -----
-        - Continuous: Stable if all eigenvalues in left half-plane (Re(λ) < 0)
-        - Discrete: Stable if all eigenvalues inside unit circle (|λ| < 1)
-        - Stability region shown in green
-        - Unstable region shown in red
-        - Eigenvalues plotted as blue circles
+        **Stability Criteria:**
+        
+        - **Continuous systems**: Stable if Re(λ) < 0 for all eigenvalues
+        (left half-plane of complex plane)
+        
+        - **Discrete systems**: Stable if |λ| < 1 for all eigenvalues
+        (inside unit circle)
+        
+        **Stability Margin:**
+        
+        Distance from least stable eigenvalue to stability boundary:
+        
+        - Continuous: margin = -max(Re(λ))
+        - Positive: stable with margin
+        - Negative: unstable
+        - Larger is better (more robustness)
+        
+        - Discrete: margin = 1 - max(|λ|)
+        - Positive: stable with margin
+        - Negative: unstable
+        - Larger is better
+        
+        **Visual Encoding:**
+        
+        - Stable region: Shaded green/highlighted
+        - Unstable region: Shaded red/unmarked
+        - Stability boundary: Solid black line
+        - Eigenvalues: Colored circles (one color per set)
+        - Margin: Annotated with arrow
+        
+        **Multiple Sets:**
+        
+        When comparing multiple designs:
+        - Each set gets unique color from color_scheme
+        - Legend shows which eigenvalues belong to which design
+        - Useful for visualizing controller tuning effects
+        
+        See Also
+        --------
+        plot_root_locus : Shows eigenvalue migration as gain varies
+        plot_gain_comparison : Compare feedback gains
         """
         # Use default theme if not specified
         if theme is None:
             theme = self.default_theme
 
-        # Convert to NumPy
-        eigs = self._to_numpy(eigenvalues)
+        # Extract marker size from kwargs
+        marker_size = kwargs.get('marker_size', 12)
+        show_grid = kwargs.get('show_grid', True)
 
-        # Create figure
+        # =========================================================================
+        # Parse Input Format
+        # =========================================================================
+        
+        # Check if input is dictionary or array
+        if isinstance(eigenvalues, dict):
+            # Dictionary format: {name: eigenvalues}
+            eigenvalue_sets = eigenvalues
+            set_names = list(eigenvalue_sets.keys())
+            n_sets = len(set_names)
+            
+            # Convert all to NumPy
+            eigenvalue_sets = {
+                name: self._to_numpy(eigs) 
+                for name, eigs in eigenvalue_sets.items()
+            }
+            
+            # Ignore labels parameter (using dict keys)
+            if labels is not None:
+                import warnings
+                warnings.warn(
+                    "labels parameter ignored when eigenvalues is provided as dict. "
+                    "Using dict keys as labels instead.",
+                    UserWarning
+                )
+        
+        else:
+            # Array format: single or concatenated eigenvalues
+            eigs_np = self._to_numpy(eigenvalues)
+            
+            # Parse labels parameter
+            if labels is None:
+                # Single set, default name
+                eigenvalue_sets = {'Eigenvalues': eigs_np}
+                set_names = ['Eigenvalues']
+                n_sets = 1
+            
+            elif isinstance(labels, str):
+                # Single set with custom name
+                eigenvalue_sets = {labels: eigs_np}
+                set_names = [labels]
+                n_sets = 1
+            
+            elif isinstance(labels, list):
+                # Individual labels for each eigenvalue
+                if len(labels) != len(eigs_np):
+                    raise ValueError(
+                        f"labels length {len(labels)} must match "
+                        f"number of eigenvalues {len(eigs_np)}"
+                    )
+                
+                # Group eigenvalues by label
+                eigenvalue_sets = {}
+                for eig, label in zip(eigs_np, labels):
+                    if label not in eigenvalue_sets:
+                        eigenvalue_sets[label] = []
+                    eigenvalue_sets[label].append(eig)
+                
+                # Convert lists to arrays
+                eigenvalue_sets = {
+                    name: np.array(eigs_list) 
+                    for name, eigs_list in eigenvalue_sets.items()
+                }
+                
+                set_names = list(eigenvalue_sets.keys())
+                n_sets = len(set_names)
+            
+            else:
+                raise TypeError(
+                    f"labels must be None, str, or List[str], got {type(labels)}"
+                )
+
+        # =========================================================================
+        # Create Figure
+        # =========================================================================
+        
         fig = go.Figure()
 
         # Draw stability region
-        self._draw_stability_region(fig, system_type)
+        if show_stability_region:
+            self._draw_stability_region(fig, system_type)
 
-        # Plot eigenvalues (use ColorSchemes for consistency)
-        eigenvalue_color = ColorSchemes.PLOTLY[0]
-
-        fig.add_trace(
-            go.Scatter(
-                x=np.real(eigs),
-                y=np.imag(eigs),
-                mode="markers",
-                name="Eigenvalues",
-                marker=dict(
-                    color=eigenvalue_color,
-                    size=12,
-                    symbol="circle",
-                    line=dict(color="white", width=2),
+        # =========================================================================
+        # Plot Eigenvalue Sets
+        # =========================================================================
+        
+        # Get colors from centralized color schemes
+        colors = ColorSchemes.get_colors(color_scheme, n_sets)
+        
+        # Different marker symbols for different sets
+        symbols = ['circle', 'square', 'diamond', 'cross', 'x', 'triangle-up', 
+                'triangle-down', 'star', 'hexagram', 'pentagon']
+        
+        # Plot each eigenvalue set
+        all_eigs = []  # For computing plot limits
+        
+        for set_idx, set_name in enumerate(set_names):
+            eigs = eigenvalue_sets[set_name]
+            all_eigs.append(eigs)
+            
+            # Choose symbol (cycle if more sets than symbols)
+            symbol = symbols[set_idx % len(symbols)]
+            
+            fig.add_trace(
+                go.Scatter(
+                    x=np.real(eigs),
+                    y=np.imag(eigs),
+                    mode="markers",
+                    name=set_name,
+                    marker=dict(
+                        color=colors[set_idx],
+                        size=marker_size,
+                        symbol=symbol,
+                        line=dict(color="white", width=2),
+                    ),
+                    hovertemplate=(
+                        f"<b>{set_name}</b><br>"
+                        "λ = %{x:.4f} + %{y:.4f}j<br>"
+                        "|λ| = %{text:.4f}"
+                        "<extra></extra>"
+                    ),
+                    text=np.abs(eigs),
                 ),
-                hovertemplate="λ = %{x:.4f} + %{y:.4f}j<br>|λ| = %{text:.4f}<extra></extra>",
-                text=np.abs(eigs),
-            ),
-        )
+            )
+        
+        # Concatenate all eigenvalues for limit computation
+        all_eigs_concat = np.concatenate(all_eigs)
 
-        # Determine plot limits
+        # =========================================================================
+        # Determine Plot Limits
+        # =========================================================================
+        
         if system_type == "continuous":
-            # Focus on left half-plane
-            real_min = min(-1, np.min(np.real(eigs)) - 0.5)
-            real_max = max(1, np.max(np.real(eigs)) + 0.5)
-            imag_range = max(2, np.max(np.abs(np.imag(eigs))) + 0.5)
+            # Focus on left half-plane for continuous systems
+            real_min = min(-1, np.min(np.real(all_eigs_concat)) - 0.5)
+            real_max = max(1, np.max(np.real(all_eigs_concat)) + 0.5)
+            imag_range = max(2, np.max(np.abs(np.imag(all_eigs_concat))) + 0.5)
             imag_min, imag_max = -imag_range, imag_range
 
             # Add stability margin annotation
             if show_stability_margin:
-                max_real = np.max(np.real(eigs))
+                max_real = np.max(np.real(all_eigs_concat))
                 stability_margin = -max_real
+                
+                # Find which set has the least stable eigenvalue
+                least_stable_set = None
+                for name, eigs in eigenvalue_sets.items():
+                    if np.max(np.real(eigs)) == max_real:
+                        least_stable_set = name
+                        break
+
+                annotation_text = f"Margin = {stability_margin:.3f}"
+                if least_stable_set and n_sets > 1:
+                    annotation_text += f"<br>({least_stable_set})"
 
                 fig.add_annotation(
                     x=max_real,
                     y=0,
-                    text=f"Margin = {stability_margin:.3f}",
+                    text=annotation_text,
                     showarrow=True,
                     arrowhead=2,
                     arrowsize=1,
                     arrowwidth=2,
-                    ax=-50,
+                    arrowcolor="black",
+                    ax=-60,
                     ay=0,
+                    bgcolor="rgba(255, 255, 255, 0.8)",
+                    bordercolor="black",
+                    borderwidth=1,
                 )
-        else:
-            # Discrete: focus on unit circle
-            max_mag = max(1.2, np.max(np.abs(eigs)) + 0.2)
+        
+        else:  # discrete
+            # Focus on unit circle for discrete systems
+            max_mag = max(1.2, np.max(np.abs(all_eigs_concat)) + 0.2)
             real_min, real_max = -max_mag, max_mag
             imag_min, imag_max = -max_mag, max_mag
 
             # Add stability margin annotation
             if show_stability_margin:
-                max_magnitude = np.max(np.abs(eigs))
+                max_magnitude = np.max(np.abs(all_eigs_concat))
                 stability_margin = 1.0 - max_magnitude
 
-                # Find eigenvalue with max magnitude
-                max_idx = np.argmax(np.abs(eigs))
-                max_eig = eigs[max_idx]
+                # Find which set has the least stable eigenvalue
+                least_stable_set = None
+                max_eig = None
+                for name, eigs in eigenvalue_sets.items():
+                    max_mag_set = np.max(np.abs(eigs))
+                    if max_mag_set == max_magnitude:
+                        least_stable_set = name
+                        max_idx = np.argmax(np.abs(eigs))
+                        max_eig = eigs[max_idx]
+                        break
 
-                fig.add_annotation(
-                    x=np.real(max_eig),
-                    y=np.imag(max_eig),
-                    text=f"Margin = {stability_margin:.3f}",
-                    showarrow=True,
-                    arrowhead=2,
-                    arrowsize=1,
-                    arrowwidth=2,
-                    ax=50,
-                    ay=-50,
-                )
+                annotation_text = f"Margin = {stability_margin:.3f}"
+                if least_stable_set and n_sets > 1:
+                    annotation_text += f"<br>({least_stable_set})"
 
-        # Update layout
+                if max_eig is not None:
+                    fig.add_annotation(
+                        x=np.real(max_eig),
+                        y=np.imag(max_eig),
+                        text=annotation_text,
+                        showarrow=True,
+                        arrowhead=2,
+                        arrowsize=1,
+                        arrowwidth=2,
+                        arrowcolor="black",
+                        ax=50,
+                        ay=-50,
+                        bgcolor="rgba(255, 255, 255, 0.8)",
+                        bordercolor="black",
+                        borderwidth=1,
+                    )
+
+        # =========================================================================
+        # Update Layout
+        # =========================================================================
+        
         fig.update_layout(
             title=title,
             xaxis_title="Real Part" if system_type == "continuous" else "Real",
             yaxis_title="Imaginary Part" if system_type == "continuous" else "Imaginary",
             width=700,
             height=600,
-            xaxis=dict(range=[real_min, real_max], zeroline=True),
-            yaxis=dict(range=[imag_min, imag_max], zeroline=True),
+            xaxis=dict(
+                range=[real_min, real_max], 
+                zeroline=True,
+                showgrid=show_grid,
+            ),
+            yaxis=dict(
+                range=[imag_min, imag_max], 
+                zeroline=True,
+                showgrid=show_grid,
+            ),
             showlegend=True,
         )
 
-        # Equal aspect ratio
+        # Equal aspect ratio (important for eigenvalue plots)
         fig.update_yaxes(scaleanchor="x", scaleratio=1)
 
         # Apply theme
