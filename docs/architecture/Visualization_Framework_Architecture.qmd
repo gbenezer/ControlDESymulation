@@ -241,6 +241,7 @@ fig
 ## Why `simulate()` for Plotting
 
 This example uses `simulate()` rather than `integrate()` because:
+
 - **Regular time grid** (uniform dt=0.01) makes for smooth, evenly-spaced plots
 - **Time-major output** `result['states']` is (T, nx) - natural for plotting
 - **Reconstructed controls** available if controller provided
@@ -307,6 +308,7 @@ This demonstrates **true stochastic dynamics** from Wiener process noise, descri
 $$dx = f(x, u)dt + g(x, u)dW$$
 
 **What you see:**
+
 - **Individual trajectories**: Each colored line shows one noise realization
 - **Stochastic spread**: Trajectories diverge over time from accumulated Brownian forcing
 - **Nonlinear effects**: Pendulum damping limits growth but uncertainty remains
@@ -318,8 +320,7 @@ For comparison, deterministic Monte Carlo shows variability only from initial co
 
 ::: {.callout-tip}
 ## SDE Integration with PyTorch
-
-For PyTorch SDE integration, specify output times with `t_eval`:
+If you still want to use `integrate` directly despite the recommendation for `simulate`, specify output times with `t_eval`:
 
 ```python
 # Define output times
@@ -336,7 +337,8 @@ result = system.integrate(
 )
 ```
 
-**Parameters:**
+**Integration Parameters:**
+
 - `dt=0.01`: Internal time step (controls accuracy)
 - `t_eval`: Which points to return in output (controls density)
 :::
@@ -344,7 +346,7 @@ result = system.integrate(
 ::: {.callout-tip}
 ## Backend Conversion for Plotting
 
-The plotter requires **NumPy arrays**, but SDE integration returns **PyTorch tensors**:
+The plotter requires **NumPy arrays**, but integration returns **arrays of default backend type**:
 
 ```python
 # Convert torch tensor to numpy
@@ -353,9 +355,10 @@ t_np = result['t'].cpu().numpy()  # Same for time
 ```
 
 **Why this is needed:**
-- PyTorch SDE solvers work with torch tensors (for autodiff/GPU)
+
+- PyTorch solvers work with torch tensors (for autodiff/GPU)
+- JAX solvers work with jax.numpy.array arrays (for TPU/JIT performance)
 - Plotly requires NumPy arrays for visualization
-- Conversion is explicit for batched Monte Carlo data
 :::
 
 
@@ -369,7 +372,7 @@ Visualize both states and control inputs:
 
 # Simple proportional controller
 def controller(x, t):
-    K = np.array([[-2.0, -1.0]])
+    K = np.array([[-0.5, -0.15]])
     return -K @ x
 
 # Simulate with controller
@@ -632,7 +635,7 @@ Phase portraits reveal noise-induced behavior:
 stochastic_system.set_default_backend('torch')
 
 # Multiple stochastic trajectories from same initial condition
-n_trajectories = 5
+n_trajectories = 3
 stochastic_trajectories = []
 
 for i in range(n_trajectories):
@@ -719,7 +722,7 @@ C = np.array([[1, 0]])
 D = np.zeros((1, 1))
 
 # Closed-loop dynamics
-A_cl = A - B @ lqr_result['gain']
+A_cl = (A - B @ lqr_result['gain']) * 10.0
 sys_cl = signal.StateSpace(A_cl, B, C, D)
 
 # Step response
