@@ -298,6 +298,21 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
         # Device management
         self._device = "cpu"
         
+        # Auto-detect required levy_area for the solver if not specified
+        solver_info = self.get_solver_info(self.solver_name)
+        required_levy_area = solver_info.get("levy_area", "none")
+
+        # If user didn't specify levy_area, use the solver's requirement
+        if levy_area == "none" and required_levy_area != "none":
+            levy_area = required_levy_area
+            # Optionally warn the user
+            import warnings
+            warnings.warn(
+                f"Solver '{self.solver_name}' requires levy_area='{required_levy_area}'. "
+                f"Auto-setting levy_area to '{required_levy_area}'.",
+                UserWarning
+            )
+
         # Validate levy_area
         valid_levy_areas = ["none", "space-time", "full"]
         if levy_area not in valid_levy_areas:
@@ -305,7 +320,7 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
                 f"Invalid levy_area '{levy_area}'. "
                 f"Must be one of: {valid_levy_areas}"
             )
-        
+
         self.levy_area = levy_area
 
     @property
@@ -337,50 +352,26 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
         shape: Tuple[int, ...],
         dW: Optional[NoiseVector] = None,
     ):
-        """
-        Create Brownian motion for the integration interval.
-
-        Parameters
-        ----------
-        key : jax.random.PRNGKey
-            Random key for noise generation
-        t0 : ScalarLike
-            Start time
-        t1 : ScalarLike
-            End time
-        shape : tuple
-            Shape of noise (nw,)
-        dW : Optional[NoiseVector]
-            Custom Brownian increment. If provided, uses CustomBrownianPath.
-
-        Returns
-        -------
-        AbstractPath
-            Brownian motion object compatible with Diffrax
-
-        Notes
-        -----
-        Diffrax's VirtualBrownianTree computes Levy areas on-demand when
-        accessed by solvers that need them (like Milstein methods).
-
-        The levy_area parameter in the integrator constructor tells the
-        solver which Levy areas to request, not which Brownian generator to use.
-
-        SpaceTimeLevyArea and SpaceTimeTimeLevyArea are data structures that
-        hold computed Levy area values, not constructors.
-        """
-        # If custom noise provided, use it
+        """Create Brownian motion with appropriate Levy area for the solver."""
         if dW is not None:
             return CustomBrownianPath(t0, t1, dW)
 
-        # For random noise, always use VirtualBrownianTree
-        # It computes Levy areas on-demand based on what the solver requests
+        # Map levy_area string to Diffrax Levy area type
+        levy_area_map = {
+            "none": dfx.BrownianIncrement,
+            "space-time": dfx.SpaceTimeLevyArea,
+            "full": dfx.SpaceTimeTimeLevyArea,
+        }
+        
+        levy_area_type = levy_area_map.get(self.levy_area, dfx.BrownianIncrement)
+
         return dfx.VirtualBrownianTree(
             t0=t0,
             t1=t1,
             tol=1e-3,
             shape=shape,
             key=key,
+            levy_area=levy_area_type,
         )
 
     def step(
@@ -903,13 +894,7 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
         Returns
         -------
         Dict[str, Any]
-            Solver properties
-
-        Examples
-        --------
-        >>> info = DiffraxSDEIntegrator.get_solver_info('SEA')
-        >>> print(info['description'])
-        'Optimized for additive noise, high efficiency'
+            Solver properties including required levy_area type
         """
         solver_info = {
             "Euler": {
@@ -928,6 +913,14 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
                 "best_for": "Improved stability",
                 "levy_area": "none",
             },
+            "Heun": {
+                "name": "Heun",
+                "strong_order": 0.5,
+                "weak_order": 1.0,
+                "description": "Heun's method for SDEs",
+                "best_for": "Better stability than Euler",
+                "levy_area": "none",
+            },
             "ItoMilstein": {
                 "name": "Ito-Milstein",
                 "strong_order": 1.0,
@@ -936,13 +929,21 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
                 "best_for": "Better accuracy",
                 "levy_area": "space-time",
             },
+            "StratonovichMilstein": {
+                "name": "Stratonovich-Milstein",
+                "strong_order": 1.0,
+                "weak_order": 1.0,
+                "description": "Stratonovich version of Milstein",
+                "best_for": "Better accuracy (Stratonovich)",
+                "levy_area": "space-time",
+            },
             "SEA": {
                 "name": "SDE Adapted",
                 "strong_order": 1.0,
                 "weak_order": 2.0,
                 "description": "Optimized for additive noise",
                 "best_for": "Fast, additive noise only",
-                "levy_area": "none",
+                "levy_area": "space-time",  # SEA requires space-time Levy area!
             },
             "SHARK": {
                 "name": "ShARK",
@@ -950,7 +951,7 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
                 "weak_order": 2.0,
                 "description": "Higher-order additive",
                 "best_for": "High accuracy, additive noise",
-                "levy_area": "none",
+                "levy_area": "space-time",  # SHARK requires space-time Levy area!
             },
             "SRA1": {
                 "name": "SRA1",
@@ -958,6 +959,14 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
                 "weak_order": 2.0,
                 "description": "Weak order 2 for additive",
                 "best_for": "Monte Carlo, additive noise",
+                "levy_area": "space-time",  # SRA1 requires space-time Levy area!
+            },
+            "ReversibleHeun": {
+                "name": "Reversible Heun",
+                "strong_order": 0.5,
+                "weak_order": 1.0,
+                "description": "Time-reversible method",
+                "best_for": "Reversible dynamics",
                 "levy_area": "none",
             },
         }
@@ -967,6 +976,7 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
             {
                 "name": solver,
                 "description": "Diffrax SDE solver",
+                "levy_area": "none",
             },
         )
 

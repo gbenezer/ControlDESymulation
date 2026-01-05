@@ -274,18 +274,21 @@ class TestDiffraxSDEInitialization:
             assert integrator.solver_name == solver
 
     def test_milstein_requires_levy_area(self, ou_system):
-        """Test that Milstein solvers require levy_area."""
-        # Should raise without levy_area
+        """Test that Milstein solvers auto-detect levy_area requirement."""
+        # ItoMilstein should auto-upgrade levy_area to "space-time"
         integrator = DiffraxSDEIntegrator(
             ou_system,
             dt=0.01,
             solver="ItoMilstein",
-            levy_area="none",
+            levy_area="none",  # Will be auto-upgraded
         )
-
-        # Should fail when trying to get solver instance
-        with pytest.raises(ValueError, match="requires levy_area"):
-            integrator._get_solver_instance()
+        
+        # Should have been auto-upgraded
+        assert integrator.levy_area == "space-time"
+        
+        # Should work without errors
+        solver = integrator._get_solver_instance()
+        assert solver is not None
 
     def test_milstein_with_levy_area_works(self, ou_system):
         """Test that Milstein works with levy_area."""

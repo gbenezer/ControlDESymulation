@@ -251,7 +251,11 @@ class SDEValidator:
 
         # Determine validity
         is_valid = len(self._errors) == 0
-
+        
+        # SDE-specific additional validations (AFTER drift validation)
+        self._validate_diffusion_matrix()
+        self._validate_unused_parameters()  # SDE-aware version!
+        
         # Build result
         result = SymbolicValidationResult(
             is_valid=is_valid,
@@ -416,6 +420,70 @@ class SDEValidator:
             characterizer.validate_noise_type_claim(claimed_type)
         except ValueError as e:
             self._errors.append(f"Noise type validation failed: {e!s}")
+            
+    def _validate_diffusion_matrix(self):
+        """
+        Validate diffusion matrix properties.
+        
+        This is called during validate() to check diffusion-specific constraints.
+        """
+        import warnings
+        
+        if self.diffusion is None:
+            warnings.warn(
+                "SDE system has no diffusion expression defined. "
+                "This will be treated as zero diffusion.",
+                UserWarning
+            )
+            return
+        
+        # Check dimensions (already done in _validate_diffusion_dimensions)
+        # This is a placeholder for additional diffusion validations
+        pass
+
+
+    def _validate_unused_parameters(self):
+        """
+        Validate parameter usage including diffusion expressions.
+        
+        This overrides/extends the base symbolic validator's parameter check
+        to include diffusion_expr in the analysis.
+        """
+        import warnings
+        
+        if not self.parameters:
+            return  # No parameters to check
+        
+        # Collect all symbols used across ALL expressions
+        used_symbols = set()
+        
+        # Get symbols from drift
+        if self.drift is not None:
+            used_symbols |= self.drift.free_symbols
+        
+        # Get symbols from diffusion (SDE-specific!)
+        if self.diffusion is not None:
+            used_symbols |= self.diffusion.free_symbols
+        
+        # Note: We don't check _h_sym here because SDEValidator doesn't have it
+        # The SymbolicValidator already checked it when validating the drift system
+        
+        # Find truly unused parameters
+        param_symbols = set(self.parameters.keys())
+        unused_params = param_symbols - used_symbols
+        
+        # Remove time variable if it's a "parameter" (added as workaround)
+        if self.time_var and self.time_var in unused_params:
+            unused_params.remove(self.time_var)
+        
+        # Warn about truly unused parameters
+        if unused_params:
+            warnings.warn(
+                f"System validation warning: Parameters {unused_params} are defined "
+                f"but not used in drift (_f_sym), output (_h_sym), or diffusion (diffusion_expr). "
+                f"Consider removing them or checking for typos.",
+                UserWarning
+            )
 
     # ========================================================================
     # Info Building
