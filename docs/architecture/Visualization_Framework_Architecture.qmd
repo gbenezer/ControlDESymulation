@@ -206,6 +206,9 @@ Automatically handles multiple trajectories with mean ± std visualization. This
 # Use stochastic pendulum with additive noise
 # σ = 0.3 gives moderate noise (visible but not overwhelming)
 
+# Switch to torch backend for SDE integration (required for euler method)
+stochastic_system.set_default_backend('torch')
+
 # Run Monte Carlo simulation
 n_trials = 20
 x0 = np.array([0.5, 0.0])  # Start from same initial condition
@@ -221,7 +224,9 @@ for i in range(n_trials):
         dt=0.01,
         seed=i  # Different seed for each trial
     )
-    results.append(result['x'])
+    # Convert torch tensor to numpy
+    x_np = result['x'].cpu().numpy() if hasattr(result['x'], 'cpu') else result['x']
+    results.append(x_np)
 
 # Stack into batch
 x_batch = np.stack(results)  # (n_trials, T, nx)
@@ -231,7 +236,7 @@ fig = stochastic_system.plotter.plot_trajectory(
     result['t'],
     x_batch,
     state_names=['θ (rad)', 'ω (rad/s)'],
-    title=f'Stochastic Pendulum Monte Carlo (n={n_trials}, σ={stochastic_system.parameters[sp.Symbol("sigma")]})',
+    title=f'Stochastic Pendulum Monte Carlo (n={n_trials}, σ=0.3)',
     show_std=True
 )
 fig.show()
@@ -264,6 +269,7 @@ def controller(x, t):
     return -K @ x
 
 # Simulate with controller
+from cdesym.systems.base.core.continuous_system_base import ContinuousSystemBase
 result = system.simulate(x0, controller=controller, t_span=(0, 10), dt=0.01)
 
 # Plot states and controls
