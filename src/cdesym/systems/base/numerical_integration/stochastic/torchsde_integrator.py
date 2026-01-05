@@ -577,11 +577,14 @@ class TorchSDEIntegrator(SDEIntegratorBase):
                 if not isinstance(t_eval, torch.Tensor)
                 else t_eval.to(device=self.device, dtype=x0.dtype)
             )
+            print(f"DEBUG: Using provided t_eval, ts.shape = {ts.shape}")
         else:
             n_steps = (
                 max(2, int((tf - t0) / self.dt) + 1) if self.step_mode == StepMode.FIXED else 100
             )
             ts = torch.linspace(t0, tf, n_steps, dtype=x0.dtype, device=self.device)
+            print(f"DEBUG: Creating ts with n_steps={n_steps}, dt={self.dt}, step_mode={self.step_mode}")
+            print(f"DEBUG: ts.shape = {ts.shape}, ts range = [{ts[0]:.3f}, {ts[-1]:.3f}]")
 
         sde = self._create_sde_wrapper(u_func).to(self.device)
 
@@ -589,6 +592,9 @@ class TorchSDEIntegrator(SDEIntegratorBase):
         try:
             # torchsde expects batch dimension: (batch, nx)
             y0 = x0.unsqueeze(0) if x0.ndim == 1 else x0
+            print(f"DEBUG: Before sdeint - y0.shape = {y0.shape}, ts.shape = {ts.shape}")
+            print(f"DEBUG: Calling torchsde.sdeint with method={self.method}, dt={self.dt}")
+            
             ys = (self.torchsde.sdeint_adjoint if self.use_adjoint else self.torchsde.sdeint)(
                 sde,
                 y0,
@@ -596,6 +602,9 @@ class TorchSDEIntegrator(SDEIntegratorBase):
                 method=self.method,
                 dt=self.dt,
             )
+            
+            print(f"DEBUG: After sdeint - ys.shape = {ys.shape}")
+            print(f"DEBUG: ys range: [{ys.min():.3f}, {ys.max():.3f}]")
 
             # Remove batch dimension if single trajectory
             if ys.shape[1] == 1:
@@ -631,6 +640,10 @@ class TorchSDEIntegrator(SDEIntegratorBase):
             )
         except Exception as e:
             import traceback
+            
+            print(f"ERROR: TorchSDE integration failed!")
+            print(f"Exception: {e}")
+            print(f"Traceback:\n{traceback.format_exc()}")
 
             integration_time = time.perf_counter() - t_start
 
