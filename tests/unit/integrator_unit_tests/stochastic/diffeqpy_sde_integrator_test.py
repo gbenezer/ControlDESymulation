@@ -893,8 +893,12 @@ class TestHighAccuracyAlgorithms:
         assert result["success"]
         assert np.all(np.isfinite(result["x"]))
 
-    @pytest.mark.skip(reason=("SRIW1 solver incompatible with diagonal noise: "
-                      "requires commutative noise structure for Roessler SRI methods"))
+    @pytest.mark.skip(
+        reason=(
+            "SRIW1 solver incompatible with diagonal noise: "
+            "requires commutative noise structure for Roessler SRI methods"
+        )
+    )
     def test_sriw1_diagonal_noise(self, ou_2d_system):
         """
         Test SRIW1 algorithm with diagonal noise (its specialty).
@@ -1383,11 +1387,13 @@ class TestAlgorithmComparison:
         # Both should have similar number of steps for fixed dt
         assert abs(result_em["nsteps"] - result_sra3["nsteps"]) < 5
 
-    @pytest.mark.skip(reason=(
-        "SRIW1 incompatible with diffeqpy: Julia cannot detect diagonal noise "
-        "structure through Python arrays. Use JAX/Diffrax for high-order SDE methods "
-        "or basic Julia algorithms (EM, LambaEM) that don't require noise detection."
-    ))
+    @pytest.mark.skip(
+        reason=(
+            "SRIW1 incompatible with diffeqpy: Julia cannot detect diagonal noise "
+            "structure through Python arrays. Use JAX/Diffrax for high-order SDE methods "
+            "or basic Julia algorithms (EM, LambaEM) that don't require noise detection."
+        )
+    )
     def test_sriw1_known_incompatibility(self, ou_system):
         """
         Test that SRIW1 incompatibility is known and documented.

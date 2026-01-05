@@ -282,10 +282,10 @@ class TestDiffraxSDEInitialization:
             solver="ItoMilstein",
             levy_area="none",  # Will be auto-upgraded
         )
-        
+
         # Should have been auto-upgraded
         assert integrator.levy_area == "space-time"
-        
+
         # Should work without errors
         solver = integrator._get_solver_instance()
         assert solver is not None
@@ -1069,10 +1069,10 @@ class TestEdgeCasesErrorHandling:
         """Test that invalid levy_area raises error during initialization."""
         with pytest.raises(ValueError, match="Invalid levy_area"):
             integrator = DiffraxSDEIntegrator(
-                ou_system, 
-                dt=0.01, 
-                solver="Euler", 
-                levy_area="invalid"
+                ou_system,
+                dt=0.01,
+                solver="Euler",
+                levy_area="invalid",
             )
 
 

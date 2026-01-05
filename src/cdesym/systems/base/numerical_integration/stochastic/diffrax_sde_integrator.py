@@ -297,7 +297,7 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
 
         # Device management
         self._device = "cpu"
-        
+
         # Auto-detect required levy_area for the solver if not specified
         solver_info = self.get_solver_info(self.solver_name)
         required_levy_area = solver_info.get("levy_area", "none")
@@ -307,18 +307,18 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
             levy_area = required_levy_area
             # Optionally warn the user
             import warnings
+
             warnings.warn(
                 f"Solver '{self.solver_name}' requires levy_area='{required_levy_area}'. "
                 f"Auto-setting levy_area to '{required_levy_area}'.",
-                UserWarning
+                UserWarning,
             )
 
         # Validate levy_area
         valid_levy_areas = ["none", "space-time", "full"]
         if levy_area not in valid_levy_areas:
             raise ValueError(
-                f"Invalid levy_area '{levy_area}'. "
-                f"Must be one of: {valid_levy_areas}"
+                f"Invalid levy_area '{levy_area}'. " f"Must be one of: {valid_levy_areas}",
             )
 
         self.levy_area = levy_area
@@ -362,7 +362,7 @@ class DiffraxSDEIntegrator(SDEIntegratorBase):
             "space-time": dfx.SpaceTimeLevyArea,
             "full": dfx.SpaceTimeTimeLevyArea,
         }
-        
+
         levy_area_type = levy_area_map.get(self.levy_area, dfx.BrownianIncrement)
 
         return dfx.VirtualBrownianTree(
