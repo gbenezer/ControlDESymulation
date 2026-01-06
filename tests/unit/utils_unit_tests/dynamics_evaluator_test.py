@@ -769,7 +769,8 @@ class TestBackendDispatch:
 
         # Should return torch tensor
         assert isinstance(dx, torch.Tensor)
-        assert torch.allclose(dx, torch.tensor([-1.5]))
+        # NumPy float64 → torch float64, so compare with float64
+        assert torch.allclose(dx, torch.tensor([-1.5], dtype=torch.float64))
 
     def test_default_backend(self):
         """Test using configured default backend"""
@@ -1244,7 +1245,8 @@ class TestTypeConversionRegression:
         dx = evaluator.evaluate(x_numpy, u_numpy, backend="torch")
         
         assert isinstance(dx, torch.Tensor)
-        assert torch.allclose(dx, torch.tensor([-1.5]))
+        # NumPy float64 → torch float64
+        assert torch.allclose(dx, torch.tensor([-1.5], dtype=torch.float64))
 
     @pytest.mark.skipif(not jax_available, reason="JAX required")
     def test_jax_with_numpy_control_input(self):
@@ -1328,10 +1330,12 @@ class TestTypeConversionRegression:
         system = MockLinearSystem(a=2.0)
         code_gen = CodeGenerator(system)
         backend_mgr = BackendManager()
+        # Set preferred device to cuda
+        backend_mgr.to_device('cuda')
         evaluator = DynamicsEvaluator(system, code_gen, backend_mgr)
 
         # State on GPU
-        x_gpu = torch.tensor([1.0], device='cuda')
+        x_gpu = torch.tensor([1.0], device='cuda', dtype=torch.float64)
         
         # Control as numpy (CPU)
         u_numpy = np.array([0.5])
@@ -1340,8 +1344,8 @@ class TestTypeConversionRegression:
         dx = evaluator.evaluate(x_gpu, u_numpy, backend="torch")
         
         assert isinstance(dx, torch.Tensor)
-        assert dx.device.type == 'cuda'
-        assert torch.allclose(dx.cpu(), torch.tensor([-1.5]))
+        assert dx.device.type == 'cuda'  # Should be on GPU
+        assert torch.allclose(dx.cpu(), torch.tensor([-1.5], dtype=torch.float64))
 
     @pytest.mark.skipif(not torch_available, reason="PyTorch required")
     def test_torch_control_function_returning_numpy(self):
@@ -1362,7 +1366,7 @@ class TestTypeConversionRegression:
             return np.array([0.5 * np.sin(t)])
         
         # State is torch tensor (from integrator)
-        x_torch = torch.tensor([1.0])
+        x_torch = torch.tensor([1.0], dtype=torch.float64)  # Specify dtype
         
         # Get control from user's function
         t = 1.0
@@ -1373,7 +1377,8 @@ class TestTypeConversionRegression:
         
         assert isinstance(dx, torch.Tensor)
         expected = -2.0 * 1.0 + 0.5 * np.sin(1.0)
-        assert torch.allclose(dx, torch.tensor([expected]))
+        # Match dtype to x_torch
+        assert torch.allclose(dx, torch.tensor([expected], dtype=torch.float64))
 
     @pytest.mark.skipif(not torch_available, reason="PyTorch required")
     def test_torch_type_preservation_after_conversion(self):
