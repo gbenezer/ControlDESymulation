@@ -616,8 +616,9 @@ def design_lqg(
     - Estimator must converge faster than controller for good performance
     - Trade-off: Lower Q_process/R_measurement → more aggressive estimator
     """
+    
     # Design LQR controller
-    lqr_result = lqr_result = design_lqr(
+    lqr_result = design_lqr(
         A=A,
         B=B,
         Q=Q_state,
@@ -628,16 +629,31 @@ def design_lqg(
     )
 
     # Design Kalman filter estimator
-    kalman_result = design_kalman_filter(A, C, Q_process, R_measurement, system_type, backend)
+    kalman_result = design_kalman_filter(
+        A, C, Q_process, R_measurement, system_type, backend
+    )
 
-    # Construct LQG result
+    # Check stability and separation
+    closed_loop_stable = bool(
+        lqr_result["stability_margin"] > 0 
+        and (np.max(np.abs(kalman_result["observer_eigenvalues"])) < 1 
+             if system_type == "discrete" 
+             else np.max(np.real(kalman_result["observer_eigenvalues"])) < 0)
+    )
+    
+    # Separation principle always holds for linear systems
+    separation_verified = True
+
+    # Construct LQG result - match TypedDict field names exactly
     result: LQGResult = {
-        "controller_gain": lqr_result["gain"],
+        "control_gain": lqr_result["gain"],  # Changed from controller_gain
         "estimator_gain": kalman_result["gain"],
-        "controller_riccati": lqr_result["cost_to_go"],
-        "estimator_covariance": kalman_result["error_covariance"],
-        "closed_loop_eigenvalues": lqr_result["closed_loop_eigenvalues"],
-        "observer_eigenvalues": kalman_result["observer_eigenvalues"],
+        "control_cost_to_go": lqr_result["cost_to_go"],  # Changed from controller_riccati
+        "estimation_error_covariance": kalman_result["error_covariance"],  # Changed from estimator_covariance
+        "separation_verified": separation_verified,  # Added
+        "closed_loop_stable": closed_loop_stable,  # Added
+        "controller_eigenvalues": lqr_result["closed_loop_eigenvalues"],  # Changed from closed_loop_eigenvalues
+        "estimator_eigenvalues": kalman_result["observer_eigenvalues"],  # Changed from observer_eigenvalues
     }
 
     return result

@@ -417,15 +417,14 @@ class LQGResult(TypedDict):
     >>> print("Estimator poles:", result['estimator_eigenvalues'])
     """
 
-    control_gain: GainMatrix
-    estimator_gain: GainMatrix
-    control_cost_to_go: CovarianceMatrix
-    estimation_error_covariance: CovarianceMatrix
-    separation_verified: bool
-    closed_loop_stable: bool
-    controller_eigenvalues: np.ndarray
-    estimator_eigenvalues: np.ndarray
-
+    control_gain: GainMatrix                        # LQR feedback gain K (nu, nx)
+    estimator_gain: GainMatrix                      # Kalman gain L (nx, ny)
+    control_cost_to_go: CovarianceMatrix           # Controller Riccati solution P_control
+    estimation_error_covariance: CovarianceMatrix   # Estimator Riccati solution P_estimate
+    separation_verified: bool                       # Confirms separation principle holds
+    closed_loop_stable: bool                        # Combined controller-estimator system is stable
+    controller_eigenvalues: np.ndarray             # Eigenvalues of (A - BK) - control loop
+    estimator_eigenvalues: np.ndarray              # Eigenvalues of (A - LC) - estimation loop
 
 # ============================================================================
 # Additional Classical Control Types
