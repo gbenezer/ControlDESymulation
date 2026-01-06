@@ -23,11 +23,6 @@ Comprehensive test suite for method_registry.py covering:
 - Method validation
 - Backend compatibility checking
 - Method discovery and introspection
-
-Run with pytest:
-    pytest tests/test_method_registry.py -v
-    pytest tests/test_method_registry.py::TestMethodClassification -v
-    pytest tests/test_method_registry.py -k "test_normalize" -v
 """
 
 import pytest
