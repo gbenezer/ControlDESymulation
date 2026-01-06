@@ -1,3 +1,202 @@
 ---
 title: "Architecture"
+subtitle: "Understanding ControlDESymulation's Internal Design"
 ---
+
+## Introduction
+
+ControlDESymulation is built on a **type-driven, composition-based architecture** that achieves mathematical rigor, software engineering excellence, and multi-backend performance simultaneously. This section provides comprehensive documentation of the framework's internal design for developers and advanced users.
+
+::: {.callout-important}
+## Who Should Read This?
+
+**Most users do NOT need to read architecture documentation.** If you're:
+
+- Using built-in systems from `cdesym.systems.builtin.*`
+- Defining custom systems by subclassing `ContinuousSymbolicSystem` or `DiscreteSymbolicSystem`
+- Following tutorials and examples
+
+**Then you can skip this section entirely.** The architecture documentation is intended for:
+
+- Framework contributors and maintainers
+- Advanced users implementing custom integrators or utilities
+- Researchers studying the framework's design
+- Developers extending the framework with new capabilities
+:::
+
+## Architecture Documents
+
+The framework consists of **4 architectural layers**, each documented separately:
+
+### 1. [Design Philosophy](cdesym_Design_Philosophy.qmd)
+
+**Start here** to understand the core principles that guide the framework's design.
+
+**Topics covered:**
+
+- Type-driven design philosophy
+- Composition over inheritance
+- Backend agnosticism
+- Zero code duplication
+- Progressive disclosure of complexity
+- Design patterns and trade-offs
+
+**Read this if:** You want to understand *why* the framework is built the way it is, or you're contributing new features.
+
+### 2. [Delegation Layer](Delegation_Layer_Architecture.qmd)
+
+The internal service layer that provides specialized utilities through composition.
+
+**Components documented:**
+
+- **Core Utilities:** `BackendManager`, `CodeGenerator`, `EquilibriumHandler`, `SymbolicValidator`
+- **Deterministic Evaluation:** `DynamicsEvaluator`, `LinearizationEngine`, `ObservationEngine`
+- **Stochastic Support:** `DiffusionHandler`, `NoiseCharacterizer`, `SDEValidator`
+- **Low-Level Utilities:** `codegen_utils`
+
+**Read this if:** You're implementing custom system types or need to understand how symbolic-to-numerical compilation works.
+
+### 3. [Integration Framework](Integration_Framework_Architecture.qmd)
+
+Multi-backend numerical integration for ODEs and SDEs.
+
+**Topics covered:**
+
+- Integrator architecture and factories
+- Deterministic integrators (Scipy, TorchDiffEq, Diffrax, DiffEqPy, Fixed-step)
+- Stochastic integrators (TorchSDE, Diffrax SDE, DiffEqPy SDE)
+- 40+ integration methods across 4 backends
+- Integration result types and performance tracking
+
+**Read this if:** You're implementing custom integrators, need to understand method selection, or want to optimize integration performance.
+
+### 4. [Visualization Framework](Visualization_Framework_Architecture.qmd)
+
+Interactive, publication-ready plotting for dynamical systems analysis.
+
+**Components documented:**
+
+- Theming layer (colors, styles, themes)
+- `TrajectoryPlotter` - Time-domain visualization
+- `PhasePortraitPlotter` - State-space visualization
+- `ControlPlotter` - Control analysis plots
+
+**Read this if:** You're extending visualization capabilities or need to understand the plotting system architecture.
+
+## Quick Navigation
+
+### By User Level
+
+**Beginners:**
+- Skip architecture docs - use [Getting Started](../getting_started/index.qmd) instead
+
+**Intermediate Users:**
+- Read [Design Philosophy](cdesym_Design_Philosophy.qmd) for conceptual understanding
+- Skim [Visualization Framework](Visualization_Framework_Architecture.qmd) for plotting capabilities
+
+**Advanced Users:**
+- Study all architecture documents
+- Focus on [Integration Framework](Integration_Framework_Architecture.qmd) for custom numerical methods
+- Reference [Delegation Layer](Delegation_Layer_Architecture.qmd) for system extension
+
+### By Use Case
+
+**I want to understand the framework's design principles:**
+→ [Design Philosophy](cdesym_Design_Philosophy.qmd)
+
+**I want to implement a custom integrator:**
+→ [Integration Framework](Integration_Framework_Architecture.qmd)
+
+**I want to extend the system base classes:**
+→ [Delegation Layer](Delegation_Layer_Architecture.qmd)
+
+**I want to customize or extend plotting:**
+→ [Visualization Framework](Visualization_Framework_Architecture.qmd)
+
+**I want to understand symbolic-to-numerical compilation:**
+→ [Delegation Layer](Delegation_Layer_Architecture.qmd) → CodeGenerator
+
+**I want to add a new backend (e.g., TensorFlow):**
+→ [Design Philosophy](cdesym_Design_Philosophy.qmd) → Extension Points  
+→ [Delegation Layer](Delegation_Layer_Architecture.qmd) → BackendManager
+
+## Architecture Statistics
+
+The framework consists of:
+
+- **39 core files** organized into 4 architectural layers
+- **200+ types** for semantic clarity and IDE support
+- **55+ integration methods** across NumPy, PyTorch, JAX, and Julia backends
+- **11 delegation layer utilities** providing specialized services
+- **16+ plot types** for comprehensive visualization
+- **Zero code duplication** through strategic abstraction
+
+## Design Principles Summary
+
+::: {.callout-tip}
+## Core Principles
+
+1. **Type-Driven Design** - Types are not just annotations—they are the architecture
+2. **Composition Over Inheritance** - Build systems from specialized utilities
+3. **Backend Agnosticism** - Write once, run on NumPy/PyTorch/JAX
+4. **Zero Code Duplication** - Every line exists in exactly one place
+5. **Structured Results** - TypedDict for all outputs with IDE support
+6. **Protocol-Based Interfaces** - Duck typing with type safety
+7. **Factory Pattern** - Hide complexity behind simple creation methods
+8. **Semantic Naming** - Names convey mathematical meaning
+9. **Progressive Disclosure** - Simple things simple, complex things possible
+:::
+
+## Common Architectural Questions
+
+### Why composition instead of inheritance?
+
+**Short answer:** Single responsibility, testability, and flexibility.
+
+**Long answer:** See [Design Philosophy](cdesym_Design_Philosophy.qmd#sec-composition-over-inheritance)
+
+### Why support multiple backends?
+
+**Short answer:** Different backends excel at different tasks—NumPy for CPU, PyTorch for GPUs/neural networks, JAX for optimization.
+
+**Long answer:** See [Design Philosophy](cdesym_Design_Philosophy.qmd#sec-backend-agnosticism)
+
+### Where does symbolic-to-numerical compilation happen?
+
+**Short answer:** In the `CodeGenerator` utility, with per-backend caching.
+
+**Long answer:** See [Delegation Layer](Delegation_Layer_Architecture.qmd#sec-codegenerator)
+
+### How are integrators selected automatically?
+
+**Short answer:** Through the `IntegratorFactory` which chooses based on system properties and backend.
+
+**Long answer:** See [Integration Framework](Integration_Framework_Architecture.qmd#sec-integratorfactory)
+
+### How does the framework avoid code duplication?
+
+**Short answer:** Through `SymbolicSystemBase` providing shared functionality to both continuous and discrete systems.
+
+**Long answer:** See [Design Philosophy](cdesym_Design_Philosophy.qmd#sec-zero-code-duplication)
+
+## Contributing to the Framework
+
+If you're interested in contributing:
+
+1. **Start with [Design Philosophy](cdesym_Design_Philosophy.qmd)** to understand core principles
+2. **Study the relevant layer docs** for your contribution area
+3. **Follow the established patterns** (composition, type-driven design, etc.)
+4. **Write comprehensive tests** for each component in isolation
+5. **Document your additions** with clear examples and type annotations
+
+See [Contributing Guidelines](../contributing/index.qmd) for more details.
+
+## Getting Help
+
+- **Questions about architecture?** Open a discussion on GitHub
+- **Found a design issue?** File an issue with the "architecture" label
+- **Want to propose an enhancement?** Start with a discussion to align with design principles
+
+---
+
+**Remember:** Most users don't need to read architecture documentation. The framework is designed so you can be productive without understanding its internals. These documents are here when you need them.
