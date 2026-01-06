@@ -358,18 +358,20 @@ class TestBackendConversion:
     def test_numpy_to_torch(self):
         """Test NumPy to PyTorch conversion"""
         mgr = BackendManager()
-        x = np.array([1.0, 2.0])
+        x = np.array([1.0, 2.0])  # Default is float64
 
         x_torch = mgr.convert(x, "torch")
 
         assert isinstance(x_torch, torch.Tensor)
-        assert torch.allclose(x_torch, torch.tensor([1.0, 2.0]))
+        # NumPy float64 → torch.float64
+        assert torch.allclose(x_torch, torch.tensor([1.0, 2.0], dtype=torch.float64))
+        assert x_torch.dtype == torch.float64
 
     @pytest.mark.skipif(not torch_available, reason="PyTorch not installed")
     def test_torch_to_numpy(self):
         """Test PyTorch to NumPy conversion"""
         mgr = BackendManager()
-        x = torch.tensor([1.0, 2.0])
+        x = torch.tensor([1.0, 2.0], dtype=torch.float64)  # Specify dtype
 
         x_numpy = mgr.convert(x, "numpy")
 
@@ -405,7 +407,7 @@ class TestBackendConversion:
     def test_torch_to_jax(self):
         """Test PyTorch to JAX conversion (via NumPy)"""
         mgr = BackendManager()
-        x = torch.tensor([1.0, 2.0])
+        x = torch.tensor([1.0, 2.0], dtype=torch.float64)  # Specify dtype
 
         x_jax = mgr.convert(x, "jax")
 
@@ -840,6 +842,7 @@ class TestIntegration:
         # Convert to torch
         x_torch = mgr.convert(x_np, "torch")
         assert isinstance(x_torch, torch.Tensor)
+        assert x_torch.dtype == torch.float64  # Preserved from NumPy
 
         # Detect torch backend
         assert mgr.detect(x_torch) == "torch"
