@@ -116,13 +116,23 @@ def _to_numpy(arr, backend: Backend):
     if isinstance(arr, np.ndarray):
         return arr
 
-    if backend == "torch" or hasattr(arr, "cpu"):
+    # Check backend explicitly first for clarity
+    if backend == "torch":
         # PyTorch tensor
         return arr.detach().cpu().numpy()
-    if backend == "jax" or hasattr(arr, "__array__"):
+    elif backend == "jax":
         # JAX array
         return np.array(arr)
-    # Try generic conversion
+    
+    # Fallback: try attribute-based detection
+    if hasattr(arr, "cpu"):
+        # Likely PyTorch tensor
+        return arr.detach().cpu().numpy()
+    if hasattr(arr, "__array__"):
+        # Likely JAX array or other array-like
+        return np.array(arr)
+    
+    # Last resort: generic conversion
     return np.asarray(arr)
 
 
@@ -634,11 +644,16 @@ def design_lqg(
     )
 
     # Check stability and separation
+    # Convert eigenvalues to numpy for stability check (backend-agnostic)
+    estimator_eigs_np = _to_numpy(kalman_result["estimator_eigenvalues"], backend)
+    
+    if system_type == "discrete":
+        estimator_stable = np.max(np.abs(estimator_eigs_np)) < 1
+    else:
+        estimator_stable = np.max(np.real(estimator_eigs_np)) < 0
+    
     closed_loop_stable = bool(
-        lqr_result["stability_margin"] > 0 
-        and (np.max(np.abs(kalman_result["estimator_eigenvalues"])) < 1 
-             if system_type == "discrete" 
-             else np.max(np.real(kalman_result["estimator_eigenvalues"])) < 0)
+        lqr_result["stability_margin"] > 0 and estimator_stable
     )
     
     # Separation principle always holds for linear systems
@@ -649,7 +664,7 @@ def design_lqg(
         "control_gain": lqr_result["gain"],
         "estimator_gain": kalman_result["gain"],
         "control_cost_to_go": lqr_result["cost_to_go"],
-        "estimation_error_covariance": kalman_result["estimation_error_covariance"],  # Changed from estimator_covariance
+        "estimation_error_covariance": kalman_result["estimation_error_covariance"],
         "separation_verified": separation_verified,
         "closed_loop_stable": closed_loop_stable,
         "controller_eigenvalues": lqr_result["controller_eigenvalues"],
