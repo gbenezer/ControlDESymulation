@@ -146,7 +146,6 @@ DETERMINISTIC_FIXED_STEP: FrozenSet[str] = frozenset([
     "euler",     # Forward Euler (1st order)
     "midpoint",  # Midpoint/RK2 (2nd order)
     "rk4",       # Classic Runge-Kutta 4 (4th order)
-    "heun",      # Heun's method (2nd order)
 ])
 
 # ============================================================================
@@ -395,7 +394,7 @@ BACKEND_METHODS: Dict[Backend, FrozenSet[str]] = {
         "Tsit5", "Vern6", "Vern7", "Vern8", "Vern9", "DP5", "DP8",
         "Rosenbrock23", "Rodas5", "ROCK4",
         # Manual implementations (fixed-step)
-        "euler", "midpoint", "rk4", "heun",
+        "euler", "midpoint", "rk4",
     ]),
     
     # ========================================================================
@@ -409,7 +408,7 @@ BACKEND_METHODS: Dict[Backend, FrozenSet[str]] = {
         "dopri5", "dopri8", "bosh3", "fehlberg2",
         "explicit_adams", "implicit_adams",
         # Manual implementations (fixed-step)
-        "rk4", "heun",
+        "rk4",
     ]),
     
     # ========================================================================
@@ -423,7 +422,7 @@ BACKEND_METHODS: Dict[Backend, FrozenSet[str]] = {
         "tsit5", "dopri5", "dopri8", "bosh3", "implicit_euler",
         "kvaerno3", "kvaerno4", "kvaerno5",
         # Manual implementations (fixed-step)
-        "euler", "midpoint", "rk4", "heun",
+        "euler", "midpoint", "rk4",
     ]),
 }
 
@@ -1381,6 +1380,104 @@ def list_all_methods() -> Dict[str, List[str]]:
         "sde_adaptive": sorted(list(SDE_ADAPTIVE)),
         "all_canonical": sorted(list(canonical_aliases)),
     }
+    
+def get_implementing_library(method: str, backend: Backend, is_stochastic: bool = False) -> str:
+    """
+    Get which library/package implements this method.
+    
+    Returns
+    -------
+    str
+        One of: 'scipy', 'diffeqpy', 'torchdiffeq', 'torchsde', 
+        'diffrax', 'manual', 'unknown'
+    
+    Examples
+    --------
+    >>> get_implementing_library('LSODA', 'numpy', is_stochastic=False)
+    'scipy'
+    >>> get_implementing_library('Tsit5', 'numpy', is_stochastic=False)
+    'diffeqpy'
+    >>> get_implementing_library('euler', 'torch', is_stochastic=True)
+    'torchsde'
+    >>> get_implementing_library('euler', 'numpy', is_stochastic=False)
+    'manual'
+    >>> get_implementing_library('rk4', 'jax', is_stochastic=False)
+    'manual'
+    """
+    # ========================================================================
+    # Manual implementations (only for deterministic on NumPy)
+    # ========================================================================
+    
+    manual_methods = {"euler", "midpoint", "rk4"}
+    
+    if method in manual_methods and backend == "numpy" and not is_stochastic:
+        return "manual"
+    
+    # ========================================================================
+    # Scipy (NumPy only, deterministic only, specific set)
+    # ========================================================================
+    
+    if backend == "numpy" and not is_stochastic:
+        scipy_methods = {"LSODA", "RK45", "RK23", "DOP853", "Radau", "BDF"}
+        if method in scipy_methods:
+            return "scipy"
+    
+    # ========================================================================
+    # DiffEqPy (NumPy only, Capital letter heuristic)
+    # ========================================================================
+    
+    if backend == "numpy":
+        # Auto-switching methods (contain parentheses)
+        if "(" in method:
+            return "diffeqpy"
+        
+        # Capital first letter, excluding Scipy methods
+        if method and method[0].isupper():
+            scipy_methods = {"LSODA", "RK45", "RK23", "DOP853", "Radau", "BDF"}
+            if method not in scipy_methods:
+                return "diffeqpy"
+    
+    # ========================================================================
+    # TorchDiffEq (PyTorch, deterministic)
+    # ========================================================================
+    
+    if backend == "torch" and not is_stochastic:
+        torchdiffeq_methods = {"dopri5", "dopri8", "bosh3", "fehlberg2", 
+                               "explicit_adams", "implicit_adams"}
+        if method in torchdiffeq_methods:
+            return "torchdiffeq"
+        
+        # Manual methods on torch (deterministic only)
+        if method == "rk4":
+            return "manual"
+    
+    # ========================================================================
+    # TorchSDE (PyTorch, stochastic)
+    # ========================================================================
+    
+    if backend == "torch" and is_stochastic:
+        torchsde_methods = {"euler", "milstein", "srk", "midpoint", 
+                           "reversible_heun", "adaptive_heun"}
+        if method in torchsde_methods:
+            return "torchsde"
+    
+    # ========================================================================
+    # Diffrax (JAX, both ODE and SDE)
+    # ========================================================================
+    
+    if backend == "jax":
+        # Manual methods on JAX (deterministic only)
+        if method in manual_methods and not is_stochastic:
+            return "manual"
+        
+        # Everything else is Diffrax
+        return "diffrax"
+    
+    # ========================================================================
+    # Unknown/unsupported
+    # ========================================================================
+    
+    return "unknown"
 
 
 # ============================================================================
@@ -1396,6 +1493,7 @@ __all__ = [
     "get_available_methods",
     "get_method_info",
     "list_all_methods",
+    "get_implementing_library",
     
     # Constants (for advanced usage)
     "DETERMINISTIC_FIXED_STEP",
