@@ -73,6 +73,14 @@ from cdesym.types.backends import (
     SDEType,
     validate_backend,
 )
+from cdesym.systems.base.numerical_integration.method_registry import (
+    is_fixed_step,
+    is_sde_method,
+    normalize_method_name,
+    validate_method,
+    get_available_methods,
+    BACKEND_METHODS,
+)
 
 # Import from centralized type system
 from cdesym.types.core import ScalarLike
@@ -147,62 +155,9 @@ class SDEIntegratorFactory:
 
     # Default methods for each backend
     _BACKEND_DEFAULTS: Dict[Backend, SDEIntegrationMethod] = {
-        "numpy": "EM",  # Julia Euler-Maruyama
-        "torch": "euler",  # TorchSDE euler
-        "jax": "Euler",  # Diffrax Euler
-    }
-
-    # Method to backend mapping
-    _METHOD_TO_BACKEND: Dict[SDEIntegrationMethod, Backend] = {
-        # Julia DiffEqPy methods (numpy only)
-        # Euler-Maruyama family
-        "EM": "numpy",
-        "LambaEM": "numpy",
-        "EulerHeun": "numpy",
-        # Stochastic Runge-Kutta
-        "SRIW1": "numpy",
-        "SRIW2": "numpy",
-        "SOSRI": "numpy",
-        "SOSRI2": "numpy",
-        "SRA": "numpy",
-        "SRA1": "numpy",
-        "SRA2": "numpy",
-        "SRA3": "numpy",
-        "SOSRA": "numpy",
-        "SOSRA2": "numpy",
-        # Milstein family
-        "RKMil": "numpy",
-        "RKMilCommute": "numpy",
-        "RKMilGeneral": "numpy",
-        # Implicit methods
-        "ImplicitEM": "numpy",
-        "ImplicitEulerHeun": "numpy",
-        "ImplicitRKMil": "numpy",
-        # IMEX methods
-        "SKenCarp": "numpy",
-        # Adaptive
-        "AutoEM": "numpy",
-        # Optimized
-        "SRI": "numpy",
-        "SRIW1Optimized": "numpy",
-        "SRIW2Optimized": "numpy",
-        # TorchSDE methods (torch only)
-        "euler": "torch",
-        "milstein": "torch",
-        "srk": "torch",
-        "midpoint": "torch",
-        "reversible_heun": "torch",
-        "adaptive_heun": "torch",
-        # Diffrax methods (jax only)
-        "Euler": "jax",
-        "EulerHeun": "jax",
-        "Heun": "jax",
-        "ItoMilstein": "jax",
-        "StratonovichMilstein": "jax",
-        "SEA": "jax",
-        "SHARK": "jax",
-        "SRA1": "jax",  # Note: SRA1 exists in both Julia and Diffrax
-        "ReversibleHeun": "jax",
+        "numpy": "EM",      # Julia Euler-Maruyama
+        "torch": "euler",   # TorchSDE euler
+        "jax": "Euler",     # Diffrax Euler
     }
 
     @classmethod
@@ -295,23 +250,57 @@ class SDEIntegratorFactory:
         ...     t_span=(0.0, 10.0)
         ... )
         """
-        # Validate backend
+        # ====================================================================
+        # Import method_registry functions
+        # ====================================================================
+        
+        from cdesym.systems.base.numerical_integration.method_registry import (
+            normalize_method_name,
+            validate_method,
+            is_fixed_step,
+        )
+        
+        # ====================================================================
+        # Step 1: Validate backend
+        # ====================================================================
+        
         backend = validate_backend(backend)
 
-        # Select method
+        # ====================================================================
+        # Step 2: Select default method if not specified
+        # ====================================================================
+        
         if method is None:
             method = cls._BACKEND_DEFAULTS[backend]
-        else:
-            # Verify method is compatible with backend
-            expected_backend = cls._METHOD_TO_BACKEND.get(method)
-            if expected_backend and expected_backend != backend:
+        
+        # ====================================================================
+        # Step 3: Normalize method name using registry
+        # ====================================================================
+        
+        method = normalize_method_name(method, backend)
+        
+        # ====================================================================
+        # Step 4: Validate using registry (stochastic system)
+        # ====================================================================
+        
+        is_valid, error = validate_method(method, backend, is_stochastic=True)
+        if not is_valid:
+            raise ValueError(error)
+        
+        # ====================================================================
+        # Step 5: Check if fixed-step method requires dt
+        # ====================================================================
+        
+        if is_fixed_step(method) or step_mode == StepMode.FIXED:
+            if dt is None:
                 raise ValueError(
-                    f"Method '{method}' requires backend '{expected_backend}', "
-                    f"but backend '{backend}' was specified. "
-                    f"Either change backend or use a compatible method.",
+                    f"Fixed-step SDE method '{method}' or FIXED step mode requires dt parameter"
                 )
 
-        # Create integrator based on backend
+        # ====================================================================
+        # Step 6: Create integrator based on backend
+        # ====================================================================
+        
         if backend == "numpy":
             return cls._create_diffeqpy(
                 sde_system,
@@ -698,9 +687,11 @@ class SDEIntegratorFactory:
     @staticmethod
     def list_methods(
         backend: Optional[Backend] = None,
-    ) -> Dict[Backend, List[SDEIntegrationMethod]]:
+    ) -> Dict[str, List[SDEIntegrationMethod]]:
         """
         List available SDE methods for each backend.
+        
+        Delegates to method_registry for stochastic methods.
 
         Parameters
         ----------
@@ -709,72 +700,28 @@ class SDEIntegratorFactory:
 
         Returns
         -------
-        Dict[Backend, List[SDEIntegrationMethod]]
-            Methods available for each backend
+        Dict with method categories (from registry)
+            If backend specified: categories for that backend
+            If backend None: returns methods for 'numpy' by default
 
         Examples
         --------
-        >>> # All methods
-        >>> methods = SDEIntegratorFactory.list_methods()
-        >>> print(methods['jax'])
+        >>> # Specific backend
+        >>> methods = SDEIntegratorFactory.list_methods('jax')
+        >>> print(methods['sde_fixed_step'])
         ['Euler', 'EulerHeun', 'Heun', 'ItoMilstein', ...]
         >>>
-        >>> # Specific backend
-        >>> torch_methods = SDEIntegratorFactory.list_methods('torch')
-        >>> print(torch_methods['torch'])
-        ['euler', 'milstein', 'srk', ...]
+        >>> # All methods (defaults to numpy)
+        >>> methods = SDEIntegratorFactory.list_methods()
+        >>> print(methods['sde_fixed_step'])
+        ['EM', 'EulerHeun', 'SRIW1', ...]
         """
-        all_methods: Dict[Backend, List[SDEIntegrationMethod]] = {
-            "numpy": [
-                # Julia DiffEqPy methods
-                # Euler-Maruyama family
-                "EM",
-                "LambaEM",
-                "EulerHeun",
-                # Stochastic RK (high accuracy)
-                "SRIW1",
-                "SRIW2",
-                "SOSRI",
-                "SRA1",
-                "SRA3",
-                "SOSRA",
-                # Milstein family
-                "RKMil",
-                "RKMilCommute",
-                # Implicit (for stiff)
-                "ImplicitEM",
-                "ImplicitRKMil",
-                # IMEX
-                "SKenCarp",
-                # Adaptive
-                "AutoEM",
-            ],
-            "torch": [
-                # TorchSDE methods
-                "euler",
-                "milstein",
-                "srk",
-                "midpoint",
-                "reversible_heun",
-                "adaptive_heun",
-            ],
-            "jax": [
-                # Diffrax methods
-                "Euler",
-                "EulerHeun",
-                "Heun",
-                "ItoMilstein",
-                "StratonovichMilstein",
-                "SEA",
-                "SHARK",
-                "SRA1",
-                "ReversibleHeun",
-            ],
-        }
-
-        if backend:
-            return {backend: all_methods.get(backend, [])}
-        return all_methods
+        from cdesym.systems.base.numerical_integration.method_registry import (
+            get_available_methods,
+        )
+        
+        # Get stochastic methods from registry
+        return get_available_methods(backend or "numpy", method_type="stochastic")
 
     @staticmethod
     def recommend(
@@ -974,3 +921,10 @@ def auto_sde_integrator(sde_system: "ContinuousStochasticSystem", **options) -> 
     >>> integrator = auto_sde_integrator(autonomous_sde_system)
     """
     return SDEIntegratorFactory.auto(sde_system, **options)
+
+__all__ = [
+    "SDEIntegratorFactory",
+    "SDEIntegratorType",
+    "create_sde_integrator",
+    "auto_sde_integrator",
+]
