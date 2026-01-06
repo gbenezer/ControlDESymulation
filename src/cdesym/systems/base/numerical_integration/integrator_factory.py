@@ -68,6 +68,14 @@ from cdesym.types.backends import Backend, IntegrationMethod
 # Import semantic types from centralized type system
 from cdesym.types.core import ScalarLike
 
+from cdesym.systems.base.numerical_integration.method_registry import (
+    is_fixed_step,
+    normalize_method_name,
+    validate_method,
+    get_available_methods,
+    BACKEND_METHODS,
+)
+
 if TYPE_CHECKING:
     from cdesym.systems.base.core.continuous_system_base import ContinuousSystemBase
 
@@ -129,69 +137,11 @@ class IntegratorFactory:
     >>> integrator = IntegratorFactory.for_production(system)
     >>> integrator = IntegratorFactory.for_julia(system, algorithm='Vern9')
     """
-
-    # Default methods for each backend
+    
     _BACKEND_DEFAULTS = {
         "numpy": "LSODA",
         "torch": "dopri5",
         "jax": "tsit5",
-    }
-
-    # Method to backend/integrator mapping
-    _METHOD_TO_BACKEND = {
-        # Scipy methods (numpy only)
-        "RK45": "numpy",
-        "RK23": "numpy",
-        "DOP853": "numpy",
-        "Radau": "numpy",
-        "BDF": "numpy",
-        "LSODA": "numpy",
-        # DiffEqPy (Julia) methods (numpy only)
-        # Convention: Capital first letter = Julia solver
-        "Tsit5": "numpy",
-        "Vern6": "numpy",
-        "Vern7": "numpy",
-        "Vern8": "numpy",
-        "Vern9": "numpy",
-        "DP5": "numpy",
-        "DP8": "numpy",
-        "Rosenbrock23": "numpy",
-        "Rosenbrock32": "numpy",
-        "Rodas4": "numpy",
-        "Rodas4P": "numpy",
-        "Rodas5": "numpy",
-        "TRBDF2": "numpy",
-        "KenCarp3": "numpy",
-        "KenCarp4": "numpy",
-        "KenCarp5": "numpy",
-        "RadauIIA5": "numpy",
-        "ROCK2": "numpy",
-        "ROCK4": "numpy",
-        "VelocityVerlet": "numpy",
-        "SymplecticEuler": "numpy",
-        # Special Julia auto-switching (contains parentheses)
-        "AutoTsit5(Rosenbrock23())": "numpy",
-        "AutoVern7(Rodas5())": "numpy",
-        # TorchDiffEq-only methods (torch only)
-        "adaptive_heun": "torch",
-        "fehlberg2": "torch",
-        "explicit_adams": "torch",
-        "implicit_adams": "torch",
-        "fixed_adams": "torch",
-        "scipy_solver": "torch",
-        # Shared adaptive methods (available in BOTH torch and jax)
-        "dopri5": ["torch", "jax"],
-        "dopri8": ["torch", "jax"],
-        "bosh3": ["torch", "jax"],
-        # Diffrax-only explicit methods (jax only)
-        "tsit5": "jax",  # lowercase = Diffrax
-        "heun": "jax",
-        "ralston": "jax",
-        "reversible_heun": "jax",
-        # Fixed-step methods (available in all backends via manual implementation)
-        "euler": "any",
-        "midpoint": "any",
-        "rk4": "any",
     }
 
     @classmethod
@@ -275,52 +225,55 @@ class IntegratorFactory:
         ...     t_span=(0.0, 10.0)
         ... )
         """
-        # Handle 'solver' parameter for JAX backend (backward compatibility)
-        # If user passes 'solver' instead of 'method', use it
+        # ====================================================================
+        # Step 1: Handle JAX 'solver' parameter
+        # ====================================================================
+        
         if backend == "jax" and "solver" in options and method is None:
-            method = options.pop("solver")  # Remove from options to avoid duplicate
-
-        # Use default method if not specified
+            method = options.pop("solver")
+        
+        # ====================================================================
+        # Step 2: Select default method if not specified
+        # ====================================================================
+        
         if method is None:
             method = cls._BACKEND_DEFAULTS.get(backend, "LSODA")
-
-        # Validate backend
-        valid_backends = ["numpy", "torch", "jax"]
-        if backend not in valid_backends:
-            raise ValueError(f"Invalid backend '{backend}'. Choose from: {valid_backends}")
-
-        # Validate method-backend compatibility
-        if method in cls._METHOD_TO_BACKEND:
-            allowed = cls._METHOD_TO_BACKEND[method]
-
-            if allowed != "any":
-                # Method has specific backend requirements
-                if isinstance(allowed, list):
-                    # Multiple backends allowed
-                    if backend not in allowed:
-                        raise ValueError(
-                            f"Method '{method}' requires backend in {allowed}, got '{backend}'",
-                        )
-                elif allowed != backend:
-                    # Single backend required
-                    raise ValueError(
-                        f"Method '{method}' requires backend '{allowed}', got '{backend}'",
-                    )
-
-        # Check if fixed-step method requires dt
-        if cls._is_fixed_step_method(method) or step_mode == StepMode.FIXED:
+        
+        # ====================================================================
+        # Step 3: Normalize method name using registry
+        # ====================================================================
+        
+        method = normalize_method_name(method, backend)
+        
+        # ====================================================================
+        # Step 4: Validate using registry (deterministic system)
+        # ====================================================================
+        
+        is_valid, error = validate_method(method, backend, is_stochastic=False)
+        if not is_valid:
+            raise ValueError(error)
+        
+        # ====================================================================
+        # Step 5: Check if fixed-step method requires dt
+        # ====================================================================
+        
+        if is_fixed_step(method) or step_mode == StepMode.FIXED:
             if dt is None:
                 raise ValueError(
-                    f"Fixed-step method '{method}' or FIXED step mode requires dt parameter",
+                    f"Fixed-step method '{method}' or FIXED step mode requires dt parameter"
                 )
-
-        # Create appropriate integrator based on backend
+        
+        # ====================================================================
+        # Step 6: Create appropriate integrator based on backend
+        # ====================================================================
+        
         if backend == "numpy":
             return cls._create_numpy_integrator(system, method, dt, step_mode, **options)
         if backend == "torch":
             return cls._create_torch_integrator(system, method, dt, step_mode, **options)
         if backend == "jax":
             return cls._create_jax_integrator(system, method, dt, step_mode, **options)
+        
         raise ValueError(f"Unknown backend: {backend}")
 
     @classmethod
@@ -334,19 +287,22 @@ class IntegratorFactory:
     ):
         """
         Create NumPy-based integrator.
-
+        
         Routes to:
         - DiffEqPy for Julia methods (Capital first letter)
         - Scipy for standard methods (LSODA, RK45, etc.)
-        - Fixed-step manual implementations (euler, midpoint, rk4)
+        - Fixed-step manual implementations (euler, midpoint, rk4 ONLY)
         """
-        # Check if Julia method (capital first letter or contains parentheses)
+        # ====================================================================
+        # Route 1: Julia/DiffEqPy methods (check FIRST)
+        # ====================================================================
+        
         if cls._is_julia_method(method):
             try:
                 from cdesym.systems.base.numerical_integration.diffeqpy_integrator import (
                     DiffEqPyIntegrator,
                 )
-
+                
                 return DiffEqPyIntegrator(
                     system,
                     dt=dt,
@@ -362,30 +318,46 @@ class IntegratorFactory:
                     f"Then: pip install diffeqpy\n"
                     f"Error: {e}",
                 )
-
-        # Check if manual fixed-step method
-        elif cls._is_fixed_step_method(method):
+        
+        # ====================================================================
+        # Route 2: Manual fixed-step implementations (SPECIFIC methods only)
+        # ====================================================================
+        
+        elif cls._is_manual_method(method):
             from cdesym.systems.base.numerical_integration.fixed_step_integrators import (
                 ExplicitEulerIntegrator,
                 MidpointIntegrator,
                 RK4Integrator,
             )
-
+            
             integrator_map = {
                 "euler": ExplicitEulerIntegrator,
                 "midpoint": MidpointIntegrator,
                 "rk4": RK4Integrator,
             }
-
+            
             integrator_class = integrator_map[method]
             return integrator_class(system, dt=dt, backend="numpy", **options)
-
-        # Otherwise, use scipy
+        
+        # ====================================================================
+        # Route 3: Scipy methods (everything else on NumPy backend)
+        # ====================================================================
+        
         else:
-            from cdesym.systems.base.numerical_integration.scipy_integrator import ScipyIntegrator
-
-            # Note: ScipyIntegrator is always adaptive, doesn't accept step_mode parameter
+            from cdesym.systems.base.numerical_integration.scipy_integrator import (
+                ScipyIntegrator,
+            )
+            
             return ScipyIntegrator(system, dt=dt, method=method, backend="numpy", **options)
+
+    @classmethod
+    def _is_manual_method(cls, method: IntegrationMethod) -> bool:
+        """
+        Check if method has a manual fixed-step implementation.
+        
+        These are the ONLY methods with manual integrator classes.
+        """
+        return method in ["euler", "midpoint", "rk4"]
 
     @classmethod
     def _is_julia_method(cls, method: IntegrationMethod) -> bool:
@@ -395,6 +367,8 @@ class IntegratorFactory:
         Julia methods are identified by:
         1. Capital first letter (e.g., Tsit5, Vern9)
         2. Contains parentheses (e.g., AutoTsit5(Rosenbrock23()))
+        
+        Routing heuristic for NumPy backend.
 
         Parameters
         ----------
@@ -408,37 +382,18 @@ class IntegratorFactory:
         """
         if not method:
             return False
-
-        # Check for parentheses (auto-switching methods)
+        
+        # Auto-switching methods (contain parentheses)
         if "(" in method:
             return True
-
-        # Check for capital first letter (standard Julia methods)
+        
+        # Capital first letter, excluding Scipy methods
         if method[0].isupper():
             # Exclude scipy methods (which also start with capitals)
             scipy_methods = {"LSODA", "RK45", "RK23", "DOP853", "Radau", "BDF"}
-            if method not in scipy_methods:
-                return True
-            return False
-
-    @classmethod
-    def _is_fixed_step_method(cls, method: IntegrationMethod) -> bool:
-        """
-        Check if method is a manual fixed-step implementation.
-
-        These methods are backend-agnostic and available everywhere.
-
-        Parameters
-        ----------
-        method : str
-            Method name
-
-        Returns
-        -------
-        bool
-            True if manual fixed-step method, False otherwise
-        """
-        return method in ["euler", "midpoint", "rk4"]
+            return method not in scipy_methods
+        
+        return False
 
     @classmethod
     def _is_scipy_method(cls, method: IntegrationMethod) -> bool:
@@ -446,6 +401,8 @@ class IntegratorFactory:
         Check if method is a scipy solver.
 
         Scipy methods are typically all-caps or specific well-known names.
+        
+        Routing heuristic for numpy backend.
 
         Parameters
         ----------
@@ -927,71 +884,29 @@ class IntegratorFactory:
     def list_methods(backend: Optional[Backend] = None) -> Dict[str, list]:
         """
         List available methods for each backend.
-
-        Parameters
-        ----------
-        backend : Optional[str]
-            If specified, list methods for that backend only
-
-        Returns
-        -------
-        Dict[str, list]
-            Methods organized by backend
-
-        Examples
-        --------
-        >>> methods = IntegratorFactory.list_methods()
-        >>> print(methods['numpy'])
-        >>> print(methods['jax'])
-        >>>
-        >>> jax_methods = IntegratorFactory.list_methods('jax')
+        
+        Delegates to method_registry for base methods, then adds Julia ODE methods.
         """
-        all_methods = {
-            "numpy": [
-                "LSODA",
-                "RK45",
-                "RK23",
-                "DOP853",
-                "Radau",
-                "BDF",
-                "euler",
-                "midpoint",
-                "rk4",
-                # Julia methods
-                "Tsit5",
-                "Vern6",
-                "Vern7",
-                "Vern8",
-                "Vern9",
-                "Rosenbrock23",
-                "AutoTsit5(Rosenbrock23())",
-            ],
-            "torch": [
-                "dopri5",
-                "dopri8",
-                "bosh3",
-                "euler",
-                "midpoint",
-                "rk4",
-                "adaptive_heun",
-                "fehlberg2",
-            ],
-            "jax": [
-                "tsit5",
-                "dopri5",
-                "dopri8",
-                "bosh3",
-                "euler",
-                "midpoint",
-                "rk4",
-                "heun",
-                "ralston",
-            ],
-        }
-
-        if backend:
-            return {backend: all_methods.get(backend, [])}
-        return all_methods
+        # Get deterministic methods from registry
+        methods = get_available_methods(backend or "numpy", method_type="deterministic")
+        
+        # Add Julia-specific ODE methods not in base registry
+        # (These are ODE-only Julia methods)
+        if backend is None or backend == "numpy":
+            julia_ode_methods = [
+                "Tsit5", "Vern6", "Vern7", "Vern8", "Vern9",
+                "DP5", "DP8", "Rosenbrock23", "Rodas5", "ROCK4",
+                "AutoTsit5(Rosenbrock23())", "AutoVern7(Rodas5())"
+            ]
+            
+            if "numpy" in methods:
+                # Merge with existing methods, avoid duplicates
+                existing = set(methods["numpy"].get("deterministic_adaptive", []))
+                methods["numpy"]["deterministic_adaptive"] = sorted(
+                    list(existing) + [m for m in julia_ode_methods if m not in existing]
+                )
+        
+        return methods
 
     @staticmethod
     def recommend(use_case: str, has_gpu: bool = False) -> Dict[str, Any]:

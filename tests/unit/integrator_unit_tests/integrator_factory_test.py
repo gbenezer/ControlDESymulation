@@ -205,8 +205,9 @@ class TestMethodBackendCompatibility:
     """Test validation of method-backend compatibility."""
 
     def test_scipy_method_requires_numpy(self, mock_system):
-        """Test scipy methods require numpy backend."""
-        with pytest.raises(ValueError, match="requires backend"):
+        """Test scipy methods require numpy backend (validated by registry)."""
+        # Registry validation should catch this
+        with pytest.raises(ValueError, match="not available"):
             IntegratorFactory.create(
                 mock_system,
                 backend="torch",
@@ -376,14 +377,15 @@ class TestUseCaseFactoryMethods:
 class TestHelperMethods:
     """Test internal helper methods."""
 
-    def test_is_fixed_step_method(self):
-        """Test _is_fixed_step_method helper."""
-        assert IntegratorFactory._is_fixed_step_method("euler")
-        assert IntegratorFactory._is_fixed_step_method("midpoint")
-        assert IntegratorFactory._is_fixed_step_method("rk4")
+    def test_is_manual_method(self):
+        """Test _is_manual_method helper."""
+        assert IntegratorFactory._is_manual_method("euler")
+        assert IntegratorFactory._is_manual_method("midpoint")
+        assert IntegratorFactory._is_manual_method("rk4")
 
-        assert not IntegratorFactory._is_fixed_step_method("dopri5")
-        assert not IntegratorFactory._is_fixed_step_method("LSODA")
+        assert not IntegratorFactory._is_manual_method("dopri5")
+        assert not IntegratorFactory._is_manual_method("LSODA")
+        assert not IntegratorFactory._is_manual_method("heun")
 
     def test_is_scipy_method(self):
         """Test _is_scipy_method helper."""
@@ -393,6 +395,22 @@ class TestHelperMethods:
 
         assert not IntegratorFactory._is_scipy_method("dopri5")
         assert not IntegratorFactory._is_scipy_method("tsit5")
+    
+    def test_is_julia_method(self):
+        """Test _is_julia_method helper correctly identifies Julia methods."""
+        # Julia methods (capital first letter)
+        assert IntegratorFactory._is_julia_method("Tsit5")
+        assert IntegratorFactory._is_julia_method("Vern9")
+        assert IntegratorFactory._is_julia_method("Rosenbrock23")
+
+        # Julia auto-switching (contains parentheses)
+        assert IntegratorFactory._is_julia_method("AutoTsit5(Rosenbrock23())")
+
+        # Not Julia methods
+        assert not IntegratorFactory._is_julia_method("LSODA")  # Scipy
+        assert not IntegratorFactory._is_julia_method("RK45")  # Scipy
+        assert not IntegratorFactory._is_julia_method("tsit5")  # Diffrax (lowercase)
+        assert not IntegratorFactory._is_julia_method("dopri5")  # TorchDiffEq/Diffrax
 
 
 # ============================================================================
@@ -404,25 +422,34 @@ class TestMethodListingAndInfo:
     """Test method listing and information retrieval."""
 
     def test_list_methods_all(self):
-        """Test list_methods returns all backends."""
+        """Test list_methods returns methods organized by categories."""
         methods = IntegratorFactory.list_methods()
 
-        assert "numpy" in methods
-        assert "torch" in methods
-        assert "jax" in methods
-
-        # Check some expected methods
-        assert "LSODA" in methods["numpy"]
-        assert "dopri5" in methods["torch"]
-        assert "tsit5" in methods["jax"]
+        # Now returns categories, not backends as top-level keys
+        assert "deterministic_fixed_step" in methods
+        assert "deterministic_adaptive" in methods
+        
+        # Check some expected methods in categories
+        assert "euler" in methods["deterministic_fixed_step"]
+        assert "rk4" in methods["deterministic_fixed_step"]
+        assert "LSODA" in methods["deterministic_adaptive"]
 
     def test_list_methods_specific_backend(self):
         """Test list_methods for specific backend."""
         numpy_methods = IntegratorFactory.list_methods("numpy")
 
-        assert "numpy" in numpy_methods
-        assert "LSODA" in numpy_methods["numpy"]
-        assert "Tsit5" in numpy_methods["numpy"]  # Julia method
+        # Returns categories, not nested by backend
+        assert "deterministic_fixed_step" in numpy_methods
+        assert "deterministic_adaptive" in numpy_methods
+        
+        # Check expected methods
+        fixed_step = numpy_methods["deterministic_fixed_step"]
+        adaptive = numpy_methods["deterministic_adaptive"]
+        
+        assert "euler" in fixed_step
+        assert "rk4" in fixed_step
+        assert "LSODA" in adaptive
+        assert "Tsit5" in adaptive  # Julia method
 
     def test_get_info_scipy(self):
         """Test get_info for scipy method."""
@@ -577,15 +604,16 @@ class TestErrorHandling:
 
     def test_method_backend_mismatch_clear_error(self, mock_system):
         """Test clear error message for method-backend mismatch."""
-        with pytest.raises(ValueError) as exc_info:
+        # tsit5 (lowercase) is valid for JAX, so use different example
+        with pytest.raises(ValueError, match="not available") as exc_info:
             IntegratorFactory.create(
                 mock_system,
-                backend="numpy",
-                method="tsit5",  # Diffrax method, requires jax
+                backend="torch",
+                method="LSODA",  # Scipy method, not available on torch
             )
 
         error_msg = str(exc_info.value).lower()
-        assert "requires backend" in error_msg or "backend in" in error_msg
+        assert "not available" in error_msg or "lsoda" in error_msg
 
     def test_fixed_step_without_dt_clear_error(self, mock_system):
         """Test clear error when dt missing for fixed-step."""
@@ -601,11 +629,12 @@ class TestErrorHandling:
 
     def test_julia_method_wrong_backend_error(self, mock_system):
         """Test error when Julia method used with wrong backend."""
-        with pytest.raises(ValueError, match="requires backend"):
+        # Tsit5 should fail validation on JAX backend
+        with pytest.raises(ValueError, match="not available"):
             IntegratorFactory.create(
                 mock_system,
                 backend="jax",
-                method="Tsit5",  # Julia method, needs numpy
+                method="Tsit5",  # Julia method, not available on jax
             )
 
 
@@ -688,47 +717,6 @@ class TestIntegratorTypeEnum:
         assert IntegratorType.JULIA.value == "julia"
         assert IntegratorType.SIMPLE.value == "simple"
         assert IntegratorType.EDUCATIONAL.value == "educational"
-
-
-# ============================================================================
-# Test Class: Method-to-Backend Mapping
-# ============================================================================
-
-
-class TestMethodToBackendMapping:
-    """Test the _METHOD_TO_BACKEND mapping."""
-
-    def test_mapping_contains_scipy_methods(self):
-        """Test mapping includes all scipy methods."""
-        mapping = IntegratorFactory._METHOD_TO_BACKEND
-
-        assert "LSODA" in mapping
-        assert "RK45" in mapping
-        assert "BDF" in mapping
-
-    def test_mapping_contains_julia_methods(self):
-        """Test mapping includes Julia methods."""
-        mapping = IntegratorFactory._METHOD_TO_BACKEND
-
-        assert "Tsit5" in mapping
-        assert "Vern9" in mapping
-        assert "Rosenbrock23" in mapping
-
-    def test_mapping_contains_diffrax_methods(self):
-        """Test mapping includes Diffrax methods."""
-        mapping = IntegratorFactory._METHOD_TO_BACKEND
-
-        assert "tsit5" in mapping
-        assert mapping["tsit5"] == "jax"
-
-    def test_mapping_contains_universal_methods(self):
-        """Test mapping includes universal fixed-step methods."""
-        mapping = IntegratorFactory._METHOD_TO_BACKEND
-
-        assert "euler" in mapping
-        assert "rk4" in mapping
-        assert mapping["euler"] == "any"
-
 
 # ============================================================================
 # Test Class: ScalarLike Type Usage
