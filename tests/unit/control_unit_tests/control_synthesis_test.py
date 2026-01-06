@@ -127,12 +127,12 @@ class SynthesisTestCase(unittest.TestCase):
         self.assertIn("gain", result)
         self.assertIn("error_covariance", result)
         self.assertIn("innovation_covariance", result)
-        self.assertIn("observer_eigenvalues", result)
+        self.assertIn("estimator_eigenvalues", result)
 
         self.assertEqual(result["gain"].shape, (nx, ny))
         self.assertEqual(result["error_covariance"].shape, (nx, nx))
         self.assertEqual(result["innovation_covariance"].shape, (ny, ny))
-        self.assertEqual(len(result["observer_eigenvalues"]), nx)
+        self.assertEqual(len(result["estimator_eigenvalues"]), nx)
 
     def assert_lqg_result_valid(self, result: LQGResult, nx: int, nu: int, ny: int):
         """Validate LQG result structure and shapes."""
@@ -142,7 +142,7 @@ class SynthesisTestCase(unittest.TestCase):
         self.assertIn("control_cost_to_go", result)  # Changed from "controller_riccati"
         self.assertIn("estimation_error_covariance", result)  # Changed from "estimator_covariance"
         self.assertIn("controller_eigenvalues", result)  # Changed from "controller_eigenvalues"
-        self.assertIn("estimator_eigenvalues", result)  # Changed from "observer_eigenvalues"
+        self.assertIn("estimator_eigenvalues", result)  # Changed from "estimator_eigenvalues"
         self.assertIn("separation_verified", result)  # Added
         self.assertIn("closed_loop_stable", result)  # Added
 
@@ -360,7 +360,7 @@ class TestKalmanMethod(SynthesisTestCase):
         )
 
         # Observer should be stable (|λ| < 1)
-        max_mag = np.max(np.abs(result["observer_eigenvalues"]))
+        max_mag = np.max(np.abs(result["estimator_eigenvalues"]))
         self.assertLess(max_mag, 1.0)
 
 
@@ -484,7 +484,7 @@ class TestBackendConsistency(SynthesisTestCase):
                 "gain": np.zeros((2, 1)),
                 "error_covariance": np.eye(2),
                 "innovation_covariance": np.array([[0.1]]),
-                "observer_eigenvalues": np.array([0.5, 0.6]),
+                "estimator_eigenvalues": np.array([0.5, 0.6]),
             }
 
             synthesis = ControlSynthesis(backend="numpy")
@@ -502,7 +502,7 @@ class TestBackendConsistency(SynthesisTestCase):
                 "controller_riccati": np.eye(2),
                 "estimator_covariance": np.eye(2),
                 "controller_eigenvalues": np.array([0.5, 0.6]),
-                "observer_eigenvalues": np.array([0.4, 0.5]),
+                "estimator_eigenvalues": np.array([0.4, 0.5]),
             }
 
             synthesis = ControlSynthesis(backend="torch")
@@ -600,7 +600,7 @@ class TestDelegation(SynthesisTestCase):
                 "gain": np.zeros((2, 1)),
                 "error_covariance": np.eye(2),
                 "innovation_covariance": np.array([[0.1]]),
-                "observer_eigenvalues": np.array([0.5, 0.6]),
+                "estimator_eigenvalues": np.array([0.5, 0.6]),
             }
 
             synthesis = ControlSynthesis(backend="numpy")

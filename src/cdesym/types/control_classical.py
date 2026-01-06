@@ -308,7 +308,7 @@ class KalmanFilterResult(TypedDict):
         Steady-state error covariance P (nx, nx)
     innovation_covariance : CovarianceMatrix
         Innovation covariance S = CPC' + R (ny, ny)
-    observer_eigenvalues : np.ndarray
+    estimator_eigenvalues : np.ndarray
         Eigenvalues of (A - LC) - determines convergence rate
 
     Examples
@@ -334,7 +334,7 @@ class KalmanFilterResult(TypedDict):
     ...     x_hat = x_hat_pred + L @ innovation
     >>>
     >>> # Check observer stability
-    >>> print(np.all(np.abs(result['observer_eigenvalues']) < 1))  # True
+    >>> print(np.all(np.abs(result['estimator_eigenvalues']) < 1))  # True
     >>>
     >>> # Innovation statistics
     >>> S = result['innovation_covariance']
@@ -344,7 +344,7 @@ class KalmanFilterResult(TypedDict):
     gain: GainMatrix
     error_covariance: CovarianceMatrix
     innovation_covariance: CovarianceMatrix
-    observer_eigenvalues: np.ndarray
+    estimator_eigenvalues: np.ndarray
 
 
 class LQGResult(TypedDict):

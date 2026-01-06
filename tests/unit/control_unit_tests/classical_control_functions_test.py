@@ -448,7 +448,7 @@ class TestKalmanFilter(ControlTestCase):
         self.assertIn("gain", result)
         self.assertIn("error_covariance", result)
         self.assertIn("innovation_covariance", result)
-        self.assertIn("observer_eigenvalues", result)
+        self.assertIn("estimator_eigenvalues", result)
 
         # Check dimensions
         L = result["gain"]
@@ -464,7 +464,7 @@ class TestKalmanFilter(ControlTestCase):
         self.assert_positive_definite(P, "Error covariance")
 
         # Check observer stability
-        self.assert_stable_discrete(result["observer_eigenvalues"])
+        self.assert_stable_discrete(result["estimator_eigenvalues"])
 
         # Verify innovation covariance: S = CPC' + R
         C = self.C_double_int
@@ -482,7 +482,7 @@ class TestKalmanFilter(ControlTestCase):
         )
 
         self.assertEqual(result["gain"].shape, (2, 1))
-        self.assert_stable_continuous(result["observer_eigenvalues"])
+        self.assert_stable_continuous(result["estimator_eigenvalues"])
 
     def test_kalman_perfect_measurement(self):
         """Test with very low measurement noise (R → 0)."""
@@ -531,7 +531,7 @@ class TestKalmanFilter(ControlTestCase):
         )
 
         self.assertEqual(result["gain"].shape, (2, 2))
-        self.assert_stable_discrete(result["observer_eigenvalues"])
+        self.assert_stable_discrete(result["estimator_eigenvalues"])
 
 
 # ============================================================================
@@ -561,7 +561,7 @@ class TestLQG(ControlTestCase):
         self.assertIn("control_cost_to_go", result)  # Changed from "controller_riccati"
         self.assertIn("estimation_error_covariance", result)  # Changed from "estimator_covariance"
         self.assertIn("controller_eigenvalues", result)  # Changed from "controller_eigenvalues"
-        self.assertIn("estimator_eigenvalues", result)  # Changed from "observer_eigenvalues"
+        self.assertIn("estimator_eigenvalues", result)  # Changed from "estimator_eigenvalues"
         self.assertIn("separation_verified", result)  # Added
         self.assertIn("closed_loop_stable", result)  # Added
 
