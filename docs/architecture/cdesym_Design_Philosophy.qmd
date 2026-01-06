@@ -9,6 +9,7 @@ format:
     toc-depth: 3
     code-fold: show
     code-tools: true
+    theme: cosmo
 execute:
   eval: false  # Philosophy doc doesn't need code execution
   cache: false
