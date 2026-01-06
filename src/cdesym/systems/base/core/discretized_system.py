@@ -41,7 +41,7 @@ See class docstring for complete documentation.
 import inspect
 import time
 from enum import Enum
-from typing import Optional
+from typing import Optional, Literal
 
 import numpy as np
 from scipy.interpolate import interp1d
@@ -49,6 +49,13 @@ from scipy.interpolate import interp1d
 from cdesym.systems.base.core.continuous_system_base import ContinuousSystemBase
 from cdesym.systems.base.core.discrete_system_base import DiscreteSystemBase
 from cdesym.systems.base.numerical_integration.integrator_factory import IntegratorFactory
+from cdesym.systems.base.numerical_integration.method_registry import (
+    is_sde_method,
+    is_fixed_step,
+    normalize_method_name,
+    validate_method,
+    get_available_methods,
+)
 from cdesym.types.backends import Backend
 from cdesym.types.core import ControlVector, DiscreteControlInput, StateVector
 from cdesym.types.linearization import DiscreteLinearization
@@ -95,607 +102,8 @@ class DiscretizedSystem(DiscreteSystemBase):
     >>> K = lqr_design(discrete, Q, R)  # ✓ Type checks pass!
     """
 
-    # ========================================================================
-    # Deterministic Methods
-    # ========================================================================
-
-    # Fixed-step deterministic methods (manual implementations + some backends)
-    _DETERMINISTIC_FIXED_STEP = frozenset(
-        [
-            "euler",
-            "midpoint",
-            "rk4",
-            "heun",  # Manual implementations (all backends)
-        ],
-    )
-
-    # Adaptive deterministic methods (scipy + backends)
-    _DETERMINISTIC_ADAPTIVE = frozenset(
-        [
-            # Scipy methods
-            "RK45",
-            "RK23",
-            "DOP853",
-            "Radau",
-            "BDF",
-            "LSODA",
-            # TorchDiffEq adaptive
-            "dopri5",
-            "dopri8",
-            "bosh3",
-            "fehlberg2",
-            "adaptive_heun",
-            "explicit_adams",
-            "implicit_adams",
-            # Diffrax adaptive (lowercase)
-            "tsit5",
-            "dopri5",
-            "dopri8",
-            "bosh3",
-            "implicit_euler",
-            "kvaerno3",
-            "kvaerno4",
-            "kvaerno5",
-            # Julia/DiffEqPy adaptive (capitalized)
-            "Tsit5",
-            "Vern6",
-            "Vern7",
-            "Vern8",
-            "Vern9",
-            "DP5",
-            "DP8",
-            "Rosenbrock23",
-            "Rodas5",
-            "ROCK4",
-        ],
-    )
-
-    # ========================================================================
-    # Stochastic (SDE) Methods
-    # ========================================================================
-
-    # SDE methods - organized by backend for clarity
-    _SDE_METHODS = frozenset(
-        [
-            # Canonical simplified names (preferred for user API)
-            "euler_maruyama",
-            "milstein",
-            # NumPy/Julia (DiffEqPy) - capitalized
-            "EM",
-            "LambaEM",
-            "EulerHeun",
-            "SRIW1",
-            "SRIW2",
-            "SRA1",
-            "SRA3",
-            "RKMil",
-            "ImplicitEM",
-            # PyTorch (TorchSDE) - lowercase
-            "euler",
-            "milstein",
-            "srk",
-            "midpoint",
-            "reversible_heun",
-            "adaptive_heun",
-            # JAX (Diffrax) - PascalCase
-            "Euler",
-            "EulerHeun",
-            "Heun",
-            "ItoMilstein",
-            "StratonovichMilstein",
-            "SEA",
-            "SHARK",
-            "SRA1",
-            "ReversibleHeun",
-        ],
-    )
-
-    # Adaptive SDE methods (rare, but they exist)
-    _SDE_ADAPTIVE = frozenset(
-        [
-            "AutoEM",  # Julia
-            "adaptive_heun",
-            "reversible_heun",  # TorchSDE
-            "LambaEM",  # Julia adaptive
-        ],
-    )
-
-    # ========================================================================
-    # Method Classification Helpers
-    # ========================================================================
-
-    @classmethod
-    def _is_method_sde(cls, method: str) -> bool:
-        """
-        Check if integration method is for stochastic differential equations.
-
-        Determines whether a given method name is designed for SDE integration
-        (stochastic systems) or deterministic ODE integration.
-
-        Parameters
-        ----------
-        method : str
-            Integration method name (normalized or original)
-
-        Returns
-        -------
-        bool
-            True if method is for stochastic systems (SDE), False otherwise
-
-        Notes
-        -----
-        - Checks against the class-level `_SDE_METHODS` frozenset
-        - Works with both canonical names ('euler_maruyama') and backend-specific
-        names ('EM', 'euler', 'Euler')
-        - Method name should ideally be normalized first, but this works with
-        any name in the _SDE_METHODS set
-        - Returns False for deterministic methods (euler, rk4, RK45, etc.)
-
-        Examples
-        --------
-        >>> # Canonical SDE names
-        >>> DiscretizedSystem._is_method_sde('euler_maruyama')
-        True
-        >>> DiscretizedSystem._is_method_sde('milstein')
-        True
-
-        >>> # Backend-specific SDE names
-        >>> DiscretizedSystem._is_method_sde('EM')  # NumPy/Julia
-        True
-        >>> DiscretizedSystem._is_method_sde('euler')  # PyTorch (ambiguous!)
-        True
-        >>> DiscretizedSystem._is_method_sde('ItoMilstein')  # JAX
-        True
-
-        >>> # Deterministic methods
-        >>> DiscretizedSystem._is_method_sde('rk4')
-        False
-        >>> DiscretizedSystem._is_method_sde('RK45')
-        False
-        >>> DiscretizedSystem._is_method_sde('dopri5')
-        False
-
-        >>> # Unknown methods
-        >>> DiscretizedSystem._is_method_sde('my_custom_method')
-        False
-
-        Ambiguous Cases
-        ---------------
-        Some method names appear in both deterministic and stochastic contexts:
-
-        - 'euler': Both a deterministic method (Forward Euler) and SDE method
-        (Euler-Maruyama for PyTorch/TorchSDE). In _SDE_METHODS, so returns True.
-        - 'midpoint': Similar ambiguity. Returns True (in _SDE_METHODS).
-
-        For these cases, normalization to canonical names ('euler_maruyama' vs 'rk4')
-        is recommended before calling this method.
-
-        See Also
-        --------
-        _is_method_fixed_step : Classify method by time-stepping strategy
-        _normalize_method_name : Convert canonical names to backend-specific
-        """
-        return method in cls._SDE_METHODS
-
-    @classmethod
-    def _is_method_fixed_step(cls, method: str) -> bool:
-        """
-        Check if integration method uses fixed time stepping.
-
-        Classifies methods into fixed-step (constant dt throughout integration)
-        or adaptive (dt adjusted based on error estimates). This classification
-        is used to auto-select discretization mode and validate mode/method
-        compatibility.
-
-        Parameters
-        ----------
-        method : str
-            Integration method name (normalized or original)
-
-        Returns
-        -------
-        bool
-            True if method uses fixed time steps, False if adaptive
-
-        Classification Rules
-        --------------------
-        1. **Deterministic fixed-step**: euler, midpoint, rk4, heun → True
-        2. **Deterministic adaptive**: RK45, LSODA, dopri5, tsit5, etc. → False
-        3. **SDE fixed-step**: Most SDE methods (EM, euler_maruyama, etc.) → True
-        4. **SDE adaptive**: Rare cases (LambaEM, AutoEM, adaptive_heun) → False
-        5. **Unknown methods**: Conservative default → False (more flexible)
-
-        Notes
-        -----
-        - Fixed-step methods take exactly `n_steps` integrations of size `dt`
-        - Adaptive methods adjust step size internally for accuracy/efficiency
-        - Most SDE methods are fixed-step (adaptive SDE solvers are rare)
-        - Unknown methods default to False (adaptive mode works for both cases)
-        - Used to auto-select DiscretizationMode.FIXED_STEP vs DENSE_OUTPUT
-
-        Design Decision: Conservative Default
-        -------------------------------------
-        When method is unknown, returns False (assume adaptive) because:
-        - DENSE_OUTPUT mode works for both fixed and adaptive methods
-        - FIXED_STEP mode ONLY works for fixed-step methods
-        - Better to be conservative than raise unexpected errors
-
-        Examples
-        --------
-        >>> # Deterministic fixed-step methods
-        >>> DiscretizedSystem._is_method_fixed_step('euler')
-        True
-        >>> DiscretizedSystem._is_method_fixed_step('rk4')
-        True
-        >>> DiscretizedSystem._is_method_fixed_step('heun')
-        True
-
-        >>> # Deterministic adaptive methods
-        >>> DiscretizedSystem._is_method_fixed_step('RK45')
-        False
-        >>> DiscretizedSystem._is_method_fixed_step('LSODA')
-        False
-        >>> DiscretizedSystem._is_method_fixed_step('dopri5')  # PyTorch
-        False
-        >>> DiscretizedSystem._is_method_fixed_step('tsit5')  # JAX
-        False
-
-        >>> # SDE methods (mostly fixed-step)
-        >>> DiscretizedSystem._is_method_fixed_step('euler_maruyama')
-        True
-        >>> DiscretizedSystem._is_method_fixed_step('EM')  # NumPy/Julia
-        True
-        >>> DiscretizedSystem._is_method_fixed_step('milstein')
-        True
-        >>> DiscretizedSystem._is_method_fixed_step('SRIW1')  # Julia SDE
-        True
-
-        >>> # Rare adaptive SDE methods
-        >>> DiscretizedSystem._is_method_fixed_step('LambaEM')  # Julia adaptive
-        False
-        >>> DiscretizedSystem._is_method_fixed_step('AutoEM')  # Julia adaptive
-        False
-        >>> DiscretizedSystem._is_method_fixed_step('adaptive_heun')  # PyTorch
-        False
-
-        >>> # Unknown method (conservative default)
-        >>> DiscretizedSystem._is_method_fixed_step('my_custom_method')
-        False
-
-        Usage in __init__
-        -----------------
-        >>> # Auto-select mode based on method
-        >>> discrete = DiscretizedSystem(system, dt=0.01, method='rk4')
-        >>> # _is_method_fixed_step('rk4') = True
-        >>> # → mode auto-selected as FIXED_STEP
-
-        >>> discrete = DiscretizedSystem(system, dt=0.01, method='RK45')
-        >>> # _is_method_fixed_step('RK45') = False
-        >>> # → mode auto-selected as DENSE_OUTPUT
-
-        Edge Cases
-        ----------
-        **Ambiguous names** (appear in multiple contexts):
-        - 'euler': In both _DETERMINISTIC_FIXED_STEP and _SDE_METHODS
-        - Returns True (deterministic check comes first)
-        - 'midpoint': Similar ambiguity, returns True
-
-        **Method not in any set**:
-        - Returns False (conservative default)
-        - User can still manually specify mode=FIXED_STEP if desired
-
-        See Also
-        --------
-        _is_method_sde : Check if method is for stochastic systems
-        DiscretizationMode : Enum defining discretization strategies
-        """
-        # Deterministic fixed-step
-        if method in cls._DETERMINISTIC_FIXED_STEP:
-            return True
-
-        # Deterministic adaptive
-        if method in cls._DETERMINISTIC_ADAPTIVE:
-            return False
-
-        # SDE methods - mostly fixed-step
-        if method in cls._SDE_METHODS:
-            # Check if it's one of the rare adaptive SDE methods
-            return method not in cls._SDE_ADAPTIVE
-
-        # Unknown method - conservative default
-        # Assume adaptive (more flexible, works for both fixed and adaptive)
-        return False
-
-    # ========================================================================
-    # Name Normalization
-    # ========================================================================
-
     @staticmethod
-    def _normalize_method_name(method: str, backend: Backend = "numpy") -> str:
-        """
-        Normalize method names across backends to canonical form.
-
-        This provides user-friendly aliases while maintaining backend compatibility.
-        Handles both deterministic and stochastic (SDE) methods.
-
-        Parameters
-        ----------
-        method : str
-            User-provided method name (canonical or backend-specific)
-        backend : str, default='numpy'
-            Target backend: 'numpy', 'torch', 'jax'
-
-        Returns
-        -------
-        str
-            Normalized method name appropriate for backend
-
-        Notes
-        -----
-        - If method is already backend-appropriate, returns unchanged
-        - If method is canonical (simplified), maps to backend-specific name
-        - If method is from different backend, attempts cross-backend mapping
-        - Unknown methods pass through unchanged (will fail at integrator level)
-
-        Backend Conventions
-        -------------------
-        - NumPy/Julia (DiffEqPy): Capitalized (e.g., 'EM', 'Tsit5', 'SRIW1')
-        - PyTorch (TorchSDE/TorchDiffEq): lowercase (e.g., 'euler', 'dopri5')
-        - JAX (Diffrax): PascalCase (e.g., 'Euler', 'ItoMilstein', 'Tsit5')
-
-        Examples
-        --------
-        >>> # Canonical SDE names -> backend-specific
-        >>> DiscretizedSystem._normalize_method_name('euler_maruyama', 'numpy')
-        'EM'
-        >>> DiscretizedSystem._normalize_method_name('euler_maruyama', 'torch')
-        'euler'
-        >>> DiscretizedSystem._normalize_method_name('euler_maruyama', 'jax')
-        'Euler'
-
-        >>> # Canonical ODE names -> backend-specific
-        >>> DiscretizedSystem._normalize_method_name('rk45', 'numpy')
-        'RK45'
-        >>> DiscretizedSystem._normalize_method_name('rk45', 'torch')
-        'dopri5'
-        >>> DiscretizedSystem._normalize_method_name('rk45', 'jax')
-        'tsit5'
-
-        >>> # Cross-backend normalization (torch -> jax)
-        >>> DiscretizedSystem._normalize_method_name('dopri5', 'jax')
-        'tsit5'
-
-        >>> # Already correct for backend -> unchanged
-        >>> DiscretizedSystem._normalize_method_name('EM', 'numpy')
-        'EM'
-        >>> DiscretizedSystem._normalize_method_name('ItoMilstein', 'jax')
-        'ItoMilstein'
-
-        >>> # Unknown method -> pass through
-        >>> DiscretizedSystem._normalize_method_name('my_custom_method', 'numpy')
-        'my_custom_method'
-        """
-        # ====================================================================
-        # Normalization Map: canonical/alias -> backend-specific
-        # ====================================================================
-
-        normalization_map = {
-            # ================================================================
-            # Stochastic (SDE) Methods
-            # ================================================================
-            # Euler-Maruyama (most common SDE method)
-            "euler_maruyama": {
-                "numpy": "EM",  # Julia/DiffEqPy
-                "torch": "euler",  # TorchSDE
-                "jax": "Euler",  # Diffrax
-            },
-            # Milstein method
-            "milstein": {
-                "numpy": "RKMil",  # Julia (Runge-Kutta-Milstein)
-                "torch": "milstein",  # TorchSDE
-                "jax": "ItoMilstein",  # Diffrax (Itô interpretation)
-            },
-            # Stratonovich Milstein
-            "stratonovich_milstein": {
-                "numpy": "RKMil",  # Julia (can handle Stratonovich)
-                "torch": "milstein",  # TorchSDE (typically Itô)
-                "jax": "StratonovichMilstein",  # Diffrax
-            },
-            # SRA1 (diagonal noise, order 1.5 strong)
-            "sra1": {
-                "numpy": "SRA1",  # Julia
-                "torch": "srk",  # TorchSDE (closest equivalent)
-                "jax": "SRA1",  # Diffrax
-            },
-            # Reversible/Symmetric Heun (for time-reversible integration)
-            "reversible_heun": {
-                "numpy": "EulerHeun",  # Julia (similar)
-                "torch": "reversible_heun",  # TorchSDE
-                "jax": "ReversibleHeun",  # Diffrax
-            },
-            # ================================================================
-            # Deterministic Methods - Fixed Step
-            # ================================================================
-            # These work across all backends (manual implementations)
-            # 'euler', 'midpoint', 'rk4', 'heun' -> no normalization needed
-            # ================================================================
-            # Deterministic Methods - Adaptive
-            # ================================================================
-            # RK45 family (Dormand-Prince 5(4))
-            "rk45": {
-                "numpy": "RK45",  # Scipy
-                "torch": "dopri5",  # TorchDiffEq
-                "jax": "tsit5",  # Diffrax (Tsitouras 5/4, similar performance)
-            },
-            "dopri5": {
-                "numpy": "RK45",  # Scipy (DP5(4) = RK45)
-                "torch": "dopri5",  # TorchDiffEq
-                "jax": "dopri5",  # Diffrax also has dopri5
-            },
-            # RK23 family (Bogacki-Shampine 3(2))
-            "rk23": {
-                "numpy": "RK23",  # Scipy
-                "torch": "bosh3",  # TorchDiffEq
-                "jax": "bosh3",  # Diffrax
-            },
-            # High-order methods
-            "dopri8": {
-                "numpy": "DOP853",  # Scipy (8th order)
-                "torch": "dopri8",  # TorchDiffEq
-                "jax": "dopri8",  # Diffrax
-            },
-            # Tsitouras 5/4 (modern, efficient)
-            "tsit5": {
-                "numpy": "Tsit5",  # Julia
-                "torch": "dopri5",  # TorchDiffEq (closest)
-                "jax": "tsit5",  # Diffrax
-            },
-            # Implicit methods for stiff systems
-            "implicit_euler": {
-                "numpy": "Radau",  # Scipy (implicit RK)
-                "torch": "implicit_adams",  # TorchDiffEq
-                "jax": "implicit_euler",  # Diffrax
-            },
-            # Stiff ODE solvers
-            "bdf": {
-                "numpy": "BDF",  # Scipy
-                "torch": "implicit_adams",  # TorchDiffEq (closest)
-                "jax": "kvaerno5",  # Diffrax (ESDIRK for stiff)
-            },
-            # Auto stiffness detection
-            "lsoda": {
-                "numpy": "LSODA",  # Scipy
-                "torch": "dopri5",  # TorchDiffEq (no LSODA equivalent)
-                "jax": "tsit5",  # Diffrax (no LSODA equivalent)
-            },
-        }
-
-        # ====================================================================
-        # Method Already Valid Check
-        # ====================================================================
-
-        # Check if method is already appropriate for backend
-        # (avoids unnecessary mapping when user provides correct name)
-
-        if backend == "numpy":
-            # NumPy backend uses Julia/DiffEqPy + Scipy
-            valid_numpy = {
-                # Julia capitalized methods
-                "EM",
-                "LambaEM",
-                "EulerHeun",
-                "SRIW1",
-                "SRIW2",
-                "SRA1",
-                "SRA3",
-                "RKMil",
-                "ImplicitEM",
-                "AutoEM",
-                "Tsit5",
-                "Vern6",
-                "Vern7",
-                "Vern8",
-                "Vern9",
-                "DP5",
-                "DP8",
-                "Rosenbrock23",
-                "Rodas5",
-                "ROCK4",
-                # Scipy methods
-                "RK45",
-                "RK23",
-                "DOP853",
-                "Radau",
-                "BDF",
-                "LSODA",
-                # Manual implementations
-                "euler",
-                "midpoint",
-                "rk4",
-                "heun",
-            }
-            if method in valid_numpy:
-                return method
-
-        elif backend == "torch":
-            # PyTorch backend uses TorchSDE + TorchDiffEq
-            valid_torch = {
-                # TorchSDE lowercase
-                "euler",
-                "milstein",
-                "srk",
-                "midpoint",
-                "reversible_heun",
-                "adaptive_heun",
-                # TorchDiffEq lowercase
-                "dopri5",
-                "dopri8",
-                "bosh3",
-                "fehlberg2",
-                "explicit_adams",
-                "implicit_adams",
-                # Manual implementations
-                "rk4",
-                "heun",
-            }
-            if method in valid_torch:
-                return method
-
-        elif backend == "jax":
-            # JAX backend uses Diffrax
-            valid_jax = {
-                # Diffrax SDE methods (PascalCase)
-                "Euler",
-                "EulerHeun",
-                "Heun",
-                "ItoMilstein",
-                "StratonovichMilstein",
-                "SEA",
-                "SHARK",
-                "SRA1",
-                "ReversibleHeun",
-                # Diffrax ODE methods (lowercase/PascalCase mix)
-                "tsit5",
-                "dopri5",
-                "dopri8",
-                "bosh3",
-                "implicit_euler",
-                "kvaerno3",
-                "kvaerno4",
-                "kvaerno5",
-                # Manual implementations
-                "euler",
-                "midpoint",
-                "rk4",
-                "heun",
-            }
-            if method in valid_jax:
-                return method
-
-        # ====================================================================
-        # Apply Normalization
-        # ====================================================================
-
-        # Convert method to lowercase for case-insensitive lookup
-        method_lower = method.lower()
-
-        # Try exact match first
-        if method in normalization_map and backend in normalization_map[method]:
-            return normalization_map[method][backend]
-
-        # Try case-insensitive match
-        if method_lower in normalization_map and backend in normalization_map[method_lower]:
-            return normalization_map[method_lower][backend]
-
-        # ====================================================================
-        # No normalization found - return as-is
-        # ====================================================================
-
-        # Let integrator factory handle validation and error messages
-        return method
-
-    @staticmethod
-    def get_available_methods(backend: Backend = "numpy", method_type: str = "all") -> dict:
+    def get_available_methods(backend: Backend = "numpy", method_type: Literal["all", "deterministic", "stochastic", "fixed_step", "adaptive"] = "all") -> dict:
         """
         Get available integration methods for a backend.
 
@@ -717,101 +125,9 @@ class DiscretizedSystem(DiscreteSystemBase):
         >>> print(methods['sde_fixed_step'])
         ['euler', 'milstein', 'srk', 'midpoint']
         """
-        all_methods = {
-            "numpy": {
-                "deterministic_fixed_step": ["euler", "midpoint", "rk4", "heun"],
-                "deterministic_adaptive": [
-                    "RK45",
-                    "RK23",
-                    "DOP853",
-                    "Radau",
-                    "BDF",
-                    "LSODA",
-                    "Tsit5",
-                    "Vern6",
-                    "Vern7",
-                    "Vern8",
-                    "Vern9",
-                    "DP5",
-                    "DP8",
-                    "Rosenbrock23",
-                    "Rodas5",
-                    "ROCK4",
-                ],
-                "sde_fixed_step": [
-                    "EM",
-                    "EulerHeun",
-                    "SRIW1",
-                    "SRIW2",
-                    "SRA1",
-                    "SRA3",
-                    "RKMil",
-                    "ImplicitEM",
-                ],
-                "sde_adaptive": ["LambaEM", "AutoEM"],
-                "canonical_aliases": ["euler_maruyama", "milstein", "rk45", "rk23", "lsoda"],
-            },
-            "torch": {
-                "deterministic_fixed_step": ["euler", "midpoint", "rk4", "heun"],
-                "deterministic_adaptive": [
-                    "dopri5",
-                    "dopri8",
-                    "bosh3",
-                    "fehlberg2",
-                    "explicit_adams",
-                    "implicit_adams",
-                    "adaptive_heun",
-                ],
-                "sde_fixed_step": ["euler", "milstein", "srk", "midpoint"],
-                "sde_adaptive": ["reversible_heun", "adaptive_heun"],
-                "canonical_aliases": ["euler_maruyama", "milstein", "rk45", "rk23"],
-            },
-            "jax": {
-                "deterministic_fixed_step": ["euler", "midpoint", "rk4", "heun"],
-                "deterministic_adaptive": [
-                    "tsit5",
-                    "dopri5",
-                    "dopri8",
-                    "bosh3",
-                    "implicit_euler",
-                    "kvaerno3",
-                    "kvaerno4",
-                    "kvaerno5",
-                ],
-                "sde_fixed_step": [
-                    "Euler",
-                    "EulerHeun",
-                    "Heun",
-                    "ItoMilstein",
-                    "StratonovichMilstein",
-                    "SEA",
-                    "SHARK",
-                    "SRA1",
-                ],
-                "sde_adaptive": ["ReversibleHeun"],
-                "canonical_aliases": ["euler_maruyama", "milstein", "rk45", "rk23", "tsit5"],
-            },
-        }
-
-        backend_methods = all_methods.get(backend, {})
-
-        if method_type == "all":
-            return backend_methods
-        if method_type == "deterministic":
-            return {
-                k: v
-                for k, v in backend_methods.items()
-                if "deterministic" in k or k == "canonical_aliases"
-            }
-        if method_type == "stochastic":
-            return {
-                k: v for k, v in backend_methods.items() if "sde" in k or k == "canonical_aliases"
-            }
-        if method_type == "fixed_step":
-            return {k: v for k, v in backend_methods.items() if "fixed_step" in k}
-        if method_type == "adaptive":
-            return {k: v for k, v in backend_methods.items() if "adaptive" in k}
-        raise ValueError(f"Unknown method_type: {method_type}")
+        from cdesym.systems.base.numerical_integration.method_registry import get_available_methods
+        
+        return get_available_methods(backend=backend, method_type=method_type)
 
     def __init__(
         self,
@@ -1103,17 +419,17 @@ class DiscretizedSystem(DiscreteSystemBase):
         # any classification or decision logic
         if hasattr(continuous_system, "_default_backend"):
             backend = continuous_system._default_backend
-            method = self._normalize_method_name(method, backend)
+            method = normalize_method_name(method, backend)
 
             # Also normalize sde_method if provided
             if sde_method is not None:
-                sde_method = self._normalize_method_name(sde_method, backend)
+                sde_method = normalize_method_name(sde_method, backend)
         else:
             # Default to numpy backend if not specified
             backend = "numpy"
-            method = self._normalize_method_name(method, backend)
+            method = normalize_method_name(method, backend)
             if sde_method is not None:
-                sde_method = self._normalize_method_name(sde_method, backend)
+                sde_method = normalize_method_name(sde_method, backend)
 
         # ========================================================================
         # Detect system type
@@ -1205,7 +521,7 @@ class DiscretizedSystem(DiscreteSystemBase):
                     )
                     self._method_source = "explicit_unavailable"
 
-            elif auto_detect_sde and not self._is_method_sde(method):
+            elif auto_detect_sde and not is_sde_method(method):
                 # User gave deterministic method for stochastic system
                 recommended_method = self._detect_sde_method(continuous_system)
 
@@ -1237,7 +553,7 @@ class DiscretizedSystem(DiscreteSystemBase):
             else:
                 # User explicitly chose deterministic method or turned off auto-detect,
                 # or already provided an SDE method
-                if not self._is_method_sde(method) and not auto_detect_sde:
+                if not is_sde_method(method) and not auto_detect_sde:
                     import warnings
 
                     warnings.warn(
@@ -1259,10 +575,10 @@ class DiscretizedSystem(DiscreteSystemBase):
         self._method = method
 
         # ========================================================================
-        # Determine if method is fixed-step (using class method)
+        # Determine if method is fixed-step (using method_registry method)
         # ========================================================================
 
-        self._is_fixed_step = self._is_method_fixed_step(method)
+        self._is_fixed_step = is_fixed_step(method)
 
         # ========================================================================
         # Determine discretization mode
@@ -3095,7 +2411,7 @@ class DiscretizedSystem(DiscreteSystemBase):
 
         if source == "user_specified":
             # User explicitly chose method or disabled auto-detection
-            if self._is_stochastic and not self._is_method_sde(self._method):
+            if self._is_stochastic and not is_sde_method(self._method):
                 return f"User-specified method '{self._method}' (auto-detection disabled)"
             return f"User-specified method '{self._method}'"
 
