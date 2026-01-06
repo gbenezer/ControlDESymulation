@@ -141,6 +141,8 @@ from cdesym.types.backends import Backend
 
 DETERMINISTIC_FIXED_STEP: FrozenSet[str] = frozenset([
     # Manual implementations (available on all backends)
+    # NOTE: 'euler' and 'midpoint' also appear in SDE context for some backends
+    # When used as deterministic methods, they ignore any noise terms
     "euler",     # Forward Euler (1st order)
     "midpoint",  # Midpoint/RK2 (2nd order)
     "rk4",       # Classic Runge-Kutta 4 (4th order)
@@ -169,7 +171,7 @@ DETERMINISTIC_ADAPTIVE: FrozenSet[str] = frozenset([
     "dopri8",          # Dormand-Prince 8
     "bosh3",           # Bogacki-Shampine 3(2)
     "fehlberg2",       # Fehlberg 2(1)
-    "adaptive_heun",   # Adaptive Heun
+    # NOTE: 'adaptive_heun' removed - it's primarily an SDE method
     "explicit_adams",  # Explicit Adams-Bashforth
     "implicit_adams",  # Implicit Adams-Moulton
     
@@ -208,8 +210,10 @@ SDE_FIXED_STEP: FrozenSet[str] = frozenset([
     # ========================================================================
     # Canonical names (user-friendly aliases)
     # ========================================================================
-    "euler_maruyama",  # Most common SDE method (strong 0.5, weak 1.0)
-    "milstein",        # Higher accuracy (strong 1.0)
+    "euler_maruyama",         # Most common SDE method (strong 0.5, weak 1.0)
+    "milstein",               # Higher accuracy (strong 1.0)
+    "stratonovich_milstein",  # Stratonovich interpretation
+    "sra1",                   # Stochastic Runge-Kutta (strong 1.5, diagonal)
     
     # ========================================================================
     # NumPy/Julia (DiffEqPy) - Capitalized
@@ -226,11 +230,12 @@ SDE_FIXED_STEP: FrozenSet[str] = frozenset([
     # ========================================================================
     # PyTorch (TorchSDE) - lowercase
     # ========================================================================
+    # NOTE: PyTorch uses 'euler' for SDE, which conflicts with deterministic
+    # The context (stochastic vs deterministic system) determines usage
     "euler",           # Euler-Maruyama (TorchSDE naming)
     "milstein",        # Milstein method
     "srk",             # Stochastic Runge-Kutta
     "midpoint",        # Stochastic midpoint
-    "reversible_heun", # Time-reversible Heun
     
     # ========================================================================
     # JAX (Diffrax) - PascalCase
@@ -261,7 +266,7 @@ SDE_ADAPTIVE: FrozenSet[str] = frozenset([
     # PyTorch (TorchSDE)
     # ========================================================================
     "adaptive_heun",   # Adaptive Heun for SDEs
-    "reversible_heun", # Also supports adaptive mode
+    "reversible_heun",  # Can be used in adaptive mode (PyTorch)
 ])
 
 # Union of all SDE methods
@@ -306,7 +311,7 @@ NORMALIZATION_MAP: Dict[str, Dict[Backend, str]] = {
     
     # Reversible/Symmetric Heun (for time-reversible integration)
     "reversible_heun": {
-        "numpy": "EulerHeun",       # Julia (similar)
+        "numpy": "EulerHeun",       # Julia (similar, but not identical)
         "torch": "reversible_heun", # TorchSDE
         "jax": "ReversibleHeun",    # Diffrax
     },
@@ -578,21 +583,29 @@ def is_fixed_step(method: str) -> bool:
     False
     >>> is_fixed_step('adaptive_heun')  # PyTorch
     False
+    >>> is_fixed_step('reversible_heun')  # Can be adaptive
+    False
 
     >>> # Unknown method (conservative default)
     >>> is_fixed_step('my_custom_method')
     False
 
-    Edge Cases
-    ----------
-    **Ambiguous names** (appear in multiple contexts):
-    - 'euler': In both DETERMINISTIC_FIXED_STEP and SDE_METHODS
-    - Returns True (deterministic check comes first)
-    - 'midpoint': Similar ambiguity, returns True
-
-    **Method not in any set**:
-    - Returns False (conservative default)
-    - User can still manually specify mode=FIXED_STEP if desired
+    Notes on Ambiguous Methods
+    ---------------------------
+    Some methods appear in both deterministic and SDE contexts:
+    
+    - **'euler'**: In both DETERMINISTIC_FIXED_STEP and SDE_FIXED_STEP
+      Classification: Fixed-step (True) for both contexts
+      
+    - **'midpoint'**: In both DETERMINISTIC_FIXED_STEP and SDE_FIXED_STEP
+      Classification: Fixed-step (True) for both contexts
+      
+    - **'reversible_heun'**: In both SDE_FIXED_STEP and SDE_ADAPTIVE
+      Classification: Adaptive (False) - prioritizes adaptive classification
+      since it CAN be used in adaptive mode
+    
+    The ambiguity is resolved at runtime by the system type (stochastic vs
+    deterministic) passed to validate_method().
 
     See Also
     --------
@@ -1178,6 +1191,14 @@ def validate_method(
     - Does not check if packages (diffeqpy, torchsde) are installed
     - Only validates logical consistency, not runtime availability
     - Original method name preserved in error messages for clarity
+    
+    **Ambiguous Method Handling:**
+    Some methods appear in both deterministic and SDE categories:
+    - 'euler': Valid for both contexts (determined by is_stochastic flag)
+    - 'midpoint': Valid for both contexts (determined by is_stochastic flag)
+    - When is_stochastic=False and method is SDE-only, validation fails
+    - When is_stochastic=True and method is deterministic, validation passes
+      (with warning handled elsewhere, as noise will be ignored)
 
     Limitations
     -----------
@@ -1234,7 +1255,14 @@ def validate_method(
     # Check for type mismatch (SDE method on deterministic system)
     # ========================================================================
     
-    if not is_stochastic and is_sde_method(normalized):
+    # Only fail if method is EXCLUSIVELY SDE (not in deterministic sets)
+    is_exclusively_sde = (
+        is_sde_method(normalized) and
+        normalized not in DETERMINISTIC_FIXED_STEP and
+        normalized not in DETERMINISTIC_ADAPTIVE
+    )
+    
+    if not is_stochastic and is_exclusively_sde:
         return False, (
             f"SDE method '{method}' (normalized to '{normalized}') used on "
             f"deterministic system. SDE methods are only for stochastic systems."
