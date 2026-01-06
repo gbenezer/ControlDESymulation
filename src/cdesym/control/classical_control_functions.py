@@ -418,7 +418,7 @@ def design_kalman_filter(
     Returns:
         KalmanFilterResult containing:
             - gain: Kalman gain L (nx, ny)
-            - error_covariance: Steady-state error covariance P (nx, nx)
+            - estimation_error_covariance: Steady-state error covariance P (nx, nx)
             - innovation_covariance: Innovation covariance S = CPC' + R (ny, ny)
             - estimator_eigenvalues: Eigenvalues of (A - LC)
 
@@ -513,7 +513,7 @@ def design_kalman_filter(
     # Convert back to target backend
     result: KalmanFilterResult = {
         "gain": _from_numpy(L, backend),
-        "error_covariance": _from_numpy(P, backend),
+        "estimation_error_covariance": _from_numpy(P, backend),
         "innovation_covariance": _from_numpy(S, backend),
         "estimator_eigenvalues": _from_numpy(estimator_eigenvalues, backend),
     }
@@ -649,7 +649,7 @@ def design_lqg(
         "control_gain": lqr_result["gain"],
         "estimator_gain": kalman_result["gain"],
         "control_cost_to_go": lqr_result["cost_to_go"],
-        "estimation_error_covariance": kalman_result["error_covariance"],  # Changed from estimator_covariance
+        "estimation_error_covariance": kalman_result["estimation_error_covariance"],  # Changed from estimator_covariance
         "separation_verified": separation_verified,
         "closed_loop_stable": closed_loop_stable,
         "controller_eigenvalues": lqr_result["controller_eigenvalues"],

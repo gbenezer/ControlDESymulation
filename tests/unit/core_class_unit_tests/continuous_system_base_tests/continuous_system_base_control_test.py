@@ -397,7 +397,7 @@ class TestControlIntegration(unittest.TestCase):
 
         # Check result structure
         self.assertIn("gain", result)
-        self.assertIn("error_covariance", result)
+        self.assertIn("estimation_error_covariance", result)
         self.assertIn("innovation_covariance", result)
         self.assertIn("estimator_eigenvalues", result)
 
@@ -426,8 +426,8 @@ class TestControlIntegration(unittest.TestCase):
         # Check result structure
         self.assertIn("control_gain", result)
         self.assertIn("estimator_gain", result)
-        self.assertIn("controller_riccati", result)
-        self.assertIn("estimator_covariance", result)
+        self.assertIn("control_cost_to_go", result)
+        self.assertIn("estimation_error_covariance", result)
         self.assertIn("controller_eigenvalues", result)
         self.assertIn("estimator_eigenvalues", result)
 
@@ -771,7 +771,7 @@ class TestAllBackends(unittest.TestCase):
 
         # Verify result types
         self.assertIsInstance(result["gain"], np.ndarray)
-        self.assertIsInstance(result["error_covariance"], np.ndarray)
+        self.assertIsInstance(result["estimation_error_covariance"], np.ndarray)
         self.assertIsInstance(result["estimator_eigenvalues"], np.ndarray)
 
         # Verify observer stability
@@ -850,7 +850,7 @@ class TestAllBackends(unittest.TestCase):
 
         # Verify result types
         self.assertIsInstance(result["gain"], torch.Tensor)
-        self.assertIsInstance(result["error_covariance"], torch.Tensor)
+        self.assertIsInstance(result["estimation_error_covariance"], torch.Tensor)
         self.assertIsInstance(result["estimator_eigenvalues"], torch.Tensor)
 
         # Verify observer stability
@@ -975,7 +975,7 @@ class TestAllBackends(unittest.TestCase):
 
         # Verify result types
         self.assertTrue(hasattr(result["gain"], "__array__"))
-        self.assertTrue(hasattr(result["error_covariance"], "__array__"))
+        self.assertTrue(hasattr(result["estimation_error_covariance"], "__array__"))
         self.assertTrue(hasattr(result["estimator_eigenvalues"], "__array__"))
 
         # Verify observer stability

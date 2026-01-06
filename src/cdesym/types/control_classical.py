@@ -304,7 +304,7 @@ class KalmanFilterResult(TypedDict):
     ------
     gain : GainMatrix
         Kalman gain L of shape (nx, ny)
-    error_covariance : CovarianceMatrix
+    estimation_error_covariance : CovarianceMatrix
         Steady-state error covariance P (nx, nx)
     innovation_covariance : CovarianceMatrix
         Innovation covariance S = CPC' + R (ny, ny)
@@ -342,7 +342,7 @@ class KalmanFilterResult(TypedDict):
     """
 
     gain: GainMatrix
-    error_covariance: CovarianceMatrix
+    estimation_error_covariance: CovarianceMatrix
     innovation_covariance: CovarianceMatrix
     estimator_eigenvalues: np.ndarray
 

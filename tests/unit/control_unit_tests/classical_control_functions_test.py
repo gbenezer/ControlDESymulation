@@ -446,13 +446,13 @@ class TestKalmanFilter(ControlTestCase):
 
         # Check result structure
         self.assertIn("gain", result)
-        self.assertIn("error_covariance", result)
+        self.assertIn("estimation_error_covariance", result)
         self.assertIn("innovation_covariance", result)
         self.assertIn("estimator_eigenvalues", result)
 
         # Check dimensions
         L = result["gain"]
-        P = result["error_covariance"]
+        P = result["estimation_error_covariance"]
         S = result["innovation_covariance"]
 
         self.assertEqual(L.shape, (2, 1))
@@ -514,7 +514,7 @@ class TestKalmanFilter(ControlTestCase):
         )
 
         # Higher process noise should give larger error covariance
-        P = result["error_covariance"]
+        P = result["estimation_error_covariance"]
         self.assertGreater(np.trace(P), 0.1)
 
     def test_kalman_full_state_measurement(self):

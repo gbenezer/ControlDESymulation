@@ -125,12 +125,12 @@ class SynthesisTestCase(unittest.TestCase):
     def assert_kalman_result_valid(self, result: KalmanFilterResult, nx: int, ny: int):
         """Validate Kalman filter result structure and shapes."""
         self.assertIn("gain", result)
-        self.assertIn("error_covariance", result)
+        self.assertIn("estimation_error_covariance", result)
         self.assertIn("innovation_covariance", result)
         self.assertIn("estimator_eigenvalues", result)
 
         self.assertEqual(result["gain"].shape, (nx, ny))
-        self.assertEqual(result["error_covariance"].shape, (nx, nx))
+        self.assertEqual(result["estimation_error_covariance"].shape, (nx, nx))
         self.assertEqual(result["innovation_covariance"].shape, (ny, ny))
         self.assertEqual(len(result["estimator_eigenvalues"]), nx)
 
@@ -482,7 +482,7 @@ class TestBackendConsistency(SynthesisTestCase):
         with patch("cdesym.control.classical_control_functions.design_kalman_filter") as mock_func:
             mock_func.return_value = {
                 "gain": np.zeros((2, 1)),
-                "error_covariance": np.eye(2),
+                "estimation_error_covariance": np.eye(2),
                 "innovation_covariance": np.array([[0.1]]),
                 "estimator_eigenvalues": np.array([0.5, 0.6]),
             }
@@ -598,7 +598,7 @@ class TestDelegation(SynthesisTestCase):
         with patch("cdesym.control.classical_control_functions.design_kalman_filter") as mock_func:
             mock_func.return_value = {
                 "gain": np.zeros((2, 1)),
-                "error_covariance": np.eye(2),
+                "estimation_error_covariance": np.eye(2),
                 "innovation_covariance": np.array([[0.1]]),
                 "estimator_eigenvalues": np.array([0.5, 0.6]),
             }
