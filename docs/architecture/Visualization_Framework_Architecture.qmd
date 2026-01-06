@@ -523,7 +523,7 @@ lqr_result = system.control.design_lqr(A, B, Q, R, system_type='continuous')
 
 # Plot eigenvalues using dictionary format (recommended for comparison)
 eigenvalues_ol = np.linalg.eigvals(A)
-eigenvalues_cl = lqr_result['closed_loop_eigenvalues']
+eigenvalues_cl = lqr_result['controller_eigenvalues']
 
 eigenvalue_sets = {
     'Open-loop': eigenvalues_ol,

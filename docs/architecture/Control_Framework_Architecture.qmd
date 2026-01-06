@@ -234,7 +234,7 @@ lqr = system.control.design_lqr(A, B, Q, R, system_type='continuous')
 # Extract results
 K = lqr['gain']
 P = lqr['cost_to_go']
-eigs = lqr['closed_loop_eigenvalues']
+eigs = lqr['controller_eigenvalues']
 
 print(f"LQR gain shape: {K.shape}")
 print(f"Closed-loop stable: {np.all(np.real(eigs) < 0)}")
@@ -319,11 +319,11 @@ kalman = system.control.design_kalman(
 
 # Extract results
 L = kalman['gain']
-P = kalman['error_covariance']
-observer_eigs = kalman['observer_eigenvalues']
+P = kalman['estimation_error_covariance']
+estimator_eigs = kalman['estimator_eigenvalues']
 
 print(f"Kalman gain shape: {L.shape}")
-print(f"Observer stable: {np.all(np.real(observer_eigs) < 0)}")
+print(f"Observer stable: {np.all(np.real(estimator_eigs) < 0)}")
 ```
 
 #### LQG Controller Design
@@ -800,7 +800,7 @@ result: LQRResult = design_lqr(A, B, Q, R, system_type='continuous')
 # IDE autocomplete knows all fields
 K = result['gain']                    # ✓ Valid
 P = result['cost_to_go']              # ✓ Valid
-eigs = result['closed_loop_eigenvalues']  # ✓ Valid
+eigs = result['controller_eigenvalues']  # ✓ Valid
 bad = result['nonexistent_key']       # ✗ Type error!
 
 # Type checking prevents errors
@@ -865,7 +865,7 @@ lqr = system.control.design_lqr(A, B, Q, R, system_type='continuous')
 
 # 5. Extract and verify
 K = lqr['gain']
-eigs = lqr['closed_loop_eigenvalues']
+eigs = lqr['controller_eigenvalues']
 
 print(f"✓ LQR gain: {K}")
 print(f"✓ Closed-loop stable: {np.all(np.real(eigs) < 0)}")
@@ -910,7 +910,7 @@ kalman = system.control.design_kalman(
 
 # 5. Extract gain
 L = kalman['gain']
-observer_eigs = kalman['observer_eigenvalues']
+observer_eigs = kalman['estimator_eigenvalues']
 
 print(f"✓ Kalman gain: {L}")
 print(f"✓ Observer stable: {np.all(np.real(observer_eigs) < 0)}")
@@ -956,7 +956,7 @@ lqg = system.control.design_lqg(
 )
 
 # 4. Extract both gains
-K = lqg['control_gain']
+K = lqg['controller_gain']
 L = lqg['estimator_gain']
 
 print(f"✓ LQG stable: {lqg['closed_loop_stable']}")

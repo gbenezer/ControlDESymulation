@@ -750,7 +750,7 @@ if stability['is_stable']:
 # LQR design (clear result structure)
 lqr: LQRResult = system.control.design_lqr(A, B, Q, R, system_type='continuous')
 K = lqr['gain']
-closed_loop_eigs = lqr['closed_loop_eigenvalues']
+closed_loop_eigs = lqr['controller_eigenvalues']
 
 # Kalman filter (all fields documented)
 kalman: KalmanFilterResult = system.control.design_kalman(
@@ -762,7 +762,7 @@ L = kalman['gain']
 lqg: LQGResult = system.control.design_lqg(
     A, B, C, Q, R, Q_process, R_measurement, system_type='discrete'
 )
-K = lqg['control_gain']
+K = lqg['controller_gain']
 L = lqg['estimator_gain']
 ```
 
