@@ -1,12 +1,12 @@
 ---
-title: "ControlDESymulation Delegation Layer Architecture"
+title: "Delegation Layer Architecture"
 subtitle: "Internal Support Framework for System Components"
 author: "Gil Benezer"
 date: today
 format:
   html:
     toc: true
-    toc-depth: 3
+    toc-depth: 5
     code-fold: show
     code-tools: true
     theme: cosmo
