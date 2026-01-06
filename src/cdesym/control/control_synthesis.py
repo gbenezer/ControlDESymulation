@@ -337,7 +337,7 @@ class ControlSynthesis:
         ...     system_type='discrete'
         ... )
         >>>
-        >>> K = lqg['controller_gain']  # LQR gain
+        >>> K = lqg['control_gain']  # LQR gain
         >>> L = lqg['estimator_gain']   # Kalman gain
         >>>
         >>> # With cross-coupling term

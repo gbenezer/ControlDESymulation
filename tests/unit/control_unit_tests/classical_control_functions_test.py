@@ -556,7 +556,7 @@ class TestLQG(ControlTestCase):
         )
 
         # Check result structure
-        self.assertIn("controller_gain", result)
+        self.assertIn("control_gain", result)
         self.assertIn("estimator_gain", result)
         self.assertIn("controller_riccati", result)
         self.assertIn("estimator_covariance", result)
@@ -564,7 +564,7 @@ class TestLQG(ControlTestCase):
         self.assertIn("observer_eigenvalues", result)
 
         # Check dimensions
-        K = result["controller_gain"]
+        K = result["control_gain"]
         L = result["estimator_gain"]
 
         self.assertEqual(K.shape, (1, 2))
@@ -625,7 +625,7 @@ class TestLQG(ControlTestCase):
 
         # LQG gains should match individual designs
         assert_allclose(
-            lqg_result["controller_gain"],
+            lqg_result["control_gain"],
             lqr_result["gain"],
             rtol=self.rtol,
             atol=self.atol,
@@ -1079,7 +1079,7 @@ class TestIntegration(ControlTestCase):
 
         # Verify both controller and estimator are stable
         ctrl_stability = analyze_stability(
-            self.Ad_double_int - self.Bd_double_int @ result["controller_gain"],
+            self.Ad_double_int - self.Bd_double_int @ result["control_gain"],
             system_type="discrete",
         )
         self.assertTrue(ctrl_stability["is_stable"])

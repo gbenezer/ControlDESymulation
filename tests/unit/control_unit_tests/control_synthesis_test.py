@@ -136,14 +136,14 @@ class SynthesisTestCase(unittest.TestCase):
 
     def assert_lqg_result_valid(self, result: LQGResult, nx: int, nu: int, ny: int):
         """Validate LQG result structure and shapes."""
-        self.assertIn("controller_gain", result)
+        self.assertIn("control_gain", result)
         self.assertIn("estimator_gain", result)
         self.assertIn("controller_riccati", result)
         self.assertIn("estimator_covariance", result)
         self.assertIn("closed_loop_eigenvalues", result)
         self.assertIn("observer_eigenvalues", result)
 
-        self.assertEqual(result["controller_gain"].shape, (nu, nx))
+        self.assertEqual(result["control_gain"].shape, (nu, nx))
         self.assertEqual(result["estimator_gain"].shape, (nx, ny))
         self.assertEqual(result["controller_riccati"].shape, (nx, nx))
         self.assertEqual(result["estimator_covariance"].shape, (nx, nx))
@@ -494,7 +494,7 @@ class TestBackendConsistency(SynthesisTestCase):
         """Test that backend is passed to LQG."""
         with patch("cdesym.control.classical_control_functions.design_lqg") as mock_func:
             mock_func.return_value = {
-                "controller_gain": np.zeros((1, 2)),
+                "control_gain": np.zeros((1, 2)),
                 "estimator_gain": np.zeros((2, 1)),
                 "controller_riccati": np.eye(2),
                 "estimator_covariance": np.eye(2),
@@ -623,7 +623,7 @@ class TestDelegation(SynthesisTestCase):
         """Test that design_lqg delegates with correct arguments."""
         with patch("cdesym.control.classical_control_functions.design_lqg") as mock_func:
             mock_func.return_value = {
-                "controller_gain": np.zeros((1, 2)),
+                "control_gain": np.zeros((1, 2)),
                 "estimator_gain": np.zeros((2, 1)),
                 "controller_riccati": np.eye(2),
                 "estimator_covariance": np.eye(2),
@@ -700,7 +700,7 @@ class TestIntegration(SynthesisTestCase):
         )
 
         # Extract gains
-        K = lqg_result["controller_gain"]
+        K = lqg_result["control_gain"]
         L = lqg_result["estimator_gain"]
 
         # Verify shapes
@@ -744,7 +744,7 @@ class TestIntegration(SynthesisTestCase):
 
         # Separation principle: gains should match
         assert_allclose(
-            lqg_result["controller_gain"],
+            lqg_result["control_gain"],
             lqr_result["gain"],
             rtol=self.rtol,
             atol=self.atol,
@@ -995,7 +995,7 @@ class TestInterface(SynthesisTestCase):
             self.R_meas,
         )
         self.assertIsInstance(lqg_result, dict)
-        self.assertIn("controller_gain", lqg_result)
+        self.assertIn("control_gain", lqg_result)
         self.assertIn("estimator_gain", lqg_result)
 
 
