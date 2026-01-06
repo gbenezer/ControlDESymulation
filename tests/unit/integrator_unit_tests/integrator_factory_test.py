@@ -204,14 +204,14 @@ class TestBackendValidation:
 class TestMethodBackendCompatibility:
     """Test validation of method-backend compatibility."""
 
-    def test_scipy_method_requires_numpy(self, mock_system):
-        """Test scipy methods require numpy backend (validated by registry)."""
-        # Registry validation should catch this
+    def test_scipy_only_method_on_wrong_backend(self, mock_system):
+        """Test that methods with no cross-backend mapping fail validation."""
+        # Use a method that ONLY exists on numpy and has NO normalization
         with pytest.raises(ValueError, match="not available"):
             IntegratorFactory.create(
                 mock_system,
                 backend="torch",
-                method="RK45",  # Scipy-only method
+                method="DOP853",  # Scipy-only, no torch equivalent
             )
 
     def test_universal_methods_work_with_any_backend(self, mock_system):
@@ -231,6 +231,16 @@ class TestMethodBackendCompatibility:
                 assert integrator is not None
             except Exception as e:
                 pytest.fail(f"Universal method {method} failed: {e}")
+    
+    def test_backend_specific_method_validated(self, mock_system):
+        """Test that backend-specific methods are validated."""
+        # fehlberg2 only exists on torch
+        with pytest.raises(ValueError, match="not available"):
+            IntegratorFactory.create(
+                mock_system,
+                backend="jax",
+                method="fehlberg2",
+            )
 
 
 # ============================================================================
@@ -596,24 +606,23 @@ class TestErrorHandling:
         """Test error when PyTorch not available for neural ODE."""
         try:
             import torch
-
             pytest.skip("PyTorch is installed")
         except ImportError:
             with pytest.raises(ImportError, match="PyTorch"):
                 IntegratorFactory.for_neural_ode(mock_system)
 
-    def test_method_backend_mismatch_clear_error(self, mock_system):
-        """Test clear error message for method-backend mismatch."""
-        # tsit5 (lowercase) is valid for JAX, so use different example
+    def test_method_not_available_for_backend(self, mock_system):
+        """Test error when method truly not available for backend."""
+        # Use backend-specific method on wrong backend
         with pytest.raises(ValueError, match="not available") as exc_info:
             IntegratorFactory.create(
                 mock_system,
-                backend="torch",
-                method="LSODA",  # Scipy method, not available on torch
+                backend="numpy",
+                method="fehlberg2",  # TorchDiffEq-only method
             )
 
         error_msg = str(exc_info.value).lower()
-        assert "not available" in error_msg or "lsoda" in error_msg
+        assert "not available" in error_msg or "fehlberg2" in error_msg
 
     def test_fixed_step_without_dt_clear_error(self, mock_system):
         """Test clear error when dt missing for fixed-step."""
@@ -627,15 +636,25 @@ class TestErrorHandling:
 
         assert "requires dt" in str(exc_info.value).lower()
 
-    def test_julia_method_wrong_backend_error(self, mock_system):
-        """Test error when Julia method used with wrong backend."""
-        # Tsit5 should fail validation on JAX backend
+    def test_truly_invalid_method_for_backend(self, mock_system):
+        """Test error for method that doesn't exist anywhere."""
         with pytest.raises(ValueError, match="not available"):
             IntegratorFactory.create(
                 mock_system,
                 backend="jax",
-                method="Tsit5",  # Julia method, not available on jax
+                method="completely_fake_method_12345",
             )
+    
+    def test_normalization_works_across_backends(self, mock_system):
+        """Test that normalization allows portable canonical names."""
+        # This should NOT raise - it's the FEATURE of the registry!
+        # LSODA → dopri5 on torch (automatic normalization)
+        integrator = IntegratorFactory.create(
+            mock_system,
+            backend="torch",
+            method="LSODA",  # Normalizes to dopri5
+        )
+        assert integrator.method == "dopri5"
 
 
 # ============================================================================
@@ -655,6 +674,50 @@ class TestIntegrationWithActualSystem:
         assert integrator.backend == "numpy"
         assert integrator.method == "RK45"
 
+
+# ============================================================================
+# Test Class: Method Normalization
+# ============================================================================
+
+class TestMethodNormalization:
+    """Test that method normalization works across backends."""
+    
+    def test_lsoda_normalizes_to_backend_equivalent(self, mock_system):
+        """Test LSODA normalizes to appropriate method for each backend."""
+        # NumPy: LSODA → LSODA (no change)
+        integrator_numpy = IntegratorFactory.create(
+            mock_system, backend="numpy", method="LSODA"
+        )
+        assert integrator_numpy.method == "LSODA"
+        
+        # Torch: LSODA → dopri5 (normalized)
+        integrator_torch = IntegratorFactory.create(
+            mock_system, backend="torch", method="LSODA"
+        )
+        assert integrator_torch.method == "dopri5"
+        
+        # JAX: LSODA → tsit5 (normalized)
+        integrator_jax = IntegratorFactory.create(
+            mock_system, backend="jax", method="LSODA"
+        )
+        assert integrator_jax.solver == "tsit5"
+    
+    def test_rk45_normalizes_correctly(self, mock_system):
+        """Test rk45 canonical name works on all backends."""
+        # This is the FEATURE - portable canonical names!
+        for backend in ["numpy", "torch", "jax"]:
+            integrator = IntegratorFactory.create(
+                mock_system, backend=backend, method="rk45"
+            )
+            assert integrator is not None
+    
+    def test_backend_specific_method_fails_on_wrong_backend(self, mock_system):
+        """Test truly backend-specific methods fail on wrong backend."""
+        # fehlberg2 ONLY exists on torch, no normalization
+        with pytest.raises(ValueError, match="not available"):
+            IntegratorFactory.create(
+                mock_system, backend="jax", method="fehlberg2"
+            )
 
 # ============================================================================
 # Test Class: Edge Cases
