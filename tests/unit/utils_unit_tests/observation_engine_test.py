@@ -180,7 +180,8 @@ class TestCustomOutput:
         y: OutputVector = engine.evaluate(x, backend="torch")
 
         assert isinstance(y, torch.Tensor)
-        assert torch.allclose(y, torch.tensor([1.0, 5.0]))
+        # Fix: Specify dtype to match default PyTorch tensor dtype
+        assert torch.allclose(y, torch.tensor([1.0, 5.0], dtype=y.dtype))
 
     @pytest.mark.skipif(not jax_available, reason="JAX not installed")
     def test_evaluate_jax_custom(self):
@@ -244,7 +245,8 @@ class TestObservationJacobian:
         x: StateVector = torch.tensor([1.0, 2.0])
         C: OutputMatrix = engine.compute_jacobian(x, backend="torch")
 
-        expected_C = torch.tensor([[1.0, 0.0], [2.0, 4.0]])
+        # Fix: Match dtype
+        expected_C = torch.tensor([[1.0, 0.0], [2.0, 4.0]], dtype=C.dtype)
 
         assert isinstance(C, torch.Tensor)
         assert torch.allclose(C, expected_C)
@@ -300,12 +302,13 @@ class TestBackendConversion:
         engine = ObservationEngine(system, code_gen, backend_mgr)
 
         # NumPy input, force torch backend
-        x: StateVector = np.array([1.0, 2.0])
+        x: StateVector = np.array([1.0, 2.0])  # NumPy float64
         y: OutputVector = engine.evaluate(x, backend="torch")
 
         # Should return torch tensor
         assert isinstance(y, torch.Tensor)
-        assert torch.allclose(y, torch.tensor([1.0, 5.0]))
+        # NumPy float64 → torch float64 (via dynamics_evaluator conversion)
+        assert torch.allclose(y, torch.tensor([1.0, 5.0], dtype=torch.float64))
 
 
 # ============================================================================
