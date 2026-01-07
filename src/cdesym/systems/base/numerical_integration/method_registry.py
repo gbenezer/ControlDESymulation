@@ -144,6 +144,7 @@ DETERMINISTIC_FIXED_STEP: FrozenSet[str] = frozenset([
     # NOTE: 'euler' and 'midpoint' also appear in SDE context for some backends
     # When used as deterministic methods, they ignore any noise terms
     "euler",     # Forward Euler (1st order)
+    "heun",      # Heun's method / Improved Euler / Explicit Trapezoid (2nd order)
     "midpoint",  # Midpoint/RK2 (2nd order)
     "rk4",       # Classic Runge-Kutta 4 (4th order)
 ])
@@ -394,7 +395,7 @@ BACKEND_METHODS: Dict[Backend, FrozenSet[str]] = {
         "Tsit5", "Vern6", "Vern7", "Vern8", "Vern9", "DP5", "DP8",
         "Rosenbrock23", "Rodas5", "ROCK4",
         # Manual implementations (fixed-step)
-        "euler", "midpoint", "rk4",
+        "euler", "heun", "midpoint", "rk4",
     ]),
     
     # ========================================================================
@@ -408,7 +409,7 @@ BACKEND_METHODS: Dict[Backend, FrozenSet[str]] = {
         "dopri5", "dopri8", "bosh3", "fehlberg2",
         "explicit_adams", "implicit_adams",
         # Manual implementations (fixed-step)
-        "rk4",
+        "heun", "rk4",
     ]),
     
     # ========================================================================
@@ -422,7 +423,7 @@ BACKEND_METHODS: Dict[Backend, FrozenSet[str]] = {
         "tsit5", "dopri5", "dopri8", "bosh3", "implicit_euler",
         "kvaerno3", "kvaerno4", "kvaerno5",
         # Manual implementations (fixed-step)
-        "euler", "midpoint", "rk4",
+        "euler", "heun", "midpoint", "rk4",
     ]),
 }
 
@@ -764,6 +765,18 @@ def normalize_method_name(method: str, backend: Backend = "numpy") -> str:
     # ========================================================================
     
     if backend in BACKEND_METHODS and method in BACKEND_METHODS[backend]:
+        return method
+    
+    # ========================================================================
+    # Handle Julia/DiffEqPy auto-switching methods (e.g., "AutoTsit5(Rosenbrock23())")
+    # ========================================================================
+    
+    # DiffEqPy methods can have complex syntax with parentheses for auto-switching
+    # e.g., AutoTsit5(Rosenbrock23()), AutoVern7(Rodas5())
+    # These are valid on numpy backend and should be passed through as-is
+    if backend == "numpy" and "(" in method:
+        # This is likely a Julia auto-switching method
+        # Don't try to normalize it - validation will handle it
         return method
     
     # ========================================================================
@@ -1235,6 +1248,17 @@ def validate_method(
     normalized = normalize_method_name(method, backend)
     
     # ========================================================================
+    # Handle Julia/DiffEqPy auto-switching methods
+    # ========================================================================
+    
+    # Methods like "AutoTsit5(Rosenbrock23())" are valid Julia/DiffEqPy methods
+    # They won't be in BACKEND_METHODS but should be allowed on numpy backend
+    if backend == "numpy" and "(" in normalized:
+        # Julia auto-switching method - allow it through
+        # The actual Julia backend will validate if it's a real method
+        return True, None
+    
+    # ========================================================================
     # Check if method exists for backend
     # ========================================================================
     
@@ -1408,7 +1432,7 @@ def get_implementing_library(method: str, backend: Backend, is_stochastic: bool 
     # Manual implementations (only for deterministic on NumPy)
     # ========================================================================
     
-    manual_methods = {"euler", "midpoint", "rk4"}
+    manual_methods = {"euler", "heun", "midpoint", "rk4"}
     
     if method in manual_methods and backend == "numpy" and not is_stochastic:
         return "manual"
@@ -1448,7 +1472,7 @@ def get_implementing_library(method: str, backend: Backend, is_stochastic: bool 
             return "torchdiffeq"
         
         # Manual methods on torch (deterministic only)
-        if method == "rk4":
+        if method in manual_methods:
             return "manual"
     
     # ========================================================================
