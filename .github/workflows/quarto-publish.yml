@@ -1,56 +1,91 @@
-name: Publish Quarto Site
+name: Publish Quarto Documentation
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
+    paths:
+      - 'docs/**'
+      - 'src/**'  # Re-build if source changes!
+      - '.github/workflows/quarto-publish.yml'
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'src/**'
   workflow_dispatch:
-
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-# Allow only one concurrent deployment
-concurrency:
-  group: "pages"
-  cancel-in-progress: false
+  schedule:
+    - cron: '0 2 * * 0'  # Weekly rebuild (Sundays at 2 AM)
 
 jobs:
-  build:
+  build-deploy:
     runs-on: ubuntu-latest
     
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    
     steps:
-      - name: Check out repository
+      - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Set up Quarto
-        uses: quarto-dev/quarto-actions/setup@v2
-        with:
-          version: 1.8.26
-      
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Setup Python
+        uses: actions/setup-python@v4
         with:
           python-version: '3.12'
           cache: 'pip'
       
       - name: Install dependencies
         run: |
-          pip install -e ".[all]"  
+          pip install --upgrade pip
+          pip install -e . "[all]" # Install package in editable mode
       
-      - name: Render Quarto site
+      - name: Setup Quarto
+        uses: quarto-dev/quarto-actions/setup@v2
+        with:
+          version: 1.8.26
+      
+      - name: Verify installation
+        run: |
+          python -c "import cdesym; print(f'✓ Package version: {cdesym.__version__}')"
+          quarto --version
+      
+      - name: Render Quarto documentation
         run: |
           cd docs
-          quarto render
+          quarto render --execute-daemon --execute-daemon-restart
+        env:
+          QUARTO_PYTHON: python
       
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
+      - name: Check for rendering errors
+        run: |
+          if grep -r "ERROR" docs/_site/; then
+            echo "Found errors in rendered output"
+            exit 1
+          fi
+          echo "✓ No rendering errors found"
       
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Upload artifact (for PR preview)
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v3
         with:
+          name: quarto-docs-preview
           path: docs/_site
+          retention-days: 7
       
       - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: docs/_site
+          cname: controldesymulation.yoursite.com  # Optional
+      
+      - name: Create deployment summary
+        if: github.event_name == 'push'
+        run: |
+          echo "## 📚 Documentation Deployed" >> $GITHUB_STEP_SUMMARY
+          echo "Site: https://gilbenezer.github.io/ControlDESymulation/" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Build Statistics" >> $GITHUB_STEP_SUMMARY
+          echo "- Rendered pages: $(find docs/_site -name '*.html' | wc -l)" >> $GITHUB_STEP_SUMMARY
+          echo "- Total size: $(du -sh docs/_site | cut -f1)" >> $GITHUB_STEP_SUMMARY
