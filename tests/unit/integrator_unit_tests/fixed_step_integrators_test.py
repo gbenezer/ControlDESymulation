@@ -40,6 +40,7 @@ import pytest
 
 from cdesym.systems.base.numerical_integration.fixed_step_integrators import (
     ExplicitEulerIntegrator,
+    HeunIntegrator,
     MidpointIntegrator,
     RK4Integrator,
     create_fixed_step_integrator,
@@ -282,9 +283,272 @@ class TestMidpoint:
         assert 3.0 < ratio1 < 5.0  # Allow some tolerance
         assert 3.0 < ratio2 < 5.0
 
+# ============================================================================
+# Test Class 3: HeunIntegrator
+# ============================================================================
+
+
+class TestHeunIntegrator:
+    """Test Heun's method (Improved Euler / Explicit Trapezoid) integrator."""
+
+    def test_single_step_accuracy(self):
+        """Test Heun's method single step against analytical solution."""
+        system = ExponentialDecaySystem(a=1.0)
+        integrator = HeunIntegrator(system, dt=0.1, backend="numpy")
+
+        x0 = np.array([1.0])
+        u = np.array([0.0])
+
+        # Take one Heun step
+        x1 = integrator.step(x0, u)
+
+        # Analytical solution
+        x1_exact = system.analytical_solution(x0[0], 0.1)
+
+        # Heun (2nd order) should be more accurate than Euler
+        error = abs(x1[0] - x1_exact)
+        assert error < 0.001, f"Heun error {error} too large"
+
+    def test_predictor_corrector_structure(self):
+        """Test that Heun uses predictor-corrector structure (2 evals per step)."""
+        system = ExponentialDecaySystem(a=1.0)
+        integrator = HeunIntegrator(system, dt=0.1, backend="numpy")
+
+        x0 = np.array([1.0])
+        
+        # Take a step
+        integrator.step(x0, np.array([0.0]))
+        
+        # Heun should have 1 step, but we can't directly check nfev in step()
+        # This is tested more thoroughly in test_function_evaluations
+
+    def test_convergence_order(self):
+        """Verify Heun's method exhibits 2nd-order convergence."""
+        system = ExponentialDecaySystem(a=1.0)
+        x0 = np.array([1.0])
+        t_final = 1.0
+
+        # Test with different dt values
+        dt_values = [0.1, 0.05, 0.025]
+        errors = []
+
+        for dt in dt_values:
+            integrator = HeunIntegrator(system, dt=dt, backend="numpy")
+            
+            # Integrate
+            result = integrator.integrate(
+                x0=x0,
+                u_func=lambda t, x: np.array([0.0]),
+                t_span=(0.0, t_final),
+            )
+
+            # Compare to analytical
+            x_final_exact = system.analytical_solution(x0[0], t_final)
+            error = abs(result["x"][-1, 0] - x_final_exact)
+            errors.append(error)
+
+        # Check convergence order (error should decrease by ~4x when dt halves)
+        ratio1 = errors[0] / errors[1]
+        ratio2 = errors[1] / errors[2]
+
+        # For 2nd order: ratio should be close to 4.0
+        assert 3.0 < ratio1 < 5.0, f"First ratio {ratio1} not ~4 (2nd order)"
+        assert 3.0 < ratio2 < 5.0, f"Second ratio {ratio2} not ~4 (2nd order)"
+
+    def test_heun_vs_euler_accuracy(self):
+        """Verify Heun is significantly more accurate than Euler."""
+        system = ExponentialDecaySystem(a=1.0)
+        x0 = np.array([1.0])
+        dt = 0.1
+        t_final = 1.0
+
+        # Heun integration
+        heun = HeunIntegrator(system, dt=dt, backend="numpy")
+        result_heun = heun.integrate(
+            x0=x0,
+            u_func=lambda t, x: np.array([0.0]),
+            t_span=(0.0, t_final),
+        )
+
+        # Euler integration
+        euler = ExplicitEulerIntegrator(system, dt=dt, backend="numpy")
+        result_euler = euler.integrate(
+            x0=x0,
+            u_func=lambda t, x: np.array([0.0]),
+            t_span=(0.0, t_final),
+        )
+
+        # Exact solution
+        x_exact = system.analytical_solution(x0[0], t_final)
+
+        # Calculate errors
+        error_heun = abs(result_heun["x"][-1, 0] - x_exact)
+        error_euler = abs(result_euler["x"][-1, 0] - x_exact)
+
+        # Heun should be at least 10x more accurate
+        assert error_heun < error_euler / 10, (
+            f"Heun ({error_heun}) not significantly better than Euler ({error_euler})"
+        )
+
+    def test_heun_vs_midpoint_similar_accuracy(self):
+        """Verify Heun and Midpoint have similar accuracy (both 2nd order)."""
+        system = ExponentialDecaySystem(a=1.0)
+        x0 = np.array([1.0])
+        dt = 0.05
+        t_final = 1.0
+
+        # Heun integration
+        heun = HeunIntegrator(system, dt=dt, backend="numpy")
+        result_heun = heun.integrate(
+            x0=x0,
+            u_func=lambda t, x: np.array([0.0]),
+            t_span=(0.0, t_final),
+        )
+
+        # Midpoint integration
+        midpoint = MidpointIntegrator(system, dt=dt, backend="numpy")
+        result_midpoint = midpoint.integrate(
+            x0=x0,
+            u_func=lambda t, x: np.array([0.0]),
+            t_span=(0.0, t_final),
+        )
+
+        # Exact solution
+        x_exact = system.analytical_solution(x0[0], t_final)
+
+        # Calculate errors
+        error_heun = abs(result_heun["x"][-1, 0] - x_exact)
+        error_midpoint = abs(result_midpoint["x"][-1, 0] - x_exact)
+
+        # Both are 2nd order, should be within factor of 2 of each other
+        ratio = max(error_heun, error_midpoint) / min(error_heun, error_midpoint)
+        assert ratio < 2.0, (
+            f"Heun ({error_heun}) and Midpoint ({error_midpoint}) accuracy too different"
+        )
+
+    def test_function_evaluations(self):
+        """Test Heun uses exactly 2 function evaluations per step."""
+        system = ExponentialDecaySystem()
+        integrator = HeunIntegrator(system, dt=0.1, backend="numpy")
+
+        result = integrator.integrate(
+            x0=np.array([1.0]),
+            u_func=lambda t, x: np.array([0.0]),
+            t_span=(0.0, 1.0),
+        )
+
+        # Heun method: predictor + corrector = 2 evaluations per step
+        assert result["nfev"] == 2 * result["nsteps"], (
+            f"Heun should use 2 evals/step: {result['nfev']} != 2 * {result['nsteps']}"
+        )
+
+    def test_integrator_name(self):
+        """Test integrator name property."""
+        system = ExponentialDecaySystem()
+        integrator = HeunIntegrator(system, dt=0.1, backend="numpy")
+
+        name = integrator.name.lower()
+        assert "heun" in name or "improved euler" in name, (
+            f"Name '{integrator.name}' should contain 'heun' or 'improved euler'"
+        )
+
+    def test_step_mode(self):
+        """Test that step_mode is FIXED."""
+        system = ExponentialDecaySystem()
+        integrator = HeunIntegrator(system, dt=0.1, backend="numpy")
+        
+        assert integrator.step_mode == StepMode.FIXED
+
+    def test_harmonic_oscillator(self):
+        """Test Heun on 2D harmonic oscillator system."""
+        system = HarmonicOscillator(k=1.0)
+        integrator = HeunIntegrator(system, dt=0.05, backend="numpy")
+
+        x0 = np.array([1.0, 0.0])  # [position, velocity]
+        t_final = 2 * np.pi  # One full period
+
+        result = integrator.integrate(
+            x0=x0,
+            u_func=lambda t, x: np.array([0.0]),
+            t_span=(0.0, t_final),
+        )
+
+        # After one period, should be back near start
+        x_final = result["x"][-1]
+        error = np.linalg.norm(x_final - x0)
+        
+        # Heun should maintain reasonable accuracy over one period
+        assert error < 0.1, f"Harmonic oscillator error {error} too large"
+
+    @pytest.mark.skipif(not torch_available, reason="PyTorch not installed")
+    def test_torch_backend(self):
+        """Test Heun with PyTorch backend."""
+        system = ExponentialDecaySystem()
+        integrator = HeunIntegrator(system, dt=0.1, backend="torch")
+
+        x0 = torch.tensor([1.0])
+        u = torch.tensor([0.0])
+
+        x1 = integrator.step(x0, u)
+        
+        assert isinstance(x1, torch.Tensor), "Result should be torch.Tensor"
+        assert integrator.backend == "torch"
+
+    @pytest.mark.skipif(not jax_available, reason="JAX not installed")
+    def test_jax_backend(self):
+        """Test Heun with JAX backend."""
+        system = ExponentialDecaySystem()
+        integrator = HeunIntegrator(system, dt=0.1, backend="jax")
+
+        x0 = jnp.array([1.0])
+        u = jnp.array([0.0])
+
+        x1 = integrator.step(x0, u)
+        
+        assert isinstance(x1, jnp.ndarray), "Result should be jax.numpy.ndarray"
+        assert integrator.backend == "jax"
+
+    def test_result_is_typed_dict(self):
+        """Test that integrate returns a TypedDict (dict)."""
+        system = ExponentialDecaySystem()
+        integrator = HeunIntegrator(system, dt=0.1, backend="numpy")
+
+        result = integrator.integrate(
+            x0=np.array([1.0]),
+            u_func=lambda t, x: np.array([0.0]),
+            t_span=(0.0, 1.0),
+        )
+
+        # Should be a dict (TypedDict)
+        assert isinstance(result, dict)
+        
+        # Should have required keys
+        assert "t" in result
+        assert "x" in result
+        assert "success" in result
+        assert "nfev" in result
+        assert "nsteps" in result
+        assert "solver" in result
+
+    def test_statistics_tracking(self):
+        """Test that statistics are properly tracked."""
+        system = ExponentialDecaySystem()
+        integrator = HeunIntegrator(system, dt=0.1, backend="numpy")
+
+        result = integrator.integrate(
+            x0=np.array([1.0]),
+            u_func=lambda t, x: np.array([0.0]),
+            t_span=(0.0, 1.0),
+        )
+
+        stats = integrator.stats()
+        
+        assert stats["total_steps"] == result["nsteps"]
+        assert stats["total_time"] > 0
+        assert stats["total_fev"] == result["nfev"]
 
 # ============================================================================
-# Test Class 3: RK4 Integrator
+# Test Class 4: RK4 Integrator
 # ============================================================================
 
 
@@ -369,7 +633,7 @@ class TestRK4:
 
 
 # ============================================================================
-# Test Class 4: Accuracy Comparison
+# Test Class 5: Accuracy Comparison
 # ============================================================================
 
 
@@ -399,7 +663,7 @@ class TestAccuracyComparison:
 
 
 # ============================================================================
-# Test Class 5: Integration with Control
+# Test Class 6: Integration with Control
 # ============================================================================
 
 
@@ -448,7 +712,7 @@ class TestIntegrationWithControl:
 
 
 # ============================================================================
-# Test Class 6: Custom Time Evaluation Points
+# Test Class 7: Custom Time Evaluation Points
 # ============================================================================
 
 
@@ -493,7 +757,7 @@ class TestCustomTimeEvaluation:
 
 
 # ============================================================================
-# Test Class 7: Backend Support
+# Test Class 8: Backend Support
 # ============================================================================
 
 
@@ -540,7 +804,7 @@ class TestBackendSupport:
 
 
 # ============================================================================
-# Test Class 8: Factory Function
+# Test Class 9: Factory Function
 # ============================================================================
 
 
@@ -582,10 +846,19 @@ class TestFactoryFunction:
 
         with pytest.raises(ValueError, match="Unknown method"):
             create_fixed_step_integrator("invalid", system, dt=0.01)
+            
+    def test_create_heun(self):
+        """Test creating Heun integrator via factory"""
+        system = ExponentialDecaySystem()
+        integrator = create_fixed_step_integrator("heun", system, dt=0.01)
+
+        assert isinstance(integrator, HeunIntegrator)
+        assert integrator.dt == 0.01
+        assert integrator.backend == "numpy"
 
 
 # ============================================================================
-# Test Class 9: Performance Statistics
+# Test Class 10: Performance Statistics
 # ============================================================================
 
 
@@ -631,7 +904,7 @@ class TestPerformanceStatistics:
 
 
 # ============================================================================
-# Test Class 10: TypedDict Verification
+# Test Class 11: TypedDict Verification
 # ============================================================================
 
 

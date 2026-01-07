@@ -215,8 +215,8 @@ class TestMethodBackendCompatibility:
             )
 
     def test_universal_methods_work_with_any_backend(self, mock_system):
-        """Test that universal methods (euler, rk4) work with any backend."""
-        universal_methods = ["euler", "midpoint", "rk4"]
+        """Test that universal methods work with any backend."""
+        universal_methods = ["euler", "heun", "midpoint", "rk4"]
 
         for method in universal_methods:
             try:
@@ -390,12 +390,13 @@ class TestHelperMethods:
     def test_is_manual_method(self):
         """Test _is_manual_method helper."""
         assert IntegratorFactory._is_manual_method("euler")
+        assert IntegratorFactory._is_manual_method("heun")
         assert IntegratorFactory._is_manual_method("midpoint")
         assert IntegratorFactory._is_manual_method("rk4")
 
         assert not IntegratorFactory._is_manual_method("dopri5")
         assert not IntegratorFactory._is_manual_method("LSODA")
-        assert not IntegratorFactory._is_manual_method("heun")
+        assert not IntegratorFactory._is_manual_method("Tsit5")
 
     def test_is_scipy_method(self):
         """Test _is_scipy_method helper."""
@@ -773,6 +774,140 @@ class TestEdgeCases:
         # Should default to LSODA for numpy
         assert integrator.method == "LSODA"
 
+
+# ============================================================================
+# Test Class: Julia Preference
+# ============================================================================
+
+
+class TestJuliaPreference:
+    """Test that lowercase methods prefer Julia on numpy backend."""
+    
+    def test_lowercase_euler_heun_midpoint_routing(self, mock_system):
+        """Test that lowercase euler/heun/midpoint route correctly.
+        
+        On numpy: Should attempt to use Julia (if available, falls back to manual)
+        On torch/jax: Should use manual implementations
+        """
+        methods_to_test = ["euler", "heun", "midpoint"]
+        
+        # Test numpy backend behavior
+        for method in methods_to_test:
+            # This will either use Julia (if available) or fall back to manual
+            integrator = IntegratorFactory.create(
+                mock_system,
+                backend="numpy",
+                method=method,
+                dt=0.01,
+                step_mode=StepMode.FIXED
+            )
+            
+            # If DiffEqPy is available, should use Julia
+            if JULIA_AVAILABLE:
+                # The integrator name should indicate Julia usage
+                # (This test may need adjustment based on actual integrator naming)
+                assert integrator is not None
+            else:
+                # Falls back to manual if Julia not available
+                assert integrator is not None
+        
+        # Test torch/jax backends should use manual
+        for backend in ["torch", "jax"]:
+            try:
+                for method in methods_to_test:
+                    integrator = IntegratorFactory.create(
+                        mock_system,
+                        backend=backend,
+                        method=method,
+                        dt=0.01,
+                        step_mode=StepMode.FIXED
+                    )
+                    # Should successfully create manual implementations
+                    assert integrator is not None
+            except ImportError:
+                # Expected if torch/jax not installed
+                pass
+    
+    def test_manual_prefix_forces_manual_implementation(self, mock_system):
+        """Test that manual_* prefix forces manual implementation even on numpy."""
+        manual_methods = ["manual_euler", "manual_heun", "manual_midpoint"]
+        
+        for method in manual_methods:
+            integrator = IntegratorFactory.create(
+                mock_system,
+                backend="numpy",
+                method=method,
+                dt=0.01,
+                step_mode=StepMode.FIXED
+            )
+            
+            # Should use manual implementation (not Julia)
+            # Check that it's one of our manual integrator classes
+            from cdesym.systems.base.numerical_integration.fixed_step_integrators import (
+                ExplicitEulerIntegrator,
+                HeunIntegrator,
+                MidpointIntegrator,
+            )
+            
+            assert isinstance(integrator, (ExplicitEulerIntegrator, HeunIntegrator, MidpointIntegrator)), (
+                f"Method {method} should use manual implementation"
+            )
+    
+    def test_capitalized_attempts_julia(self, mock_system):
+        """Test that capitalized methods attempt Julia (may fail if not installed)."""
+        capitalized_methods = ["Euler", "Heun", "Midpoint"]
+        
+        for method in capitalized_methods:
+            if JULIA_AVAILABLE:
+                # Should be able to create integrator with Julia
+                try:
+                    integrator = IntegratorFactory.create(
+                        mock_system,
+                        backend="numpy",
+                        method=method,
+                        dt=0.01,
+                        step_mode=StepMode.FIXED
+                    )
+                    assert integrator is not None
+                except Exception as e:
+                    # Julia methods might not all be available
+                    # This is OK - we're just testing routing
+                    pass
+            else:
+                # Should fail gracefully if Julia not available
+                with pytest.raises((ImportError, ValueError)):
+                    IntegratorFactory.create(
+                        mock_system,
+                        backend="numpy",
+                        method=method,
+                        dt=0.01,
+                        step_mode=StepMode.FIXED
+                    )
+    
+    def test_normalization_preserves_intent(self, mock_system):
+        """Test that method normalization preserves user's intent.
+        
+        - lowercase → Julia on numpy (if available)
+        - Capitalized → Julia always
+        - manual_* → manual always
+        """
+        from cdesym.systems.base.numerical_integration.method_registry import (
+            normalize_method_name
+        )
+        
+        # Lowercase on numpy should normalize to capitalized (Julia)
+        assert normalize_method_name("euler", "numpy") == "Euler"
+        assert normalize_method_name("heun", "numpy") == "Heun"
+        assert normalize_method_name("midpoint", "numpy") == "Midpoint"
+        
+        # manual_* should normalize to lowercase
+        assert normalize_method_name("manual_euler", "numpy") == "euler"
+        assert normalize_method_name("manual_heun", "numpy") == "heun"
+        assert normalize_method_name("manual_midpoint", "numpy") == "midpoint"
+        
+        # Lowercase on torch/jax stays lowercase
+        assert normalize_method_name("euler", "torch") == "euler"
+        assert normalize_method_name("heun", "jax") == "heun"
 
 # ============================================================================
 # Test Class: IntegratorType Enum

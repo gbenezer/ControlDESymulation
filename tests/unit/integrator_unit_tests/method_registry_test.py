@@ -88,13 +88,13 @@ def canonical_ode_methods():
 @pytest.fixture
 def manual_implementations():
     """Manual implementations available on all backends."""
-    return ["euler", "midpoint", "rk4"]
+    return ["euler", "heun", "midpoint", "rk4"]
 
 
 @pytest.fixture
 def ambiguous_methods():
     """Methods that appear in both deterministic and SDE contexts."""
-    return ["euler", "midpoint"]
+    return ["euler", "heun", "midpoint"]
 
 
 # ============================================================================
@@ -318,13 +318,59 @@ class TestMethodNormalization:
         assert normalize_method_name("tsit5", "jax") == "tsit5"
     
     def test_normalize_manual_implementations(self, all_backends, manual_implementations):
-        """Test that manual implementations work on all backends."""
+        """Test that manual implementations work on all backends.
+        
+        Note: On numpy backend, euler/heun/midpoint prefer Julia (capitalized).
+        On torch/jax, they use manual implementations (lowercase).
+        """
         for method in manual_implementations:
             for backend in all_backends:
                 result = normalize_method_name(method, backend)
-                assert result == method, (
-                    f"Manual implementation {method} should work on {backend}"
+                
+                # NumPy prefers Julia for euler, heun, midpoint
+                if backend == "numpy" and method in ["euler", "heun", "midpoint"]:
+                    expected = method.capitalize()  # 'euler' → 'Euler'
+                else:
+                    expected = method
+                
+                assert result == expected, (
+                    f"Method {method} on {backend}: expected '{expected}', got '{result}'"
                 )
+                
+    def test_normalize_julia_preference_on_numpy(self):
+        """Test that lowercase methods prefer Julia on numpy backend."""
+        # Lowercase on numpy → Julia (capitalized)
+        assert normalize_method_name("euler", "numpy") == "Euler"
+        assert normalize_method_name("heun", "numpy") == "Heun"
+        assert normalize_method_name("midpoint", "numpy") == "Midpoint"
+        
+        # Lowercase on torch/jax → manual (lowercase)
+        assert normalize_method_name("euler", "torch") == "euler"
+        assert normalize_method_name("heun", "torch") == "heun"
+        assert normalize_method_name("midpoint", "jax") == "midpoint"
+        
+        # Explicit manual request → lowercase on all backends
+        assert normalize_method_name("manual_euler", "numpy") == "euler"
+        assert normalize_method_name("manual_heun", "numpy") == "heun"
+        assert normalize_method_name("manual_midpoint", "numpy") == "midpoint"
+        
+        # Capitalized on numpy → stays capitalized
+        assert normalize_method_name("Euler", "numpy") == "Euler"
+        assert normalize_method_name("Heun", "numpy") == "Heun"
+        assert normalize_method_name("Midpoint", "numpy") == "Midpoint"
+        
+        # RK4 has no Julia version → stays lowercase
+        assert normalize_method_name("rk4", "numpy") == "rk4"
+    
+    def test_normalize_manual_prefix_aliases(self):
+        """Test that manual_* prefixes force manual implementations."""
+        # These should always use lowercase (manual) even on numpy
+        assert normalize_method_name("manual_euler", "numpy") == "euler"
+        assert normalize_method_name("manual_heun", "numpy") == "heun"
+        assert normalize_method_name("manual_midpoint", "numpy") == "midpoint"
+        
+        assert normalize_method_name("manual_euler", "torch") == "euler"
+        assert normalize_method_name("manual_heun", "jax") == "heun"
     
     def test_normalize_case_insensitive(self):
         """Test case-insensitive normalization."""
