@@ -215,8 +215,15 @@ class TestMethodBackendCompatibility:
             )
 
     def test_universal_methods_work_with_any_backend(self, mock_system):
-        """Test that universal methods work with any backend."""
-        universal_methods = ["euler", "heun", "midpoint", "rk4"]
+        """Test that universal methods work with any backend.
+
+        Only euler and midpoint are truly universal:
+        - euler: Available on numpy (manual/Julia), torch (TorchDiffEq), jax (Diffrax)
+        - midpoint: Available on numpy (manual/Julia), torch (TorchDiffEq), jax (Diffrax)
+        - rk4: Only on numpy (manual) and torch (TorchDiffEq), NOT on jax
+        - heun: Only on numpy (manual/Julia) and jax (Diffrax), NOT on torch
+        """
+        universal_methods = ["euler", "midpoint"]
 
         for method in universal_methods:
             for backend in ["numpy", "torch", "jax"]:
@@ -876,7 +883,7 @@ class TestFactoryJuliaPreference:
 
     def test_torch_jax_always_use_manual(self, mock_system):
         """Test that torch/jax backends always use manual implementations."""
-        methods = ["euler", "heun", "midpoint"]
+        methods = ["euler", "midpoint"]
 
         for backend in ["torch", "jax"]:
             try:
@@ -942,6 +949,28 @@ class TestFactoryJuliaPreference:
             )
 
             assert isinstance(integrator, ExplicitEulerIntegrator)
+
+    def test_heun_only_available_on_numpy(self, mock_system):
+        """Test that heun is only available on numpy backend.
+
+        TorchDiffEq and Diffrax don't have Heun implementations.
+        """
+        # Should work on numpy
+        integrator = IntegratorFactory.create(
+            mock_system, backend="numpy", method="heun", dt=0.01, step_mode=StepMode.FIXED
+        )
+        assert integrator is not None
+
+        # Should fail on torch
+        try:
+            import torch
+
+            with pytest.raises(ValueError, match="Unknown method"):
+                IntegratorFactory.create(
+                    mock_system, backend="torch", method="heun", dt=0.01, step_mode=StepMode.FIXED
+                )
+        except ImportError:
+            pytest.skip("PyTorch not installed")
 
 
 # ============================================================================
