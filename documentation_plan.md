@@ -14,632 +14,10 @@
 
 ## Phase 1: Setup and Infrastructure (Days 1-2)
 
-### Day 1: Environment Setup
-
-#### 1.1 Install Quarto
-```bash
-# Download latest Quarto for Linux
-wget https://github.com/quarto-dev/quarto-cli/releases/download/v1.4.554/quarto-1.4.554-linux-amd64.deb
-sudo dpkg -i quarto-1.4.554-linux-amd64.deb
-quarto --version
-```
-
-#### 1.2 Create Documentation Structure
-```bash
-cd ~/projects/ControlDESymulation
-
-# Create new structure
-mkdir -p docs_quarto/{architecture,tutorials,examples,api}
-mkdir -p docs_quarto/_extensions
-mkdir -p docs_quarto/assets/{css,images}
-```
-
-#### 1.3 Initial Configuration Files
-
-**Create `docs_quarto/_quarto.yml`:**
-```yaml
-project:
-  type: website
-  output-dir: _site
-
-website:
-  title: "ControlDESymulation"
-  description: "Symbolic Dynamical Systems Framework"
-  site-url: https://gilbenezer.github.io/ControlDESymulation
-  repo-url: https://github.com/gilbenezer/ControlDESymulation
-  repo-actions: [edit, issue]
-  
-  navbar:
-    background: primary
-    left:
-      - text: "Home"
-        file: index.qmd
-      - text: "Architecture"
-        menu:
-          - architecture/UI_Framework_Architecture.qmd
-          - architecture/Type_System_Architecture.qmd
-          - architecture/Integration_Framework_Architecture.qmd
-          - architecture/Control_Framework_Architecture.qmd
-          - architecture/Visualization_Framework_Architecture.qmd
-          - architecture/Delegation_Layer_Architecture.qmd
-          - architecture/Example_Systems_Architecture.qmd
-      - text: "Tutorials"
-        menu:
-          - tutorials/UI_Framework_Quick_Reference.qmd
-          - tutorials/Type_System_Quick_Reference.qmd
-          - tutorials/Integration_Framework_Quick_Reference.qmd
-          - tutorials/Control_Framework_Quick_Reference.qmd
-          - tutorials/Visualization_Framework_Quick_Reference.qmd
-          - tutorials/Delegation_Layer_Quick_Reference.qmd
-          - tutorials/Example_Systems_Quick_Reference.qmd
-      - text: "Examples"
-        menu:
-          - examples/pendulum_control.qmd
-          - examples/cartpole_swingup.qmd
-          - examples/quadrotor_lqr.qmd
-          - examples/cstr_multiplicity.qmd
-          - examples/lorenz_chaos.qmd
-      - text: "API Reference"
-        file: api/index.qmd
-    
-    right:
-      - icon: github
-        href: https://github.com/gilbenezer/ControlDESymulation
-
-  sidebar:
-    - title: "Architecture"
-      style: "docked"
-      background: light
-      contents:
-        - section: "Framework Design"
-          contents:
-            - architecture/UI_Framework_Architecture.qmd
-            - architecture/Type_System_Architecture.qmd
-            - architecture/Integration_Framework_Architecture.qmd
-            - architecture/Control_Framework_Architecture.qmd
-            - architecture/Visualization_Framework_Architecture.qmd
-            - architecture/Delegation_Layer_Architecture.qmd
-            - architecture/Example_Systems_Architecture.qmd
-    
-    - title: "Tutorials"
-      contents:
-        - section: "Quick Start Guides"
-          contents:
-            - tutorials/UI_Framework_Quick_Reference.qmd
-            - tutorials/Type_System_Quick_Reference.qmd
-            - tutorials/Integration_Framework_Quick_Reference.qmd
-            - tutorials/Control_Framework_Quick_Reference.qmd
-            - tutorials/Visualization_Framework_Quick_Reference.qmd
-            - tutorials/Delegation_Layer_Quick_Reference.qmd
-            - tutorials/Example_Systems_Quick_Reference.qmd
-    
-    - title: "Examples"
-      contents:
-        - section: "Mechanical Systems"
-          contents:
-            - examples/pendulum_control.qmd
-            - examples/cartpole_swingup.qmd
-        - section: "Aerospace"
-          contents:
-            - examples/quadrotor_lqr.qmd
-        - section: "Chemical"
-          contents:
-            - examples/cstr_multiplicity.qmd
-        - section: "Chaos & Dynamics"
-          contents:
-            - examples/lorenz_chaos.qmd
-
-format:
-  html:
-    theme: 
-      light: [cosmo, assets/css/custom.css]
-      dark: [cosmo, assets/css/custom-dark.css]
-    css: assets/css/styles.css
-    toc: true
-    toc-depth: 3
-    code-copy: true
-    code-fold: show
-    code-tools: true
-    code-link: true
-    
-execute:
-  freeze: auto  # Cache results unless source changes
-  cache: true   # Enable caching for expensive computations
-  eval: true    # ← EXECUTE BY DEFAULT
-  
-bibliography: references.bib
-csl: ieee.csl
-```
-
-**Create `docs_quarto/assets/css/custom.css`:**
-```css
-/* Custom styling for ControlDESymulation docs */
-
-/* Code blocks */
-pre.sourceCode {
-  border-left: 3px solid #0173B2;
-  padding-left: 1em;
-}
-
-/* Callout boxes */
-.callout-warning {
-  border-left-color: #DE8F05;
-}
-
-.callout-tip {
-  border-left-color: #029E73;
-}
-
-/* Tables */
-table {
-  font-size: 0.9em;
-}
-
-/* Figure captions */
-.figure-caption {
-  font-style: italic;
-  font-size: 0.9em;
-  color: #555;
-}
-
-/* Reduce whitespace for compact display */
-.cell-output-display {
-  margin-top: 0.5em;
-  margin-bottom: 0.5em;
-}
-```
-
-#### 1.4 Create Index Page
-
-**Create `docs_quarto/index.qmd`:**
-````markdown
----
-title: "ControlDESymulation"
-subtitle: "Symbolic Dynamical Systems Framework for Control Theory"
-execute:
-  eval: true
----
-
-## Overview
-
-ControlDESymulation is a comprehensive Python framework for symbolic modeling, 
-simulation, and control of dynamical systems.
-
-### Key Features
-
-- **Symbolic Framework**: Define systems using SymPy, get automatic Jacobians
-- **Multi-Backend**: Seamless NumPy/PyTorch/JAX support with GPU acceleration  
-- **Type-Safe**: Comprehensive TypedDict-based type system
-- **Extensive Library**: 25+ example systems from mechanical, aerospace, chemical domains
-- **Professional Tools**: LQR, Kalman, LQG, stability analysis, visualization
-
-### Quick Example
-
-```{python}
-#| code-fold: false
-
-from cdesym.systems.examples.pendulum import SymbolicPendulum
-import numpy as np
-
-# Create pendulum
-system = SymbolicPendulum(m=1.0, l=0.5, beta=0.1)
-
-# Linearize at inverted equilibrium
-x_eq, u_eq = system.get_equilibrium('inverted')
-A, B = system.linearize(x_eq, u_eq)
-
-print(f"System: {system.nx} states, {system.nu} controls")
-print(f"Open-loop eigenvalues: {np.linalg.eigvals(A)}")
-print(f"Equilibrium is: {'stable' if np.all(np.real(np.linalg.eigvals(A)) < 0) else 'unstable'}")
-```
-
-### Documentation Structure
-
-- **[Architecture Guides](architecture/index.qmd)**: Deep dives into framework design with working examples
-- **[Quick References](tutorials/index.qmd)**: Practical how-to guides with executable code
-- **[Examples Gallery](examples/index.qmd)**: Complete interactive demonstrations
-
-### Installation
-
-```bash
-pip install git+https://github.com/gilbenezer/ControlDESymulation.git
-```
-
-Or for development:
-```bash
-git clone https://github.com/gilbenezer/ControlDESymulation.git
-cd ControlDESymulation
-pip install -e .
-```
-````
-
-### Day 2: Conversion Scripts
-
-#### 2.1 Create Automated Conversion Script
-
-**Create `scripts/convert_to_quarto.py`:**
-```python
-#!/usr/bin/env python3
-"""
-Convert Markdown documentation to EXECUTABLE Quarto format.
-
-All code blocks are marked as executable by default, with strategic
-use of output control to keep architecture docs readable.
-"""
-
-import re
-from pathlib import Path
-from typing import Dict, List
-
-
-def determine_doc_type(filepath: Path) -> str:
-    """Determine if doc is architecture or tutorial."""
-    if "Architecture" in filepath.stem:
-        return "architecture"
-    elif "Quick_Reference" in filepath.stem:
-        return "tutorial"
-    else:
-        return "general"
-
-
-def create_yaml_header(filepath: Path, doc_type: str) -> str:
-    """Generate appropriate YAML front matter."""
-    
-    title = filepath.stem.replace('_', ' ')
-    
-    if doc_type == "architecture":
-        # Architecture docs are EXECUTABLE but output is controlled
-        return f"""---
-title: "{title}"
-subtitle: "Architecture Guide"
-format:
-  html:
-    toc: true
-    toc-depth: 3
-    code-fold: show
-    code-tools: true
-execute:
-  eval: true      # Execute all code blocks
-  cache: true     # Cache results
-  warning: false  # Suppress warnings
----
-
-"""
-    elif doc_type == "tutorial":
-        return f"""---
-title: "{title}"
-subtitle: "Quick Reference Guide"
-format:
-  html:
-    toc: true
-    toc-depth: 3
-    code-fold: false
-    code-tools: true
-execute:
-  eval: true      # Execute by default
-  cache: true
-  warning: false
----
-
-"""
-    else:
-        return f"""---
-title: "{title}"
-format:
-  html:
-    toc: true
-execute:
-  eval: true
----
-
-"""
-
-
-def convert_code_blocks(content: str, doc_type: str) -> str:
-    """
-    Convert ```python to ```{python} with appropriate options.
-    
-    Strategy for architecture docs:
-    - Small, demonstrative code: eval=true, output shown
-    - Long code listings: eval=true, output=false (validate but don't clutter)
-    - Syntax examples: eval=false (when showing invalid code patterns)
-    """
-    
-    def replace_code_block(match):
-        lang = match.group(1)
-        
-        # Non-Python blocks
-        if lang in ['bash', 'shell', 'sh', 'yaml', 'json', 'css']:
-            return f"```{{{lang}}}\n"
-        
-        # Python blocks - check context for hints
-        full_match = match.group(0)
-        preceding_context = content[max(0, match.start()-500):match.start()]
-        
-        # Heuristics for eval: false
-        eval_false_keywords = [
-            '# Bad:', '# Wrong:', '# Anti-pattern:', 
-            '# Example:', '# Pseudo-code:',
-            'ANTI-PATTERN', '# This is wrong'
-        ]
-        
-        # Check if example shows WRONG code
-        should_skip = any(keyword in preceding_context for keyword in eval_false_keywords)
-        
-        if should_skip:
-            return f"```{{python}}\n#| eval: false\n"
-        
-        # Default: Execute but control output for architecture docs
-        if doc_type == "architecture":
-            # Architecture: execute but hide verbose output
-            return f"```{{python}}\n#| output: false\n"
-        else:
-            # Tutorials/examples: show everything
-            return f"```{{python}}\n"
-    
-    # Replace ```language with ```{language}
-    content = re.sub(
-        r'```(python|bash|shell|sh|yaml|json|css)\n',
-        replace_code_block,
-        content
-    )
-    
-    return content
-
-
-def convert_warnings_notes(content: str) -> str:
-    """Convert **WARNING** and **NOTE** to Quarto callouts."""
-    
-    # Convert **WARNING**: ... to callout-warning
-    content = re.sub(
-        r'\*\*WARNING\*\*:?\s*(.+?)(?=\n\n|\n#{1,3}\s)',
-        r'::: {.callout-warning}\n## Warning\n\1\n:::',
-        content,
-        flags=re.DOTALL
-    )
-    
-    # Convert **NOTE**: ... to callout-note
-    content = re.sub(
-        r'\*\*NOTE\*\*:?\s*(.+?)(?=\n\n|\n#{1,3}\s)',
-        r'::: {.callout-note}\n## Note\n\1\n:::',
-        content,
-        flags=re.DOTALL
-    )
-    
-    # Convert **IMPORTANT**: ... to callout-important
-    content = re.sub(
-        r'\*\*IMPORTANT\*\*:?\s*(.+?)(?=\n\n|\n#{1,3}\s)',
-        r'::: {.callout-important}\n## Important\n\1\n:::',
-        content,
-        flags=re.DOTALL
-    )
-    
-    # Convert **TIP**: ... to callout-tip
-    content = re.sub(
-        r'\*\*TIP\*\*:?\s*(.+?)(?=\n\n|\n#{1,3}\s)',
-        r'::: {.callout-tip}\n## Tip\n\1\n:::',
-        content,
-        flags=re.DOTALL
-    )
-    
-    # Convert **CRITICAL**: ... to callout-caution
-    content = re.sub(
-        r'\*\*CRITICAL\*\*:?\s*(.+?)(?=\n\n|\n#{1,3}\s)',
-        r'::: {.callout-caution}\n## Critical\n\1\n:::',
-        content,
-        flags=re.DOTALL
-    )
-    
-    return content
-
-
-def add_section_labels(content: str) -> str:
-    """Add {#sec-name} labels to headers for cross-referencing."""
-    
-    def create_label(match):
-        level = len(match.group(1))
-        title = match.group(2)
-        label = title.lower().replace(' ', '-').replace('/', '-')
-        label = re.sub(r'[^a-z0-9-]', '', label)
-        return f"{match.group(0)} {{#sec-{label}}}"
-    
-    # Add labels to headers (only if not already present)
-    content = re.sub(
-        r'^(#{2,4})\s+(.+?)(?!\s*\{#)$',
-        create_label,
-        content,
-        flags=re.MULTILINE
-    )
-    
-    return content
-
-
-def add_executable_setup_blocks(content: str, doc_type: str) -> str:
-    """
-    Add setup code blocks at the start of architecture docs.
-    
-    This ensures all subsequent examples can execute.
-    """
-    
-    if doc_type != "architecture":
-        return content
-    
-    # Determine what imports are needed based on content
-    needs_imports = {
-        'numpy': 'import numpy as np' in content or 'np.array' in content,
-        'sympy': 'import sympy as sp' in content or 'sp.symbols' in content,
-        'typing': 'from typing import' in content or 'Optional[' in content,
-        'systems': 'ContinuousSymbolicSystem' in content or 'DiscreteSymbolicSystem' in content,
-    }
-    
-    # Build setup block
-    setup_imports = []
-    
-    if needs_imports['numpy']:
-        setup_imports.append('import numpy as np')
-    if needs_imports['sympy']:
-        setup_imports.append('import sympy as sp')
-    if needs_imports['typing']:
-        setup_imports.append('from typing import Optional, Tuple, Dict, List, Union')
-    if needs_imports['systems']:
-        setup_imports.append('from cdesym.systems.base import ContinuousSymbolicSystem')
-        setup_imports.append('from cdesym.systems.examples.pendulum import SymbolicPendulum')
-    
-    if not setup_imports:
-        return content
-    
-    # Create setup block
-    setup_block = f"""
-```{{python}}
-#| label: setup-imports
-#| output: false
-#| echo: false
-
-# Setup for all code examples in this document
-{chr(10).join(setup_imports)}
-```
-
-"""
-    
-    # Insert after first header
-    content = re.sub(
-        r'(^#\s+.+?\n)',
-        r'\1' + setup_block,
-        content,
-        count=1,
-        flags=re.MULTILINE
-    )
-    
-    return content
-
-
-def convert_file(md_file: Path, output_dir: Path) -> None:
-    """Convert single Markdown file to executable Quarto."""
-    
-    print(f"Converting: {md_file.name}")
-    
-    # Read content
-    content = md_file.read_text()
-    
-    # Determine document type
-    doc_type = determine_doc_type(md_file)
-    
-    # Generate YAML header
-    yaml_header = create_yaml_header(md_file, doc_type)
-    
-    # Apply transformations
-    content = convert_code_blocks(content, doc_type)
-    content = convert_warnings_notes(content)
-    content = add_section_labels(content)
-    content = add_executable_setup_blocks(content, doc_type)
-    
-    # Determine output location
-    if doc_type == "architecture":
-        out_path = output_dir / "architecture" / f"{md_file.stem}.qmd"
-    elif doc_type == "tutorial":
-        out_path = output_dir / "tutorials" / f"{md_file.stem}.qmd"
-    else:
-        out_path = output_dir / f"{md_file.stem}.qmd"
-    
-    # Ensure directory exists
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    
-    # Write converted file
-    out_path.write_text(yaml_header + content)
-    print(f"  → {out_path.relative_to(output_dir.parent)}")
-
-
-def main():
-    """Main conversion routine."""
-    
-    # Setup paths
-    project_root = Path(__file__).parent.parent
-    docs_dir = project_root / "docs"
-    output_dir = project_root / "docs_quarto"
-    
-    print("=" * 70)
-    print("ControlDESymulation Documentation Conversion")
-    print("Full Executable Mode")
-    print("=" * 70)
-    print(f"Source: {docs_dir}")
-    print(f"Output: {output_dir}")
-    print()
-    
-    # Find all .qmd files (after rename) or .md files
-    qmd_files = list(docs_dir.rglob("*.qmd"))
-    if not qmd_files:
-        print("No .qmd files found. Looking for .md files...")
-        qmd_files = list(docs_dir.rglob("*.md"))
-    
-    print(f"Found {len(qmd_files)} files to convert\n")
-    
-    # Convert each file
-    for qmd_file in sorted(qmd_files):
-        convert_file(qmd_file, output_dir)
-    
-    print()
-    print("=" * 70)
-    print("Conversion complete!")
-    print(f"Converted {len(qmd_files)} files")
-    print()
-    print("Next steps:")
-    print("  1. Review converted files in docs_quarto/")
-    print("  2. Run: python scripts/test_quarto_docs.py")
-    print("  3. Fix any failing code blocks")
-    print("  4. Run: quarto preview docs_quarto/")
-    print("=" * 70)
-
-
-if __name__ == "__main__":
-    main()
-```
-
-#### 1.5 Create Metadata Files
-
-**Create `docs_quarto/architecture/_metadata.yml`:**
-```yaml
-execute:
-  eval: true       # ← EXECUTE architecture code!
-  cache: true      # Cache for speed
-  warning: false
-  output: false    # Default: validate but don't show output (override per-block)
-  
-format:
-  html:
-    code-fold: show  # Show code, allow folding
-```
-
-**Create `docs_quarto/tutorials/_metadata.yml`:**
-```yaml
-execute:
-  eval: true       # Execute all tutorial code
-  cache: true
-  warning: false
-  output: true     # Show outputs by default
-  
-format:
-  html:
-    code-fold: false  # Always show code in tutorials
-```
-
-**Create `docs_quarto/examples/_metadata.yml`:**
-```yaml
-execute:
-  eval: true       # Execute all examples
-  cache: true
-  warning: false
-  output: true     # Show all outputs
-  
-format:
-  html:
-    code-fold: false
-    code-tools: true
-```
-
 #### 1.6 Test Initial Build
 
 ```bash
-cd docs_quarto
+cd docs
 quarto preview
 ```
 
@@ -698,7 +76,7 @@ self.parameters = {'m': 1.0}  # ✗ String key instead of Symbol
 
 ### Day 3: UI Framework Architecture
 
-**File**: `docs_quarto/architecture/UI_Framework_Architecture.qmd`
+**File**: `docs/architecture/UI_Framework_Architecture.qmd`
 
 **Key conversions:**
 
@@ -1347,7 +725,7 @@ Now that architecture is executable, examples can be even richer:
 
 ### Day 16: Advanced Pendulum Example
 
-**Create `docs_quarto/examples/pendulum_control.qmd`:**
+**Create `docs/examples/pendulum_control.qmd`:**
 
 ````markdown
 ---
@@ -1567,7 +945,7 @@ print(f"✓ All trials stabilized successfully")
 
 ### Day 20: Examples Index with Live Previews
 
-**Create `docs_quarto/examples/index.qmd`:**
+**Create `docs/examples/index.qmd`:**
 ````markdown
 ---
 title: "Examples Gallery"
@@ -1662,12 +1040,12 @@ on:
   push:
     branches: [main, master]
     paths:
-      - 'docs_quarto/**'
+      - 'docs/**'
       - 'src/**'  # Re-build if source changes!
       - '.github/workflows/quarto-publish.yml'
   pull_request:
     paths:
-      - 'docs_quarto/**'
+      - 'docs/**'
       - 'src/**'
   workflow_dispatch:
   schedule:
@@ -1713,14 +1091,14 @@ jobs:
       
       - name: Render Quarto documentation
         run: |
-          cd docs_quarto
+          cd docs
           quarto render --execute-daemon --execute-daemon-restart
         env:
           QUARTO_PYTHON: python
       
       - name: Check for rendering errors
         run: |
-          if grep -r "ERROR" docs_quarto/_site/; then
+          if grep -r "ERROR" docs/_site/; then
             echo "Found errors in rendered output"
             exit 1
           fi
@@ -1731,7 +1109,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: quarto-docs-preview
-          path: docs_quarto/_site
+          path: docs/_site
           retention-days: 7
       
       - name: Deploy to GitHub Pages
@@ -1739,7 +1117,7 @@ jobs:
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: docs_quarto/_site
+          publish_dir: docs/_site
           cname: controldesymulation.yoursite.com  # Optional
       
       - name: Create deployment summary
@@ -1749,8 +1127,8 @@ jobs:
           echo "Site: https://gilbenezer.github.io/ControlDESymulation/" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Build Statistics" >> $GITHUB_STEP_SUMMARY
-          echo "- Rendered pages: $(find docs_quarto/_site -name '*.html' | wc -l)" >> $GITHUB_STEP_SUMMARY
-          echo "- Total size: $(du -sh docs_quarto/_site | cut -f1)" >> $GITHUB_STEP_SUMMARY
+          echo "- Rendered pages: $(find docs/_site -name '*.html' | wc -l)" >> $GITHUB_STEP_SUMMARY
+          echo "- Total size: $(du -sh docs/_site | cut -f1)" >> $GITHUB_STEP_SUMMARY
 ```
 
 ### Day 22: Testing Infrastructure
@@ -1814,7 +1192,7 @@ def test_quarto_file(qmd_file: Path) -> tuple[bool, float, str]:
 def main():
     """Test all Quarto documentation files."""
     
-    docs_root = Path("docs_quarto")
+    docs_root = Path("docs")
     
     # Find all .qmd files
     qmd_files = list(docs_root.rglob("*.qmd"))
@@ -2211,7 +1589,7 @@ plot_monte_carlo_results(monte_carlo_results)
 ```
 ````
 
-**Create `docs_quarto/_freeze_config.yml`:**
+**Create `docs/_freeze_config.yml`:**
 ```yaml
 # Control freezing behavior
 freeze:
@@ -2293,7 +1671,7 @@ print(f"✓ Backend: {system.backend.default_backend}")
 **Run full test:**
 ```bash
 # Clean build (no cache)
-rm -rf docs_quarto/_freeze
+rm -rf docs/_freeze
 python scripts/test_quarto_docs.py
 
 # Cached build (should be faster)
@@ -2460,7 +1838,7 @@ def check_file_quality(qmd_file: Path):
     return issues
 
 # Run checks on all files
-docs_root = Path("docs_quarto")
+docs_root = Path("docs")
 all_issues = {}
 
 for qmd_file in docs_root.rglob("*.qmd"):
@@ -2491,10 +1869,10 @@ else:
 
 ```bash
 # 1. Clean build
-rm -rf docs_quarto/_freeze docs_quarto/_site
+rm -rf docs/_freeze docs/_site
 
 # 2. Full render
-cd docs_quarto
+cd docs
 quarto render
 
 # 3. Run tests
@@ -2505,15 +1883,15 @@ python scripts/test_quarto_docs.py
 python scripts/check_quarto_quality.py
 
 # 5. Check output size
-du -sh docs_quarto/_site
+du -sh docs/_site
 # Should be <100 MB ideally
 
 # 6. Manual review
-open docs_quarto/_site/index.html
+open docs/_site/index.html
 
 # 7. Check all links work
 # (Use link checker tool)
-wget --spider -r -nd -nv -l 2 docs_quarto/_site/index.html 2>&1 | grep -B2 '404'
+wget --spider -r -nd -nv -l 2 docs/_site/index.html 2>&1 | grep -B2 '404'
 ```
 
 ### Day 34: Launch
@@ -2533,7 +1911,7 @@ wget --spider -r -nd -nv -l 2 docs_quarto/_site/index.html 2>&1 | grep -B2 '404'
 **Deploy:**
 ```bash
 # Final commit
-git add docs_quarto/
+git add docs/
 git add .github/workflows/
 git add scripts/
 git commit -m "docs: Complete executable Quarto conversion
@@ -2558,7 +1936,7 @@ git push origin main
 
 ### Architecture: Full Execution
 
-**`docs_quarto/architecture/_metadata.yml`:**
+**`docs/architecture/_metadata.yml`:**
 ```yaml
 execute:
   eval: true       # Execute ALL code
@@ -2577,7 +1955,7 @@ format:
 
 ### Tutorials: Full Execution with Output
 
-**`docs_quarto/tutorials/_metadata.yml`:**
+**`docs/tutorials/_metadata.yml`:**
 ```yaml
 execute:
   eval: true        # Execute all
@@ -2595,7 +1973,7 @@ format:
 
 ### Examples: Full Execution, Rich Output
 
-**`docs_quarto/examples/_metadata.yml`:**
+**`docs/examples/_metadata.yml`:**
 ```yaml
 execute:
   eval: true         # Execute all
@@ -2680,8 +2058,8 @@ quarto render --execute-daemon
 - name: Cache Quarto freeze
   uses: actions/cache@v3
   with:
-    path: docs_quarto/_freeze
-    key: quarto-freeze-${{ hashFiles('docs_quarto/**/*.qmd') }}
+    path: docs/_freeze
+    key: quarto-freeze-${{ hashFiles('docs/**/*.qmd') }}
 ```
 
 **For Debugging:**
@@ -2755,9 +2133,9 @@ except Exception as e:
 - uses: actions/cache@v3
   with:
     path: |
-      docs_quarto/_freeze
+      docs/_freeze
       ~/.cache/pip
-    key: docs-${{ hashFiles('docs_quarto/**', 'src/**') }}
+    key: docs-${{ hashFiles('docs/**', 'src/**') }}
 
 # Parallel rendering
 quarto render --execute-daemon
@@ -2807,8 +2185,8 @@ on:
 **Manual refresh:**
 ```bash
 # When suspicious of stale cache
-rm -rf docs_quarto/_freeze
-quarto render docs_quarto/
+rm -rf docs/_freeze
+quarto render docs/
 ```
 
 ---
