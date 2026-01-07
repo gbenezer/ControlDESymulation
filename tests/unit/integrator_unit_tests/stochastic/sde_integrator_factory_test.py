@@ -482,19 +482,25 @@ class TestFactoryBasics:
 class TestMethodRouting:
     """Test that methods are routed to correct backends."""
 
-    def test_julia_method_requires_numpy(self, controlled_sde_system):
-        """Test Julia methods require NumPy backend."""
-        with pytest.raises(ValueError, match="requires backend 'numpy'"):
+    def test_julia_method_not_available_on_jax(self, controlled_sde_system):
+        """Test Julia-only methods are not available on JAX backend."""
+        with pytest.raises(ValueError, match="not available"):
             SDEIntegratorFactory.create(controlled_sde_system, backend="jax", method="SRIW1")
 
-    def test_torchsde_method_requires_torch(self, controlled_sde_system):
-        """Test TorchSDE methods require torch backend."""
-        with pytest.raises(ValueError, match="requires backend 'torch'"):
-            SDEIntegratorFactory.create(controlled_sde_system, backend="numpy", method="euler")
+    def test_torchsde_method_not_available_on_numpy(self, controlled_sde_system):
+        """Test TorchSDE-specific methods fail on NumPy backend."""
+        # 'euler' is ambiguous - it exists on numpy as manual implementation
+        # Use a TorchSDE-specific method instead
+        with pytest.raises(ValueError, match="not available"):
+            SDEIntegratorFactory.create(
+                controlled_sde_system, 
+                backend="numpy", 
+                method="srk"  # TorchSDE-only method
+            )
 
-    def test_diffrax_method_requires_jax(self, controlled_sde_system):
-        """Test Diffrax methods require JAX backend."""
-        with pytest.raises(ValueError, match="requires backend 'jax'"):
+    def test_diffrax_method_not_available_on_numpy(self, controlled_sde_system):
+        """Test Diffrax-only methods are not available on NumPy."""
+        with pytest.raises(ValueError, match="not available"):
             SDEIntegratorFactory.create(controlled_sde_system, backend="numpy", method="SEA")
 
     def test_correct_backend_method_combination(self, controlled_sde_system):
@@ -536,6 +542,37 @@ class TestMethodRouting:
                 method="Euler",
             )
             assert isinstance(integrator, SDEIntegratorBase)
+    
+    def test_canonical_names_normalize_correctly(self, controlled_sde_system):
+        """Test that canonical SDE names normalize to backend-specific names."""
+        mock_integrator = MockSDEIntegrator(controlled_sde_system)
+        
+        # euler_maruyama should normalize to backend-specific names
+        # NumPy: euler_maruyama → EM
+        with patch(
+            "cdesym.systems.base.numerical_integration.stochastic.diffeqpy_sde_integrator.DiffEqPySDEIntegrator",
+            return_value=mock_integrator,
+        ) as mock_class:
+            integrator = SDEIntegratorFactory.create(
+                controlled_sde_system,
+                backend="numpy",
+                method="euler_maruyama",
+            )
+            call_kwargs = mock_class.call_args[1]
+            assert call_kwargs["algorithm"] == "EM"
+        
+        # Torch: euler_maruyama → euler
+        with patch(
+            "cdesym.systems.base.numerical_integration.stochastic.torchsde_integrator.TorchSDEIntegrator",
+            return_value=mock_integrator,
+        ) as mock_class:
+            integrator = SDEIntegratorFactory.create(
+                controlled_sde_system,
+                backend="torch",
+                method="euler_maruyama",
+            )
+            call_kwargs = mock_class.call_args[1]
+            assert call_kwargs["method"] == "euler"
 
 
 # ============================================================================
@@ -687,34 +724,51 @@ class TestListMethods:
     """Test method listing functionality."""
 
     def test_list_all_methods(self):
-        """Test listing all available methods."""
+        """Test listing all available SDE methods."""
         methods = SDEIntegratorFactory.list_methods()
 
-        assert "numpy" in methods
-        assert "torch" in methods
-        assert "jax" in methods
+        # Now returns categories, not backends as top-level keys
+        assert "sde_fixed_step" in methods
+        assert "sde_adaptive" in methods
+        assert "canonical_aliases" in methods
 
-        # Check Julia methods
-        assert "EM" in methods["numpy"]
-        assert "SRIW1" in methods["numpy"]
-
-        # Check TorchSDE methods
-        assert "euler" in methods["torch"]
-        assert "milstein" in methods["torch"]
-
-        # Check Diffrax methods
-        assert "Euler" in methods["jax"]
-        assert "SEA" in methods["jax"]
+        # Check Julia methods are in fixed_step
+        assert "EM" in methods["sde_fixed_step"]
+        assert "SRIW1" in methods["sde_fixed_step"]
+        
+        # Check adaptive methods
+        assert "AutoEM" in methods["sde_adaptive"]
+        assert "LambaEM" in methods["sde_adaptive"]
 
     def test_list_backend_specific_methods(self):
         """Test listing methods for specific backend."""
         numpy_methods = SDEIntegratorFactory.list_methods(backend="numpy")
 
-        assert "numpy" in numpy_methods
-        assert "torch" not in numpy_methods
-        assert "jax" not in numpy_methods
-
-        assert "EM" in numpy_methods["numpy"]
+        # Returns categories for that backend
+        assert "sde_fixed_step" in numpy_methods
+        assert "sde_adaptive" in numpy_methods
+        
+        # Check expected Julia methods
+        assert "EM" in numpy_methods["sde_fixed_step"]
+        assert "SRIW1" in numpy_methods["sde_fixed_step"]
+    
+    def test_list_torch_methods(self):
+        """Test listing TorchSDE methods."""
+        torch_methods = SDEIntegratorFactory.list_methods(backend="torch")
+        
+        # Check TorchSDE methods
+        assert "euler" in torch_methods["sde_fixed_step"]
+        assert "milstein" in torch_methods["sde_fixed_step"]
+        assert "srk" in torch_methods["sde_fixed_step"]
+    
+    def test_list_jax_methods(self):
+        """Test listing Diffrax methods."""
+        jax_methods = SDEIntegratorFactory.list_methods(backend="jax")
+        
+        # Check Diffrax methods
+        assert "Euler" in jax_methods["sde_fixed_step"]
+        assert "SEA" in jax_methods["sde_fixed_step"]
+        assert "SHARK" in jax_methods["sde_fixed_step"]
 
 
 # ============================================================================
