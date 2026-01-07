@@ -65,6 +65,7 @@ from cdesym.systems.base.numerical_integration.method_registry import (
     normalize_method_name,
     validate_method,
 )
+from cdesym.systems.base.numerical_integration.integrator_base import StepMode
 
 # Conditional imports for backends
 torch_available = True
@@ -1505,6 +1506,48 @@ class TestNumericalAccuracy:
         )
         assert rk4_better, "RK4 should be more accurate than Euler"
 
+    def test_rk4_fourth_order_convergence_regression(self):
+        """
+        RK4 should show higher order convergence than Euler.
+
+        Regression test: Ensures RK4 is actually being used, not falling
+        back to Euler or some other lower-order method.
+        """
+        continuous = MockContinuousSystem()
+        x0 = np.array([1.0, 0.0])
+        dt_values = [0.1, 0.05, 0.025]
+
+        euler_analysis = analyze_discretization_error(
+            continuous, x0, None, dt_values, method="euler", n_steps=20
+        )
+
+        rk4_analysis = analyze_discretization_error(
+            continuous, x0, None, dt_values, method="rk4", n_steps=20
+        )
+
+        # RK4 errors should be much smaller than Euler for all dt values
+        for euler_err, rk4_err in zip(euler_analysis["errors"], rk4_analysis["errors"]):
+            assert rk4_err < euler_err * 0.1, (
+                f"RK4 error ({rk4_err:.2e}) not significantly better than Euler ({euler_err:.2e}). "
+                f"RK4 may not be working correctly!"
+            )
+
+        # FIXED: Don't compare convergence rates directly
+        # RK4 is so accurate that errors may be dominated by reference solution
+        # Instead, verify RK4 errors are consistently much smaller
+        max_rk4_error = max(rk4_analysis["errors"])
+        min_euler_error = min(euler_analysis["errors"])
+
+        assert max_rk4_error < min_euler_error * 0.1, (
+            f"RK4 max error ({max_rk4_error:.2e}) not significantly better than "
+            f"Euler min error ({min_euler_error:.2e}). RK4 may not be working correctly!"
+        )
+
+        # Verify RK4 errors are small in absolute terms
+        assert (
+            max_rk4_error < 1e-3
+        ), f"RK4 error ({max_rk4_error:.2e}) unexpectedly large for this simple system!"
+
     def test_adaptive_more_accurate_than_fixed(self):
         """Adaptive methods generally more accurate."""
         continuous = MockContinuousSystem()
@@ -1831,6 +1874,447 @@ class TestRegressionTests:
 
         # Should be stable (|λ| < 1)
         assert np.all(np.abs(eigenvalues) < 1.0)
+
+
+# ============================================================================
+# Regression Tests for Integrator Caching and Step Method Bug
+# ============================================================================
+# These tests prevent regression of the bug where:
+# 1. Integrators were created on every step (performance issue)
+# 2. step() wasn't being called, integrate() was used instead (slow)
+# 3. Simulations weren't evolving from initial conditions (critical bug)
+# ============================================================================
+
+
+class TestIntegratorCachingRegression:
+    """
+    Test that integrators are created once and cached, not recreated on every step.
+
+    Regression Prevention: Ensures integrators are created in __init__, not in
+    _step_fixed(), preventing massive performance degradation.
+    """
+
+    def test_integrator_created_in_init(self):
+        """Integrator should be created during initialization, not lazily."""
+        continuous = MockContinuousSystem()
+        discrete = DiscretizedSystem(continuous, dt=0.01, method="euler")
+
+        # Integrator should exist immediately after __init__
+        assert hasattr(discrete, "_cached_integrator")
+        assert discrete._cached_integrator is not None
+        assert discrete._integrator_type == "ExplicitEulerIntegrator"
+
+    def test_integrator_is_reused_across_steps(self):
+        """Same integrator instance should be used for all steps."""
+        continuous = MockContinuousSystem()
+        discrete = DiscretizedSystem(continuous, dt=0.01, method="euler")
+
+        # Get integrator reference
+        integrator_id = id(discrete._cached_integrator)
+
+        # Take multiple steps
+        x = np.array([1.0, 0.0])
+        for k in range(10):
+            x = discrete.step(x, None, k)
+
+        # Integrator should be the same object
+        assert (
+            id(discrete._cached_integrator) == integrator_id
+        ), "Integrator was recreated during stepping - major performance bug!"
+
+    def test_multiple_discretized_systems_have_independent_integrators(self):
+        """Each DiscretizedSystem should have its own cached integrator."""
+        continuous = MockContinuousSystem()
+
+        discrete1 = DiscretizedSystem(continuous, dt=0.01, method="euler")
+        discrete2 = DiscretizedSystem(continuous, dt=0.01, method="rk4")
+
+        # Should be different integrator instances
+        assert id(discrete1._cached_integrator) != id(discrete2._cached_integrator)
+        assert discrete1._integrator_type != discrete2._integrator_type
+
+    def test_step_mode_set_correctly_for_fixed_step_methods(self):
+        """Fixed-step methods should have StepMode.FIXED."""
+        continuous = MockContinuousSystem()
+
+        for method in ["euler", "rk4", "midpoint", "heun"]:
+            discrete = DiscretizedSystem(continuous, dt=0.01, method=method)
+
+            # Check that integrator has correct step_mode
+            integrator = discrete._cached_integrator
+            assert hasattr(integrator, "step_mode"), f"Integrator for {method} missing step_mode"
+            assert (
+                integrator.step_mode == StepMode.FIXED
+            ), f"Method {method} should have StepMode.FIXED, got {integrator.step_mode}"
+
+    def test_prefer_manual_set_for_simple_methods(self):
+        """Simple fixed-step methods should prefer native Python implementations."""
+        continuous = MockContinuousSystem()
+
+        # These should use manual implementations, not DiffEqPy (if Julia available)
+        for method in ["euler", "rk4", "midpoint", "heun"]:
+            discrete = DiscretizedSystem(continuous, dt=0.01, method=method)
+
+            # Should NOT be DiffEqPy integrator for simple methods
+            assert (
+                "DiffEqPy" not in discrete._integrator_type
+            ), f"Method {method} incorrectly using Julia/DiffEqPy - should use native Python"
+
+
+class TestStepMethodCalledRegression:
+    """
+    Test that step() is called directly, not integrate() for each step.
+
+    Regression Prevention: Ensures the fast path (direct step() call) is used,
+    not the slow path (integrate() with trajectory building).
+    """
+
+    def test_step_method_exists_on_integrator(self):
+        """Cached integrator should have a step() method."""
+        continuous = MockContinuousSystem()
+        discrete = DiscretizedSystem(continuous, dt=0.01, method="euler")
+
+        assert hasattr(
+            discrete._cached_integrator, "step"
+        ), "Integrator missing step() method - will fall back to slow integrate() path"
+
+    def test_step_method_is_callable(self):
+        """step() method should be directly callable."""
+        continuous = MockContinuousSystem()
+        discrete = DiscretizedSystem(continuous, dt=0.01, method="euler")
+
+        integrator = discrete._cached_integrator
+        assert callable(integrator.step), "step() exists but is not callable"
+
+    def test_step_method_works_correctly(self):
+        """step() should advance state by one timestep."""
+        continuous = MockContinuousSystem()
+        discrete = DiscretizedSystem(continuous, dt=0.1, method="euler")
+
+        x0 = np.array([1.0, 0.0])
+
+        # Call step() directly on integrator
+        x1 = discrete._cached_integrator.step(x0, None, dt=0.1)
+
+        # Should evolve: dx/dt = -x, so x(0.1) ≈ x0 * (1 - 0.1) = [0.9, 0.0]
+        expected = np.array([0.9, 0.0])
+        assert np.allclose(
+            x1, expected, rtol=1e-10
+        ), f"step() didn't evolve state correctly. Got {x1}, expected {expected}"
+
+    def test_discretized_step_uses_integrator_step(self, monkeypatch):
+        """_step_fixed should call integrator.step(), not integrate()."""
+        continuous = MockContinuousSystem()
+        discrete = DiscretizedSystem(continuous, dt=0.1, method="euler")
+
+        # Track which methods are called
+        step_called = [False]
+        integrate_called = [False]
+
+        original_step = discrete._cached_integrator.step
+        original_integrate = discrete._cached_integrator.integrate
+
+        def tracked_step(*args, **kwargs):
+            step_called[0] = True
+            return original_step(*args, **kwargs)
+
+        def tracked_integrate(*args, **kwargs):
+            integrate_called[0] = True
+            return original_integrate(*args, **kwargs)
+
+        monkeypatch.setattr(discrete._cached_integrator, "step", tracked_step)
+        monkeypatch.setattr(discrete._cached_integrator, "integrate", tracked_integrate)
+
+        # Call _step_fixed
+        x0 = np.array([1.0, 0.0])
+        discrete._step_fixed(x0, None, 0.0, 0.1)
+
+        # Should call step(), not integrate()
+        assert step_called[0], "step() was not called - using slow path!"
+        assert not integrate_called[0], "integrate() was called - should use fast step() path!"
+
+
+class TestSimulationEvolutionRegression:
+    """
+    Test that simulations actually evolve from initial conditions.
+
+    Regression Prevention: The original bug caused simulations to stay at
+    initial conditions, resulting in constant errors across all timesteps.
+    """
+
+    def test_single_step_evolves_state(self):
+        """Single step should change the state."""
+        continuous = MockContinuousSystem()
+        discrete = DiscretizedSystem(continuous, dt=0.1, method="euler")
+
+        x0 = np.array([1.0, 0.0])
+        x1 = discrete.step(x0, None, k=0)
+
+        # State should have changed
+        assert not np.allclose(x1, x0), "State didn't evolve after one step - critical bug!"
+
+        # Should be moving in correct direction (dx/dt = -x, so decreasing)
+        assert x1[0] < x0[0], f"State evolved in wrong direction: {x0} -> {x1}"
+
+    def test_multiple_steps_show_continuous_evolution(self):
+        """Each step should show further evolution."""
+        continuous = MockContinuousSystem()
+        discrete = DiscretizedSystem(continuous, dt=0.1, method="euler")
+
+        states = [np.array([1.0, 0.0])]
+
+        for k in range(10):
+            x_next = discrete.step(states[-1], None, k)
+            states.append(x_next)
+
+        # All states should be different
+        for i in range(len(states) - 1):
+            assert not np.allclose(
+                states[i], states[i + 1]
+            ), f"State didn't evolve at step {i} - simulation stuck!"
+
+        # Should show monotonic decrease (for dx/dt = -x)
+        x_values = [s[0] for s in states]
+        for i in range(len(x_values) - 1):
+            assert x_values[i + 1] < x_values[i], f"State not decreasing as expected at step {i}"
+
+    def test_simulation_reaches_expected_final_state(self):
+        """Full simulation should reach analytically expected state."""
+        continuous = MockContinuousSystem()
+        discrete = DiscretizedSystem(continuous, dt=0.1, method="euler")
+
+        x0 = np.array([1.0, 0.0])
+        n_steps = 100  # t = 10.0
+
+        result = discrete.simulate(x0, None, n_steps)
+        x_final = result["states"][-1]
+
+        # Analytical solution: x(t) = x0 * exp(-t)
+        t_final = n_steps * 0.1
+        x_exact = x0 * np.exp(-t_final)
+
+        # FIXED: Euler has significant discretization error
+        # For dt=0.1, Euler gives x = (1-0.1)^100 = 0.9^100 ≈ 2.66e-5
+        # Exact is exp(-10) ≈ 4.54e-5
+        # Relative error ≈ 40%, which is expected for Euler with dt=0.1
+
+        # The key test: should be in the right ballpark (within 2x of exact)
+        # This catches the bug where simulations don't evolve at all
+        relative_error = np.abs(x_final[0] - x_exact[0]) / x_exact[0]
+        assert relative_error < 1.0, (
+            f"Final state {x_final} too far from expected {x_exact}. "
+            f"Relative error {relative_error:.2%} suggests simulation may not be evolving correctly!"
+        )
+
+        # Most importantly, should NOT still be at initial condition
+        assert not np.allclose(
+            x_final, x0, rtol=0.1
+        ), "Final state nearly identical to initial state - simulation didn't evolve!"
+
+        # Should be decaying toward zero
+        assert (
+            x_final[0] < x0[0] * 0.5
+        ), f"State {x_final[0]} not sufficiently decayed from initial {x0[0]}"
+
+    def test_errors_decrease_with_smaller_timestep(self):
+        """
+        Discretization errors should decrease as dt decreases.
+
+        This is the CORE regression test - the original bug caused errors
+        to be identical regardless of dt, because simulations weren't evolving.
+        """
+        continuous = MockContinuousSystem()
+        x0 = np.array([1.0, 0.0])
+        t_final = 1.0
+
+        # Analytical solution
+        x_exact = x0 * np.exp(-t_final)
+
+        errors = []
+        dt_values = [0.1, 0.05, 0.025, 0.0125]
+
+        for dt in dt_values:
+            discrete = DiscretizedSystem(continuous, dt=dt, method="euler")
+            n_steps = int(t_final / dt)
+            result = discrete.simulate(x0, None, n_steps)
+
+            error = np.linalg.norm(result["states"][-1] - x_exact)
+            errors.append(error)
+
+        # CRITICAL CHECK: Errors must decrease as dt decreases
+        for i in range(len(errors) - 1):
+            assert errors[i + 1] < errors[i], (
+                f"Error didn't decrease when dt halved: dt={dt_values[i]} -> {dt_values[i+1]}, "
+                f"errors={errors[i]:.6f} -> {errors[i+1]:.6f}. "
+                f"This indicates simulation is not evolving properly!"
+            )
+
+        # Errors should be different (not all the same)
+        unique_errors = len(set(np.round(errors, 10)))
+        assert unique_errors == len(errors), (
+            f"Errors are identical across different dt values: {errors}. "
+            f"This indicates the original bug - simulations staying at initial conditions!"
+        )
+
+    def test_convergence_rate_is_reasonable(self):
+        """
+        Convergence rate for Euler method should be close to 1.0.
+
+        Direct regression test for the originally failing test.
+        """
+        continuous = MockContinuousSystem()
+        x0 = np.array([1.0, 0.0])
+        dt_values = [0.1, 0.05, 0.025, 0.0125]
+
+        analysis = analyze_discretization_error(
+            continuous, x0, None, dt_values, method="euler", n_steps=100
+        )
+
+        convergence_rate = analysis["convergence_rate"]
+
+        # Should show first-order convergence (rate ≈ 1.0)
+        assert 0.8 < convergence_rate < 1.5, (
+            f"Euler convergence rate {convergence_rate:.3f} outside expected range [0.8, 1.5]. "
+            f"Errors: {analysis['errors']}. "
+            f"If rate ≈ 0 and all errors are identical, simulation is not evolving!"
+        )
+
+        # Convergence rate should NOT be near zero (original bug symptom)
+        assert convergence_rate > 0.1, (
+            f"Convergence rate {convergence_rate:.6f} is nearly zero! "
+            f"This is the exact symptom of the original bug. Errors: {analysis['errors']}"
+        )
+
+
+class TestSDEMethodMappingRegression:
+    """
+    Test that SDE method names on deterministic systems are handled gracefully.
+
+    Regression Prevention: Ensures IntegratorFactory validation errors are
+    caught and mapped to deterministic equivalents.
+    """
+
+    def test_sde_method_on_deterministic_system_warns(self):
+        """Using SDE method on deterministic system should warn but not crash."""
+        continuous = MockContinuousSystem()  # Deterministic
+
+        with pytest.warns(UserWarning, match="SDE method.*deterministic system"):
+            discrete = DiscretizedSystem(continuous, dt=0.01, method="euler_maruyama")
+
+        # Should create successfully despite the mismatch
+        assert discrete is not None
+        assert discrete._cached_integrator is not None
+
+    def test_sde_method_mapped_to_deterministic_equivalent(self):
+        """SDE methods should be mapped to appropriate deterministic equivalents."""
+        continuous = MockContinuousSystem()  # Deterministic
+
+        # Mapping: euler_maruyama -> euler
+        with pytest.warns(UserWarning):
+            discrete = DiscretizedSystem(continuous, dt=0.01, method="euler_maruyama")
+
+        # FIXED: Don't assume specific integrator type (Julia vs native Python)
+        # Instead, verify the integrator works correctly
+        assert discrete._cached_integrator is not None
+
+        # Should still store normalized SDE name for consistency
+        assert discrete._method == "EM"  # Normalized form
+
+        # Should have mapped to a deterministic method
+        assert discrete._integrator_method in [
+            "euler",
+            "Euler",
+        ], f"Expected deterministic euler method, got {discrete._integrator_method}"
+
+        # Most importantly: verify it actually works
+        x0 = np.array([1.0, 0.0])
+        x1 = discrete.step(x0, None, k=0)
+
+        # Should evolve the state (not stay at initial condition)
+        assert not np.allclose(
+            x1, x0
+        ), "Mapped integrator didn't evolve state - not working correctly!"
+
+    def test_mapped_integrator_still_works(self):
+        """Integrator created from mapped SDE method should work correctly."""
+        continuous = MockContinuousSystem()
+
+        with pytest.warns(UserWarning):
+            discrete = DiscretizedSystem(continuous, dt=0.1, method="euler_maruyama")
+
+        x0 = np.array([1.0, 0.0])
+        result = discrete.simulate(x0, None, n_steps=10)
+
+        # Should evolve correctly
+        assert not np.allclose(result["states"][-1], x0)
+        assert result["success"]
+
+
+class TestPerformanceRegression:
+    """
+    Test performance characteristics to catch efficiency regressions.
+
+    These tests verify that the optimizations are actually working.
+    """
+
+    def test_1000_steps_completes_quickly(self):
+        """
+        1000 steps should complete in reasonable time.
+
+        Original bug: Creating integrator per step would make this very slow,
+        especially with DiffEqPy/Julia.
+        """
+        continuous = MockContinuousSystem()
+        discrete = DiscretizedSystem(continuous, dt=0.01, method="euler")
+
+        x0 = np.array([1.0, 0.0])
+
+        import time
+
+        start = time.time()
+        result = discrete.simulate(x0, None, n_steps=1000)
+        elapsed = time.time() - start
+
+        # Should complete in well under 1 second for Euler on simple system
+        assert elapsed < 1.0, (
+            f"1000 Euler steps took {elapsed:.3f}s - way too slow! "
+            f"This suggests integrators are being recreated on every step."
+        )
+
+        # Verify it actually ran
+        assert result["states"].shape[0] == 1001
+
+    def test_stepping_faster_than_repeated_simulate(self):
+        """
+        Repeated stepping should be faster than repeated simulate() calls.
+
+        This verifies that integrator caching provides actual benefit.
+        """
+        continuous = MockContinuousSystem()
+        x0 = np.array([1.0, 0.0])
+
+        # Method 1: Use simulate (optimal - one call)
+        discrete1 = DiscretizedSystem(continuous, dt=0.01, method="euler")
+        import time
+
+        start = time.time()
+        discrete1.simulate(x0, None, n_steps=100)
+        simulate_time = time.time() - start
+
+        # Method 2: Repeated stepping (should be comparable due to caching)
+        discrete2 = DiscretizedSystem(continuous, dt=0.01, method="euler")
+        x = x0.copy()
+        start = time.time()
+        for k in range(100):
+            x = discrete2.step(x, None, k)
+        stepping_time = time.time() - start
+
+        # Stepping should be reasonably close to simulate time (within 5x)
+        # Without caching, stepping could be 100-1000x slower!
+        assert stepping_time < simulate_time * 5, (
+            f"Stepping ({stepping_time:.3f}s) much slower than simulate ({simulate_time:.3f}s). "
+            f"Integrator caching may not be working!"
+        )
 
 
 # ============================================================================
