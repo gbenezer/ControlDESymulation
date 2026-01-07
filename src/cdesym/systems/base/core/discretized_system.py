@@ -48,6 +48,7 @@ from scipy.interpolate import interp1d
 
 from cdesym.systems.base.core.continuous_system_base import ContinuousSystemBase
 from cdesym.systems.base.core.discrete_system_base import DiscreteSystemBase
+from cdesym.systems.base.numerical_integration.integrator_base import StepMode
 from cdesym.systems.base.numerical_integration.integrator_factory import IntegratorFactory
 
 # Import method registry functions
@@ -107,7 +108,9 @@ class DiscretizedSystem(DiscreteSystemBase):
     @staticmethod
     def get_available_methods(
         backend: Backend = "numpy",
-        method_type: Literal["all", "deterministic", "stochastic", "fixed_step", "adaptive"] = "all",
+        method_type: Literal[
+            "all", "deterministic", "stochastic", "fixed_step", "adaptive"
+        ] = "all",
     ) -> Dict[str, List[str]]:
         """
         Get available integration methods for a backend.
@@ -204,9 +207,9 @@ class DiscretizedSystem(DiscreteSystemBase):
             **Note on method selection:**
             - For stochastic systems, prefer specifying `sde_method` explicitly
             - Canonical names ('euler_maruyama', 'milstein', 'rk45') are
-              automatically converted to backend-appropriate names
+            automatically converted to backend-appropriate names
             - Use `DiscretizedSystem.get_available_methods(backend)` to see
-              all methods for a specific backend
+            all methods for a specific backend
 
         mode : DiscretizationMode, optional
             Discretization mode. If None, auto-selected based on method:
@@ -237,6 +240,7 @@ class DiscretizedSystem(DiscreteSystemBase):
             - max_steps : int - Maximum integration steps
             - seed : int - Random seed (SDE methods only)
             - adjoint : bool - Use adjoint method (JAX/PyTorch only)
+            - prefer_manual : bool - Force native Python integrators over Julia
 
         Raises
         ------
@@ -282,6 +286,10 @@ class DiscretizedSystem(DiscreteSystemBase):
         **Backend Detection:**
         The backend is detected from `continuous_system._default_backend`.
         If not available, defaults to 'numpy'.
+
+        **Performance Note:**
+        Integrators are created once during initialization and cached for reuse.
+        This avoids expensive recreation overhead (especially for Julia/DiffEqPy).
         """
 
         # ========================================================================
@@ -316,6 +324,9 @@ class DiscretizedSystem(DiscreteSystemBase):
             backend = continuous_system._default_backend
         else:
             backend = "numpy"
+
+        # Store backend for later use
+        self._backend = backend
 
         # Normalize method names using method_registry
         method = normalize_method_name(method, backend)
@@ -510,6 +521,146 @@ class DiscretizedSystem(DiscreteSystemBase):
             "final_method": self._method,
         }
 
+        # ========================================================================
+        # Create and cache integrators
+        # ========================================================================
+        # CRITICAL ARCHITECTURAL FIX:
+        # Create integrators ONCE during initialization and cache them.
+        # This avoids expensive recreation overhead on every step, especially
+        # for Julia/DiffEqPy integrators which have significant startup cost.
+        #
+        # Different modes require different integrators:
+        # - FIXED_STEP: Uses step() method for repeated stepping
+        # - DENSE_OUTPUT/BATCH: Uses integrate() with dense output
+        # ========================================================================
+
+        self._cached_integrator = None
+        integrator_create_kwargs = self._integrator_kwargs.copy()
+
+        # Set prefer_manual for simple fixed-step methods
+        if "prefer_manual" not in integrator_create_kwargs:
+            if self._is_fixed_step and method.lower() in ["euler", "rk4", "midpoint", "heun"]:
+                integrator_create_kwargs["prefer_manual"] = True
+
+        # ========================================================================
+        # Create integrator based on system type and mode
+        # ========================================================================
+
+        if self._is_stochastic and is_sde_method(method) and self._has_sde_integrator:
+            # Stochastic system with SDE method
+            try:
+                from cdesym.systems.base.numerical_integration.stochastic.sde_integrator_factory import (
+                    SDEIntegratorFactory,
+                )
+
+                self._cached_integrator = SDEIntegratorFactory.create(
+                    sde_system=continuous_system,
+                    backend=backend,
+                    method=method,
+                    dt=dt,
+                    **integrator_create_kwargs,
+                )
+
+            except (ImportError, AttributeError, ValueError, TypeError) as e:
+                # SDE integrator creation failed - fall back to deterministic
+                import warnings
+
+                warnings.warn(
+                    f"Failed to create SDE integrator: {e}. "
+                    f"Falling back to deterministic integration (noise ignored).",
+                    UserWarning,
+                    stacklevel=2,
+                )
+
+                # Create deterministic fallback
+                self._cached_integrator = IntegratorFactory.create(
+                    system=continuous_system,
+                    backend=backend,
+                    method="rk4",
+                    dt=dt,
+                    step_mode=(
+                        StepMode.FIXED
+                        if self._mode == DiscretizationMode.FIXED_STEP
+                        else StepMode.ADAPTIVE
+                    ),
+                    **integrator_create_kwargs,
+                )
+
+        else:
+            # Deterministic system or stochastic with deterministic method
+            if self._mode == DiscretizationMode.FIXED_STEP:
+                step_mode = StepMode.FIXED
+            elif self._mode == DiscretizationMode.BATCH_INTERPOLATION:
+                step_mode = StepMode.ADAPTIVE
+            else:  # DENSE_OUTPUT
+                step_mode = StepMode.ADAPTIVE
+
+            try:
+                # Try to create integrator with the specified method
+                self._cached_integrator = IntegratorFactory.create(
+                    system=continuous_system,
+                    backend=backend,
+                    method=method,
+                    dt=dt,
+                    step_mode=step_mode,
+                    **integrator_create_kwargs,
+                )
+
+            except ValueError as e:
+                # ================================================================
+                # Handle case where SDE method name used on deterministic system
+                # ================================================================
+                # IntegratorFactory correctly rejects SDE methods on deterministic
+                # systems. Map to deterministic equivalent and warn.
+
+                if "SDE method" in str(e) and "deterministic system" in str(e):
+                    # Map SDE methods to deterministic equivalents
+                    sde_to_deterministic_map = {
+                        "EM": "euler",
+                        "euler": "euler",
+                        "milstein": "euler",
+                        "ItoMilstein": "euler",
+                        "StratonovichMilstein": "euler",
+                        "SRA": "midpoint",
+                        "SRA1": "midpoint",
+                        "ReversibleHeun": "heun",
+                    }
+
+                    integrator_method = sde_to_deterministic_map.get(method, "euler")
+
+                    import warnings
+
+                    warnings.warn(
+                        f"SDE method '{self._original_method}' used on deterministic system. "
+                        f"Using deterministic equivalent '{integrator_method}' for integration. "
+                        f"Note: discrete._method still stores '{method}' for consistency.",
+                        UserWarning,
+                        stacklevel=2,
+                    )
+
+                    # Create integrator with mapped method
+                    self._cached_integrator = IntegratorFactory.create(
+                        system=continuous_system,
+                        backend=backend,
+                        method=integrator_method,
+                        dt=dt,
+                        step_mode=step_mode,
+                        **integrator_create_kwargs,
+                    )
+
+                    # Store the actual method used by integrator for diagnostics
+                    self._integrator_method = integrator_method
+                else:
+                    # Some other ValueError - re-raise it
+                    raise
+
+        # Store integrator type for diagnostics
+        self._integrator_type = type(self._cached_integrator).__name__
+
+        # Store actual method used by integrator (may differ from _method)
+        if not hasattr(self, "_integrator_method"):
+            self._integrator_method = method
+
     def _detect_sde_method(self, system) -> str:
         """
         Detect best SDE integration method for stochastic system.
@@ -589,62 +740,40 @@ class DiscretizedSystem(DiscreteSystemBase):
         )
 
     def _step_fixed(self, x, u, t_start, t_end):
-        """Single fixed-step integration from t_start to t_end."""
-        # Check if we should use SDE integrator (using method_registry)
-        use_sde = (
-            self._is_stochastic and is_sde_method(self._method) and self._has_sde_integrator
-        )
+        """
+        Single fixed-step integration from t_start to t_end.
 
-        if use_sde:
-            # Use SDE integrator for stochastic systems
-            try:
-                from cdesym.systems.base.numerical_integration.stochastic.sde_integrator_factory import (
-                    SDEIntegratorFactory,
-                )
+        Uses cached integrator created in __init__ for efficiency.
+        """
+        dt = t_end - t_start
 
-                integrator = SDEIntegratorFactory.create(
-                    sde_system=self._continuous_system,
-                    backend=self._continuous_system._default_backend,
-                    method=self._method,
-                    dt=self._dt,
-                    **self._integrator_kwargs,
-                )
-            except (ImportError, AttributeError, ValueError) as e:
-                # SDE integrator creation failed - fall back to deterministic
-                import warnings
+        try:
+            # Use cached integrator's step() method
+            x_next = self._cached_integrator.step(x, u, dt=dt)
+            return np.asarray(x_next)
 
-                warnings.warn(
-                    f"Failed to create SDE integrator: {e}. "
-                    f"Falling back to deterministic integration (noise ignored).",
-                    UserWarning,
-                    stacklevel=2,
-                )
-                integrator = IntegratorFactory.create(
-                    system=self._continuous_system,
-                    backend=self._continuous_system._default_backend,
-                    method="rk4",
-                    dt=self._dt,
-                    **self._integrator_kwargs,
-                )
-        else:
-            # Use regular integrator for deterministic systems or deterministic methods
-            integrator = IntegratorFactory.create(
-                system=self._continuous_system,
-                backend=self._continuous_system._default_backend,
-                method=self._method,
-                dt=self._dt,
-                **self._integrator_kwargs,
+        except (AttributeError, NotImplementedError) as e:
+            # Integrator doesn't have step() method - use integrate() as fallback
+            # This can happen with some adaptive integrators
+            result = self._cached_integrator.integrate(
+                x0=x, u_func=lambda t, xv: u, t_span=(t_start, t_end)
             )
 
-        result = integrator.integrate(x0=x, u_func=lambda t, xv: u, t_span=(t_start, t_end))
-        return result["x"][-1, :] if "x" in result else result["y"][:, -1]
+            # Extract final state
+            if "x" in result:
+                return result["x"][-1, :] if result["x"].ndim > 1 else result["x"]
+            elif "y" in result:
+                return result["y"][:, -1] if result["y"].ndim > 1 else result["y"]
+            else:
+                raise RuntimeError(
+                    f"Integrator {self._integrator_type} returned unexpected result format. "
+                    f"Keys: {list(result.keys())}"
+                )
 
     def _step_dense(self, x, u, t_start, t_end):
         """Single step using dense output (adaptive methods)."""
         # Check if we should use SDE integrator (using method_registry)
-        use_sde = (
-            self._is_stochastic and is_sde_method(self._method) and self._has_sde_integrator
-        )
+        use_sde = self._is_stochastic and is_sde_method(self._method) and self._has_sde_integrator
 
         if use_sde:
             # Use SDE integrator (dense output not typically supported for SDEs)
