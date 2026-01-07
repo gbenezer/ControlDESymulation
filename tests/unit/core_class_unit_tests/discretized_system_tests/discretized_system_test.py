@@ -160,7 +160,6 @@ class MockContinuousSystem(ContinuousSystemBase):
         return (A, B)
 
 
-
 class MockStochasticSystem(MockContinuousSystem):
     """Mock stochastic continuous system."""
 
@@ -173,6 +172,7 @@ class MockStochasticSystem(MockContinuousSystem):
 
     def is_diagonal_noise(self):
         return True
+
 
 # ============================================================================
 # Test Suite: Method Registry Integration
@@ -247,32 +247,31 @@ class TestMethodRegistryIntegration:
         """Method registry functions are imported from method_registry module."""
         # These should be the actual registry functions, not DiscretizedSystem methods
         from cdesym.systems.base.numerical_integration import method_registry
-        
+
         # Verify they're imported in discretized_system module
         import cdesym.systems.base.core.discretized_system as ds_module
-        
+
         # Check that the module uses the registry functions
         # (not that they're methods on DiscretizedSystem)
-        assert hasattr(method_registry, 'is_sde_method')
-        assert hasattr(method_registry, 'is_fixed_step')
-        assert hasattr(method_registry, 'normalize_method_name')
+        assert hasattr(method_registry, "is_sde_method")
+        assert hasattr(method_registry, "is_fixed_step")
+        assert hasattr(method_registry, "normalize_method_name")
 
     def test_normalization_idempotent(self):
         """Method normalization is idempotent."""
         continuous = MockContinuousSystem()
         continuous._default_backend = "numpy"
-        
+
         # First normalization
         discrete1 = DiscretizedSystem(continuous, dt=0.01, method="euler_maruyama")
         normalized_once = discrete1._method
-        
+
         # Already normalized - should stay the same
         discrete2 = DiscretizedSystem(continuous, dt=0.01, method=normalized_once)
         normalized_twice = discrete2._method
-        
+
         assert normalized_once == normalized_twice
         assert normalized_once == "EM"
-
 
 
 # ============================================================================
@@ -1031,6 +1030,7 @@ class TestUtilityMethods:
         # Verify it's using registry function
         assert info["stochastic_info"]["noise_ignored"] == (not is_sde_method("rk4"))
 
+
 # ============================================================================
 # Test Suite: Helper Functions
 # ============================================================================
@@ -1194,7 +1194,9 @@ class TestStochasticDiscretization:
             # Should have warning about SDE not available
             assert len(w) > 0
             warning_text = str(w[0].message)
-            assert "noise will be IGNORED" in warning_text or "deterministic" in warning_text.lower()
+            assert (
+                "noise will be IGNORED" in warning_text or "deterministic" in warning_text.lower()
+            )
 
         assert discrete._method == "rk4"
         assert discrete._method_source == "deterministic_fallback"
@@ -1456,14 +1458,15 @@ class TestNumericalAccuracy:
         continuous = MockContinuousSystem()
         x0 = np.array([1.0, 0.0])
 
-        dt_values = [0.1, 0.05, 0.025]
+        # Use smaller dt values and more steps for better convergence analysis
+        dt_values = [0.1, 0.05, 0.025, 0.0125]
         analysis = analyze_discretization_error(
             continuous,
             x0,
             None,
             dt_values,
             method="euler",
-            n_steps=20,
+            n_steps=200,  # More steps to accumulate error
         )
 
         # Should show O(dt) convergence (rate ≈ 1)
@@ -1893,6 +1896,7 @@ class TestInterpolation:
         # Either we have enough points for cubic, or it fell back to linear gracefully
         assert result["success"]
         # Don't assert on adaptive_points - the fallback mechanism handles this
+
 
 # ============================================================================
 # Test Suite: Stochastic Simulation (Monte Carlo)
