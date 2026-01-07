@@ -137,7 +137,7 @@ class IntegratorFactory:
     >>> integrator = IntegratorFactory.for_production(system)
     >>> integrator = IntegratorFactory.for_julia(system, algorithm='Vern9')
     """
-    
+
     _BACKEND_DEFAULTS = {
         "numpy": "LSODA",
         "torch": "dopri5",
@@ -228,52 +228,52 @@ class IntegratorFactory:
         # ====================================================================
         # Step 1: Handle JAX 'solver' parameter
         # ====================================================================
-        
+
         if backend == "jax" and "solver" in options and method is None:
             method = options.pop("solver")
-        
+
         # ====================================================================
         # Step 2: Select default method if not specified
         # ====================================================================
-        
+
         if method is None:
             method = cls._BACKEND_DEFAULTS.get(backend, "LSODA")
-        
+
         # ====================================================================
         # Step 3: Normalize method name using registry
         # ====================================================================
-        
+
         method = normalize_method_name(method, backend)
-        
+
         # ====================================================================
         # Step 4: Validate using registry (deterministic system)
         # ====================================================================
-        
+
         is_valid, error = validate_method(method, backend, is_stochastic=False)
         if not is_valid:
             raise ValueError(error)
-        
+
         # ====================================================================
         # Step 5: Check if fixed-step method requires dt
         # ====================================================================
-        
+
         if is_fixed_step(method) or step_mode == StepMode.FIXED:
             if dt is None:
                 raise ValueError(
                     f"Fixed-step method '{method}' or FIXED step mode requires dt parameter"
                 )
-        
+
         # ====================================================================
         # Step 6: Create appropriate integrator based on backend
         # ====================================================================
-        
+
         if backend == "numpy":
             return cls._create_numpy_integrator(system, method, dt, step_mode, **options)
         if backend == "torch":
             return cls._create_torch_integrator(system, method, dt, step_mode, **options)
         if backend == "jax":
             return cls._create_jax_integrator(system, method, dt, step_mode, **options)
-        
+
         raise ValueError(f"Unknown backend: {backend}")
 
     @classmethod
@@ -287,22 +287,33 @@ class IntegratorFactory:
     ):
         """
         Create NumPy-based integrator.
-        
+
         Routes to:
         - DiffEqPy for Julia methods (Capital first letter)
         - Scipy for standard methods (LSODA, RK45, etc.)
-        - Fixed-step manual implementations (euler, midpoint, rk4 ONLY)
+        - Fixed-step manual implementations (euler, midpoint, rk4)
+
+        Julia Preference (Optional Optimization)
+        ----------------------------------------
+        For manual methods (euler, heun, midpoint) on NumPy backend, this factory
+        optionally prefers Julia implementations when available for better performance.
+        Users can:
+        - Use lowercase 'euler' → gets Julia 'Euler' if available, else manual
+        - Use capitalized 'Euler' → explicitly requests Julia
+        - Pass 'prefer_manual=True' in options → forces manual implementation
+
+        This is an implementation detail separate from normalization.
         """
         # ====================================================================
         # Route 1: Julia/DiffEqPy methods (check FIRST)
         # ====================================================================
-        
+
         if cls._is_julia_method(method):
             try:
                 from cdesym.systems.base.numerical_integration.diffeqpy_integrator import (
                     DiffEqPyIntegrator,
                 )
-                
+
                 return DiffEqPyIntegrator(
                     system,
                     dt=dt,
@@ -318,43 +329,80 @@ class IntegratorFactory:
                     f"Then: pip install diffeqpy\n"
                     f"Error: {e}",
                 )
-        
+
         # ====================================================================
-        # Route 2: Manual fixed-step implementations (SPECIFIC methods only)
+        # Route 2: Manual fixed-step implementations
         # ====================================================================
-        
+
         elif cls._is_manual_method(method):
+            # ================================================================
+            # OPTIONAL: Julia preference for better performance
+            # ================================================================
+            # Check if user explicitly wants manual implementation
+            prefer_manual = options.pop("prefer_manual", False)
+
+            # Try Julia first for euler/heun/midpoint (if not explicitly manual)
+            if not prefer_manual and method in ["euler", "heun", "midpoint"]:
+                try:
+                    from cdesym.systems.base.numerical_integration.diffeqpy_integrator import (
+                        DiffEqPyIntegrator,
+                    )
+
+                    # Use Julia version (capitalized)
+                    julia_method = method.capitalize()
+                    return DiffEqPyIntegrator(
+                        system,
+                        dt=dt,
+                        step_mode=step_mode,
+                        backend="numpy",
+                        algorithm=julia_method,
+                        **options,
+                    )
+                except ImportError:
+                    # Julia not available, fall back to manual
+                    pass
+
+            # ================================================================
+            # Use manual implementation (fallback or explicit request)
+            # ================================================================
             from cdesym.systems.base.numerical_integration.fixed_step_integrators import (
                 ExplicitEulerIntegrator,
                 MidpointIntegrator,
                 RK4Integrator,
             )
-            
+
             integrator_map = {
                 "euler": ExplicitEulerIntegrator,
                 "midpoint": MidpointIntegrator,
                 "rk4": RK4Integrator,
             }
-            
+
+            # Note: 'heun' would need HeunIntegrator class to be implemented
+            if method not in integrator_map:
+                raise ValueError(
+                    f"Manual implementation for '{method}' not available. "
+                    f"Available manual methods: {list(integrator_map.keys())}"
+                )
+
             integrator_class = integrator_map[method]
             return integrator_class(system, dt=dt, backend="numpy", **options)
-        
+
         # ====================================================================
         # Route 3: Scipy methods (everything else on NumPy backend)
         # ====================================================================
-        
+
         else:
             from cdesym.systems.base.numerical_integration.scipy_integrator import (
                 ScipyIntegrator,
             )
-            
+
             return ScipyIntegrator(system, dt=dt, method=method, backend="numpy", **options)
 
     @classmethod
     def _is_manual_method(cls, method: IntegrationMethod) -> bool:
         """
         Check if method has a manual fixed-step implementation.
-        
+
         These are the ONLY methods with manual integrator classes.
         """
         return method in ["euler", "midpoint", "rk4"]
@@ -367,7 +415,7 @@ class IntegratorFactory:
         Julia methods are identified by:
         1. Capital first letter (e.g., Tsit5, Vern9)
         2. Contains parentheses (e.g., AutoTsit5(Rosenbrock23()))
-        
+
         Routing heuristic for NumPy backend.
 
         Parameters
@@ -382,17 +430,17 @@ class IntegratorFactory:
         """
         if not method:
             return False
-        
+
         # Auto-switching methods (contain parentheses)
         if "(" in method:
             return True
-        
+
         # Capital first letter, excluding Scipy methods
         if method[0].isupper():
             # Exclude scipy methods (which also start with capitals)
             scipy_methods = {"LSODA", "RK45", "RK23", "DOP853", "Radau", "BDF"}
             return method not in scipy_methods
-        
+
         return False
 
     @classmethod
@@ -401,7 +449,7 @@ class IntegratorFactory:
         Check if method is a scipy solver.
 
         Scipy methods are typically all-caps or specific well-known names.
-        
+
         Routing heuristic for numpy backend.
 
         Parameters
@@ -884,28 +932,37 @@ class IntegratorFactory:
     def list_methods(backend: Optional[Backend] = None) -> Dict[str, list]:
         """
         List available methods for each backend.
-        
+
         Delegates to method_registry for base methods, then adds Julia ODE methods.
         """
         # Get deterministic methods from registry
         methods = get_available_methods(backend or "numpy", method_type="deterministic")
-        
+
         # Add Julia-specific ODE methods not in base registry
         # (These are ODE-only Julia methods)
         if backend is None or backend == "numpy":
             julia_ode_methods = [
-                "Tsit5", "Vern6", "Vern7", "Vern8", "Vern9",
-                "DP5", "DP8", "Rosenbrock23", "Rodas5", "ROCK4",
-                "AutoTsit5(Rosenbrock23())", "AutoVern7(Rodas5())"
+                "Tsit5",
+                "Vern6",
+                "Vern7",
+                "Vern8",
+                "Vern9",
+                "DP5",
+                "DP8",
+                "Rosenbrock23",
+                "Rodas5",
+                "ROCK4",
+                "AutoTsit5(Rosenbrock23())",
+                "AutoVern7(Rodas5())",
             ]
-            
+
             if "numpy" in methods:
                 # Merge with existing methods, avoid duplicates
                 existing = set(methods["numpy"].get("deterministic_adaptive", []))
                 methods["numpy"]["deterministic_adaptive"] = sorted(
                     list(existing) + [m for m in julia_ode_methods if m not in existing]
                 )
-        
+
         return methods
 
     @staticmethod

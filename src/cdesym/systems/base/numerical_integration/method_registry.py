@@ -362,43 +362,6 @@ NORMALIZATION_MAP: Dict[str, Dict[Backend, str]] = {
         "torch": "dopri5",  # TorchDiffEq (no LSODA equivalent)
         "jax": "tsit5",  # Diffrax (no LSODA equivalent)
     },
-    # ========================================================================
-    # Deterministic Methods - Fixed Step (prefer Julia on numpy)
-    # ========================================================================
-    # Euler method - prefer Julia 'Euler' on numpy, manual elsewhere
-    "euler": {
-        "numpy": "Euler",  # Use Julia's implementation
-        "torch": "euler",  # Use manual implementation
-        "jax": "euler",  # Use manual implementation
-    },
-    # Heun method - prefer Julia 'Heun' on numpy, manual elsewhere
-    "heun": {
-        "numpy": "Heun",  # Use Julia's implementation
-        "torch": "heun",  # Use manual implementation
-        "jax": "heun",  # Use manual implementation
-    },
-    # Midpoint method - prefer Julia 'Midpoint' on numpy, manual elsewhere
-    "midpoint": {
-        "numpy": "Midpoint",  # Use Julia's implementation
-        "torch": "midpoint",  # Use manual implementation
-        "jax": "midpoint",  # Use manual implementation
-    },
-    # Allow users to explicitly request manual implementations
-    "manual_euler": {
-        "numpy": "euler",  # Force manual (lowercase)
-        "torch": "euler",
-        "jax": "euler",
-    },
-    "manual_heun": {
-        "numpy": "heun",  # Force manual (lowercase)
-        "torch": "heun",
-        "jax": "heun",
-    },
-    "manual_midpoint": {
-        "numpy": "midpoint",  # Force manual (lowercase)
-        "torch": "midpoint",
-        "jax": "midpoint",
-    },
 }
 
 # ============================================================================
@@ -906,14 +869,6 @@ def normalize_method_name(method: str, backend: Backend = "numpy") -> str:
     # ========================================================================
 
     if backend in BACKEND_METHODS and method in BACKEND_METHODS[backend]:
-        # Special case: Prefer Julia for lowercase euler/heun/midpoint on numpy
-        # This upgrades manual ODE implementations to faster Julia versions
-        if backend == "numpy" and method in ["euler", "heun", "midpoint"]:
-            return method.capitalize()  # euler → Euler, heun → Heun, etc.
-
-        # Otherwise, if it's already valid, don't change it!
-        # This is CRITICAL for SDE methods - 'Euler' on jax must stay 'Euler'
-        # not be converted to 'euler' which would break SDE integration
         return method
 
     # ========================================================================
