@@ -108,7 +108,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link rel="stylesheet" href="assets/css/styles.css">
 </head>
 
-<body class="nav-fixed quarto-light">
+<body class="nav-sidebar docked nav-fixed quarto-light">
 
 <div id="quarto-search-results"></div>
   <header id="quarto-header" class="headroom fixed-top">
@@ -130,7 +130,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span class="menu-text">Home</span></a>
   </li>  
   <li class="nav-item">
-    <a class="nav-link" href="../tutorials/installation.html"> 
+    <a class="nav-link active" href="../tutorials/installation.html" aria-current="page"> 
 <span class="menu-text">Installation Guide</span></a>
   </li>  
   <li class="nav-item dropdown ">
@@ -138,6 +138,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
  <span class="menu-text">Architecture</span>
     </a>
     <ul class="dropdown-menu" aria-labelledby="nav-menu-architecture">    
+        <li>
+    <a class="dropdown-item" href="../architecture/index.html">
+ <span class="dropdown-text">Overview</span></a>
+  </li>  
+        <li><hr class="dropdown-divider"></li>
         <li>
     <a class="dropdown-item" href="../architecture/cdesym_Design_Philosophy.html">
  <span class="dropdown-text">ControlDESymulation: Design Philosophy and Architecture</span></a>
@@ -208,10 +213,103 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
       </div> <!-- /container-fluid -->
     </nav>
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../architecture/index.html">Framework Design</a></li><li class="breadcrumb-item"><a href="../architecture/index.html">Overview</a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+    </div>
+  </nav>
 </header>
 <!-- content -->
 <div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
 <!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation docked overflow-auto">
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true">
+ <span class="menu-text">Installation Guide</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../tutorials/installation.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Installation Guide</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true">
+ <span class="menu-text">Framework Design</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../architecture/index.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text">Overview</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../architecture/cdesym_Design_Philosophy.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">ControlDESymulation: Design Philosophy and Architecture</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../architecture/UI_Framework_Architecture.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">UI Framework Architecture</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../architecture/Type_System_Architecture.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Type System Architecture</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../architecture/Integration_Framework_Architecture.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Integration Framework Architecture</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../architecture/Control_Framework_Architecture.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Control Framework Architecture</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../architecture/Visualization_Framework_Architecture.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Visualization Framework Architecture</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../architecture/Delegation_Layer_Architecture.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Delegation Layer Architecture</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
 <!-- margin-sidebar -->
     <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
         <nav id="TOC" role="doc-toc" class="toc-active">
@@ -222,9 +320,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#architecture-documents" id="toc-architecture-documents" class="nav-link" data-scroll-target="#architecture-documents">Architecture Documents</a>
   <ul>
   <li><a href="#design-philosophy" id="toc-design-philosophy" class="nav-link" data-scroll-target="#design-philosophy">1. Design Philosophy</a></li>
-  <li><a href="#delegation-layer" id="toc-delegation-layer" class="nav-link" data-scroll-target="#delegation-layer">2. Delegation Layer</a></li>
-  <li><a href="#integration-framework" id="toc-integration-framework" class="nav-link" data-scroll-target="#integration-framework">3. Integration Framework</a></li>
-  <li><a href="#visualization-framework" id="toc-visualization-framework" class="nav-link" data-scroll-target="#visualization-framework">4. Visualization Framework</a></li>
+  <li><a href="#type-system-architecture" id="toc-type-system-architecture" class="nav-link" data-scroll-target="#type-system-architecture">2. Type System Architecture</a></li>
+  <li><a href="#ui-framework-architecture" id="toc-ui-framework-architecture" class="nav-link" data-scroll-target="#ui-framework-architecture">3. UI Framework Architecture</a></li>
+  <li><a href="#delegation-layer" id="toc-delegation-layer" class="nav-link" data-scroll-target="#delegation-layer">4. Delegation Layer</a></li>
+  <li><a href="#integration-framework" id="toc-integration-framework" class="nav-link" data-scroll-target="#integration-framework">5. Integration Framework</a></li>
+  <li><a href="#control-framework-architecture" id="toc-control-framework-architecture" class="nav-link" data-scroll-target="#control-framework-architecture">6. Control Framework Architecture</a></li>
+  <li><a href="#visualization-framework" id="toc-visualization-framework" class="nav-link" data-scroll-target="#visualization-framework">7. Visualization Framework</a></li>
   </ul></li>
   <li><a href="#quick-navigation" id="toc-quick-navigation" class="nav-link" data-scroll-target="#quick-navigation">Quick Navigation</a>
   <ul>
@@ -240,6 +341,9 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#where-does-symbolic-to-numerical-compilation-happen" id="toc-where-does-symbolic-to-numerical-compilation-happen" class="nav-link" data-scroll-target="#where-does-symbolic-to-numerical-compilation-happen">Where does symbolic-to-numerical compilation happen?</a></li>
   <li><a href="#how-are-integrators-selected-automatically" id="toc-how-are-integrators-selected-automatically" class="nav-link" data-scroll-target="#how-are-integrators-selected-automatically">How are integrators selected automatically?</a></li>
   <li><a href="#how-does-the-framework-avoid-code-duplication" id="toc-how-does-the-framework-avoid-code-duplication" class="nav-link" data-scroll-target="#how-does-the-framework-avoid-code-duplication">How does the framework avoid code duplication?</a></li>
+  <li><a href="#what-types-should-i-use-for-my-custom-components" id="toc-what-types-should-i-use-for-my-custom-components" class="nav-link" data-scroll-target="#what-types-should-i-use-for-my-custom-components">What types should I use for my custom components?</a></li>
+  <li><a href="#how-do-i-design-an-lqr-controller" id="toc-how-do-i-design-an-lqr-controller" class="nav-link" data-scroll-target="#how-do-i-design-an-lqr-controller">How do I design an LQR controller?</a></li>
+  <li><a href="#how-do-i-define-a-custom-dynamical-system" id="toc-how-do-i-define-a-custom-dynamical-system" class="nav-link" data-scroll-target="#how-do-i-define-a-custom-dynamical-system">How do I define a custom dynamical system?</a></li>
   </ul></li>
   <li><a href="#contributing-to-the-framework" id="toc-contributing-to-the-framework" class="nav-link" data-scroll-target="#contributing-to-the-framework">Contributing to the Framework</a></li>
   <li><a href="#getting-help" id="toc-getting-help" class="nav-link" data-scroll-target="#getting-help">Getting Help</a></li>
@@ -249,7 +353,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
-<header id="title-block-header" class="quarto-title-block default">
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../architecture/index.html">Framework Design</a></li><li class="breadcrumb-item"><a href="../architecture/index.html">Overview</a></li></ol></nav>
 <div class="quarto-title">
 <div class="quarto-title-block"><div><h1 class="title">Architecture</h1><button type="button" class="btn code-tools-button" id="quarto-code-tools-source"><i class="bi"></i> Code</button></div></div>
 <p class="subtitle lead">Understanding ControlDESymulation’s Internal Design</p>
@@ -300,7 +404,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="architecture-documents" class="level2">
 <h2 class="anchored" data-anchor-id="architecture-documents">Architecture Documents</h2>
-<p>The framework consists of <strong>4 architectural layers</strong>, each documented separately:</p>
+<p>The framework consists of <strong>7 architectural layers</strong>, each documented separately:</p>
 <section id="design-philosophy" class="level3">
 <h3 class="anchored" data-anchor-id="design-philosophy">1. <a href="../architecture/cdesym_Design_Philosophy.html">Design Philosophy</a></h3>
 <p><strong>Start here</strong> to understand the core principles that guide the framework’s design.</p>
@@ -315,8 +419,33 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </ul>
 <p><strong>Read this if:</strong> You want to understand <em>why</em> the framework is built the way it is, or you’re contributing new features.</p>
 </section>
+<section id="type-system-architecture" class="level3">
+<h3 class="anchored" data-anchor-id="type-system-architecture">2. <a href="../architecture/Type_System_Architecture.html">Type System Architecture</a></h3>
+<p>The foundational <strong>Layer 0</strong> that provides semantic types, structured results, and type-safe interfaces.</p>
+<p><strong>Topics covered:</strong></p>
+<ul>
+<li>Multi-backend array types (NumPy, PyTorch, JAX)</li>
+<li>Semantic vector/matrix types (StateVector, GainMatrix, etc.)</li>
+<li>TypedDict structured results (IntegrationResult, LQRResult, etc.)</li>
+<li>Protocol-based interfaces for duck typing with type safety</li>
+<li>200+ type definitions across 8 modules</li>
+</ul>
+<p><strong>Read this if:</strong> You’re implementing custom components, need to understand type conventions, or want to leverage IDE support.</p>
+</section>
+<section id="ui-framework-architecture" class="level3">
+<h3 class="anchored" data-anchor-id="ui-framework-architecture">3. <a href="../architecture/UI_Framework_Architecture.html">UI Framework Architecture</a></h3>
+<p>The user-facing <strong>Layer 3</strong> for defining and working with dynamical systems.</p>
+<p><strong>Components documented:</strong></p>
+<ul>
+<li><strong>Layer 0:</strong> <code>SymbolicSystemBase</code> - Time-domain agnostic foundation</li>
+<li><strong>Layer 1:</strong> <code>ContinuousSystemBase</code>, <code>DiscreteSystemBase</code> - Time-domain interfaces</li>
+<li><strong>Layer 2:</strong> <code>ContinuousSymbolicSystem</code>, <code>DiscreteSymbolicSystem</code> - Concrete implementations</li>
+<li><strong>Layer 3:</strong> <code>ContinuousStochasticSystem</code>, <code>DiscreteStochasticSystem</code> - Stochastic extensions</li>
+</ul>
+<p><strong>Read this if:</strong> You’re defining custom systems, extending the framework, or need to understand the class hierarchy.</p>
+</section>
 <section id="delegation-layer" class="level3">
-<h3 class="anchored" data-anchor-id="delegation-layer">2. <a href="../architecture/Delegation_Layer_Architecture.html">Delegation Layer</a></h3>
+<h3 class="anchored" data-anchor-id="delegation-layer">4. <a href="../architecture/Delegation_Layer_Architecture.html">Delegation Layer</a></h3>
 <p>The internal service layer that provides specialized utilities through composition.</p>
 <p><strong>Components documented:</strong></p>
 <ul>
@@ -328,7 +457,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p><strong>Read this if:</strong> You’re implementing custom system types or need to understand how symbolic-to-numerical compilation works.</p>
 </section>
 <section id="integration-framework" class="level3">
-<h3 class="anchored" data-anchor-id="integration-framework">3. <a href="../architecture/Integration_Framework_Architecture.html">Integration Framework</a></h3>
+<h3 class="anchored" data-anchor-id="integration-framework">5. <a href="../architecture/Integration_Framework_Architecture.html">Integration Framework</a></h3>
 <p>Multi-backend numerical integration for ODEs and SDEs.</p>
 <p><strong>Topics covered:</strong></p>
 <ul>
@@ -340,8 +469,21 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </ul>
 <p><strong>Read this if:</strong> You’re implementing custom integrators, need to understand method selection, or want to optimize integration performance.</p>
 </section>
+<section id="control-framework-architecture" class="level3">
+<h3 class="anchored" data-anchor-id="control-framework-architecture">6. <a href="../architecture/Control_Framework_Architecture.html">Control Framework Architecture</a></h3>
+<p>Classical control theory algorithms for analysis and synthesis.</p>
+<p><strong>Topics covered:</strong></p>
+<ul>
+<li><strong>Control Design:</strong> LQR, Kalman filter, LQG controller design</li>
+<li><strong>System Analysis:</strong> Stability, controllability, observability analysis</li>
+<li>Pure functional architecture with thin composition wrappers</li>
+<li>Unified continuous/discrete interface</li>
+<li>TypedDict results (LQRResult, KalmanFilterResult, StabilityInfo, etc.)</li>
+</ul>
+<p><strong>Read this if:</strong> You’re using control design methods, need to understand the control API, or want to extend control capabilities.</p>
+</section>
 <section id="visualization-framework" class="level3">
-<h3 class="anchored" data-anchor-id="visualization-framework">4. <a href="../architecture/Visualization_Framework_Architecture.html">Visualization Framework</a></h3>
+<h3 class="anchored" data-anchor-id="visualization-framework">7. <a href="../architecture/Visualization_Framework_Architecture.html">Visualization Framework</a></h3>
 <p>Interactive, publication-ready plotting for dynamical systems analysis.</p>
 <p><strong>Components documented:</strong></p>
 <ul>
@@ -358,28 +500,32 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="by-user-level" class="level3">
 <h3 class="anchored" data-anchor-id="by-user-level">By User Level</h3>
 <p><strong>Beginners:</strong> - Skip architecture docs - use <a href="../getting_started/index.qmd">Getting Started</a> instead</p>
-<p><strong>Intermediate Users:</strong> - Read <a href="../architecture/cdesym_Design_Philosophy.html">Design Philosophy</a> for conceptual understanding - Skim <a href="../architecture/Visualization_Framework_Architecture.html">Visualization Framework</a> for plotting capabilities</p>
-<p><strong>Advanced Users:</strong> - Study all architecture documents - Focus on <a href="../architecture/Integration_Framework_Architecture.html">Integration Framework</a> for custom numerical methods - Reference <a href="../architecture/Delegation_Layer_Architecture.html">Delegation Layer</a> for system extension</p>
+<p><strong>Intermediate Users:</strong> - Read <a href="../architecture/cdesym_Design_Philosophy.html">Design Philosophy</a> for conceptual understanding - Skim <a href="../architecture/UI_Framework_Architecture.html">UI Framework</a> for custom system definition - Skim <a href="../architecture/Visualization_Framework_Architecture.html">Visualization Framework</a> for plotting capabilities</p>
+<p><strong>Advanced Users:</strong> - Study all architecture documents - Focus on <a href="../architecture/Type_System_Architecture.html">Type System</a> for understanding type conventions - Focus on <a href="../architecture/Integration_Framework_Architecture.html">Integration Framework</a> for custom numerical methods - Reference <a href="../architecture/Delegation_Layer_Architecture.html">Delegation Layer</a> for system extension - Reference <a href="../architecture/Control_Framework_Architecture.html">Control Framework</a> for control design algorithms</p>
 </section>
 <section id="by-use-case" class="level3">
 <h3 class="anchored" data-anchor-id="by-use-case">By Use Case</h3>
 <p><strong>I want to understand the framework’s design principles:</strong> → <a href="../architecture/cdesym_Design_Philosophy.html">Design Philosophy</a></p>
+<p><strong>I want to understand the type system and conventions:</strong> → <a href="../architecture/Type_System_Architecture.html">Type System Architecture</a></p>
+<p><strong>I want to define a custom dynamical system:</strong> → <a href="../architecture/UI_Framework_Architecture.html">UI Framework Architecture</a></p>
 <p><strong>I want to implement a custom integrator:</strong> → <a href="../architecture/Integration_Framework_Architecture.html">Integration Framework</a></p>
 <p><strong>I want to extend the system base classes:</strong> → <a href="../architecture/Delegation_Layer_Architecture.html">Delegation Layer</a></p>
+<p><strong>I want to use or extend control design (LQR, Kalman, LQG):</strong> → <a href="../architecture/Control_Framework_Architecture.html">Control Framework Architecture</a></p>
 <p><strong>I want to customize or extend plotting:</strong> → <a href="../architecture/Visualization_Framework_Architecture.html">Visualization Framework</a></p>
 <p><strong>I want to understand symbolic-to-numerical compilation:</strong> → <a href="../architecture/Delegation_Layer_Architecture.html">Delegation Layer</a> → CodeGenerator</p>
-<p><strong>I want to add a new backend (e.g., TensorFlow):</strong> → <a href="../architecture/cdesym_Design_Philosophy.html">Design Philosophy</a> → Extension Points<br>
-→ <a href="../architecture/Delegation_Layer_Architecture.html">Delegation Layer</a> → BackendManager</p>
+<p><strong>I want to add a new backend (e.g., TensorFlow):</strong> → <a href="../architecture/cdesym_Design_Philosophy.html">Design Philosophy</a> → Extension Points → <a href="../architecture/Delegation_Layer_Architecture.html">Delegation Layer</a> → BackendManager</p>
 </section>
 </section>
 <section id="architecture-statistics" class="level2">
 <h2 class="anchored" data-anchor-id="architecture-statistics">Architecture Statistics</h2>
 <p>The framework consists of:</p>
 <ul>
-<li><strong>39 core files</strong> organized into 4 architectural layers</li>
+<li><strong>50+ core files</strong> organized into 7 architectural layers</li>
 <li><strong>200+ types</strong> for semantic clarity and IDE support</li>
 <li><strong>55+ integration methods</strong> across NumPy, PyTorch, JAX, and Julia backends</li>
 <li><strong>11 delegation layer utilities</strong> providing specialized services</li>
+<li><strong>Classical control algorithms</strong> (LQR, Kalman, LQG, stability, controllability, observability)</li>
+<li><strong>8 core UI framework classes</strong> for system definition</li>
 <li><strong>16+ plot types</strong> for comprehensive visualization</li>
 <li><strong>Zero code duplication</strong> through strategic abstraction</li>
 </ul>
@@ -435,7 +581,22 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="how-does-the-framework-avoid-code-duplication" class="level3">
 <h3 class="anchored" data-anchor-id="how-does-the-framework-avoid-code-duplication">How does the framework avoid code duplication?</h3>
 <p><strong>Short answer:</strong> Through <code>SymbolicSystemBase</code> providing shared functionality to both continuous and discrete systems.</p>
-<p><strong>Long answer:</strong> See <a href="../architecture/cdesym_Design_Philosophy.html#sec-zero-code-duplication">Design Philosophy</a></p>
+<p><strong>Long answer:</strong> See <a href="../architecture/UI_Framework_Architecture.html#sec-layer-0">UI Framework Architecture</a> and <a href="../architecture/cdesym_Design_Philosophy.html#sec-zero-code-duplication">Design Philosophy</a></p>
+</section>
+<section id="what-types-should-i-use-for-my-custom-components" class="level3">
+<h3 class="anchored" data-anchor-id="what-types-should-i-use-for-my-custom-components">What types should I use for my custom components?</h3>
+<p><strong>Short answer:</strong> Use semantic types like <code>StateVector</code>, <code>ControlVector</code>, and TypedDict results like <code>IntegrationResult</code>.</p>
+<p><strong>Long answer:</strong> See <a href="../architecture/Type_System_Architecture.html">Type System Architecture</a></p>
+</section>
+<section id="how-do-i-design-an-lqr-controller" class="level3">
+<h3 class="anchored" data-anchor-id="how-do-i-design-an-lqr-controller">How do I design an LQR controller?</h3>
+<p><strong>Short answer:</strong> Use <code>system.control.design_lqr(A, B, Q, R)</code> after linearizing your system.</p>
+<p><strong>Long answer:</strong> See <a href="../architecture/Control_Framework_Architecture.html#sec-control-design">Control Framework Architecture</a></p>
+</section>
+<section id="how-do-i-define-a-custom-dynamical-system" class="level3">
+<h3 class="anchored" data-anchor-id="how-do-i-define-a-custom-dynamical-system">How do I define a custom dynamical system?</h3>
+<p><strong>Short answer:</strong> Subclass <code>ContinuousSymbolicSystem</code> or <code>DiscreteSymbolicSystem</code> and implement <code>define_system()</code>.</p>
+<p><strong>Long answer:</strong> See <a href="../architecture/UI_Framework_Architecture.html#sec-layer-2">UI Framework Architecture</a></p>
 </section>
 </section>
 <section id="contributing-to-the-framework" class="level2">
@@ -443,7 +604,15 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p>If you’re interested in contributing:</p>
 <ol type="1">
 <li><strong>Start with <a href="../architecture/cdesym_Design_Philosophy.html">Design Philosophy</a></strong> to understand core principles</li>
-<li><strong>Study the relevant layer docs</strong> for your contribution area</li>
+<li><strong>Review <a href="../architecture/Type_System_Architecture.html">Type System Architecture</a></strong> to understand type conventions</li>
+<li><strong>Study the relevant layer docs</strong> for your contribution area:
+<ul>
+<li>System definition → <a href="../architecture/UI_Framework_Architecture.html">UI Framework Architecture</a></li>
+<li>Internal utilities → <a href="../architecture/Delegation_Layer_Architecture.html">Delegation Layer</a></li>
+<li>Numerical integration → <a href="../architecture/Integration_Framework_Architecture.html">Integration Framework</a></li>
+<li>Control algorithms → <a href="../architecture/Control_Framework_Architecture.html">Control Framework</a></li>
+<li>Visualization → <a href="../architecture/Visualization_Framework_Architecture.html">Visualization Framework</a></li>
+</ul></li>
 <li><strong>Follow the established patterns</strong> (composition, type-driven design, etc.)</li>
 <li><strong>Write comprehensive tests</strong> for each component in isolation</li>
 <li><strong>Document your additions</strong> with clear examples and type annotations</li>
@@ -945,7 +1114,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a><span class="fu">## Architecture Documents</span></span>
 <span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>The framework consists of **4 architectural layers**, each documented separately:</span>
+<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>The framework consists of **7 architectural layers**, each documented separately:</span>
 <span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a><span class="fu">### 1. [Design Philosophy](cdesym_Design_Philosophy.qmd)</span></span>
 <span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a></span>
@@ -962,163 +1131,242 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-43"><a href="#cb1-43" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-44"><a href="#cb1-44" aria-hidden="true" tabindex="-1"></a>**Read this if:** You want to understand *why* the framework is built the way it is, or you're contributing new features.</span>
 <span id="cb1-45"><a href="#cb1-45" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-46"><a href="#cb1-46" aria-hidden="true" tabindex="-1"></a><span class="fu">### 2. [Delegation Layer](Delegation_Layer_Architecture.qmd)</span></span>
+<span id="cb1-46"><a href="#cb1-46" aria-hidden="true" tabindex="-1"></a><span class="fu">### 2. [Type System Architecture](Type_System_Architecture.qmd)</span></span>
 <span id="cb1-47"><a href="#cb1-47" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-48"><a href="#cb1-48" aria-hidden="true" tabindex="-1"></a>The internal service layer that provides specialized utilities through composition.</span>
+<span id="cb1-48"><a href="#cb1-48" aria-hidden="true" tabindex="-1"></a>The foundational **Layer 0** that provides semantic types, structured results, and type-safe interfaces.</span>
 <span id="cb1-49"><a href="#cb1-49" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-50"><a href="#cb1-50" aria-hidden="true" tabindex="-1"></a>**Components documented:**</span>
+<span id="cb1-50"><a href="#cb1-50" aria-hidden="true" tabindex="-1"></a>**Topics covered:**</span>
 <span id="cb1-51"><a href="#cb1-51" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-52"><a href="#cb1-52" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Core Utilities:** <span class="in">`BackendManager`</span>, <span class="in">`CodeGenerator`</span>, <span class="in">`EquilibriumHandler`</span>, <span class="in">`SymbolicValidator`</span></span>
-<span id="cb1-53"><a href="#cb1-53" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Deterministic Evaluation:** <span class="in">`DynamicsEvaluator`</span>, <span class="in">`LinearizationEngine`</span>, <span class="in">`ObservationEngine`</span></span>
-<span id="cb1-54"><a href="#cb1-54" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Stochastic Support:** <span class="in">`DiffusionHandler`</span>, <span class="in">`NoiseCharacterizer`</span>, <span class="in">`SDEValidator`</span></span>
-<span id="cb1-55"><a href="#cb1-55" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Low-Level Utilities:** <span class="in">`codegen_utils`</span></span>
-<span id="cb1-56"><a href="#cb1-56" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-57"><a href="#cb1-57" aria-hidden="true" tabindex="-1"></a>**Read this if:** You're implementing custom system types or need to understand how symbolic-to-numerical compilation works.</span>
-<span id="cb1-58"><a href="#cb1-58" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-59"><a href="#cb1-59" aria-hidden="true" tabindex="-1"></a><span class="fu">### 3. [Integration Framework](Integration_Framework_Architecture.qmd)</span></span>
-<span id="cb1-60"><a href="#cb1-60" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-61"><a href="#cb1-61" aria-hidden="true" tabindex="-1"></a>Multi-backend numerical integration for ODEs and SDEs.</span>
-<span id="cb1-62"><a href="#cb1-62" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-63"><a href="#cb1-63" aria-hidden="true" tabindex="-1"></a>**Topics covered:**</span>
-<span id="cb1-64"><a href="#cb1-64" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-65"><a href="#cb1-65" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Integrator architecture and factories</span>
-<span id="cb1-66"><a href="#cb1-66" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Deterministic integrators (Scipy, TorchDiffEq, Diffrax, DiffEqPy, Fixed-step)</span>
-<span id="cb1-67"><a href="#cb1-67" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Stochastic integrators (TorchSDE, Diffrax SDE, DiffEqPy SDE)</span>
-<span id="cb1-68"><a href="#cb1-68" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>40+ integration methods across 4 backends</span>
-<span id="cb1-69"><a href="#cb1-69" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Integration result types and performance tracking</span>
+<span id="cb1-52"><a href="#cb1-52" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Multi-backend array types (NumPy, PyTorch, JAX)</span>
+<span id="cb1-53"><a href="#cb1-53" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Semantic vector/matrix types (StateVector, GainMatrix, etc.)</span>
+<span id="cb1-54"><a href="#cb1-54" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>TypedDict structured results (IntegrationResult, LQRResult, etc.)</span>
+<span id="cb1-55"><a href="#cb1-55" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Protocol-based interfaces for duck typing with type safety</span>
+<span id="cb1-56"><a href="#cb1-56" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>200+ type definitions across 8 modules</span>
+<span id="cb1-57"><a href="#cb1-57" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-58"><a href="#cb1-58" aria-hidden="true" tabindex="-1"></a>**Read this if:** You're implementing custom components, need to understand type conventions, or want to leverage IDE support.</span>
+<span id="cb1-59"><a href="#cb1-59" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-60"><a href="#cb1-60" aria-hidden="true" tabindex="-1"></a><span class="fu">### 3. [UI Framework Architecture](UI_Framework_Architecture.qmd)</span></span>
+<span id="cb1-61"><a href="#cb1-61" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-62"><a href="#cb1-62" aria-hidden="true" tabindex="-1"></a>The user-facing **Layer 3** for defining and working with dynamical systems.</span>
+<span id="cb1-63"><a href="#cb1-63" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-64"><a href="#cb1-64" aria-hidden="true" tabindex="-1"></a>**Components documented:**</span>
+<span id="cb1-65"><a href="#cb1-65" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-66"><a href="#cb1-66" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Layer 0:** <span class="in">`SymbolicSystemBase`</span> - Time-domain agnostic foundation</span>
+<span id="cb1-67"><a href="#cb1-67" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Layer 1:** <span class="in">`ContinuousSystemBase`</span>, <span class="in">`DiscreteSystemBase`</span> - Time-domain interfaces</span>
+<span id="cb1-68"><a href="#cb1-68" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Layer 2:** <span class="in">`ContinuousSymbolicSystem`</span>, <span class="in">`DiscreteSymbolicSystem`</span> - Concrete implementations</span>
+<span id="cb1-69"><a href="#cb1-69" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Layer 3:** <span class="in">`ContinuousStochasticSystem`</span>, <span class="in">`DiscreteStochasticSystem`</span> - Stochastic extensions</span>
 <span id="cb1-70"><a href="#cb1-70" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-71"><a href="#cb1-71" aria-hidden="true" tabindex="-1"></a>**Read this if:** You're implementing custom integrators, need to understand method selection, or want to optimize integration performance.</span>
+<span id="cb1-71"><a href="#cb1-71" aria-hidden="true" tabindex="-1"></a>**Read this if:** You're defining custom systems, extending the framework, or need to understand the class hierarchy.</span>
 <span id="cb1-72"><a href="#cb1-72" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-73"><a href="#cb1-73" aria-hidden="true" tabindex="-1"></a><span class="fu">### 4. [Visualization Framework](Visualization_Framework_Architecture.qmd)</span></span>
+<span id="cb1-73"><a href="#cb1-73" aria-hidden="true" tabindex="-1"></a><span class="fu">### 4. [Delegation Layer](Delegation_Layer_Architecture.qmd)</span></span>
 <span id="cb1-74"><a href="#cb1-74" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-75"><a href="#cb1-75" aria-hidden="true" tabindex="-1"></a>Interactive, publication-ready plotting for dynamical systems analysis.</span>
+<span id="cb1-75"><a href="#cb1-75" aria-hidden="true" tabindex="-1"></a>The internal service layer that provides specialized utilities through composition.</span>
 <span id="cb1-76"><a href="#cb1-76" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-77"><a href="#cb1-77" aria-hidden="true" tabindex="-1"></a>**Components documented:**</span>
 <span id="cb1-78"><a href="#cb1-78" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-79"><a href="#cb1-79" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Theming layer (colors, styles, themes)</span>
-<span id="cb1-80"><a href="#cb1-80" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`TrajectoryPlotter`</span> - Time-domain visualization</span>
-<span id="cb1-81"><a href="#cb1-81" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`PhasePortraitPlotter`</span> - State-space visualization</span>
-<span id="cb1-82"><a href="#cb1-82" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`ControlPlotter`</span> - Control analysis plots</span>
+<span id="cb1-79"><a href="#cb1-79" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Core Utilities:** <span class="in">`BackendManager`</span>, <span class="in">`CodeGenerator`</span>, <span class="in">`EquilibriumHandler`</span>, <span class="in">`SymbolicValidator`</span></span>
+<span id="cb1-80"><a href="#cb1-80" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Deterministic Evaluation:** <span class="in">`DynamicsEvaluator`</span>, <span class="in">`LinearizationEngine`</span>, <span class="in">`ObservationEngine`</span></span>
+<span id="cb1-81"><a href="#cb1-81" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Stochastic Support:** <span class="in">`DiffusionHandler`</span>, <span class="in">`NoiseCharacterizer`</span>, <span class="in">`SDEValidator`</span></span>
+<span id="cb1-82"><a href="#cb1-82" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Low-Level Utilities:** <span class="in">`codegen_utils`</span></span>
 <span id="cb1-83"><a href="#cb1-83" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-84"><a href="#cb1-84" aria-hidden="true" tabindex="-1"></a>**Read this if:** You're extending visualization capabilities or need to understand the plotting system architecture.</span>
+<span id="cb1-84"><a href="#cb1-84" aria-hidden="true" tabindex="-1"></a>**Read this if:** You're implementing custom system types or need to understand how symbolic-to-numerical compilation works.</span>
 <span id="cb1-85"><a href="#cb1-85" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-86"><a href="#cb1-86" aria-hidden="true" tabindex="-1"></a><span class="fu">## Quick Navigation</span></span>
+<span id="cb1-86"><a href="#cb1-86" aria-hidden="true" tabindex="-1"></a><span class="fu">### 5. [Integration Framework](Integration_Framework_Architecture.qmd)</span></span>
 <span id="cb1-87"><a href="#cb1-87" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-88"><a href="#cb1-88" aria-hidden="true" tabindex="-1"></a><span class="fu">### By User Level</span></span>
+<span id="cb1-88"><a href="#cb1-88" aria-hidden="true" tabindex="-1"></a>Multi-backend numerical integration for ODEs and SDEs.</span>
 <span id="cb1-89"><a href="#cb1-89" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-90"><a href="#cb1-90" aria-hidden="true" tabindex="-1"></a>**Beginners:**</span>
-<span id="cb1-91"><a href="#cb1-91" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Skip architecture docs - use <span class="co">[</span><span class="ot">Getting Started</span><span class="co">](../getting_started/index.qmd)</span> instead</span>
-<span id="cb1-92"><a href="#cb1-92" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-93"><a href="#cb1-93" aria-hidden="true" tabindex="-1"></a>**Intermediate Users:**</span>
-<span id="cb1-94"><a href="#cb1-94" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Read <span class="co">[</span><span class="ot">Design Philosophy</span><span class="co">](cdesym_Design_Philosophy.qmd)</span> for conceptual understanding</span>
-<span id="cb1-95"><a href="#cb1-95" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Skim <span class="co">[</span><span class="ot">Visualization Framework</span><span class="co">](Visualization_Framework_Architecture.qmd)</span> for plotting capabilities</span>
-<span id="cb1-96"><a href="#cb1-96" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-97"><a href="#cb1-97" aria-hidden="true" tabindex="-1"></a>**Advanced Users:**</span>
-<span id="cb1-98"><a href="#cb1-98" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Study all architecture documents</span>
-<span id="cb1-99"><a href="#cb1-99" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Focus on <span class="co">[</span><span class="ot">Integration Framework</span><span class="co">](Integration_Framework_Architecture.qmd)</span> for custom numerical methods</span>
-<span id="cb1-100"><a href="#cb1-100" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Reference <span class="co">[</span><span class="ot">Delegation Layer</span><span class="co">](Delegation_Layer_Architecture.qmd)</span> for system extension</span>
+<span id="cb1-90"><a href="#cb1-90" aria-hidden="true" tabindex="-1"></a>**Topics covered:**</span>
+<span id="cb1-91"><a href="#cb1-91" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-92"><a href="#cb1-92" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Integrator architecture and factories</span>
+<span id="cb1-93"><a href="#cb1-93" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Deterministic integrators (Scipy, TorchDiffEq, Diffrax, DiffEqPy, Fixed-step)</span>
+<span id="cb1-94"><a href="#cb1-94" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Stochastic integrators (TorchSDE, Diffrax SDE, DiffEqPy SDE)</span>
+<span id="cb1-95"><a href="#cb1-95" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>40+ integration methods across 4 backends</span>
+<span id="cb1-96"><a href="#cb1-96" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Integration result types and performance tracking</span>
+<span id="cb1-97"><a href="#cb1-97" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-98"><a href="#cb1-98" aria-hidden="true" tabindex="-1"></a>**Read this if:** You're implementing custom integrators, need to understand method selection, or want to optimize integration performance.</span>
+<span id="cb1-99"><a href="#cb1-99" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-100"><a href="#cb1-100" aria-hidden="true" tabindex="-1"></a><span class="fu">### 6. [Control Framework Architecture](Control_Framework_Architecture.qmd)</span></span>
 <span id="cb1-101"><a href="#cb1-101" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-102"><a href="#cb1-102" aria-hidden="true" tabindex="-1"></a><span class="fu">### By Use Case</span></span>
+<span id="cb1-102"><a href="#cb1-102" aria-hidden="true" tabindex="-1"></a>Classical control theory algorithms for analysis and synthesis.</span>
 <span id="cb1-103"><a href="#cb1-103" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-104"><a href="#cb1-104" aria-hidden="true" tabindex="-1"></a>**I want to understand the framework's design principles:**</span>
-<span id="cb1-105"><a href="#cb1-105" aria-hidden="true" tabindex="-1"></a>→ <span class="co">[</span><span class="ot">Design Philosophy</span><span class="co">](cdesym_Design_Philosophy.qmd)</span></span>
-<span id="cb1-106"><a href="#cb1-106" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-107"><a href="#cb1-107" aria-hidden="true" tabindex="-1"></a>**I want to implement a custom integrator:**</span>
-<span id="cb1-108"><a href="#cb1-108" aria-hidden="true" tabindex="-1"></a>→ <span class="co">[</span><span class="ot">Integration Framework</span><span class="co">](Integration_Framework_Architecture.qmd)</span></span>
-<span id="cb1-109"><a href="#cb1-109" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-110"><a href="#cb1-110" aria-hidden="true" tabindex="-1"></a>**I want to extend the system base classes:**</span>
-<span id="cb1-111"><a href="#cb1-111" aria-hidden="true" tabindex="-1"></a>→ <span class="co">[</span><span class="ot">Delegation Layer</span><span class="co">](Delegation_Layer_Architecture.qmd)</span></span>
-<span id="cb1-112"><a href="#cb1-112" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-113"><a href="#cb1-113" aria-hidden="true" tabindex="-1"></a>**I want to customize or extend plotting:**</span>
-<span id="cb1-114"><a href="#cb1-114" aria-hidden="true" tabindex="-1"></a>→ <span class="co">[</span><span class="ot">Visualization Framework</span><span class="co">](Visualization_Framework_Architecture.qmd)</span></span>
+<span id="cb1-104"><a href="#cb1-104" aria-hidden="true" tabindex="-1"></a>**Topics covered:**</span>
+<span id="cb1-105"><a href="#cb1-105" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-106"><a href="#cb1-106" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Control Design:** LQR, Kalman filter, LQG controller design</span>
+<span id="cb1-107"><a href="#cb1-107" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**System Analysis:** Stability, controllability, observability analysis</span>
+<span id="cb1-108"><a href="#cb1-108" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Pure functional architecture with thin composition wrappers</span>
+<span id="cb1-109"><a href="#cb1-109" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Unified continuous/discrete interface</span>
+<span id="cb1-110"><a href="#cb1-110" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>TypedDict results (LQRResult, KalmanFilterResult, StabilityInfo, etc.)</span>
+<span id="cb1-111"><a href="#cb1-111" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-112"><a href="#cb1-112" aria-hidden="true" tabindex="-1"></a>**Read this if:** You're using control design methods, need to understand the control API, or want to extend control capabilities.</span>
+<span id="cb1-113"><a href="#cb1-113" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-114"><a href="#cb1-114" aria-hidden="true" tabindex="-1"></a><span class="fu">### 7. [Visualization Framework](Visualization_Framework_Architecture.qmd)</span></span>
 <span id="cb1-115"><a href="#cb1-115" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-116"><a href="#cb1-116" aria-hidden="true" tabindex="-1"></a>**I want to understand symbolic-to-numerical compilation:**</span>
-<span id="cb1-117"><a href="#cb1-117" aria-hidden="true" tabindex="-1"></a>→ <span class="co">[</span><span class="ot">Delegation Layer</span><span class="co">](Delegation_Layer_Architecture.qmd)</span> → CodeGenerator</span>
-<span id="cb1-118"><a href="#cb1-118" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-119"><a href="#cb1-119" aria-hidden="true" tabindex="-1"></a>**I want to add a new backend (e.g., TensorFlow):**</span>
-<span id="cb1-120"><a href="#cb1-120" aria-hidden="true" tabindex="-1"></a>→ <span class="co">[</span><span class="ot">Design Philosophy</span><span class="co">](cdesym_Design_Philosophy.qmd)</span> → Extension Points  </span>
-<span id="cb1-121"><a href="#cb1-121" aria-hidden="true" tabindex="-1"></a>→ <span class="co">[</span><span class="ot">Delegation Layer</span><span class="co">](Delegation_Layer_Architecture.qmd)</span> → BackendManager</span>
-<span id="cb1-122"><a href="#cb1-122" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-123"><a href="#cb1-123" aria-hidden="true" tabindex="-1"></a><span class="fu">## Architecture Statistics</span></span>
+<span id="cb1-116"><a href="#cb1-116" aria-hidden="true" tabindex="-1"></a>Interactive, publication-ready plotting for dynamical systems analysis.</span>
+<span id="cb1-117"><a href="#cb1-117" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-118"><a href="#cb1-118" aria-hidden="true" tabindex="-1"></a>**Components documented:**</span>
+<span id="cb1-119"><a href="#cb1-119" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-120"><a href="#cb1-120" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Theming layer (colors, styles, themes)</span>
+<span id="cb1-121"><a href="#cb1-121" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`TrajectoryPlotter`</span> - Time-domain visualization</span>
+<span id="cb1-122"><a href="#cb1-122" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`PhasePortraitPlotter`</span> - State-space visualization</span>
+<span id="cb1-123"><a href="#cb1-123" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`ControlPlotter`</span> - Control analysis plots</span>
 <span id="cb1-124"><a href="#cb1-124" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-125"><a href="#cb1-125" aria-hidden="true" tabindex="-1"></a>The framework consists of:</span>
+<span id="cb1-125"><a href="#cb1-125" aria-hidden="true" tabindex="-1"></a>**Read this if:** You're extending visualization capabilities or need to understand the plotting system architecture.</span>
 <span id="cb1-126"><a href="#cb1-126" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-127"><a href="#cb1-127" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**39 core files** organized into 4 architectural layers</span>
-<span id="cb1-128"><a href="#cb1-128" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**200+ types** for semantic clarity and IDE support</span>
-<span id="cb1-129"><a href="#cb1-129" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**55+ integration methods** across NumPy, PyTorch, JAX, and Julia backends</span>
-<span id="cb1-130"><a href="#cb1-130" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**11 delegation layer utilities** providing specialized services</span>
-<span id="cb1-131"><a href="#cb1-131" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**16+ plot types** for comprehensive visualization</span>
-<span id="cb1-132"><a href="#cb1-132" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Zero code duplication** through strategic abstraction</span>
+<span id="cb1-127"><a href="#cb1-127" aria-hidden="true" tabindex="-1"></a><span class="fu">## Quick Navigation</span></span>
+<span id="cb1-128"><a href="#cb1-128" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-129"><a href="#cb1-129" aria-hidden="true" tabindex="-1"></a><span class="fu">### By User Level</span></span>
+<span id="cb1-130"><a href="#cb1-130" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-131"><a href="#cb1-131" aria-hidden="true" tabindex="-1"></a>**Beginners:**</span>
+<span id="cb1-132"><a href="#cb1-132" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Skip architecture docs - use <span class="co">[</span><span class="ot">Getting Started</span><span class="co">](../getting_started/index.qmd)</span> instead</span>
 <span id="cb1-133"><a href="#cb1-133" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-134"><a href="#cb1-134" aria-hidden="true" tabindex="-1"></a><span class="fu">## Design Principles Summary</span></span>
-<span id="cb1-135"><a href="#cb1-135" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-136"><a href="#cb1-136" aria-hidden="true" tabindex="-1"></a>::: {.callout-tip}</span>
-<span id="cb1-137"><a href="#cb1-137" aria-hidden="true" tabindex="-1"></a><span class="fu">## Core Principles</span></span>
+<span id="cb1-134"><a href="#cb1-134" aria-hidden="true" tabindex="-1"></a>**Intermediate Users:**</span>
+<span id="cb1-135"><a href="#cb1-135" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Read <span class="co">[</span><span class="ot">Design Philosophy</span><span class="co">](cdesym_Design_Philosophy.qmd)</span> for conceptual understanding</span>
+<span id="cb1-136"><a href="#cb1-136" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Skim <span class="co">[</span><span class="ot">UI Framework</span><span class="co">](UI_Framework_Architecture.qmd)</span> for custom system definition</span>
+<span id="cb1-137"><a href="#cb1-137" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Skim <span class="co">[</span><span class="ot">Visualization Framework</span><span class="co">](Visualization_Framework_Architecture.qmd)</span> for plotting capabilities</span>
 <span id="cb1-138"><a href="#cb1-138" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-139"><a href="#cb1-139" aria-hidden="true" tabindex="-1"></a><span class="ss">1. </span>**Type-Driven Design** - Types are not just annotations—they are the architecture</span>
-<span id="cb1-140"><a href="#cb1-140" aria-hidden="true" tabindex="-1"></a><span class="ss">2. </span>**Composition Over Inheritance** - Build systems from specialized utilities</span>
-<span id="cb1-141"><a href="#cb1-141" aria-hidden="true" tabindex="-1"></a><span class="ss">3. </span>**Backend Agnosticism** - Write once, run on NumPy/PyTorch/JAX</span>
-<span id="cb1-142"><a href="#cb1-142" aria-hidden="true" tabindex="-1"></a><span class="ss">4. </span>**Zero Code Duplication** - Every line exists in exactly one place</span>
-<span id="cb1-143"><a href="#cb1-143" aria-hidden="true" tabindex="-1"></a><span class="ss">5. </span>**Structured Results** - TypedDict for all outputs with IDE support</span>
-<span id="cb1-144"><a href="#cb1-144" aria-hidden="true" tabindex="-1"></a><span class="ss">6. </span>**Protocol-Based Interfaces** - Duck typing with type safety</span>
-<span id="cb1-145"><a href="#cb1-145" aria-hidden="true" tabindex="-1"></a><span class="ss">7. </span>**Factory Pattern** - Hide complexity behind simple creation methods</span>
-<span id="cb1-146"><a href="#cb1-146" aria-hidden="true" tabindex="-1"></a><span class="ss">8. </span>**Semantic Naming** - Names convey mathematical meaning</span>
-<span id="cb1-147"><a href="#cb1-147" aria-hidden="true" tabindex="-1"></a><span class="ss">9. </span>**Progressive Disclosure** - Simple things simple, complex things possible</span>
-<span id="cb1-148"><a href="#cb1-148" aria-hidden="true" tabindex="-1"></a>:::</span>
-<span id="cb1-149"><a href="#cb1-149" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-150"><a href="#cb1-150" aria-hidden="true" tabindex="-1"></a><span class="fu">## Common Architectural Questions</span></span>
-<span id="cb1-151"><a href="#cb1-151" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-152"><a href="#cb1-152" aria-hidden="true" tabindex="-1"></a><span class="fu">### Why composition instead of inheritance?</span></span>
+<span id="cb1-139"><a href="#cb1-139" aria-hidden="true" tabindex="-1"></a>**Advanced Users:**</span>
+<span id="cb1-140"><a href="#cb1-140" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Study all architecture documents</span>
+<span id="cb1-141"><a href="#cb1-141" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Focus on <span class="co">[</span><span class="ot">Type System</span><span class="co">](Type_System_Architecture.qmd)</span> for understanding type conventions</span>
+<span id="cb1-142"><a href="#cb1-142" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Focus on <span class="co">[</span><span class="ot">Integration Framework</span><span class="co">](Integration_Framework_Architecture.qmd)</span> for custom numerical methods</span>
+<span id="cb1-143"><a href="#cb1-143" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Reference <span class="co">[</span><span class="ot">Delegation Layer</span><span class="co">](Delegation_Layer_Architecture.qmd)</span> for system extension</span>
+<span id="cb1-144"><a href="#cb1-144" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Reference <span class="co">[</span><span class="ot">Control Framework</span><span class="co">](Control_Framework_Architecture.qmd)</span> for control design algorithms</span>
+<span id="cb1-145"><a href="#cb1-145" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-146"><a href="#cb1-146" aria-hidden="true" tabindex="-1"></a><span class="fu">### By Use Case</span></span>
+<span id="cb1-147"><a href="#cb1-147" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-148"><a href="#cb1-148" aria-hidden="true" tabindex="-1"></a>**I want to understand the framework's design principles:**</span>
+<span id="cb1-149"><a href="#cb1-149" aria-hidden="true" tabindex="-1"></a>→ <span class="co">[</span><span class="ot">Design Philosophy</span><span class="co">](cdesym_Design_Philosophy.qmd)</span></span>
+<span id="cb1-150"><a href="#cb1-150" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-151"><a href="#cb1-151" aria-hidden="true" tabindex="-1"></a>**I want to understand the type system and conventions:**</span>
+<span id="cb1-152"><a href="#cb1-152" aria-hidden="true" tabindex="-1"></a>→ <span class="co">[</span><span class="ot">Type System Architecture</span><span class="co">](Type_System_Architecture.qmd)</span></span>
 <span id="cb1-153"><a href="#cb1-153" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-154"><a href="#cb1-154" aria-hidden="true" tabindex="-1"></a>**Short answer:** Single responsibility, testability, and flexibility.</span>
-<span id="cb1-155"><a href="#cb1-155" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-156"><a href="#cb1-156" aria-hidden="true" tabindex="-1"></a>**Long answer:** See <span class="co">[</span><span class="ot">Design Philosophy</span><span class="co">](cdesym_Design_Philosophy.qmd#sec-composition-over-inheritance)</span></span>
-<span id="cb1-157"><a href="#cb1-157" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-158"><a href="#cb1-158" aria-hidden="true" tabindex="-1"></a><span class="fu">### Why support multiple backends?</span></span>
+<span id="cb1-154"><a href="#cb1-154" aria-hidden="true" tabindex="-1"></a>**I want to define a custom dynamical system:**</span>
+<span id="cb1-155"><a href="#cb1-155" aria-hidden="true" tabindex="-1"></a>→ <span class="co">[</span><span class="ot">UI Framework Architecture</span><span class="co">](UI_Framework_Architecture.qmd)</span></span>
+<span id="cb1-156"><a href="#cb1-156" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-157"><a href="#cb1-157" aria-hidden="true" tabindex="-1"></a>**I want to implement a custom integrator:**</span>
+<span id="cb1-158"><a href="#cb1-158" aria-hidden="true" tabindex="-1"></a>→ <span class="co">[</span><span class="ot">Integration Framework</span><span class="co">](Integration_Framework_Architecture.qmd)</span></span>
 <span id="cb1-159"><a href="#cb1-159" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-160"><a href="#cb1-160" aria-hidden="true" tabindex="-1"></a>**Short answer:** Different backends excel at different tasks—NumPy for CPU, PyTorch for GPUs/neural networks, JAX for optimization.</span>
-<span id="cb1-161"><a href="#cb1-161" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-162"><a href="#cb1-162" aria-hidden="true" tabindex="-1"></a>**Long answer:** See <span class="co">[</span><span class="ot">Design Philosophy</span><span class="co">](cdesym_Design_Philosophy.qmd#sec-backend-agnosticism)</span></span>
-<span id="cb1-163"><a href="#cb1-163" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-164"><a href="#cb1-164" aria-hidden="true" tabindex="-1"></a><span class="fu">### Where does symbolic-to-numerical compilation happen?</span></span>
+<span id="cb1-160"><a href="#cb1-160" aria-hidden="true" tabindex="-1"></a>**I want to extend the system base classes:**</span>
+<span id="cb1-161"><a href="#cb1-161" aria-hidden="true" tabindex="-1"></a>→ <span class="co">[</span><span class="ot">Delegation Layer</span><span class="co">](Delegation_Layer_Architecture.qmd)</span></span>
+<span id="cb1-162"><a href="#cb1-162" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-163"><a href="#cb1-163" aria-hidden="true" tabindex="-1"></a>**I want to use or extend control design (LQR, Kalman, LQG):**</span>
+<span id="cb1-164"><a href="#cb1-164" aria-hidden="true" tabindex="-1"></a>→ <span class="co">[</span><span class="ot">Control Framework Architecture</span><span class="co">](Control_Framework_Architecture.qmd)</span></span>
 <span id="cb1-165"><a href="#cb1-165" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-166"><a href="#cb1-166" aria-hidden="true" tabindex="-1"></a>**Short answer:** In the <span class="in">`CodeGenerator`</span> utility, with per-backend caching.</span>
-<span id="cb1-167"><a href="#cb1-167" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-168"><a href="#cb1-168" aria-hidden="true" tabindex="-1"></a>**Long answer:** See <span class="co">[</span><span class="ot">Delegation Layer</span><span class="co">](Delegation_Layer_Architecture.qmd#sec-codegenerator)</span></span>
-<span id="cb1-169"><a href="#cb1-169" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-170"><a href="#cb1-170" aria-hidden="true" tabindex="-1"></a><span class="fu">### How are integrators selected automatically?</span></span>
+<span id="cb1-166"><a href="#cb1-166" aria-hidden="true" tabindex="-1"></a>**I want to customize or extend plotting:**</span>
+<span id="cb1-167"><a href="#cb1-167" aria-hidden="true" tabindex="-1"></a>→ <span class="co">[</span><span class="ot">Visualization Framework</span><span class="co">](Visualization_Framework_Architecture.qmd)</span></span>
+<span id="cb1-168"><a href="#cb1-168" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-169"><a href="#cb1-169" aria-hidden="true" tabindex="-1"></a>**I want to understand symbolic-to-numerical compilation:**</span>
+<span id="cb1-170"><a href="#cb1-170" aria-hidden="true" tabindex="-1"></a>→ <span class="co">[</span><span class="ot">Delegation Layer</span><span class="co">](Delegation_Layer_Architecture.qmd)</span> → CodeGenerator</span>
 <span id="cb1-171"><a href="#cb1-171" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-172"><a href="#cb1-172" aria-hidden="true" tabindex="-1"></a>**Short answer:** Through the <span class="in">`IntegratorFactory`</span> which chooses based on system properties and backend.</span>
-<span id="cb1-173"><a href="#cb1-173" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-174"><a href="#cb1-174" aria-hidden="true" tabindex="-1"></a>**Long answer:** See <span class="co">[</span><span class="ot">Integration Framework</span><span class="co">](Integration_Framework_Architecture.qmd#sec-integratorfactory)</span></span>
+<span id="cb1-172"><a href="#cb1-172" aria-hidden="true" tabindex="-1"></a>**I want to add a new backend (e.g., TensorFlow):**</span>
+<span id="cb1-173"><a href="#cb1-173" aria-hidden="true" tabindex="-1"></a>→ <span class="co">[</span><span class="ot">Design Philosophy</span><span class="co">](cdesym_Design_Philosophy.qmd)</span> → Extension Points</span>
+<span id="cb1-174"><a href="#cb1-174" aria-hidden="true" tabindex="-1"></a>→ <span class="co">[</span><span class="ot">Delegation Layer</span><span class="co">](Delegation_Layer_Architecture.qmd)</span> → BackendManager</span>
 <span id="cb1-175"><a href="#cb1-175" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-176"><a href="#cb1-176" aria-hidden="true" tabindex="-1"></a><span class="fu">### How does the framework avoid code duplication?</span></span>
+<span id="cb1-176"><a href="#cb1-176" aria-hidden="true" tabindex="-1"></a><span class="fu">## Architecture Statistics</span></span>
 <span id="cb1-177"><a href="#cb1-177" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-178"><a href="#cb1-178" aria-hidden="true" tabindex="-1"></a>**Short answer:** Through <span class="in">`SymbolicSystemBase`</span> providing shared functionality to both continuous and discrete systems.</span>
+<span id="cb1-178"><a href="#cb1-178" aria-hidden="true" tabindex="-1"></a>The framework consists of:</span>
 <span id="cb1-179"><a href="#cb1-179" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-180"><a href="#cb1-180" aria-hidden="true" tabindex="-1"></a>**Long answer:** See <span class="co">[</span><span class="ot">Design Philosophy</span><span class="co">](cdesym_Design_Philosophy.qmd#sec-zero-code-duplication)</span></span>
-<span id="cb1-181"><a href="#cb1-181" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-182"><a href="#cb1-182" aria-hidden="true" tabindex="-1"></a><span class="fu">## Contributing to the Framework</span></span>
-<span id="cb1-183"><a href="#cb1-183" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-184"><a href="#cb1-184" aria-hidden="true" tabindex="-1"></a>If you're interested in contributing:</span>
-<span id="cb1-185"><a href="#cb1-185" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-186"><a href="#cb1-186" aria-hidden="true" tabindex="-1"></a><span class="ss">1. </span>**Start with [Design Philosophy](cdesym_Design_Philosophy.qmd)** to understand core principles</span>
-<span id="cb1-187"><a href="#cb1-187" aria-hidden="true" tabindex="-1"></a><span class="ss">2. </span>**Study the relevant layer docs** for your contribution area</span>
-<span id="cb1-188"><a href="#cb1-188" aria-hidden="true" tabindex="-1"></a><span class="ss">3. </span>**Follow the established patterns** (composition, type-driven design, etc.)</span>
-<span id="cb1-189"><a href="#cb1-189" aria-hidden="true" tabindex="-1"></a><span class="ss">4. </span>**Write comprehensive tests** for each component in isolation</span>
-<span id="cb1-190"><a href="#cb1-190" aria-hidden="true" tabindex="-1"></a><span class="ss">5. </span>**Document your additions** with clear examples and type annotations</span>
-<span id="cb1-191"><a href="#cb1-191" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-192"><a href="#cb1-192" aria-hidden="true" tabindex="-1"></a>See <span class="co">[</span><span class="ot">Contributing Guidelines</span><span class="co">](../contributing/index.qmd)</span> for more details.</span>
+<span id="cb1-180"><a href="#cb1-180" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**50+ core files** organized into 7 architectural layers</span>
+<span id="cb1-181"><a href="#cb1-181" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**200+ types** for semantic clarity and IDE support</span>
+<span id="cb1-182"><a href="#cb1-182" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**55+ integration methods** across NumPy, PyTorch, JAX, and Julia backends</span>
+<span id="cb1-183"><a href="#cb1-183" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**11 delegation layer utilities** providing specialized services</span>
+<span id="cb1-184"><a href="#cb1-184" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Classical control algorithms** (LQR, Kalman, LQG, stability, controllability, observability)</span>
+<span id="cb1-185"><a href="#cb1-185" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**8 core UI framework classes** for system definition</span>
+<span id="cb1-186"><a href="#cb1-186" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**16+ plot types** for comprehensive visualization</span>
+<span id="cb1-187"><a href="#cb1-187" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Zero code duplication** through strategic abstraction</span>
+<span id="cb1-188"><a href="#cb1-188" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-189"><a href="#cb1-189" aria-hidden="true" tabindex="-1"></a><span class="fu">## Design Principles Summary</span></span>
+<span id="cb1-190"><a href="#cb1-190" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-191"><a href="#cb1-191" aria-hidden="true" tabindex="-1"></a>::: {.callout-tip}</span>
+<span id="cb1-192"><a href="#cb1-192" aria-hidden="true" tabindex="-1"></a><span class="fu">## Core Principles</span></span>
 <span id="cb1-193"><a href="#cb1-193" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-194"><a href="#cb1-194" aria-hidden="true" tabindex="-1"></a><span class="fu">## Getting Help</span></span>
-<span id="cb1-195"><a href="#cb1-195" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-196"><a href="#cb1-196" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Questions about architecture?** Open a discussion on GitHub</span>
-<span id="cb1-197"><a href="#cb1-197" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Found a design issue?** File an issue with the "architecture" label</span>
-<span id="cb1-198"><a href="#cb1-198" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Want to propose an enhancement?** Start with a discussion to align with design principles</span>
-<span id="cb1-199"><a href="#cb1-199" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-200"><a href="#cb1-200" aria-hidden="true" tabindex="-1"></a>---</span>
-<span id="cb1-201"><a href="#cb1-201" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-202"><a href="#cb1-202" aria-hidden="true" tabindex="-1"></a>**Remember:** Most users don't need to read architecture documentation. The framework is designed so you can be productive without understanding its internals. These documents are here when you need them.</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button" data-in-quarto-modal=""><i class="bi"></i></button></div>
+<span id="cb1-194"><a href="#cb1-194" aria-hidden="true" tabindex="-1"></a><span class="ss">1. </span>**Type-Driven Design** - Types are not just annotations—they are the architecture</span>
+<span id="cb1-195"><a href="#cb1-195" aria-hidden="true" tabindex="-1"></a><span class="ss">2. </span>**Composition Over Inheritance** - Build systems from specialized utilities</span>
+<span id="cb1-196"><a href="#cb1-196" aria-hidden="true" tabindex="-1"></a><span class="ss">3. </span>**Backend Agnosticism** - Write once, run on NumPy/PyTorch/JAX</span>
+<span id="cb1-197"><a href="#cb1-197" aria-hidden="true" tabindex="-1"></a><span class="ss">4. </span>**Zero Code Duplication** - Every line exists in exactly one place</span>
+<span id="cb1-198"><a href="#cb1-198" aria-hidden="true" tabindex="-1"></a><span class="ss">5. </span>**Structured Results** - TypedDict for all outputs with IDE support</span>
+<span id="cb1-199"><a href="#cb1-199" aria-hidden="true" tabindex="-1"></a><span class="ss">6. </span>**Protocol-Based Interfaces** - Duck typing with type safety</span>
+<span id="cb1-200"><a href="#cb1-200" aria-hidden="true" tabindex="-1"></a><span class="ss">7. </span>**Factory Pattern** - Hide complexity behind simple creation methods</span>
+<span id="cb1-201"><a href="#cb1-201" aria-hidden="true" tabindex="-1"></a><span class="ss">8. </span>**Semantic Naming** - Names convey mathematical meaning</span>
+<span id="cb1-202"><a href="#cb1-202" aria-hidden="true" tabindex="-1"></a><span class="ss">9. </span>**Progressive Disclosure** - Simple things simple, complex things possible</span>
+<span id="cb1-203"><a href="#cb1-203" aria-hidden="true" tabindex="-1"></a>:::</span>
+<span id="cb1-204"><a href="#cb1-204" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-205"><a href="#cb1-205" aria-hidden="true" tabindex="-1"></a><span class="fu">## Common Architectural Questions</span></span>
+<span id="cb1-206"><a href="#cb1-206" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-207"><a href="#cb1-207" aria-hidden="true" tabindex="-1"></a><span class="fu">### Why composition instead of inheritance?</span></span>
+<span id="cb1-208"><a href="#cb1-208" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-209"><a href="#cb1-209" aria-hidden="true" tabindex="-1"></a>**Short answer:** Single responsibility, testability, and flexibility.</span>
+<span id="cb1-210"><a href="#cb1-210" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-211"><a href="#cb1-211" aria-hidden="true" tabindex="-1"></a>**Long answer:** See <span class="co">[</span><span class="ot">Design Philosophy</span><span class="co">](cdesym_Design_Philosophy.qmd#sec-composition-over-inheritance)</span></span>
+<span id="cb1-212"><a href="#cb1-212" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-213"><a href="#cb1-213" aria-hidden="true" tabindex="-1"></a><span class="fu">### Why support multiple backends?</span></span>
+<span id="cb1-214"><a href="#cb1-214" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-215"><a href="#cb1-215" aria-hidden="true" tabindex="-1"></a>**Short answer:** Different backends excel at different tasks—NumPy for CPU, PyTorch for GPUs/neural networks, JAX for optimization.</span>
+<span id="cb1-216"><a href="#cb1-216" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-217"><a href="#cb1-217" aria-hidden="true" tabindex="-1"></a>**Long answer:** See <span class="co">[</span><span class="ot">Design Philosophy</span><span class="co">](cdesym_Design_Philosophy.qmd#sec-backend-agnosticism)</span></span>
+<span id="cb1-218"><a href="#cb1-218" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-219"><a href="#cb1-219" aria-hidden="true" tabindex="-1"></a><span class="fu">### Where does symbolic-to-numerical compilation happen?</span></span>
+<span id="cb1-220"><a href="#cb1-220" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-221"><a href="#cb1-221" aria-hidden="true" tabindex="-1"></a>**Short answer:** In the <span class="in">`CodeGenerator`</span> utility, with per-backend caching.</span>
+<span id="cb1-222"><a href="#cb1-222" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-223"><a href="#cb1-223" aria-hidden="true" tabindex="-1"></a>**Long answer:** See <span class="co">[</span><span class="ot">Delegation Layer</span><span class="co">](Delegation_Layer_Architecture.qmd#sec-codegenerator)</span></span>
+<span id="cb1-224"><a href="#cb1-224" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-225"><a href="#cb1-225" aria-hidden="true" tabindex="-1"></a><span class="fu">### How are integrators selected automatically?</span></span>
+<span id="cb1-226"><a href="#cb1-226" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-227"><a href="#cb1-227" aria-hidden="true" tabindex="-1"></a>**Short answer:** Through the <span class="in">`IntegratorFactory`</span> which chooses based on system properties and backend.</span>
+<span id="cb1-228"><a href="#cb1-228" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-229"><a href="#cb1-229" aria-hidden="true" tabindex="-1"></a>**Long answer:** See <span class="co">[</span><span class="ot">Integration Framework</span><span class="co">](Integration_Framework_Architecture.qmd#sec-integratorfactory)</span></span>
+<span id="cb1-230"><a href="#cb1-230" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-231"><a href="#cb1-231" aria-hidden="true" tabindex="-1"></a><span class="fu">### How does the framework avoid code duplication?</span></span>
+<span id="cb1-232"><a href="#cb1-232" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-233"><a href="#cb1-233" aria-hidden="true" tabindex="-1"></a>**Short answer:** Through <span class="in">`SymbolicSystemBase`</span> providing shared functionality to both continuous and discrete systems.</span>
+<span id="cb1-234"><a href="#cb1-234" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-235"><a href="#cb1-235" aria-hidden="true" tabindex="-1"></a>**Long answer:** See <span class="co">[</span><span class="ot">UI Framework Architecture</span><span class="co">](UI_Framework_Architecture.qmd#sec-layer-0)</span> and <span class="co">[</span><span class="ot">Design Philosophy</span><span class="co">](cdesym_Design_Philosophy.qmd#sec-zero-code-duplication)</span></span>
+<span id="cb1-236"><a href="#cb1-236" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-237"><a href="#cb1-237" aria-hidden="true" tabindex="-1"></a><span class="fu">### What types should I use for my custom components?</span></span>
+<span id="cb1-238"><a href="#cb1-238" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-239"><a href="#cb1-239" aria-hidden="true" tabindex="-1"></a>**Short answer:** Use semantic types like <span class="in">`StateVector`</span>, <span class="in">`ControlVector`</span>, and TypedDict results like <span class="in">`IntegrationResult`</span>.</span>
+<span id="cb1-240"><a href="#cb1-240" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-241"><a href="#cb1-241" aria-hidden="true" tabindex="-1"></a>**Long answer:** See <span class="co">[</span><span class="ot">Type System Architecture</span><span class="co">](Type_System_Architecture.qmd)</span></span>
+<span id="cb1-242"><a href="#cb1-242" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-243"><a href="#cb1-243" aria-hidden="true" tabindex="-1"></a><span class="fu">### How do I design an LQR controller?</span></span>
+<span id="cb1-244"><a href="#cb1-244" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-245"><a href="#cb1-245" aria-hidden="true" tabindex="-1"></a>**Short answer:** Use <span class="in">`system.control.design_lqr(A, B, Q, R)`</span> after linearizing your system.</span>
+<span id="cb1-246"><a href="#cb1-246" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-247"><a href="#cb1-247" aria-hidden="true" tabindex="-1"></a>**Long answer:** See <span class="co">[</span><span class="ot">Control Framework Architecture</span><span class="co">](Control_Framework_Architecture.qmd#sec-control-design)</span></span>
+<span id="cb1-248"><a href="#cb1-248" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-249"><a href="#cb1-249" aria-hidden="true" tabindex="-1"></a><span class="fu">### How do I define a custom dynamical system?</span></span>
+<span id="cb1-250"><a href="#cb1-250" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-251"><a href="#cb1-251" aria-hidden="true" tabindex="-1"></a>**Short answer:** Subclass <span class="in">`ContinuousSymbolicSystem`</span> or <span class="in">`DiscreteSymbolicSystem`</span> and implement <span class="in">`define_system()`</span>.</span>
+<span id="cb1-252"><a href="#cb1-252" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-253"><a href="#cb1-253" aria-hidden="true" tabindex="-1"></a>**Long answer:** See <span class="co">[</span><span class="ot">UI Framework Architecture</span><span class="co">](UI_Framework_Architecture.qmd#sec-layer-2)</span></span>
+<span id="cb1-254"><a href="#cb1-254" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-255"><a href="#cb1-255" aria-hidden="true" tabindex="-1"></a><span class="fu">## Contributing to the Framework</span></span>
+<span id="cb1-256"><a href="#cb1-256" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-257"><a href="#cb1-257" aria-hidden="true" tabindex="-1"></a>If you're interested in contributing:</span>
+<span id="cb1-258"><a href="#cb1-258" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-259"><a href="#cb1-259" aria-hidden="true" tabindex="-1"></a><span class="ss">1. </span>**Start with [Design Philosophy](cdesym_Design_Philosophy.qmd)** to understand core principles</span>
+<span id="cb1-260"><a href="#cb1-260" aria-hidden="true" tabindex="-1"></a><span class="ss">2. </span>**Review [Type System Architecture](Type_System_Architecture.qmd)** to understand type conventions</span>
+<span id="cb1-261"><a href="#cb1-261" aria-hidden="true" tabindex="-1"></a><span class="ss">3. </span>**Study the relevant layer docs** for your contribution area:</span>
+<span id="cb1-262"><a href="#cb1-262" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>System definition → <span class="co">[</span><span class="ot">UI Framework Architecture</span><span class="co">](UI_Framework_Architecture.qmd)</span></span>
+<span id="cb1-263"><a href="#cb1-263" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Internal utilities → <span class="co">[</span><span class="ot">Delegation Layer</span><span class="co">](Delegation_Layer_Architecture.qmd)</span></span>
+<span id="cb1-264"><a href="#cb1-264" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Numerical integration → <span class="co">[</span><span class="ot">Integration Framework</span><span class="co">](Integration_Framework_Architecture.qmd)</span></span>
+<span id="cb1-265"><a href="#cb1-265" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Control algorithms → <span class="co">[</span><span class="ot">Control Framework</span><span class="co">](Control_Framework_Architecture.qmd)</span></span>
+<span id="cb1-266"><a href="#cb1-266" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Visualization → <span class="co">[</span><span class="ot">Visualization Framework</span><span class="co">](Visualization_Framework_Architecture.qmd)</span></span>
+<span id="cb1-267"><a href="#cb1-267" aria-hidden="true" tabindex="-1"></a><span class="ss">4. </span>**Follow the established patterns** (composition, type-driven design, etc.)</span>
+<span id="cb1-268"><a href="#cb1-268" aria-hidden="true" tabindex="-1"></a><span class="ss">5. </span>**Write comprehensive tests** for each component in isolation</span>
+<span id="cb1-269"><a href="#cb1-269" aria-hidden="true" tabindex="-1"></a><span class="ss">6. </span>**Document your additions** with clear examples and type annotations</span>
+<span id="cb1-270"><a href="#cb1-270" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-271"><a href="#cb1-271" aria-hidden="true" tabindex="-1"></a>See <span class="co">[</span><span class="ot">Contributing Guidelines</span><span class="co">](../contributing/index.qmd)</span> for more details.</span>
+<span id="cb1-272"><a href="#cb1-272" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-273"><a href="#cb1-273" aria-hidden="true" tabindex="-1"></a><span class="fu">## Getting Help</span></span>
+<span id="cb1-274"><a href="#cb1-274" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-275"><a href="#cb1-275" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Questions about architecture?** Open a discussion on GitHub</span>
+<span id="cb1-276"><a href="#cb1-276" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Found a design issue?** File an issue with the "architecture" label</span>
+<span id="cb1-277"><a href="#cb1-277" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Want to propose an enhancement?** Start with a discussion to align with design principles</span>
+<span id="cb1-278"><a href="#cb1-278" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-279"><a href="#cb1-279" aria-hidden="true" tabindex="-1"></a>---</span>
+<span id="cb1-280"><a href="#cb1-280" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-281"><a href="#cb1-281" aria-hidden="true" tabindex="-1"></a>**Remember:** Most users don't need to read architecture documentation. The framework is designed so you can be productive without understanding its internals. These documents are here when you need them.</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button" data-in-quarto-modal=""><i class="bi"></i></button></div>
 </div></div></div></div></div>
 </div> <!-- /content -->
 

@@ -608,63 +608,108 @@
     "href": "architecture/index.html",
     "title": "Architecture",
     "section": "",
-    "text": "ControlDESymulation is built on a type-driven, composition-based architecture that achieves mathematical rigor, software engineering excellence, and multi-backend performance simultaneously. This section provides comprehensive documentation of the framework’s internal design for developers and advanced users.\n\n\n\n\n\n\nImportantWho Should Read This?\n\n\n\nMost users do NOT need to read architecture documentation. If you’re:\n\nUsing built-in systems from cdesym.systems.builtin.*\nDefining custom systems by subclassing ContinuousSymbolicSystem or DiscreteSymbolicSystem\nFollowing tutorials and examples\n\nThen you can skip this section entirely. The architecture documentation is intended for:\n\nFramework contributors and maintainers\nAdvanced users implementing custom integrators or utilities\nResearchers studying the framework’s design\nDevelopers extending the framework with new capabilities"
+    "text": "ControlDESymulation is built on a type-driven, composition-based architecture that achieves mathematical rigor, software engineering excellence, and multi-backend performance simultaneously. This section provides comprehensive documentation of the framework’s internal design for developers and advanced users.\n\n\n\n\n\n\nImportantWho Should Read This?\n\n\n\nMost users do NOT need to read architecture documentation. If you’re:\n\nUsing built-in systems from cdesym.systems.builtin.*\nDefining custom systems by subclassing ContinuousSymbolicSystem or DiscreteSymbolicSystem\nFollowing tutorials and examples\n\nThen you can skip this section entirely. The architecture documentation is intended for:\n\nFramework contributors and maintainers\nAdvanced users implementing custom integrators or utilities\nResearchers studying the framework’s design\nDevelopers extending the framework with new capabilities",
+    "crumbs": [
+      "Installation Guide",
+      "Framework Design",
+      "Overview"
+    ]
   },
   {
     "objectID": "architecture/index.html#introduction",
     "href": "architecture/index.html#introduction",
     "title": "Architecture",
     "section": "",
-    "text": "ControlDESymulation is built on a type-driven, composition-based architecture that achieves mathematical rigor, software engineering excellence, and multi-backend performance simultaneously. This section provides comprehensive documentation of the framework’s internal design for developers and advanced users.\n\n\n\n\n\n\nImportantWho Should Read This?\n\n\n\nMost users do NOT need to read architecture documentation. If you’re:\n\nUsing built-in systems from cdesym.systems.builtin.*\nDefining custom systems by subclassing ContinuousSymbolicSystem or DiscreteSymbolicSystem\nFollowing tutorials and examples\n\nThen you can skip this section entirely. The architecture documentation is intended for:\n\nFramework contributors and maintainers\nAdvanced users implementing custom integrators or utilities\nResearchers studying the framework’s design\nDevelopers extending the framework with new capabilities"
+    "text": "ControlDESymulation is built on a type-driven, composition-based architecture that achieves mathematical rigor, software engineering excellence, and multi-backend performance simultaneously. This section provides comprehensive documentation of the framework’s internal design for developers and advanced users.\n\n\n\n\n\n\nImportantWho Should Read This?\n\n\n\nMost users do NOT need to read architecture documentation. If you’re:\n\nUsing built-in systems from cdesym.systems.builtin.*\nDefining custom systems by subclassing ContinuousSymbolicSystem or DiscreteSymbolicSystem\nFollowing tutorials and examples\n\nThen you can skip this section entirely. The architecture documentation is intended for:\n\nFramework contributors and maintainers\nAdvanced users implementing custom integrators or utilities\nResearchers studying the framework’s design\nDevelopers extending the framework with new capabilities",
+    "crumbs": [
+      "Installation Guide",
+      "Framework Design",
+      "Overview"
+    ]
   },
   {
     "objectID": "architecture/index.html#architecture-documents",
     "href": "architecture/index.html#architecture-documents",
     "title": "Architecture",
     "section": "Architecture Documents",
-    "text": "Architecture Documents\nThe framework consists of 4 architectural layers, each documented separately:\n\n1. Design Philosophy\nStart here to understand the core principles that guide the framework’s design.\nTopics covered:\n\nType-driven design philosophy\nComposition over inheritance\nBackend agnosticism\nZero code duplication\nProgressive disclosure of complexity\nDesign patterns and trade-offs\n\nRead this if: You want to understand why the framework is built the way it is, or you’re contributing new features.\n\n\n2. Delegation Layer\nThe internal service layer that provides specialized utilities through composition.\nComponents documented:\n\nCore Utilities: BackendManager, CodeGenerator, EquilibriumHandler, SymbolicValidator\nDeterministic Evaluation: DynamicsEvaluator, LinearizationEngine, ObservationEngine\nStochastic Support: DiffusionHandler, NoiseCharacterizer, SDEValidator\nLow-Level Utilities: codegen_utils\n\nRead this if: You’re implementing custom system types or need to understand how symbolic-to-numerical compilation works.\n\n\n3. Integration Framework\nMulti-backend numerical integration for ODEs and SDEs.\nTopics covered:\n\nIntegrator architecture and factories\nDeterministic integrators (Scipy, TorchDiffEq, Diffrax, DiffEqPy, Fixed-step)\nStochastic integrators (TorchSDE, Diffrax SDE, DiffEqPy SDE)\n40+ integration methods across 4 backends\nIntegration result types and performance tracking\n\nRead this if: You’re implementing custom integrators, need to understand method selection, or want to optimize integration performance.\n\n\n4. Visualization Framework\nInteractive, publication-ready plotting for dynamical systems analysis.\nComponents documented:\n\nTheming layer (colors, styles, themes)\nTrajectoryPlotter - Time-domain visualization\nPhasePortraitPlotter - State-space visualization\nControlPlotter - Control analysis plots\n\nRead this if: You’re extending visualization capabilities or need to understand the plotting system architecture."
+    "text": "Architecture Documents\nThe framework consists of 7 architectural layers, each documented separately:\n\n1. Design Philosophy\nStart here to understand the core principles that guide the framework’s design.\nTopics covered:\n\nType-driven design philosophy\nComposition over inheritance\nBackend agnosticism\nZero code duplication\nProgressive disclosure of complexity\nDesign patterns and trade-offs\n\nRead this if: You want to understand why the framework is built the way it is, or you’re contributing new features.\n\n\n2. Type System Architecture\nThe foundational Layer 0 that provides semantic types, structured results, and type-safe interfaces.\nTopics covered:\n\nMulti-backend array types (NumPy, PyTorch, JAX)\nSemantic vector/matrix types (StateVector, GainMatrix, etc.)\nTypedDict structured results (IntegrationResult, LQRResult, etc.)\nProtocol-based interfaces for duck typing with type safety\n200+ type definitions across 8 modules\n\nRead this if: You’re implementing custom components, need to understand type conventions, or want to leverage IDE support.\n\n\n3. UI Framework Architecture\nThe user-facing Layer 3 for defining and working with dynamical systems.\nComponents documented:\n\nLayer 0: SymbolicSystemBase - Time-domain agnostic foundation\nLayer 1: ContinuousSystemBase, DiscreteSystemBase - Time-domain interfaces\nLayer 2: ContinuousSymbolicSystem, DiscreteSymbolicSystem - Concrete implementations\nLayer 3: ContinuousStochasticSystem, DiscreteStochasticSystem - Stochastic extensions\n\nRead this if: You’re defining custom systems, extending the framework, or need to understand the class hierarchy.\n\n\n4. Delegation Layer\nThe internal service layer that provides specialized utilities through composition.\nComponents documented:\n\nCore Utilities: BackendManager, CodeGenerator, EquilibriumHandler, SymbolicValidator\nDeterministic Evaluation: DynamicsEvaluator, LinearizationEngine, ObservationEngine\nStochastic Support: DiffusionHandler, NoiseCharacterizer, SDEValidator\nLow-Level Utilities: codegen_utils\n\nRead this if: You’re implementing custom system types or need to understand how symbolic-to-numerical compilation works.\n\n\n5. Integration Framework\nMulti-backend numerical integration for ODEs and SDEs.\nTopics covered:\n\nIntegrator architecture and factories\nDeterministic integrators (Scipy, TorchDiffEq, Diffrax, DiffEqPy, Fixed-step)\nStochastic integrators (TorchSDE, Diffrax SDE, DiffEqPy SDE)\n40+ integration methods across 4 backends\nIntegration result types and performance tracking\n\nRead this if: You’re implementing custom integrators, need to understand method selection, or want to optimize integration performance.\n\n\n6. Control Framework Architecture\nClassical control theory algorithms for analysis and synthesis.\nTopics covered:\n\nControl Design: LQR, Kalman filter, LQG controller design\nSystem Analysis: Stability, controllability, observability analysis\nPure functional architecture with thin composition wrappers\nUnified continuous/discrete interface\nTypedDict results (LQRResult, KalmanFilterResult, StabilityInfo, etc.)\n\nRead this if: You’re using control design methods, need to understand the control API, or want to extend control capabilities.\n\n\n7. Visualization Framework\nInteractive, publication-ready plotting for dynamical systems analysis.\nComponents documented:\n\nTheming layer (colors, styles, themes)\nTrajectoryPlotter - Time-domain visualization\nPhasePortraitPlotter - State-space visualization\nControlPlotter - Control analysis plots\n\nRead this if: You’re extending visualization capabilities or need to understand the plotting system architecture.",
+    "crumbs": [
+      "Installation Guide",
+      "Framework Design",
+      "Overview"
+    ]
   },
   {
     "objectID": "architecture/index.html#quick-navigation",
     "href": "architecture/index.html#quick-navigation",
     "title": "Architecture",
     "section": "Quick Navigation",
-    "text": "Quick Navigation\n\nBy User Level\nBeginners: - Skip architecture docs - use Getting Started instead\nIntermediate Users: - Read Design Philosophy for conceptual understanding - Skim Visualization Framework for plotting capabilities\nAdvanced Users: - Study all architecture documents - Focus on Integration Framework for custom numerical methods - Reference Delegation Layer for system extension\n\n\nBy Use Case\nI want to understand the framework’s design principles: → Design Philosophy\nI want to implement a custom integrator: → Integration Framework\nI want to extend the system base classes: → Delegation Layer\nI want to customize or extend plotting: → Visualization Framework\nI want to understand symbolic-to-numerical compilation: → Delegation Layer → CodeGenerator\nI want to add a new backend (e.g., TensorFlow): → Design Philosophy → Extension Points\n→ Delegation Layer → BackendManager"
+    "text": "Quick Navigation\n\nBy User Level\nBeginners: - Skip architecture docs - use Getting Started instead\nIntermediate Users: - Read Design Philosophy for conceptual understanding - Skim UI Framework for custom system definition - Skim Visualization Framework for plotting capabilities\nAdvanced Users: - Study all architecture documents - Focus on Type System for understanding type conventions - Focus on Integration Framework for custom numerical methods - Reference Delegation Layer for system extension - Reference Control Framework for control design algorithms\n\n\nBy Use Case\nI want to understand the framework’s design principles: → Design Philosophy\nI want to understand the type system and conventions: → Type System Architecture\nI want to define a custom dynamical system: → UI Framework Architecture\nI want to implement a custom integrator: → Integration Framework\nI want to extend the system base classes: → Delegation Layer\nI want to use or extend control design (LQR, Kalman, LQG): → Control Framework Architecture\nI want to customize or extend plotting: → Visualization Framework\nI want to understand symbolic-to-numerical compilation: → Delegation Layer → CodeGenerator\nI want to add a new backend (e.g., TensorFlow): → Design Philosophy → Extension Points → Delegation Layer → BackendManager",
+    "crumbs": [
+      "Installation Guide",
+      "Framework Design",
+      "Overview"
+    ]
   },
   {
     "objectID": "architecture/index.html#architecture-statistics",
     "href": "architecture/index.html#architecture-statistics",
     "title": "Architecture",
     "section": "Architecture Statistics",
-    "text": "Architecture Statistics\nThe framework consists of:\n\n39 core files organized into 4 architectural layers\n200+ types for semantic clarity and IDE support\n55+ integration methods across NumPy, PyTorch, JAX, and Julia backends\n11 delegation layer utilities providing specialized services\n16+ plot types for comprehensive visualization\nZero code duplication through strategic abstraction"
+    "text": "Architecture Statistics\nThe framework consists of:\n\n50+ core files organized into 7 architectural layers\n200+ types for semantic clarity and IDE support\n55+ integration methods across NumPy, PyTorch, JAX, and Julia backends\n11 delegation layer utilities providing specialized services\nClassical control algorithms (LQR, Kalman, LQG, stability, controllability, observability)\n8 core UI framework classes for system definition\n16+ plot types for comprehensive visualization\nZero code duplication through strategic abstraction",
+    "crumbs": [
+      "Installation Guide",
+      "Framework Design",
+      "Overview"
+    ]
   },
   {
     "objectID": "architecture/index.html#design-principles-summary",
     "href": "architecture/index.html#design-principles-summary",
     "title": "Architecture",
     "section": "Design Principles Summary",
-    "text": "Design Principles Summary\n\n\n\n\n\n\nTipCore Principles\n\n\n\n\nType-Driven Design - Types are not just annotations—they are the architecture\nComposition Over Inheritance - Build systems from specialized utilities\nBackend Agnosticism - Write once, run on NumPy/PyTorch/JAX\nZero Code Duplication - Every line exists in exactly one place\nStructured Results - TypedDict for all outputs with IDE support\nProtocol-Based Interfaces - Duck typing with type safety\nFactory Pattern - Hide complexity behind simple creation methods\nSemantic Naming - Names convey mathematical meaning\nProgressive Disclosure - Simple things simple, complex things possible"
+    "text": "Design Principles Summary\n\n\n\n\n\n\nTipCore Principles\n\n\n\n\nType-Driven Design - Types are not just annotations—they are the architecture\nComposition Over Inheritance - Build systems from specialized utilities\nBackend Agnosticism - Write once, run on NumPy/PyTorch/JAX\nZero Code Duplication - Every line exists in exactly one place\nStructured Results - TypedDict for all outputs with IDE support\nProtocol-Based Interfaces - Duck typing with type safety\nFactory Pattern - Hide complexity behind simple creation methods\nSemantic Naming - Names convey mathematical meaning\nProgressive Disclosure - Simple things simple, complex things possible",
+    "crumbs": [
+      "Installation Guide",
+      "Framework Design",
+      "Overview"
+    ]
   },
   {
     "objectID": "architecture/index.html#common-architectural-questions",
     "href": "architecture/index.html#common-architectural-questions",
     "title": "Architecture",
     "section": "Common Architectural Questions",
-    "text": "Common Architectural Questions\n\nWhy composition instead of inheritance?\nShort answer: Single responsibility, testability, and flexibility.\nLong answer: See Design Philosophy\n\n\nWhy support multiple backends?\nShort answer: Different backends excel at different tasks—NumPy for CPU, PyTorch for GPUs/neural networks, JAX for optimization.\nLong answer: See Design Philosophy\n\n\nWhere does symbolic-to-numerical compilation happen?\nShort answer: In the CodeGenerator utility, with per-backend caching.\nLong answer: See Delegation Layer\n\n\nHow are integrators selected automatically?\nShort answer: Through the IntegratorFactory which chooses based on system properties and backend.\nLong answer: See Integration Framework\n\n\nHow does the framework avoid code duplication?\nShort answer: Through SymbolicSystemBase providing shared functionality to both continuous and discrete systems.\nLong answer: See Design Philosophy"
+    "text": "Common Architectural Questions\n\nWhy composition instead of inheritance?\nShort answer: Single responsibility, testability, and flexibility.\nLong answer: See Design Philosophy\n\n\nWhy support multiple backends?\nShort answer: Different backends excel at different tasks—NumPy for CPU, PyTorch for GPUs/neural networks, JAX for optimization.\nLong answer: See Design Philosophy\n\n\nWhere does symbolic-to-numerical compilation happen?\nShort answer: In the CodeGenerator utility, with per-backend caching.\nLong answer: See Delegation Layer\n\n\nHow are integrators selected automatically?\nShort answer: Through the IntegratorFactory which chooses based on system properties and backend.\nLong answer: See Integration Framework\n\n\nHow does the framework avoid code duplication?\nShort answer: Through SymbolicSystemBase providing shared functionality to both continuous and discrete systems.\nLong answer: See UI Framework Architecture and Design Philosophy\n\n\nWhat types should I use for my custom components?\nShort answer: Use semantic types like StateVector, ControlVector, and TypedDict results like IntegrationResult.\nLong answer: See Type System Architecture\n\n\nHow do I design an LQR controller?\nShort answer: Use system.control.design_lqr(A, B, Q, R) after linearizing your system.\nLong answer: See Control Framework Architecture\n\n\nHow do I define a custom dynamical system?\nShort answer: Subclass ContinuousSymbolicSystem or DiscreteSymbolicSystem and implement define_system().\nLong answer: See UI Framework Architecture",
+    "crumbs": [
+      "Installation Guide",
+      "Framework Design",
+      "Overview"
+    ]
   },
   {
     "objectID": "architecture/index.html#contributing-to-the-framework",
     "href": "architecture/index.html#contributing-to-the-framework",
     "title": "Architecture",
     "section": "Contributing to the Framework",
-    "text": "Contributing to the Framework\nIf you’re interested in contributing:\n\nStart with Design Philosophy to understand core principles\nStudy the relevant layer docs for your contribution area\nFollow the established patterns (composition, type-driven design, etc.)\nWrite comprehensive tests for each component in isolation\nDocument your additions with clear examples and type annotations\n\nSee Contributing Guidelines for more details."
+    "text": "Contributing to the Framework\nIf you’re interested in contributing:\n\nStart with Design Philosophy to understand core principles\nReview Type System Architecture to understand type conventions\nStudy the relevant layer docs for your contribution area:\n\nSystem definition → UI Framework Architecture\nInternal utilities → Delegation Layer\nNumerical integration → Integration Framework\nControl algorithms → Control Framework\nVisualization → Visualization Framework\n\nFollow the established patterns (composition, type-driven design, etc.)\nWrite comprehensive tests for each component in isolation\nDocument your additions with clear examples and type annotations\n\nSee Contributing Guidelines for more details.",
+    "crumbs": [
+      "Installation Guide",
+      "Framework Design",
+      "Overview"
+    ]
   },
   {
     "objectID": "architecture/index.html#getting-help",
     "href": "architecture/index.html#getting-help",
     "title": "Architecture",
     "section": "Getting Help",
-    "text": "Getting Help\n\nQuestions about architecture? Open a discussion on GitHub\nFound a design issue? File an issue with the “architecture” label\nWant to propose an enhancement? Start with a discussion to align with design principles\n\n\nRemember: Most users don’t need to read architecture documentation. The framework is designed so you can be productive without understanding its internals. These documents are here when you need them."
+    "text": "Getting Help\n\nQuestions about architecture? Open a discussion on GitHub\nFound a design issue? File an issue with the “architecture” label\nWant to propose an enhancement? Start with a discussion to align with design principles\n\n\nRemember: Most users don’t need to read architecture documentation. The framework is designed so you can be productive without understanding its internals. These documents are here when you need them.",
+    "crumbs": [
+      "Installation Guide",
+      "Framework Design",
+      "Overview"
+    ]
   },
   {
     "objectID": "index.html",
@@ -1532,7 +1577,7 @@
     "href": "tutorials/basic_usage.html#sec-simulation",
     "title": "Basic Usage",
     "section": "Simulation",
-    "text": "Simulation\nNow simulate the system:\n\n# Integrate a trajectory with auto-selection of\n# relevant arguments\npendulum_integration_result = pendulum.integrate(\n        x0=x0,\n        t_span = (0.0, 20.0)\n    )\nfor k, v in pendulum_integration_result.items():\n    if k != \"x\" and k != \"t\":\n        print(k, \" : \", v)\n\nsuccess  :  True\nmessage  :  The solver successfully reached the end of the integration interval.\nnfev  :  1442\nnsteps  :  1442\nintegration_time  :  0.029050111770629883\nsolver  :  scipy.RK45\nnjev  :  0\nnlu  :  0\nstatus  :  0",
+    "text": "Simulation\nNow simulate the system:\n\n# Integrate a trajectory with auto-selection of\n# relevant arguments\npendulum_integration_result = pendulum.integrate(\n        x0=x0,\n        t_span = (0.0, 20.0)\n    )\nfor k, v in pendulum_integration_result.items():\n    if k != \"x\" and k != \"t\":\n        print(k, \" : \", v)\n\nsuccess  :  True\nmessage  :  The solver successfully reached the end of the integration interval.\nnfev  :  1442\nnsteps  :  1442\nintegration_time  :  0.03442120552062988\nsolver  :  scipy.RK45\nnjev  :  0\nnlu  :  0\nstatus  :  0",
     "crumbs": [
       "Small Demonstrations of Basic Functionality",
       "Basic Usage"
