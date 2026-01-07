@@ -28,6 +28,7 @@ Comprehensive test suite for method_registry.py covering:
 """
 
 import pytest
+import numpy as np
 
 from cdesym.systems.base.numerical_integration.method_registry import (
     # Classification functions
@@ -47,6 +48,7 @@ from cdesym.systems.base.numerical_integration.method_registry import (
     NORMALIZATION_MAP,
     BACKEND_METHODS,
 )
+from cdesym.systems.base.numerical_integration.integrator_base import StepMode
 
 
 # ============================================================================
@@ -1323,6 +1325,147 @@ class TestDocumentation:
 
         is_valid, error = validate_method("rk4", "jax", is_stochastic=False)
         assert is_valid is True
+
+
+# ============================================================================
+# Integration Tests with IntegratorFactory (Bug #XXX Prevention)
+# ============================================================================
+
+
+class TestMethodRegistryFactoryIntegration:
+    """
+    Test that method registry works correctly with IntegratorFactory.
+
+    Regression Prevention: Ensures normalized names work correctly
+    when passed to IntegratorFactory.
+    """
+
+    def test_normalized_fixed_step_methods_work_with_factory(self):
+        """Normalized fixed-step method names should work in factory."""
+        from cdesym.systems.base.numerical_integration.integrator_factory import (
+            IntegratorFactory,
+        )
+        from unittest.mock import Mock
+
+        mock_system = Mock()
+        mock_system.nx = 2
+        mock_system.nu = 1
+        mock_system.__call__ = Mock(return_value=np.array([1.0, 2.0]))
+
+        # Test that normalized names work
+        for method in ["euler", "rk4", "midpoint", "heun"]:
+            normalized = normalize_method_name(method, "numpy")
+
+            # Should be able to create integrator with normalized name
+            integrator = IntegratorFactory.create(
+                mock_system,
+                backend="numpy",
+                method=normalized,
+                dt=0.01,
+                step_mode=StepMode.FIXED,
+            )
+
+            assert integrator is not None
+
+    def test_is_fixed_step_matches_factory_behavior(self):
+        """is_fixed_step() should match which methods need StepMode.FIXED."""
+        from cdesym.systems.base.numerical_integration.integrator_factory import (
+            IntegratorFactory,
+        )
+        from unittest.mock import Mock
+
+        mock_system = Mock()
+        mock_system.nx = 2
+        mock_system.nu = 1
+        mock_system.__call__ = Mock(return_value=np.array([1.0, 2.0]))
+
+        test_methods = {
+            "euler": True,  # Fixed-step
+            "rk4": True,  # Fixed-step
+            "midpoint": True,  # Fixed-step
+            "heun": True,  # Fixed-step
+            "rk45": False,  # Adaptive
+            "lsoda": False,  # Adaptive
+            "tsit5": False,  # Adaptive
+        }
+
+        for method, expected_fixed in test_methods.items():
+            normalized = normalize_method_name(method, "numpy")
+            is_fixed = is_fixed_step(normalized)
+
+            assert is_fixed == expected_fixed, (
+                f"Method {method} (normalized: {normalized}) "
+                f"is_fixed_step={is_fixed}, expected {expected_fixed}"
+            )
+
+    def test_sde_method_detection_for_factory_validation(self):
+        """is_sde_method() should match what factory validates."""
+        from cdesym.systems.base.numerical_integration.integrator_factory import (
+            IntegratorFactory,
+        )
+        from unittest.mock import Mock
+
+        mock_system = Mock()
+        mock_system.nx = 2
+        mock_system.nu = 1
+
+        sde_methods = ["EM", "euler_maruyama", "milstein", "SRA1"]
+
+        for method in sde_methods:
+            normalized = normalize_method_name(method, "numpy")
+
+            # Should be detected as SDE method
+            assert is_sde_method(
+                normalized
+            ), f"Method {method} (normalized: {normalized}) not detected as SDE"
+
+            # Factory should reject on deterministic system
+            with pytest.raises(ValueError, match="SDE method"):
+                IntegratorFactory.create(
+                    mock_system,
+                    backend="numpy",
+                    method=normalized,
+                    dt=0.01,
+                    step_mode=StepMode.FIXED,
+                )
+
+
+class TestMethodClassificationConsistency:
+    """
+    Ensure method classification is consistent across all contexts.
+
+    Critical for DiscretizedSystem's mode selection logic.
+    """
+
+    def test_fixed_step_classification_stable_across_backends(self):
+        """Fixed-step classification should be same for all backends."""
+        method = "euler"
+
+        classifications = {}
+        for backend in ["numpy", "torch", "jax"]:
+            normalized = normalize_method_name(method, backend)
+            is_fixed = is_fixed_step(normalized)
+            classifications[backend] = is_fixed
+
+        # Should all agree
+        assert (
+            len(set(classifications.values())) == 1
+        ), f"Fixed-step classification inconsistent: {classifications}"
+
+    def test_sde_classification_stable_across_backends(self):
+        """SDE classification should be same for all backends."""
+        method = "euler_maruyama"
+
+        classifications = {}
+        for backend in ["numpy", "torch", "jax"]:
+            normalized = normalize_method_name(method, backend)
+            is_sde = is_sde_method(normalized)
+            classifications[backend] = is_sde
+
+        # Should all agree
+        assert (
+            len(set(classifications.values())) == 1
+        ), f"SDE classification inconsistent: {classifications}"
 
 
 if __name__ == "__main__":
