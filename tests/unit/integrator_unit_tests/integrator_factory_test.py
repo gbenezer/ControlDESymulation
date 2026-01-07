@@ -219,19 +219,24 @@ class TestMethodBackendCompatibility:
         universal_methods = ["euler", "heun", "midpoint", "rk4"]
 
         for method in universal_methods:
-            try:
-                dt: ScalarLike = 0.01
-                integrator = IntegratorFactory.create(
-                    mock_system,
-                    backend="numpy",
-                    method=method,
-                    dt=dt,
-                    step_mode=StepMode.FIXED,
-                )
-                assert integrator is not None
-            except Exception as e:
-                pytest.fail(f"Universal method {method} failed: {e}")
-    
+            for backend in ["numpy", "torch", "jax"]:
+                try:
+                    dt: ScalarLike = 0.01
+                    integrator = IntegratorFactory.create(
+                        mock_system,
+                        backend=backend,
+                        method=method,
+                        dt=dt,
+                        step_mode=StepMode.FIXED,
+                    )
+                    assert integrator is not None
+                    assert integrator.backend == backend
+                except ImportError:
+                    # Expected if torch/jax not installed
+                    pytest.skip(f"{backend} not installed")
+                except Exception as e:
+                    pytest.fail(f"Universal method {method} on {backend} failed: {e}")
+
     def test_backend_specific_method_validated(self, mock_system):
         """Test that backend-specific methods are validated."""
         # fehlberg2 only exists on torch
@@ -406,7 +411,7 @@ class TestHelperMethods:
 
         assert not IntegratorFactory._is_scipy_method("dopri5")
         assert not IntegratorFactory._is_scipy_method("tsit5")
-    
+
     def test_is_julia_method(self):
         """Test _is_julia_method helper correctly identifies Julia methods."""
         # Julia methods (capital first letter)
@@ -439,7 +444,7 @@ class TestMethodListingAndInfo:
         # Now returns categories, not backends as top-level keys
         assert "deterministic_fixed_step" in methods
         assert "deterministic_adaptive" in methods
-        
+
         # Check some expected methods in categories
         assert "euler" in methods["deterministic_fixed_step"]
         assert "rk4" in methods["deterministic_fixed_step"]
@@ -452,11 +457,11 @@ class TestMethodListingAndInfo:
         # Returns categories, not nested by backend
         assert "deterministic_fixed_step" in numpy_methods
         assert "deterministic_adaptive" in numpy_methods
-        
+
         # Check expected methods
         fixed_step = numpy_methods["deterministic_fixed_step"]
         adaptive = numpy_methods["deterministic_adaptive"]
-        
+
         assert "euler" in fixed_step
         assert "rk4" in fixed_step
         assert "LSODA" in adaptive
@@ -607,6 +612,7 @@ class TestErrorHandling:
         """Test error when PyTorch not available for neural ODE."""
         try:
             import torch
+
             pytest.skip("PyTorch is installed")
         except ImportError:
             with pytest.raises(ImportError, match="PyTorch"):
@@ -645,7 +651,7 @@ class TestErrorHandling:
                 backend="jax",
                 method="completely_fake_method_12345",
             )
-    
+
     def test_normalization_works_across_backends(self, mock_system):
         """Test that normalization allows portable canonical names."""
         # This should NOT raise - it's the FEATURE of the registry!
@@ -680,64 +686,54 @@ class TestIntegrationWithActualSystem:
 # Test Class: Method Normalization
 # ============================================================================
 
+
 class TestMethodNormalization:
     """Test that method normalization works across backends."""
-    
+
     def test_lsoda_normalizes_to_backend_equivalent(self, mock_system):
         """Test LSODA normalizes to appropriate method for each backend."""
         # All backends should successfully create an integrator
         # (proving normalization worked)
-        
-        integrator_numpy = IntegratorFactory.create(
-            mock_system, backend="numpy", method="LSODA"
-        )
+
+        integrator_numpy = IntegratorFactory.create(mock_system, backend="numpy", method="LSODA")
         assert integrator_numpy is not None
         assert integrator_numpy.backend == "numpy"
         assert integrator_numpy.method == "LSODA"
-        
-        integrator_torch = IntegratorFactory.create(
-            mock_system, backend="torch", method="LSODA"
-        )
+
+        integrator_torch = IntegratorFactory.create(mock_system, backend="torch", method="LSODA")
         assert integrator_torch is not None
         assert integrator_torch.backend == "torch"
         assert integrator_torch.method == "dopri5"  # Normalized
-        
-        integrator_jax = IntegratorFactory.create(
-            mock_system, backend="jax", method="LSODA"
-        )
+
+        integrator_jax = IntegratorFactory.create(mock_system, backend="jax", method="LSODA")
         assert integrator_jax is not None
         assert integrator_jax.backend == "jax"
         # Don't check solver attribute - just verify creation succeeded
-    
+
     def test_canonical_methods_work_across_backends(self, mock_system):
         """Test canonical method names work on all backends (via normalization)."""
         canonical_methods = ["lsoda", "rk45", "rk23"]
-        
+
         for method in canonical_methods:
             # Each canonical name should work on all backends
             for backend in ["numpy", "torch", "jax"]:
-                integrator = IntegratorFactory.create(
-                    mock_system, backend=backend, method=method
-                )
+                integrator = IntegratorFactory.create(mock_system, backend=backend, method=method)
                 assert integrator is not None
                 assert integrator.backend == backend
-    
+
     def test_rk45_normalizes_correctly(self, mock_system):
         """Test rk45 canonical name works on all backends."""
         # This is the FEATURE - portable canonical names!
         for backend in ["numpy", "torch", "jax"]:
-            integrator = IntegratorFactory.create(
-                mock_system, backend=backend, method="rk45"
-            )
+            integrator = IntegratorFactory.create(mock_system, backend=backend, method="rk45")
             assert integrator is not None
-    
+
     def test_backend_specific_method_fails_on_wrong_backend(self, mock_system):
         """Test truly backend-specific methods fail on wrong backend."""
         # fehlberg2 ONLY exists on torch, no normalization
         with pytest.raises(ValueError, match="not available"):
-            IntegratorFactory.create(
-                mock_system, backend="jax", method="fehlberg2"
-            )
+            IntegratorFactory.create(mock_system, backend="jax", method="fehlberg2")
+
 
 # ============================================================================
 # Test Class: Edge Cases
@@ -776,138 +772,229 @@ class TestEdgeCases:
 
 
 # ============================================================================
-# Test Class: Julia Preference
+# Test Class: Factory-Level Julia Preference (Optional Optimization)
 # ============================================================================
 
 
-class TestJuliaPreference:
-    """Test that lowercase methods prefer Julia on numpy backend."""
-    
-    def test_lowercase_euler_heun_midpoint_routing(self, mock_system):
-        """Test that lowercase euler/heun/midpoint route correctly.
-        
-        On numpy: Should attempt to use Julia (if available, falls back to manual)
-        On torch/jax: Should use manual implementations
+class TestFactoryJuliaPreference:
+    """Test optional Julia preference in factory routing.
+
+    The factory MAY prefer Julia implementations for euler/heun/midpoint when
+    available on NumPy backend. This is an implementation detail, not a
+    normalization concern.
+
+    Key behaviors:
+    - lowercase 'euler' on numpy → tries Julia 'Euler', falls back to manual
+    - capitalized 'Euler' on numpy → explicitly requests Julia
+    - prefer_manual=True option → forces manual implementation
+    - torch/jax → always use manual implementations
+    """
+
+    def test_lowercase_manual_methods_create_successfully(self, mock_system):
+        """Test that lowercase manual methods create integrators successfully.
+
+        The factory may prefer Julia (if available) or use manual implementations.
+        This test just ensures creation succeeds.
         """
         methods_to_test = ["euler", "heun", "midpoint"]
-        
-        # Test numpy backend behavior
+
         for method in methods_to_test:
-            # This will either use Julia (if available) or fall back to manual
             integrator = IntegratorFactory.create(
-                mock_system,
-                backend="numpy",
-                method=method,
-                dt=0.01,
-                step_mode=StepMode.FIXED
+                mock_system, backend="numpy", method=method, dt=0.01, step_mode=StepMode.FIXED
             )
-            
-            # If DiffEqPy is available, should use Julia
-            if JULIA_AVAILABLE:
-                # The integrator name should indicate Julia usage
-                # (This test may need adjustment based on actual integrator naming)
-                assert integrator is not None
-            else:
-                # Falls back to manual if Julia not available
-                assert integrator is not None
-        
-        # Test torch/jax backends should use manual
-        for backend in ["torch", "jax"]:
-            try:
-                for method in methods_to_test:
-                    integrator = IntegratorFactory.create(
-                        mock_system,
-                        backend=backend,
-                        method=method,
-                        dt=0.01,
-                        step_mode=StepMode.FIXED
-                    )
-                    # Should successfully create manual implementations
-                    assert integrator is not None
-            except ImportError:
-                # Expected if torch/jax not installed
-                pass
-    
-    def test_manual_prefix_forces_manual_implementation(self, mock_system):
-        """Test that manual_* prefix forces manual implementation even on numpy."""
-        manual_methods = ["manual_euler", "manual_heun", "manual_midpoint"]
-        
-        for method in manual_methods:
-            integrator = IntegratorFactory.create(
-                mock_system,
-                backend="numpy",
-                method=method,
-                dt=0.01,
-                step_mode=StepMode.FIXED
-            )
-            
-            # Should use manual implementation (not Julia)
-            # Check that it's one of our manual integrator classes
-            from cdesym.systems.base.numerical_integration.fixed_step_integrators import (
-                ExplicitEulerIntegrator,
-                HeunIntegrator,
-                MidpointIntegrator,
-            )
-            
-            assert isinstance(integrator, (ExplicitEulerIntegrator, HeunIntegrator, MidpointIntegrator)), (
-                f"Method {method} should use manual implementation"
-            )
-    
-    def test_capitalized_attempts_julia(self, mock_system):
-        """Test that capitalized methods attempt Julia (may fail if not installed)."""
+
+            # Should successfully create an integrator
+            assert integrator is not None
+            assert integrator.backend == "numpy"
+
+    def test_capitalized_methods_attempt_julia(self, mock_system):
+        """Test that capitalized methods attempt to use Julia."""
         capitalized_methods = ["Euler", "Heun", "Midpoint"]
-        
+
         for method in capitalized_methods:
             if JULIA_AVAILABLE:
-                # Should be able to create integrator with Julia
+                # Should successfully create Julia integrator
                 try:
                     integrator = IntegratorFactory.create(
                         mock_system,
                         backend="numpy",
                         method=method,
                         dt=0.01,
-                        step_mode=StepMode.FIXED
+                        step_mode=StepMode.FIXED,
                     )
                     assert integrator is not None
+                    # Should be DiffEqPy integrator
+                    assert hasattr(integrator, "algorithm")
                 except Exception as e:
-                    # Julia methods might not all be available
-                    # This is OK - we're just testing routing
+                    # Some Julia methods might not be available - that's OK
                     pass
             else:
-                # Should fail gracefully if Julia not available
-                with pytest.raises((ImportError, ValueError)):
+                # Should fail if Julia not available
+                with pytest.raises(ImportError, match="diffeqpy"):
                     IntegratorFactory.create(
                         mock_system,
                         backend="numpy",
                         method=method,
                         dt=0.01,
-                        step_mode=StepMode.FIXED
+                        step_mode=StepMode.FIXED,
                     )
-    
-    def test_normalization_preserves_intent(self, mock_system):
-        """Test that method normalization preserves user's intent.
-        
-        - lowercase → Julia on numpy (if available)
-        - Capitalized → Julia always
-        - manual_* → manual always
-        """
-        from cdesym.systems.base.numerical_integration.method_registry import (
-            normalize_method_name
+
+    @pytest.mark.skipif(not JULIA_AVAILABLE, reason="Julia not installed")
+    def test_prefer_manual_option_forces_manual(self, mock_system):
+        """Test that prefer_manual=True option forces manual implementation."""
+        from cdesym.systems.base.numerical_integration.fixed_step_integrators import (
+            ExplicitEulerIntegrator,
+            MidpointIntegrator,
         )
-        
-        # Lowercase on numpy should normalize to capitalized (Julia)
-        assert normalize_method_name("euler", "numpy") == "Euler"
-        assert normalize_method_name("heun", "numpy") == "Heun"
-        assert normalize_method_name("midpoint", "numpy") == "Midpoint"
-        
-        # manual_* should normalize to lowercase
-        assert normalize_method_name("manual_euler", "numpy") == "euler"
-        assert normalize_method_name("manual_heun", "numpy") == "heun"
-        assert normalize_method_name("manual_midpoint", "numpy") == "midpoint"
-        
-        # Lowercase on torch/jax stays lowercase
-        assert normalize_method_name("euler", "torch") == "euler"
-        assert normalize_method_name("heun", "jax") == "heun"
+
+        # Create with prefer_manual=True
+        integrator = IntegratorFactory.create(
+            mock_system,
+            backend="numpy",
+            method="euler",
+            dt=0.01,
+            step_mode=StepMode.FIXED,
+            prefer_manual=True,
+        )
+
+        # Should be manual implementation, not DiffEqPy
+        assert isinstance(integrator, ExplicitEulerIntegrator)
+        assert not hasattr(integrator, "algorithm")  # Not a Julia integrator
+
+    def test_rk4_always_uses_manual(self, mock_system):
+        """Test that rk4 always uses manual (no Julia equivalent)."""
+        from cdesym.systems.base.numerical_integration.fixed_step_integrators import (
+            RK4Integrator,
+        )
+
+        integrator = IntegratorFactory.create(
+            mock_system, backend="numpy", method="rk4", dt=0.01, step_mode=StepMode.FIXED
+        )
+
+        # Should always be manual RK4
+        assert isinstance(integrator, RK4Integrator)
+
+    def test_torch_jax_always_use_manual(self, mock_system):
+        """Test that torch/jax backends always use manual implementations."""
+        methods = ["euler", "heun", "midpoint"]
+
+        for backend in ["torch", "jax"]:
+            try:
+                for method in methods:
+                    integrator = IntegratorFactory.create(
+                        mock_system,
+                        backend=backend,
+                        method=method,
+                        dt=0.01,
+                        step_mode=StepMode.FIXED,
+                    )
+
+                    # Should create successfully
+                    assert integrator is not None
+                    assert integrator.backend == backend
+
+                    # Should NOT be DiffEqPy integrator
+                    assert not hasattr(integrator, "algorithm")
+            except ImportError:
+                # Expected if torch/jax not installed
+                pytest.skip(f"{backend} not installed")
+
+    @pytest.mark.skipif(not JULIA_AVAILABLE, reason="Julia not installed")
+    def test_julia_preference_provides_performance_benefit(self, mock_system):
+        """Test that Julia preference is indeed using Julia implementations.
+
+        This verifies the optimization actually works when Julia is available.
+        """
+        from cdesym.systems.base.numerical_integration.diffeqpy_integrator import (
+            DiffEqPyIntegrator,
+        )
+
+        # Create with lowercase (should prefer Julia)
+        integrator = IntegratorFactory.create(
+            mock_system, backend="numpy", method="euler", dt=0.01, step_mode=StepMode.FIXED
+        )
+
+        # Should be DiffEqPy integrator
+        assert isinstance(integrator, DiffEqPyIntegrator)
+        assert integrator.algorithm == "Euler"
+
+    def test_factory_julia_preference_is_optional(self, mock_system):
+        """Test that Julia preference is optional and degrades gracefully.
+
+        Even if Julia preference is implemented, it should gracefully fall back
+        to manual if Julia is not available.
+        """
+        # This should always succeed (Julia or manual)
+        integrator = IntegratorFactory.create(
+            mock_system, backend="numpy", method="euler", dt=0.01, step_mode=StepMode.FIXED
+        )
+
+        assert integrator is not None
+        assert integrator.backend == "numpy"
+
+        if JULIA_AVAILABLE:
+            # May use Julia (optimization)
+            pass
+        else:
+            # Should fall back to manual
+            from cdesym.systems.base.numerical_integration.fixed_step_integrators import (
+                ExplicitEulerIntegrator,
+            )
+
+            assert isinstance(integrator, ExplicitEulerIntegrator)
+
+
+# ============================================================================
+# Test Class: Normalization Does NOT Handle Julia Preference
+# ============================================================================
+
+
+class TestNormalizationPurity:
+    """Test that normalization layer is pure and doesn't handle Julia preference.
+
+    This validates the architectural decision that Julia preference is a
+    factory implementation detail, not a normalization concern.
+    """
+
+    def test_normalize_manual_methods_pass_through(self, mock_system):
+        """Test that manual methods pass through normalization unchanged."""
+        from cdesym.systems.base.numerical_integration.method_registry import normalize_method_name
+
+        # Manual methods should pass through unchanged
+        assert normalize_method_name("euler", "numpy") == "euler"
+        assert normalize_method_name("heun", "numpy") == "heun"
+        assert normalize_method_name("midpoint", "numpy") == "midpoint"
+        assert normalize_method_name("rk4", "numpy") == "rk4"
+
+        # On all backends
+        for backend in ["numpy", "torch", "jax"]:
+            assert normalize_method_name("euler", backend) == "euler"
+            assert normalize_method_name("heun", backend) == "heun"
+            assert normalize_method_name("midpoint", backend) == "midpoint"
+
+    def test_normalize_canonical_names_only(self, mock_system):
+        """Test that normalization only handles true canonical names."""
+        from cdesym.systems.base.numerical_integration.method_registry import normalize_method_name
+
+        # These ARE canonical names and should normalize
+        assert normalize_method_name("euler_maruyama", "numpy") == "EM"
+        assert normalize_method_name("euler_maruyama", "torch") == "euler"
+        assert normalize_method_name("euler_maruyama", "jax") == "Euler"
+
+        assert normalize_method_name("rk45", "numpy") == "RK45"
+        assert normalize_method_name("rk45", "torch") == "dopri5"
+        assert normalize_method_name("rk45", "jax") == "tsit5"
+
+    def test_no_manual_prefix_in_normalization(self, mock_system):
+        """Test that normalization doesn't handle manual_* prefix."""
+        from cdesym.systems.base.numerical_integration.method_registry import normalize_method_name
+
+        # manual_* methods should pass through unchanged
+        # (not stripped to lowercase)
+        assert normalize_method_name("manual_euler", "numpy") == "manual_euler"
+        assert normalize_method_name("manual_heun", "torch") == "manual_heun"
+        assert normalize_method_name("manual_midpoint", "jax") == "manual_midpoint"
+
 
 # ============================================================================
 # Test Class: IntegratorType Enum
@@ -934,6 +1021,7 @@ class TestIntegratorTypeEnum:
         assert IntegratorType.JULIA.value == "julia"
         assert IntegratorType.SIMPLE.value == "simple"
         assert IntegratorType.EDUCATIONAL.value == "educational"
+
 
 # ============================================================================
 # Test Class: ScalarLike Type Usage
