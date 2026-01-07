@@ -375,6 +375,48 @@ NORMALIZATION_MAP: Dict[str, Dict[Backend, str]] = {
         "torch": "dopri5",  # TorchDiffEq (no LSODA equivalent)
         "jax": "tsit5",     # Diffrax (no LSODA equivalent)
     },
+    
+    # ========================================================================
+    # Deterministic Methods - Fixed Step (prefer Julia on numpy)
+    # ========================================================================
+    
+    # Euler method - prefer Julia 'Euler' on numpy, manual elsewhere
+    "euler": {
+        "numpy": "Euler",     # Use Julia's implementation
+        "torch": "euler",     # Use manual implementation
+        "jax": "euler",       # Use manual implementation
+    },
+    
+    # Heun method - prefer Julia 'Heun' on numpy, manual elsewhere
+    "heun": {
+        "numpy": "Heun",      # Use Julia's implementation
+        "torch": "heun",      # Use manual implementation
+        "jax": "heun",        # Use manual implementation
+    },
+    
+    # Midpoint method - prefer Julia 'Midpoint' on numpy, manual elsewhere
+    "midpoint": {
+        "numpy": "Midpoint",  # Use Julia's implementation
+        "torch": "midpoint",  # Use manual implementation
+        "jax": "midpoint",    # Use manual implementation
+    },
+    
+    # Allow users to explicitly request manual implementations
+    "manual_euler": {
+        "numpy": "euler",     # Force manual (lowercase)
+        "torch": "euler", 
+        "jax": "euler",
+    },
+    "manual_heun": {
+        "numpy": "heun",      # Force manual (lowercase)
+        "torch": "heun",
+        "jax": "heun", 
+    },
+    "manual_midpoint": {
+        "numpy": "midpoint",  # Force manual (lowercase)
+        "torch": "midpoint",
+        "jax": "midpoint",
+    },
 }
 
 # ============================================================================
@@ -396,6 +438,8 @@ BACKEND_METHODS: Dict[Backend, FrozenSet[str]] = {
         "Rosenbrock23", "Rodas5", "ROCK4",
         # Manual implementations (fixed-step)
         "euler", "heun", "midpoint", "rk4",
+        # Julia low-order implementations (optional, capitalized)
+        "Euler", "Heun", "Midpoint",
     ]),
     
     # ========================================================================
@@ -761,14 +805,7 @@ def normalize_method_name(method: str, backend: Backend = "numpy") -> str:
         raise ValueError("method cannot be None")
     
     # ========================================================================
-    # Check if already valid for backend
-    # ========================================================================
-    
-    if backend in BACKEND_METHODS and method in BACKEND_METHODS[backend]:
-        return method
-    
-    # ========================================================================
-    # Handle Julia/DiffEqPy auto-switching methods (e.g., "AutoTsit5(Rosenbrock23())")
+    # Handle Julia/DiffEqPy auto-switching methods FIRST
     # ========================================================================
     
     # DiffEqPy methods can have complex syntax with parentheses for auto-switching
@@ -780,7 +817,7 @@ def normalize_method_name(method: str, backend: Backend = "numpy") -> str:
         return method
     
     # ========================================================================
-    # Try normalization map (exact and case-insensitive)
+    # Check normalization map FIRST (to allow preferring Julia methods)
     # ========================================================================
     
     method_lower = method.lower()
@@ -792,6 +829,13 @@ def normalize_method_name(method: str, backend: Backend = "numpy") -> str:
     # Try case-insensitive match
     if method_lower in NORMALIZATION_MAP and backend in NORMALIZATION_MAP[method_lower]:
         return NORMALIZATION_MAP[method_lower][backend]
+    
+    # ========================================================================
+    # Check if already valid for backend (fallback)
+    # ========================================================================
+    
+    if backend in BACKEND_METHODS and method in BACKEND_METHODS[backend]:
+        return method
     
     # ========================================================================
     # No normalization found - return as-is
