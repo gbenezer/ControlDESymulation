@@ -108,14 +108,14 @@ jobs:
           retention-days: 7
       
       - name: Deploy to GitHub Pages
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: docs/_site
       
       - name: Create deployment summary
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         run: |
           echo "## Documentation Deployed" >> $GITHUB_STEP_SUMMARY
           echo "Site: https://gbenezer.github.io/ControlDESymulation/" >> $GITHUB_STEP_SUMMARY
