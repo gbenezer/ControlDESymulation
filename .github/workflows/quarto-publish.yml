@@ -12,6 +12,12 @@ on:
       - 'docs/**'
       - 'src/**'
   workflow_dispatch:
+    inputs:
+      clear_cache:
+        description: 'Force clear all caches (rebuild everything from scratch)'
+        required: false
+        default: 'false'
+        type: boolean
   schedule:
     - cron: '0 2 * * 0'  # Weekly rebuild (Sundays at 2 AM)
 
@@ -45,7 +51,34 @@ jobs:
         uses: quarto-dev/quarto-actions/setup@v2
         with:
           version: 1.8.26
-      
+
+      # Force clear all caches if manually triggered with clear_cache=true
+      - name: Force clear caches (manual trigger)
+        if: github.event.inputs.clear_cache == 'true'
+        run: |
+          rm -rf docs/_freeze docs/.quarto
+          echo "✓ Forced cache clear - rebuilding everything from scratch"
+
+      # Hybrid caching: Cache freeze results but invalidate when source changes
+      - name: Cache Quarto freeze
+        if: github.event.inputs.clear_cache != 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            docs/_freeze
+            docs/.quarto
+          # Cache invalidates when .qmd files, Python source, or dependencies change
+          key: quarto-freeze-${{ runner.os }}-${{ hashFiles('docs/**/*.qmd', 'docs/**/_metadata.yml', 'src/**/*.py', 'pyproject.toml') }}
+          restore-keys: |
+            quarto-freeze-${{ runner.os }}-
+
+      # Always clear jupyter-cache to ensure notebook outputs are fresh
+      # (jupyter-cache uses content hashing that doesn't track external dependencies)
+      - name: Clear Jupyter cache
+        run: |
+          find docs -type d -name ".jupyter_cache" -exec rm -rf {} + 2>/dev/null || true
+          echo "✓ Jupyter cache cleared"
+
       - name: Verify installation
         run: |
           python -c "import cdesym; print(f'✓ Package version: {cdesym.__version__}')"
