@@ -110,3 +110,380 @@ csl: ieee.csl
 
 metadata:
   version: "1.0.0"
+
+quartodoc:
+  package: cdesym
+  source_dir: ../src
+  dir: api
+  title: API Reference
+  style: pkgdown
+
+  sections:
+    # =========================================================================
+    # Control Module
+    # =========================================================================
+    - title: Control Design & Analysis
+      desc: Control synthesis, system analysis, and classical control functions
+      contents:
+        - control.ControlSynthesis
+        - control.SystemAnalysis
+        - control.design_lqr
+        - control.design_lqg
+        - control.design_kalman_filter
+        - control.analyze_stability
+        - control.analyze_controllability
+        - control.analyze_observability
+
+    # =========================================================================
+    # Observers Module
+    # =========================================================================
+    - title: State Observers
+      desc: State estimation and observer design
+      contents:
+        - observers.LinearObserver
+        - observers.ExtendedKalmanFilter
+
+    # =========================================================================
+    # Visualization Module
+    # =========================================================================
+    - title: Visualization
+      desc: Plotting and visualization tools for dynamical systems
+      contents:
+        - visualization.TrajectoryPlotter
+        - visualization.PhasePortraitPlotter
+        - visualization.ControlPlotter
+        - visualization.ColorSchemes
+        - visualization.PlotThemes
+
+    # =========================================================================
+    # Systems - Base Infrastructure
+    # =========================================================================
+    - title: "Systems: Core Classes"
+      desc: Abstract base classes and core system implementations
+      contents:
+        - systems.base.core.SymbolicSystemBase
+        - systems.base.core.ContinuousSystemBase
+        - systems.base.core.DiscreteSystemBase
+        - systems.base.core.ContinuousSymbolicSystem
+        - systems.base.core.DiscreteSymbolicSystem
+        - systems.base.core.ContinuousStochasticSystem
+        - systems.base.core.DiscreteStochasticSystem
+        - systems.base.core.DiscretizedSystem
+        - systems.base.core.discretize
+
+    - title: "Systems: Numerical Integration"
+      desc: ODE and SDE integrators for multiple backends
+      contents:
+        - systems.base.numerical_integration.is_sde_method
+        - systems.base.numerical_integration.is_fixed_step
+        - systems.base.numerical_integration.normalize_method_name
+        - systems.base.numerical_integration.get_available_methods
+        - systems.base.numerical_integration.validate_method
+        - systems.base.numerical_integration.get_method_info
+        - systems.base.numerical_integration.list_all_methods
+        - systems.base.numerical_integration.get_implementing_library
+        - systems.base.numerical_integration.IntegratorFactory
+        - systems.base.numerical_integration.IntegratorBase
+        - systems.base.numerical_integration.ScipyIntegrator
+        - systems.base.numerical_integration.DiffraxIntegrator
+        - systems.base.numerical_integration.TorchDiffEqIntegrator
+        - systems.base.numerical_integration.stochastic.SDEIntegratorFactory
+        - systems.base.numerical_integration.stochastic.SDEIntegratorBase
+        - systems.base.numerical_integration.stochastic.DiffEqPySDEIntegrator
+        - systems.base.numerical_integration.stochastic.TorchSDEIntegrator
+        - systems.base.numerical_integration.stochastic.DiffraxSDEIntegrator
+        - systems.base.numerical_integration.stochastic.CustomBrownianPath
+        - systems.base.numerical_integration.stochastic.create_custom_or_random_brownian
+
+    - title: "Systems: Utilities"
+      desc: Backend management, linearization, and code generation
+      contents:
+        - systems.base.utils.BackendManager
+        - systems.base.utils.CodeGenerator
+        - systems.base.utils.DynamicsEvaluator
+        - systems.base.utils.EquilibriumHandler
+        - systems.base.utils.LinearizationEngine
+        - systems.base.utils.ObservationEngine
+        - systems.base.utils.SymbolicValidator
+        - systems.base.utils.stochastic.NoiseCharacteristics
+        - systems.base.utils.stochastic.NoiseCharacterizer
+        - systems.base.utils.stochastic.analyze_noise_structure
+        - systems.base.utils.stochastic.DiffusionHandler
+        - systems.base.utils.stochastic.SDEValidator
+
+
+    # =========================================================================
+    # Builtin Systems - Deterministic
+    # =========================================================================
+    - title: "Builtin: Deterministic Continuous"
+      desc: Continuous-time deterministic dynamical systems
+      contents:
+        # Linear systems
+        - systems.builtin.deterministic.continuous.LinearSystem
+        - systems.builtin.deterministic.continuous.AutonomousLinearSystem
+        - systems.builtin.deterministic.continuous.LinearSystem2D
+        # Pendulum systems
+        - systems.builtin.deterministic.continuous.Pendulum
+        - systems.builtin.deterministic.continuous.SymbolicPendulum2ndOrder
+        # Cart-pole
+        - systems.builtin.deterministic.continuous.CartPoleSystem
+        # Chaotic systems
+        - systems.builtin.deterministic.continuous.Lorenz
+        - systems.builtin.deterministic.continuous.ControlledLorenz
+        # Oscillators
+        - systems.builtin.deterministic.continuous.VanDerPolOscillator
+        - systems.builtin.deterministic.continuous.ControlledVanDerPolOscillator
+        - systems.builtin.deterministic.continuous.DuffingOscillator
+        - systems.builtin.deterministic.continuous.CoupledOscillatorSystem
+        - systems.builtin.deterministic.continuous.NonlinearChainSystem
+        # Vehicles
+        - systems.builtin.deterministic.continuous.DubinsVehicle
+        - systems.builtin.deterministic.continuous.PathTracking
+        # Aerial systems
+        - systems.builtin.deterministic.continuous.SymbolicQuadrotor2D
+        - systems.builtin.deterministic.continuous.SymbolicQuadrotor2DLidar
+        - systems.builtin.deterministic.continuous.PVTOL
+        # Mechanical systems
+        - systems.builtin.deterministic.continuous.Manipulator2Link
+        - systems.builtin.deterministic.continuous.FifthOrderMechanicalSystem
+        # Reactor systems
+        - systems.builtin.deterministic.continuous.ContinuousBatchReactor
+        - systems.builtin.deterministic.continuous.ContinuousCSTR
+
+    - title: "Builtin: Deterministic Discrete"
+      desc: Discrete-time deterministic dynamical systems
+      contents:
+        # Mechanical systems
+        - systems.builtin.deterministic.discrete.DiscreteOscillator
+        - systems.builtin.deterministic.discrete.DiscretePendulum
+        - systems.builtin.deterministic.discrete.DiscreteDoubleIntegrator
+        - systems.builtin.deterministic.discrete.DiscreteDoubleIntegratorWithForce
+        - systems.builtin.deterministic.discrete.DiscreteRobotArm
+        # Control systems
+        - systems.builtin.deterministic.discrete.DiscreteCartPole
+        # Mobile robots
+        - systems.builtin.deterministic.discrete.DifferentialDriveRobot
+        # Reactor systems
+        - systems.builtin.deterministic.discrete.DiscreteBatchReactor
+        - systems.builtin.deterministic.discrete.DiscreteCSTR
+        # Economic models
+        - systems.builtin.deterministic.discrete.DiscreteSolowModel
+        # Chaotic maps
+        - systems.builtin.deterministic.discrete.LogisticMap
+        - systems.builtin.deterministic.discrete.HenonMap
+        - systems.builtin.deterministic.discrete.StandardMap
+
+    # =========================================================================
+    # Builtin Systems - Stochastic
+    # =========================================================================
+    - title: "Builtin: Stochastic Continuous"
+      desc: Continuous-time stochastic dynamical systems (SDEs)
+      contents:
+        # Brownian motion variants
+        - systems.builtin.stochastic.continuous.BrownianMotion
+        - systems.builtin.stochastic.continuous.BrownianMotion2D
+        - systems.builtin.stochastic.continuous.BrownianMotionWithDrift
+        - systems.builtin.stochastic.continuous.GeometricBrownianMotion
+        # Mean-reverting processes
+        - systems.builtin.stochastic.continuous.OrnsteinUhlenbeck
+        - systems.builtin.stochastic.continuous.MultivariateOrnsteinUhlenbeck
+        - systems.builtin.stochastic.continuous.CoxIngersollRoss
+        # Dynamics
+        - systems.builtin.stochastic.continuous.LangevinDynamics
+        # Controlled systems with noise
+        - systems.builtin.stochastic.continuous.StochasticDoubleIntegrator
+        - systems.builtin.stochastic.continuous.ContinuousStochasticPendulum
+        - systems.builtin.stochastic.continuous.StochasticCartPole
+        - systems.builtin.stochastic.continuous.StochasticLorenz
+        # Epidemiological models
+        - systems.builtin.stochastic.continuous.StochasticSIR
+        # Reactor systems
+        - systems.builtin.stochastic.continuous.ContinuousStochasticBatchReactor
+        - systems.builtin.stochastic.continuous.ContinuousStochasticCSTR
+
+    - title: "Builtin: Stochastic Discrete"
+      desc: Discrete-time stochastic dynamical systems
+      contents:
+        # Time series models
+        - systems.builtin.stochastic.discrete.DiscreteAR1
+        - systems.builtin.stochastic.discrete.DiscreteWhiteNoise
+        - systems.builtin.stochastic.discrete.DiscreteRandomWalk
+        - systems.builtin.stochastic.discrete.DiscreteARMA11
+        # Multivariate models
+        - systems.builtin.stochastic.discrete.DiscreteVAR1
+        # Financial models
+        - systems.builtin.stochastic.discrete.DiscreteGARCH11
+        # Control systems
+        - systems.builtin.stochastic.discrete.DiscreteStochasticDoubleIntegrator
+        - systems.builtin.stochastic.discrete.DiscreteStochasticPendulum
+        # Queueing systems
+        - systems.builtin.stochastic.discrete.DiscreteStochasticQueue
+        # Reactor systems
+        - systems.builtin.stochastic.discrete.DiscreteStochasticBatchReactor
+        - systems.builtin.stochastic.discrete.DiscreteStochasticCSTR
+        # Nonlinear dynamics
+        - systems.builtin.stochastic.discrete.DiscreteStochasticLogisticMap
+
+    # =========================================================================
+    # Types Module
+    # =========================================================================
+    - title: "Types: Core"
+      desc: Fundamental vectors, matrices, dimensions, and function types
+      contents:
+        # Scalar and array types
+        - types.core.ScalarLike
+        - types.core.ArrayLike
+        # Vector types
+        - types.core.StateVector
+        - types.core.ControlVector
+        - types.core.OutputVector
+        - types.core.NoiseVector
+        - types.core.ParameterVector
+        # Matrix types
+        - types.core.StateMatrix
+        - types.core.InputMatrix
+        - types.core.OutputMatrix
+        - types.core.DiffusionMatrix
+        - types.core.FeedthroughMatrix
+        - types.core.GainMatrix
+        - types.core.CovarianceMatrix
+        # Dimensions
+        - types.core.SystemDimensions
+        # Function types
+        - types.core.DynamicsFunction
+        - types.core.OutputFunction
+        - types.core.DiffusionFunction
+        - types.core.ControlPolicy
+        - types.core.TimeVaryingControl
+        - types.core.FeedbackController
+        - types.core.ControlInput
+
+    - title: "Types: Backend & Configuration"
+      desc: Backend support and configuration types
+      contents:
+        # Backend types
+        - types.backends.Backend
+        - types.backends.Device
+        - types.backends.BackendConfig
+        # Integration methods
+        - types.backends.IntegrationMethod
+        - types.backends.SDEIntegrationMethod
+        - types.backends.DiscretizationMethod
+        - types.backends.OptimizationMethod
+        # Stochastic types
+        - types.backends.NoiseType
+        - types.backends.SDEType
+        - types.backends.ConvergenceType
+        # Configuration types
+        - types.backends.IntegratorConfig
+        - types.backends.SDEIntegratorConfig
+        - types.backends.DiscretizerConfig
+        - types.backends.SystemConfig
+        # Validation functions
+        - types.backends.validate_backend
+        - types.backends.validate_device
+        - types.backends.get_backend_default_method
+
+    - title: "Types: Trajectories & Simulation"
+      desc: Time series, trajectories, and simulation results
+      contents:
+        # Time types
+        - types.trajectories.TimePoints
+        - types.trajectories.TimeSpan
+        # Trajectory types
+        - types.trajectories.StateTrajectory
+        - types.trajectories.ControlSequence
+        - types.trajectories.OutputSequence
+        - types.trajectories.NoiseSequence
+        # Results
+        - types.trajectories.SimulationResult
+        - types.trajectories.IntegrationResult
+        # Statistics and segments
+        - types.trajectories.TrajectoryStatistics
+        - types.trajectories.TrajectorySegment
+
+    - title: "Types: Control Results"
+      desc: Control design and analysis result types
+      contents:
+        # Classical control results
+        - types.control_classical.LQRResult
+        - types.control_classical.LQGResult
+        - types.control_classical.KalmanFilterResult
+        - types.control_classical.StabilityInfo
+        - types.control_classical.ControllabilityInfo
+        - types.control_classical.ObservabilityInfo
+        - types.control_classical.PolePlacementResult
+        - types.control_classical.LuenbergerObserverResult
+        # Advanced control results
+        - types.control_advanced.MPCResult
+        - types.control_advanced.MHEResult
+        - types.control_advanced.H2ControlResult
+        - types.control_advanced.HInfControlResult
+        - types.control_advanced.LMIResult
+        - types.control_advanced.AdaptiveControlResult
+        - types.control_advanced.SlidingModeResult
+
+    - title: "Types: Estimation"
+      desc: State estimation result types
+      contents:
+        - types.estimation.EKFResult
+        - types.estimation.UKFResult
+        - types.estimation.ParticleFilterResult
+
+    - title: "Types: Linearization"
+      desc: Linearization and Jacobian types
+      contents:
+        # Base linearization types
+        - types.linearization.LinearizationResult
+        - types.linearization.DeterministicLinearization
+        - types.linearization.StochasticLinearization
+        # Continuous/discrete variants
+        - types.linearization.ContinuousLinearization
+        - types.linearization.DiscreteLinearization
+        - types.linearization.ContinuousStochasticLinearization
+        - types.linearization.DiscreteStochasticLinearization
+        # Full linearization types
+        - types.linearization.FullLinearization
+        - types.linearization.FullStochasticLinearization
+        - types.linearization.ObservationLinearization
+        # Jacobian types
+        - types.linearization.StateJacobian
+        - types.linearization.ControlJacobian
+        - types.linearization.OutputJacobian
+        - types.linearization.DiffusionJacobian
+        # Cache key
+        - types.linearization.LinearizationCacheKey
+
+    - title: "Types: Symbolic"
+      desc: Symbolic computation types
+      contents:
+        - types.symbolic.SymbolicExpression
+        - types.symbolic.SymbolicMatrix
+        - types.symbolic.SymbolicStateEquations
+        - types.symbolic.SymbolicJacobian
+
+    - title: "Types: Advanced"
+      desc: Reachability, robustness, optimization, and learning types
+      contents:
+        - types.reachability.ReachabilityResult
+        - types.reachability.ROAResult
+        - types.reachability.CBFResult
+        - types.reachability.CLFResult
+        - types.robustness.RobustStabilityResult
+        - types.robustness.TubeMPCResult
+        - types.optimization.OptimizationResult
+        - types.optimization.TrajectoryOptimizationResult
+        - types.learning.TrainingResult
+        - types.learning.RLTrainingResult
+        - types.contraction.ContractionAnalysisResult
+        - types.contraction.CCMResult
+        - types.conformal.ConformalPredictionResult
+
+    - title: "Types: Protocols"
+      desc: Structural subtyping protocols for system interfaces
+      contents:
+        - types.protocols.ContinuousSystemProtocol
+        - types.protocols.DiscreteSystemProtocol
+        - types.protocols.StochasticSystemProtocol
+        - types.protocols.LinearizableContinuousProtocol
+        - types.protocols.LinearizableDiscreteProtocol
