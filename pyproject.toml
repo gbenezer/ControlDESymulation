@@ -92,7 +92,7 @@ jax = [
 
 # Visualization tools
 viz = [
-    "plotly>=5.18,<6.0",
+    "plotly>=5.18,<7.0",
     "matplotlib>=3.8,<4.0",
 ]
 
@@ -112,7 +112,7 @@ julia = [
 optimization = [
     "cvxpy>=1.4,<2.0",           # Convex optimization
     "clarabel>=0.9.0,<1.0",      # CVXPY solver
-    "osqp>=0.6.0,<1.0",          # CVXPY solver
+    "osqp>=0.6.0,<2.0",          # CVXPY solver
     "scs>=3.2.0,<4.0",           # CVXPY solver
     "casadi>=3.6,<4.0",          # Nonlinear optimization
 ]
@@ -133,37 +133,37 @@ dev = [
     "pytest-parallel>=0.1,<1.0",  # Alternative parallel execution
     "coverage>=7.4,<8.0",
     "mutmut>=3.0,<4.0",
-    
+
     # Code quality
     "black>=24.0,<26.0",
     "isort>=5.13,<8.0",
     "ruff>=0.3,<1.0",
     "mypy>=1.8,<2.0",
     "mypy-extensions>=1.0,<2.0",
-    
+
     # Additional linting
     "flake8>=7.0,<8.0",
     "pylint>=3.0,<5.0",
-    
+
     # Security
     "bandit>=1.7,<2.0",
     "safety>=3.0,<4.0",
-    
+
     # Pre-commit
     "pre-commit>=3.6,<4.0",
-    
+
     # Code analysis
     "radon>=6.0,<7.0",
     "pydeps>=2.0,<4.0",
-    
+
     # Type stubs
     "types-requests>=2.31",
     "types-setuptools>=69.0",
-    
+
     # Build tools
     "build>=1.0,<2.0",
     "twine>=5.0,<7.0",
-    "setuptools>=69.0,<81.0",
+    "setuptools>=69.0,<82.0",
     "wheel>=0.42.0,<1.0",
 ]
 
@@ -172,25 +172,24 @@ docs = [
     "sphinx>=7.2,<9.0",
     "sphinx-rtd-theme>=2.0,<4.0",
     "sphinx-autodoc-typehints>=2.0,<4.0",
-    "myst-parser>=2.0,<4.0",
+    "myst-parser>=2.0,<5.0",
 ]
 
 # Jupyter notebook support
 notebooks = [
     "jupyter>=1.0,<2.0",
-    "jupyter-cache",
     "jupyterlab>=4.0,<5.0",
     "ipykernel>=6.29,<8.0",
     "ipywidgets>=8.1,<9.0",
     "notebook>=7.0,<8.0",
     "ipython>=8.0,<8.19; python_version=='3.9'",  # 8.19+ requires Python 3.10+
-    "ipython>=8.20,<10.0; python_version>='3.10'",
+    "ipython>=8.20,<11.0; python_version>='3.10'",
 ]
 
 # Interactive CLI tools
 cli = [
     "rich>=13.7,<15.0",
-    "textual>=0.50,<1.0",
+    "textual>=0.50,<7.0",
     "typer>=0.9,<1.0",
 ]
 
