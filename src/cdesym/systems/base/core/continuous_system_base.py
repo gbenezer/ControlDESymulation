@@ -193,9 +193,8 @@ class ContinuousSystemBase(ABC):
             **Standard Convention**: Functions with two parameters should use (t, x) order
             to avoid ambiguity. If using (x, t) order, the wrapper will attempt detection
             but may fail on edge cases - prefer wrapping explicitly:
-        ```python
-            u_func = lambda t, x: my_controller(x, t)
-        ```
+
+            >>> u_func = lambda t, x: my_controller(x, t)
         t_span : tuple[float, float]
             Time interval (t_start, t_end)
         method : str
