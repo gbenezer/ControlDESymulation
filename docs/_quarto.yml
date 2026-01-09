@@ -223,10 +223,10 @@ quartodoc:
         - systems.builtin.deterministic.continuous.AutonomousLinearSystem
         - systems.builtin.deterministic.continuous.LinearSystem2D
         # Pendulum systems
-        - systems.builtin.deterministic.continuous.Pendulum
+        - systems.builtin.deterministic.continuous.SymbolicPendulum
         - systems.builtin.deterministic.continuous.SymbolicPendulum2ndOrder
         # Cart-pole
-        - systems.builtin.deterministic.continuous.CartPoleSystem
+        - systems.builtin.deterministic.continuous.CartPole
         # Chaotic systems
         - systems.builtin.deterministic.continuous.Lorenz
         - systems.builtin.deterministic.continuous.ControlledLorenz
