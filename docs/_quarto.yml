@@ -119,41 +119,6 @@ quartodoc:
   style: pkgdown
 
   sections:
-    # =========================================================================
-    # Control Module
-    # =========================================================================
-    - title: Control Design & Analysis
-      desc: Control synthesis, system analysis, and classical control functions
-      contents:
-        - control.ControlSynthesis
-        - control.SystemAnalysis
-        - control.design_lqr
-        - control.design_lqg
-        - control.design_kalman_filter
-        - control.analyze_stability
-        - control.analyze_controllability
-        - control.analyze_observability
-
-    # =========================================================================
-    # Observers Module
-    # =========================================================================
-    - title: State Observers
-      desc: State estimation and observer design
-      contents:
-        - observers.LinearObserver
-        - observers.ExtendedKalmanFilter
-
-    # =========================================================================
-    # Visualization Module
-    # =========================================================================
-    - title: Visualization
-      desc: Plotting and visualization tools for dynamical systems
-      contents:
-        - visualization.TrajectoryPlotter
-        - visualization.PhasePortraitPlotter
-        - visualization.ControlPlotter
-        - visualization.ColorSchemes
-        - visualization.PlotThemes
 
     # =========================================================================
     # Systems - Base Infrastructure
@@ -210,7 +175,34 @@ quartodoc:
         - systems.base.utils.stochastic.analyze_noise_structure
         - systems.base.utils.stochastic.DiffusionHandler
         - systems.base.utils.stochastic.SDEValidator
+    
+    
+    # =========================================================================
+    # Control Module
+    # =========================================================================
+    - title: Control Design & Analysis
+      desc: Control synthesis, system analysis, and classical control functions
+      contents:
+        - control.ControlSynthesis
+        - control.SystemAnalysis
+        - control.design_lqr
+        - control.design_lqg
+        - control.design_kalman_filter
+        - control.analyze_stability
+        - control.analyze_controllability
+        - control.analyze_observability
 
+    # =========================================================================
+    # Visualization Module
+    # =========================================================================
+    - title: Visualization
+      desc: Plotting and visualization tools for dynamical systems
+      contents:
+        - visualization.TrajectoryPlotter
+        - visualization.PhasePortraitPlotter
+        - visualization.ControlPlotter
+        - visualization.ColorSchemes
+        - visualization.PlotThemes
 
     # =========================================================================
     # Builtin Systems - Deterministic
@@ -487,3 +479,12 @@ quartodoc:
         - types.protocols.StochasticSystemProtocol
         - types.protocols.LinearizableContinuousProtocol
         - types.protocols.LinearizableDiscreteProtocol
+
+    # =========================================================================
+    # Observers Module
+    # =========================================================================
+    - title: State Observers
+      desc: State estimation and observer design
+      contents:
+        - observers.LinearObserver
+        - observers.ExtendedKalmanFilter
