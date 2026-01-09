@@ -1080,10 +1080,10 @@ class SymbolicSystemBase(ABC):
         device : Optional[str]
             Temporary device to use (None = keep current device)
 
-        Yields
-        ------
-        SymbolicSystemBase
-            Self with temporary backend configuration
+        Returns
+        -------
+        Generator[SymbolicSystemBase, None, None]
+            Context manager yielding self with temporary backend configuration
 
         Examples
         --------

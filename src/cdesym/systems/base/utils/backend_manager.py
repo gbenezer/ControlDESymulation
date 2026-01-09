@@ -512,12 +512,16 @@ class BackendManager:
         """
         Temporarily switch to a different backend and/or device.
 
+        This is a context manager that temporarily changes the default backend
+        and device, restoring the original configuration when the context exits.
+
         Args:
             backend: Temporary backend to use
             device: Optional temporary device
 
-        Yields:
-            Self with temporary configuration
+        Returns:
+            Generator[BackendManager, None, None]: Context manager yielding self
+                with temporary configuration
 
         Example:
             >>> mgr = BackendManager(default_backend='numpy')
