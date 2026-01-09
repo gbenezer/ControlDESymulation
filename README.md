@@ -243,10 +243,10 @@ ControlDESymulation supports multiple numerical backends with automatic detectio
 
 ## Contributing
 
-Repository is not currently ready for other contributors. Once all files are fully documented, initial example notebooks and/or more formal tutorials, all warnings addressed, and all mypy/ruff/pylint issues are resolved, then contributions are welcome. Some examples of future help would be:
+The API is mostly stabilized, but the repository is not yet ready for contributions. Once all files are fully documented, initial example notebooks and/or more formal tutorials, all warnings addressed, and all mypy/ruff/pylint issues are resolved, then contributions are welcome. Some examples of future help would be:
 
-1. **Additional Example Systems** - More application domains
-    <!-- - Currently implemented systems
+<!-- 1. **Additional Example Systems** - More application domains
+     - Currently implemented systems
         - Deterministic
             - Continuous
                 - Aerial system models (2D quadrotor)
@@ -295,11 +295,13 @@ Repository is not currently ready for other contributors. Once all files are ful
                 - Stochastic logistic map
                 - Euler discretized stochastic chemical reactors with independent noise
                 - Discrete stochastic queue model -->
-2. **Documentation** - Tutorials, guides, and examples
-3. **Performance Optimization** - Profiling and speedups
+
+2. **Added Documentation and Documentation Verification** - Tutorials, guides, and examples
+3. **Performance Optimization** - Profiling and speedups, parallelization of stochastic simulation, etc.
 4. **Additional Backends** - TensorFlow, CuPy, etc.
 5. **Visualization Tools** - Enhanced plotting capabilities
-6. **Control Algorithms** - MPC, LQG, H-infinity, etc.
+6. **Advanced Control Algorithms** - MPC, LQG, H-infinity, etc.
+7. **System Identification, Uncertainty Analysis, and Bayesian Methods** - Methods to construct symbolic systems and associated model parameter/structure uncertainty using Bayesian approaches
 
 ## Citation
 
@@ -397,7 +399,6 @@ ControlDESymulation builds on excellent open-source libraries:
 
 - **python-control** - Control theory algorithms
 - **Plotly** - Interactive visualization
-- **Matplotlib** - Publication-quality plots
 - **pytest** - Testing framework
 - **pydantic** - Data validation and type safety
 
@@ -437,13 +438,15 @@ For commercial licensing or consulting inquiries, contact via email.
 - [x] Comprehensive documentation
 - [x] Classical control design methods
 - [x] Advanced plotting capabilities
-- [ ] Debug plotting capabilities
-    - Make sure control plotting capabilities auto-calculate relevant quantities (future feature branch)
-- [ ] Add capacity to symbolically specify time as a variable explicitly in equations (time varying systems) (future feature branch)
+- [x] Debug plotting capabilities
+- [ ] Constructing notebooks, tutorials, and other documentation with Quarto, quartodocs and GitHub Pages (in progress)
+- [ ] Increase pytest code coverage to at least 80%
+- [ ] Add capacity to symbolically specify time as a variable explicitly in equations (time-varying systems) (future feature branch)
+- [ ] Simplify type system (200+ is too many custom types) (future refactor branch)
+- [ ] Make sure control plotting capabilities auto-calculate relevant quantities (future feature branch)
 - [ ] Refactoring test suites to use common test fixtures and mock systems to reduce code duplication (future refactor branch)
 - [ ] Constructing integration test suites for debugging and regression testing (future refactor branch)
 - [ ] Addressing warnings and ruff/mypy issues (future refactor branch)
-- [ ] Constructing notebooks, tutorials, and other documentation with Quarto and GitHub Pages
 - [ ] Verifying constructed documentation
 
 ### v1.1 (Planned)
@@ -451,6 +454,7 @@ For commercial licensing or consulting inquiries, contact via email.
 - [ ] RL Environment Synthesis using Gymnasium
 - [ ] Generation and Standardized Export of Synthetic Data
 - [ ] System Identification and Bayesian Inference
+    - [ ] Noise structure and parameter estimation for sim-2-real and model calibration
 - [ ] Neural Controller and Certificate Function Synthesis
 - [ ] Model Predictive Control
 - [ ] Stochastic/Noisy Output Dynamics
@@ -461,6 +465,7 @@ For commercial licensing or consulting inquiries, contact via email.
 - [ ] Partial Differential Equations (PDEs)
 - [ ] Hybrid systems (continuous + discrete events)
 - [ ] Distributed Systems
+- [ ] Simulation Parallelization (especially for stochastic systems)
 - [ ] Delay Systems
 - [ ] Reachability Analysis
 - [ ] Conformal Methods
