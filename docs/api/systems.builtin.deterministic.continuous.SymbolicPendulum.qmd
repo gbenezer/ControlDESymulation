@@ -1,0 +1,51 @@
+# systems.builtin.deterministic.continuous.SymbolicPendulum { #cdesym.systems.builtin.deterministic.continuous.SymbolicPendulum }
+
+```python
+systems.builtin.deterministic.continuous.SymbolicPendulum(*args, **kwargs)
+```
+
+Simple inverted pendulum system - first-order state-space formulation.
+
+## Physical System: {.doc-section .doc-section-physical-system}
+
+A point mass attached to a massless rigid rod, free to rotate about a fixed pivot.
+The pendulum experiences:
+- Gravitational torque (proportional to sin(θ))
+- Viscous damping (proportional to angular velocity)
+- External control torque
+
+## State Space: {.doc-section .doc-section-state-space}
+
+State: x = [θ, θ̇]
+    - θ (theta): Angular position from upward vertical [rad]
+      * θ = 0: upright (unstable equilibrium)
+      * θ = π: hanging down (stable equilibrium)
+    - θ̇ (theta_dot): Angular velocity [rad/s]
+
+Control: u = [τ]
+    - τ (torque): Applied torque at pivot [N⋅m]
+
+Output: y = [θ]
+    - Measures only the angle (partial observation)
+
+## Dynamics: {.doc-section .doc-section-dynamics}
+
+The equations of motion are:
+    θ̇ = θ̇
+    θ̈ = -(β/I)θ̇ + (g/l)sin(θ) + τ/I
+
+where I = ml² is the moment of inertia.
+
+Rewritten as first-order system:
+    dx/dt = [θ̇, -(β/ml²)θ̇ + (g/l)sin(θ) + τ/(ml²)]ᵀ
+
+## Parameters: {.doc-section .doc-section-parameters}
+
+m : float, default=1.0
+    Mass of the bob [kg]. Larger mass → more inertia, slower response.
+l : float, default=1.0
+    Length of the rod [m]. Longer rod → more gravity torque, slower dynamics.
+beta : float, default=1.0
+    Damping coefficient [N⋅m⋅s/rad]. Larger β → more energy dissipation.
+g : float, default=9.81
+    Gravitational acceleration [m/s²].

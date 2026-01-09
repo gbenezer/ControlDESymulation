@@ -1,4 +1,0 @@
-# systems.builtin.deterministic.continuous.Pendulum { #cdesym.systems.builtin.deterministic.continuous.Pendulum }
-
-`systems.builtin.deterministic.continuous.Pendulum`
-

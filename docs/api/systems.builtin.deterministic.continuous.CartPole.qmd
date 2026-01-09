@@ -1,0 +1,85 @@
+# systems.builtin.deterministic.continuous.CartPole { #cdesym.systems.builtin.deterministic.continuous.CartPole }
+
+```python
+systems.builtin.deterministic.continuous.CartPole(*args, **kwargs)
+```
+
+Cart-pole system (inverted pendulum on cart) - classic underactuated system.
+
+## Physical System: {.doc-section .doc-section-physical-system}
+
+A pole (inverted pendulum) attached to a cart that moves horizontally.
+- Cart can slide freely on a horizontal track
+- Pole is attached to cart via a frictionless pivot
+- System is underactuated: 1 control input, 2 degrees of freedom
+- Nonlinear coupling between cart motion and pole angle
+
+## State Space: {.doc-section .doc-section-state-space}
+
+State: x = [x, θ, ẋ, θ̇]
+    Position coordinates:
+    - x: Cart position [m] (positive right)
+    - θ: Pole angle from vertical [rad]
+      * θ = 0: upright (unstable equilibrium)
+      * θ = π: hanging down (stable equilibrium)
+
+    Velocity coordinates:
+    - ẋ (x_dot): Cart velocity [m/s]
+    - θ̇ (theta_dot): Pole angular velocity [rad/s]
+
+Control: u = [F]
+    - F: Horizontal force applied to cart [N]
+    Can be positive (push right) or negative (push left)
+
+Output: y = [x, θ]
+    - Measures cart position and pole angle
+
+## Dynamics: {.doc-section .doc-section-dynamics}
+
+The equations of motion (derived from Lagrangian mechanics):
+
+Let M = m_cart + m_pole, then:
+
+    ẍ = (F - b·ẋ + m_pole·l·θ̇²·sin(θ) - m_pole·g·sin(θ)·cos(θ)) / (M - m_pole·cos²(θ))
+
+    θ̈ = (F·cos(θ) - b·ẋ·cos(θ) + m_pole·l·θ̇²·sin(θ)·cos(θ) - M·g·sin(θ)) / (l·(M - m_pole·cos²(θ)))
+
+Physical interpretation:
+- Cart accelerates from applied force F
+- Pole motion creates reaction forces on cart
+- Centrifugal force (θ̇² term) affects both cart and pole
+- Gravity pulls pole down (sin(θ) term)
+- Friction opposes cart motion (b·ẋ)
+
+## Parameters: {.doc-section .doc-section-parameters}
+
+m_cart : float, default=1.0
+    Mass of the cart [kg]
+m_pole : float, default=0.1
+    Mass of the pole [kg]
+    Typical: m_pole << m_cart (light pole, heavy cart)
+length : float, default=0.5
+    Length from pivot to pole's center of mass [m]
+gravity : float, default=9.81
+    Gravitational acceleration [m/s²]
+friction : float, default=0.1
+    Cart friction coefficient [N⋅s/m]
+    Models bearing friction and air resistance
+
+## Equilibria: {.doc-section .doc-section-equilibria}
+
+1. **Upright (unstable)**:
+   x_eq = [x*, 0, 0, 0]  (any cart position, pole vertical)
+   u_eq = 0 (no force needed)
+
+2. **Hanging (stable)**:
+   x_eq = [x*, π, 0, 0]  (any cart position, pole hanging)
+   u_eq = 0 (no force needed)
+
+NOTE: this is a different convention than that of the SymbolicPendulum
+class; that system is defined with π radians being inverted/upward
+
+## See Also: {.doc-section .doc-section-see-also}
+
+SymbolicPendulum : Simpler version without cart
+PVTOL : Another underactuated system with similar challenges
