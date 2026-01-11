@@ -16,10 +16,89 @@ execute:
   warning: false
 ---
 
-TODO: add front matter describing the batch reactor system
+This tutorial introduces the anatomy of a symbolic control system using a **stochastic batch reactor** as a worked example. A batch reactor is a closed chemical system where reactants $A$ and $B$ undergo sequential reactions governed by Arrhenius kinetics, with temperature controlled via external heating $Q$.
 
+## System Overview
+
+The system demonstrates key `cdesym` concepts:
+
+- **State variables**: Concentrations $(C_A, C_B)$ and temperature $(T)$
+- **Control input**: Heat input $(Q)$
+- **Drift dynamics**: Deterministic reaction rates and heat transfer
+- **Diffusion dynamics**: Additive noise on each state, representing measurement or process uncertainty
+
+The reaction sequence $A \to B \to C$ follows first-order Arrhenius kinetics:
+
+$$
+\begin{aligned}
+r_1 &= k_1 \cdot C_A \cdot \exp(-E_1/T) \\
+r_2 &= k_2 \cdot C_B \cdot \exp(-E_2/T)
+\end{aligned}
+$$
+
+The deterministic dynamics are:
+
+$$
+\begin{aligned}
+\frac{dC_A}{dt} &= -r_1 \\
+\frac{dC_B}{dt} &= r_1 - r_2 \\
+\frac{dT}{dt} &= Q - \alpha(T - T_{\text{amb}})
+\end{aligned}
+$$
+
+::: {.callout-note collapse="true"}
+## Itô vs Stratonovich SDEs
+
+The stochastic formulation in this example uses an **Itô SDE** of the form:
+
+$$dX_t = f(X_t, u_t)\,dt + g(X_t)\,dW_t$$
+
+where $W_t$ is a Wiener process (Brownian motion). The key distinction from **Stratonovich SDEs** lies in how the stochastic integral is defined:
+
+| Property | Itô | Stratonovich |
+|----------|-----|--------------|
+| **Evaluation point** | Left endpoint of interval | Midpoint of interval |
+| **Martingale property** | Yes (integral is a martingale) | No |
+| **Chain rule** | Requires **Itô's lemma** with correction term | Standard chain rule applies |
+| **Typical use** | Finance, control theory, probability | Physics, systems with colored noise limits |
+
+**Itô's lemma** for a function $Y_t = h(X_t)$ includes an extra term:
+
+$$dY_t = h'(X_t)\,dX_t + \frac{1}{2}h''(X_t)\,g(X_t)^2\,dt$$
+
+The second term (absent in ordinary calculus) arises because Brownian paths have infinite quadratic variation.
+
+**When the distinction matters**: For **state-dependent (multiplicative) noise** like $g(X_t) = \sigma X_t$, the two interpretations give different results. For **additive noise** where $g$ is constant, they coincide. This tutorial uses additive noise, so the choice is moot here—but understanding the difference is essential when modeling state-dependent noise.
+:::
+
+## Noise Structure
+
+The stochastic batch reactor extends the deterministic model with additive process noise:
+
+$$
+\begin{aligned}
+dC_A &= (-r_1)\,dt + \sigma_A\,dW_A \\
+dC_B &= (r_1 - r_2)\,dt + \sigma_B\,dW_B \\
+dT &= (Q - \alpha(T - T_{\text{amb}}))\,dt + \sigma_T\,dW_T
+\end{aligned}
+$$
+
+Three independent Wiener processes model distinct physical noise sources: feed variability ($\sigma_A$, $\sigma_B$) and heat transfer fluctuations ($\sigma_T$). Trajectories fluctuate around the deterministic equilibrium with standard deviation growing as $\sqrt{t}$.
+
+## What This Tutorial Covers
+
+We define two equilibria:
+
+1. **Complete conversion** (stable): All reactants consumed, temperature at ambient
+2. **Initial setpoint** (unstable): Starting conditions for batch operation
+
+The tutorial walks through defining `_f_sym` (drift), `diffusion_expr` (noise structure), how to define optional `_h_sym` (output map) and output variables if needed, then covers equilibrium setup and trajectory visualization.
+
+## System Definition
+
+The full system definition is as follows:
 ```{python}
-from typing import List, Optional, Tuple
+from typing import Optional
 
 import numpy as np
 import sympy as sp
@@ -49,14 +128,14 @@ class ContinuousStochasticBatchReactor(ContinuousStochasticSystem):
         C_A, C_B, T = sp.symbols("C_A C_B T", real=True, positive=True)
         Q = sp.symbols("Q", real=True)
 
-        # Parameters (kinetics and heat transfer)
+        # Deterministic Parameters (kinetics and heat transfer)
         k1, k2, E1, E2, alpha, T_amb = sp.symbols(
             "k1 k2 E1 E2 alpha T_amb",
             real=True,
             positive=True,
         )
 
-        # Noise intensities
+        # Stochastic Parameters (noise intensities)
         sigma_A_sym = sp.symbols("sigma_A", real=True, positive=True)
         sigma_B_sym = sp.symbols("sigma_B", real=True, positive=True)
         sigma_T_sym = sp.symbols("sigma_T", real=True, positive=True)
@@ -140,16 +219,178 @@ class ContinuousStochasticBatchReactor(ContinuousStochasticSystem):
             self.set_default_equilibrium("complete")
 ```
 
-TODO: go stepwise over the definition of define system
+The first step in system construction is to subclass the proper symbolic system and create the define_system method signature.
 
-TODO: go over what is optional and what isn't optional about deterministic systems
+```python
+class ContinuousStochasticBatchReactor(ContinuousStochasticSystem):
+    def define_system(
+        self,
+        k1_val: float = 0.5,
+        k2_val: float = 0.3,
+        E1_val: float = 1000.0,
+        E2_val: float = 1500.0,
+        alpha_val: float = 0.1,
+        T_amb_val: float = 300.0,
+        sigma_A: float = 0.01,
+        sigma_B: float = 0.01,
+        sigma_T: float = 1.0,
+        C_A0: Optional[float] = None,
+        T0: Optional[float] = None,
+    ):
+```
 
-TODO: clarify what output variables actually are, what they semantically mean, and what _h_sym is relative to _f_sym
+More often than not, the only arguments to this function will be the `self` argument and parameter values. It is not necessary to add type hints or default values, but it is recommended for debug purposes.
 
-TODO: go over the added stochastic system mechanics and clarify that for pure diffusion systems the drift term _f_sym needs to be a zero vector
+The next step in system definition is to define the (deterministic) symbolic variables to be used and place them in the proper fields.
+The main limitation currently is that it is not possible to explicitly define a symbolic variable for time. If it is heavily requested, we can implement it as a future feature.
 
-TODO: go over Ito versus Stratonovich and types of noise
+```python
+# State and control variables
+C_A, C_B, T = sp.symbols("C_A C_B T", real=True, positive=True)
+Q = sp.symbols("Q", real=True)
 
-TODO: go over the optional setup_equilibria method and why its there
+# Deterministic Parameters (kinetics and heat transfer)
+k1, k2, E1, E2, alpha, T_amb = sp.symbols(
+    "k1 k2 E1 E2 alpha T_amb",
+    real=True,
+    positive=True,
+)
+
+# Stochastic Parameters (noise intensities)
+sigma_A_sym = sp.symbols("sigma_A", real=True, positive=True)
+sigma_B_sym = sp.symbols("sigma_B", real=True, positive=True)
+sigma_T_sym = sp.symbols("sigma_T", real=True, positive=True)
+
+self.parameters = {
+    k1: k1_val,
+    k2: k2_val,
+    E1: E1_val,
+    E2: E2_val,
+    alpha: alpha_val,
+    T_amb: T_amb_val,
+    sigma_A_sym: sigma_A,
+    sigma_B_sym: sigma_B,
+    sigma_T_sym: sigma_T,
+}
+
+self.state_vars = [C_A, C_B, T]
+self.control_vars = [Q]
+self.output_vars = []
+```
+
+The necessary symbolic variables include:
+    - State variables
+    - Control variables
+    - Parameter variables
+
+::: {.callout-warning}
+## Output Variables and the Output Map
+
+There are two related but distinct concepts for system outputs:
+
+- **`self.output_vars`**: A list of symbolic variables representing *computed outputs*—quantities derived from state variables but not states themselves. For example, if your states are position and velocity, an output variable might be kinetic energy. Do **not** add state variables to this list.
+
+- **`self._h_sym`**: The *output map* $y = h(x)$, a symbolic column vector defining what the system actually outputs. This can include:
+  - State variables (for full or partial state observation)
+  - Output variables (computed quantities)
+  - Any symbolic expression of states
+
+**Defaults**: `self.output_vars = []` (no computed outputs) and `self._h_sym = state vector` (full state observability).
+
+**Example**: For a system with states $[x, v]$ and a computed output $E = \frac{1}{2}mv^2$:
+
+- `self.output_vars = [E]`
+- `self._h_sym = sp.Matrix([x, E])` outputs position and energy (but not velocity)
+:::
+
+::: {.callout-warning}
+## Autonomous Systems
+To specify that a system is autonomous and has no control variables, you must pass an empty list to the self.control_vars field. 
+:::
+
+::: {.callout-important}
+## Parameter Dictionary Keys Must Be Symbolic Variables
+A common mistake is to set the dictionary keys for self.parameters as strings, but for proper symbolic substitution and code generation, the keys must be SymPy Symbolic variables.
+:::
+
+The final required step in system definition is to relate symbolic variables for the definition of the system (and possibly observation) dynamics.
+
+```python
+# Reaction rates (Arrhenius kinetics)
+r1 = k1 * C_A * sp.exp(-E1 / T)
+r2 = k2 * C_B * sp.exp(-E2 / T)
+
+# DRIFT (Deterministic part - same as deterministic reactor)
+dC_A_dt = -r1
+dC_B_dt = r1 - r2
+dT_dt = Q - alpha * (T - T_amb)
+
+self._f_sym = sp.Matrix([dC_A_dt, dC_B_dt, dT_dt])
+
+# DIFFUSION (Stochastic part - additive noise)
+# Diagonal matrix: three independent Wiener processes
+self.diffusion_expr = sp.Matrix(
+    [
+        [sigma_A_sym, 0, 0],
+        [0, sigma_B_sym, 0],
+        [0, 0, sigma_T_sym],
+    ],
+)
+
+# Output: Full state measurement (with potential noise in practice)
+# technically optional
+self._h_sym = sp.Matrix([C_A, C_B, T])
+```
+
+::: {.callout-note}
+## Pure Diffusion Systems
+To define purely stochastic systems with only diffusion terms and no drift terms, self._f_sym must be defined as a symbolic column vector of zero elements with the same dimensionality as the number of state variables.
+:::
+
+The following steps are optional, but recommended for explicit documentation of system behavior
+
+The order (number of time derivatives) is set to 1 by default, but can be set higher. If the order is higher than 1, the expression in self._f_sym must return only the highest derivative.
+
+The SDE type is set to Itô by default, but can be set to Stratonovich with self.sde_type = "stratonovich" if needed.
+
+Upon initialization, the origin and zero control are set as an equilibrium of the system, but if the user specifies a setup_equilibria method, it will be run after system setup to add necessary system equilibria automatically as well. This is especially useful if the system equilibria are parameter dependent. 
+
+```python
+def setup_equilibria(self):
+    # Get parameters
+    T_amb = self.parameters[sp.symbols("T_amb")]
+
+    # Complete conversion equilibrium (deterministic part)
+    self.add_equilibrium(
+        "complete",
+        x_eq=np.array([0.0, 0.0, T_amb]),
+        u_eq=np.array([0.0]),
+        verify=True,
+        stability="stable",
+        notes="Equilibrium of deterministic part (drift). Stochastic trajectories "
+        "fluctuate around this point with variance growing over time.",
+    )
+
+    # Initial condition (if provided)
+    if self.C_A0 is not None and self.T0 is not None:
+        alpha = self.parameters[sp.symbols("alpha")]
+        Q_init = alpha * (self.T0 - T_amb)
+
+        self.add_equilibrium(
+            "initial",
+            x_eq=np.array([self.C_A0, 0.0, self.T0]),
+            u_eq=np.array([Q_init]),
+            verify=False,
+            stability="unstable",
+            notes="Initial state setpoint (deterministic part). Stochastic trajectories "
+            "will fluctuate with std ~ [σ_A·√t, σ_B·√t, σ_T·√t].",
+        )
+        self.set_default_equilibrium("initial")
+    else:
+        self.set_default_equilibrium("complete")
+```
+
+Finally, a user can define other fields and methods for downstream usage as long as they don't interfere with the system's base methods and fields.
+
 
 TODO: go over basic trajectory and phase plotting
