@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Gil Benezer">
-<meta name="dcterms.date" content="2026-01-09">
+<meta name="dcterms.date" content="2026-01-11">
 
 <title>Anatomy of a Symbolic System – ControlDESymulation</title>
 <style>
@@ -106,6 +106,35 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   }
 }</script>
 
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
 
 <link rel="stylesheet" href="assets/css/styles.css">
 </head>
@@ -220,8 +249,17 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
 <!-- sidebar -->
 <!-- margin-sidebar -->
-    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar zindex-bottom">
-        
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#system-overview" id="toc-system-overview" class="nav-link active" data-scroll-target="#system-overview">System Overview</a></li>
+  <li><a href="#noise-structure" id="toc-noise-structure" class="nav-link" data-scroll-target="#noise-structure">Noise Structure</a></li>
+  <li><a href="#what-this-tutorial-covers" id="toc-what-this-tutorial-covers" class="nav-link" data-scroll-target="#what-this-tutorial-covers">What This Tutorial Covers</a></li>
+  <li><a href="#system-definition" id="toc-system-definition" class="nav-link" data-scroll-target="#system-definition">System Definition</a></li>
+  </ul>
+<div class="toc-actions"><ul><li><a href="https://github.com/gilbenezer/ControlDESymulation/edit/main/tutorials/core_concepts_continuous/batch_reactor_tutorial.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/gilbenezer/ControlDESymulation/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
     </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
@@ -246,7 +284,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">January 9, 2026</p>
+      <p class="date">January 11, 2026</p>
     </div>
   </div>
   
@@ -258,11 +296,118 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<p>TODO: add front matter describing the batch reactor system</p>
-<div id="c81ed98e" class="cell" data-execution_count="1">
+<p>This tutorial introduces the anatomy of a symbolic control system using a <strong>stochastic batch reactor</strong> as a worked example. A batch reactor is a closed chemical system where reactants <span class="math inline">\(A\)</span> and <span class="math inline">\(B\)</span> undergo sequential reactions governed by Arrhenius kinetics, with temperature controlled via external heating <span class="math inline">\(Q\)</span>.</p>
+<section id="system-overview" class="level2">
+<h2 class="anchored" data-anchor-id="system-overview">System Overview</h2>
+<p>The system demonstrates key <code>cdesym</code> concepts:</p>
+<ul>
+<li><strong>State variables</strong>: Concentrations <span class="math inline">\((C_A, C_B)\)</span> and temperature <span class="math inline">\((T)\)</span></li>
+<li><strong>Control input</strong>: Heat input <span class="math inline">\((Q)\)</span></li>
+<li><strong>Drift dynamics</strong>: Deterministic reaction rates and heat transfer</li>
+<li><strong>Diffusion dynamics</strong>: Additive noise on each state, representing measurement or process uncertainty</li>
+</ul>
+<p>The reaction sequence <span class="math inline">\(A \to B \to C\)</span> follows first-order Arrhenius kinetics:</p>
+<p><span class="math display">\[
+\begin{aligned}
+r_1 &amp;= k_1 \cdot C_A \cdot \exp(-E_1/T) \\
+r_2 &amp;= k_2 \cdot C_B \cdot \exp(-E_2/T)
+\end{aligned}
+\]</span></p>
+<p>The deterministic dynamics are:</p>
+<p><span class="math display">\[
+\begin{aligned}
+\frac{dC_A}{dt} &amp;= -r_1 \\
+\frac{dC_B}{dt} &amp;= r_1 - r_2 \\
+\frac{dT}{dt} &amp;= Q - \alpha(T - T_{\text{amb}})
+\end{aligned}
+\]</span></p>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-1-contents" aria-controls="callout-1" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Itô vs Stratonovich SDEs
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-1" class="callout-1-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<p>The stochastic formulation in this example uses an <strong>Itô SDE</strong> of the form:</p>
+<p><span class="math display">\[dX_t = f(X_t, u_t)\,dt + g(X_t)\,dW_t\]</span></p>
+<p>where <span class="math inline">\(W_t\)</span> is a Wiener process (Brownian motion). The key distinction from <strong>Stratonovich SDEs</strong> lies in how the stochastic integral is defined:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 34%">
+<col style="width: 17%">
+<col style="width: 48%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Property</th>
+<th>Itô</th>
+<th>Stratonovich</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Evaluation point</strong></td>
+<td>Left endpoint of interval</td>
+<td>Midpoint of interval</td>
+</tr>
+<tr class="even">
+<td><strong>Martingale property</strong></td>
+<td>Yes (integral is a martingale)</td>
+<td>No</td>
+</tr>
+<tr class="odd">
+<td><strong>Chain rule</strong></td>
+<td>Requires <strong>Itô’s lemma</strong> with correction term</td>
+<td>Standard chain rule applies</td>
+</tr>
+<tr class="even">
+<td><strong>Typical use</strong></td>
+<td>Finance, control theory, probability</td>
+<td>Physics, systems with colored noise limits</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Itô’s lemma</strong> for a function <span class="math inline">\(Y_t = h(X_t)\)</span> includes an extra term:</p>
+<p><span class="math display">\[dY_t = h'(X_t)\,dX_t + \frac{1}{2}h''(X_t)\,g(X_t)^2\,dt\]</span></p>
+<p>The second term (absent in ordinary calculus) arises because Brownian paths have infinite quadratic variation.</p>
+<p><strong>When the distinction matters</strong>: For <strong>state-dependent (multiplicative) noise</strong> like <span class="math inline">\(g(X_t) = \sigma X_t\)</span>, the two interpretations give different results. For <strong>additive noise</strong> where <span class="math inline">\(g\)</span> is constant, they coincide. This tutorial uses additive noise, so the choice is moot here—but understanding the difference is essential when modeling state-dependent noise.</p>
+</div>
+</div>
+</div>
+</section>
+<section id="noise-structure" class="level2">
+<h2 class="anchored" data-anchor-id="noise-structure">Noise Structure</h2>
+<p>The stochastic batch reactor extends the deterministic model with additive process noise:</p>
+<p><span class="math display">\[
+\begin{aligned}
+dC_A &amp;= (-r_1)\,dt + \sigma_A\,dW_A \\
+dC_B &amp;= (r_1 - r_2)\,dt + \sigma_B\,dW_B \\
+dT &amp;= (Q - \alpha(T - T_{\text{amb}}))\,dt + \sigma_T\,dW_T
+\end{aligned}
+\]</span></p>
+<p>Three independent Wiener processes model distinct physical noise sources: feed variability (<span class="math inline">\(\sigma_A\)</span>, <span class="math inline">\(\sigma_B\)</span>) and heat transfer fluctuations (<span class="math inline">\(\sigma_T\)</span>). Trajectories fluctuate around the deterministic equilibrium with standard deviation growing as <span class="math inline">\(\sqrt{t}\)</span>.</p>
+</section>
+<section id="what-this-tutorial-covers" class="level2">
+<h2 class="anchored" data-anchor-id="what-this-tutorial-covers">What This Tutorial Covers</h2>
+<p>We define two equilibria:</p>
+<ol type="1">
+<li><strong>Complete conversion</strong> (stable): All reactants consumed, temperature at ambient</li>
+<li><strong>Initial setpoint</strong> (unstable): Starting conditions for batch operation</li>
+</ol>
+<p>The tutorial walks through defining <code>_f_sym</code> (drift), <code>diffusion_expr</code> (noise structure), how to define optional <code>_h_sym</code> (output map) and output variables if needed, then covers equilibrium setup and trajectory visualization.</p>
+</section>
+<section id="system-definition" class="level2">
+<h2 class="anchored" data-anchor-id="system-definition">System Definition</h2>
+<p>The full system definition is as follows:</p>
+<div id="fbec1bcb" class="cell" data-execution_count="1">
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> typing <span class="im">import</span> List, Optional, Tuple</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> typing <span class="im">import</span> Optional</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> sympy <span class="im">as</span> sp</span>
@@ -292,14 +437,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a>        C_A, C_B, T <span class="op">=</span> sp.symbols(<span class="st">"C_A C_B T"</span>, real<span class="op">=</span><span class="va">True</span>, positive<span class="op">=</span><span class="va">True</span>)</span>
 <span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>        Q <span class="op">=</span> sp.symbols(<span class="st">"Q"</span>, real<span class="op">=</span><span class="va">True</span>)</span>
 <span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Parameters (kinetics and heat transfer)</span></span>
+<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Deterministic Parameters (kinetics and heat transfer)</span></span>
 <span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a>        k1, k2, E1, E2, alpha, T_amb <span class="op">=</span> sp.symbols(</span>
 <span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a>            <span class="st">"k1 k2 E1 E2 alpha T_amb"</span>,</span>
 <span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a>            real<span class="op">=</span><span class="va">True</span>,</span>
 <span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a>            positive<span class="op">=</span><span class="va">True</span>,</span>
 <span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a>        )</span>
 <span id="cb1-37"><a href="#cb1-37" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-38"><a href="#cb1-38" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Noise intensities</span></span>
+<span id="cb1-38"><a href="#cb1-38" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Stochastic Parameters (noise intensities)</span></span>
 <span id="cb1-39"><a href="#cb1-39" aria-hidden="true" tabindex="-1"></a>        sigma_A_sym <span class="op">=</span> sp.symbols(<span class="st">"sigma_A"</span>, real<span class="op">=</span><span class="va">True</span>, positive<span class="op">=</span><span class="va">True</span>)</span>
 <span id="cb1-40"><a href="#cb1-40" aria-hidden="true" tabindex="-1"></a>        sigma_B_sym <span class="op">=</span> sp.symbols(<span class="st">"sigma_B"</span>, real<span class="op">=</span><span class="va">True</span>, positive<span class="op">=</span><span class="va">True</span>)</span>
 <span id="cb1-41"><a href="#cb1-41" aria-hidden="true" tabindex="-1"></a>        sigma_T_sym <span class="op">=</span> sp.symbols(<span class="st">"sigma_T"</span>, real<span class="op">=</span><span class="va">True</span>, positive<span class="op">=</span><span class="va">True</span>)</span>
@@ -383,17 +528,191 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-119"><a href="#cb1-119" aria-hidden="true" tabindex="-1"></a>            <span class="va">self</span>.set_default_equilibrium(<span class="st">"complete"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
-<p>TODO: go stepwise over the definition of define system</p>
-<p>TODO: go over what is optional and what isn’t optional about deterministic systems</p>
-<p>TODO: clarify what output variables actually are, what they semantically mean, and what _h_sym is relative to _f_sym</p>
-<p>TODO: go over the added stochastic system mechanics and clarify that for pure diffusion systems the drift term _f_sym needs to be a zero vector</p>
-<p>TODO: go over Ito versus Stratonovich and types of noise</p>
-<p>TODO: go over the optional setup_equilibria method and why its there</p>
+<p>The first step in system construction is to subclass the proper symbolic system and create the define_system method signature.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> ContinuousStochasticBatchReactor(ContinuousStochasticSystem):</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> define_system(</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>,</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>        k1_val: <span class="bu">float</span> <span class="op">=</span> <span class="fl">0.5</span>,</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>        k2_val: <span class="bu">float</span> <span class="op">=</span> <span class="fl">0.3</span>,</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>        E1_val: <span class="bu">float</span> <span class="op">=</span> <span class="fl">1000.0</span>,</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>        E2_val: <span class="bu">float</span> <span class="op">=</span> <span class="fl">1500.0</span>,</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>        alpha_val: <span class="bu">float</span> <span class="op">=</span> <span class="fl">0.1</span>,</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>        T_amb_val: <span class="bu">float</span> <span class="op">=</span> <span class="fl">300.0</span>,</span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>        sigma_A: <span class="bu">float</span> <span class="op">=</span> <span class="fl">0.01</span>,</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>        sigma_B: <span class="bu">float</span> <span class="op">=</span> <span class="fl">0.01</span>,</span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>        sigma_T: <span class="bu">float</span> <span class="op">=</span> <span class="fl">1.0</span>,</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>        C_A0: Optional[<span class="bu">float</span>] <span class="op">=</span> <span class="va">None</span>,</span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>        T0: Optional[<span class="bu">float</span>] <span class="op">=</span> <span class="va">None</span>,</span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>    ):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>More often than not, the only arguments to this function will be the <code>self</code> argument and parameter values. It is not necessary to add type hints or default values, but it is recommended for debug purposes.</p>
+<p>The next step in system definition is to define the (deterministic) symbolic variables to be used and place them in the proper fields. The main limitation currently is that it is not possible to explicitly define a symbolic variable for time. If it is heavily requested, we can implement it as a future feature.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># State and control variables</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>C_A, C_B, T <span class="op">=</span> sp.symbols(<span class="st">"C_A C_B T"</span>, real<span class="op">=</span><span class="va">True</span>, positive<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>Q <span class="op">=</span> sp.symbols(<span class="st">"Q"</span>, real<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Deterministic Parameters (kinetics and heat transfer)</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>k1, k2, E1, E2, alpha, T_amb <span class="op">=</span> sp.symbols(</span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    <span class="st">"k1 k2 E1 E2 alpha T_amb"</span>,</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    real<span class="op">=</span><span class="va">True</span>,</span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>    positive<span class="op">=</span><span class="va">True</span>,</span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a><span class="co"># Stochastic Parameters (noise intensities)</span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>sigma_A_sym <span class="op">=</span> sp.symbols(<span class="st">"sigma_A"</span>, real<span class="op">=</span><span class="va">True</span>, positive<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>sigma_B_sym <span class="op">=</span> sp.symbols(<span class="st">"sigma_B"</span>, real<span class="op">=</span><span class="va">True</span>, positive<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>sigma_T_sym <span class="op">=</span> sp.symbols(<span class="st">"sigma_T"</span>, real<span class="op">=</span><span class="va">True</span>, positive<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a><span class="va">self</span>.parameters <span class="op">=</span> {</span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>    k1: k1_val,</span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a>    k2: k2_val,</span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a>    E1: E1_val,</span>
+<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a>    E2: E2_val,</span>
+<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a>    alpha: alpha_val,</span>
+<span id="cb3-23"><a href="#cb3-23" aria-hidden="true" tabindex="-1"></a>    T_amb: T_amb_val,</span>
+<span id="cb3-24"><a href="#cb3-24" aria-hidden="true" tabindex="-1"></a>    sigma_A_sym: sigma_A,</span>
+<span id="cb3-25"><a href="#cb3-25" aria-hidden="true" tabindex="-1"></a>    sigma_B_sym: sigma_B,</span>
+<span id="cb3-26"><a href="#cb3-26" aria-hidden="true" tabindex="-1"></a>    sigma_T_sym: sigma_T,</span>
+<span id="cb3-27"><a href="#cb3-27" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb3-28"><a href="#cb3-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-29"><a href="#cb3-29" aria-hidden="true" tabindex="-1"></a><span class="va">self</span>.state_vars <span class="op">=</span> [C_A, C_B, T]</span>
+<span id="cb3-30"><a href="#cb3-30" aria-hidden="true" tabindex="-1"></a><span class="va">self</span>.control_vars <span class="op">=</span> [Q]</span>
+<span id="cb3-31"><a href="#cb3-31" aria-hidden="true" tabindex="-1"></a><span class="va">self</span>.output_vars <span class="op">=</span> []</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>The necessary symbolic variables include: - State variables - Control variables - Parameter variables</p>
+<div class="callout callout-style-default callout-warning callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Warning</span>Output Variables and the Output Map
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>There are two related but distinct concepts for system outputs:</p>
+<ul>
+<li><p><strong><code>self.output_vars</code></strong>: A list of symbolic variables representing <em>computed outputs</em>—quantities derived from state variables but not states themselves. For example, if your states are position and velocity, an output variable might be kinetic energy. Do <strong>not</strong> add state variables to this list.</p></li>
+<li><p><strong><code>self._h_sym</code></strong>: The <em>output map</em> <span class="math inline">\(y = h(x)\)</span>, a symbolic column vector defining what the system actually outputs. This can include:</p>
+<ul>
+<li>State variables (for full or partial state observation)</li>
+<li>Output variables (computed quantities)</li>
+<li>Any symbolic expression of states</li>
+</ul></li>
+</ul>
+<p><strong>Defaults</strong>: <code>self.output_vars = []</code> (no computed outputs) and <code>self._h_sym = state vector</code> (full state observability).</p>
+<p><strong>Example</strong>: For a system with states <span class="math inline">\([x, v]\)</span> and a computed output <span class="math inline">\(E = \frac{1}{2}mv^2\)</span>:</p>
+<ul>
+<li><code>self.output_vars = [E]</code></li>
+<li><code>self._h_sym = sp.Matrix([x, E])</code> outputs position and energy (but not velocity)</li>
+</ul>
+</div>
+</div>
+<div class="callout callout-style-default callout-warning callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Warning</span>Autonomous Systems
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>To specify that a system is autonomous and has no control variables, you must pass an empty list to the self.control_vars field.</p>
+</div>
+</div>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Parameter Dictionary Keys Must Be Symbolic Variables
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>A common mistake is to set the dictionary keys for self.parameters as strings, but for proper symbolic substitution and code generation, the keys must be SymPy Symbolic variables.</p>
+</div>
+</div>
+<p>The final required step in system definition is to relate symbolic variables for the definition of the system (and possibly observation) dynamics.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Reaction rates (Arrhenius kinetics)</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>r1 <span class="op">=</span> k1 <span class="op">*</span> C_A <span class="op">*</span> sp.exp(<span class="op">-</span>E1 <span class="op">/</span> T)</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>r2 <span class="op">=</span> k2 <span class="op">*</span> C_B <span class="op">*</span> sp.exp(<span class="op">-</span>E2 <span class="op">/</span> T)</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="co"># DRIFT (Deterministic part - same as deterministic reactor)</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>dC_A_dt <span class="op">=</span> <span class="op">-</span>r1</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>dC_B_dt <span class="op">=</span> r1 <span class="op">-</span> r2</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>dT_dt <span class="op">=</span> Q <span class="op">-</span> alpha <span class="op">*</span> (T <span class="op">-</span> T_amb)</span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a><span class="va">self</span>._f_sym <span class="op">=</span> sp.Matrix([dC_A_dt, dC_B_dt, dT_dt])</span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a><span class="co"># DIFFUSION (Stochastic part - additive noise)</span></span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a><span class="co"># Diagonal matrix: three independent Wiener processes</span></span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a><span class="va">self</span>.diffusion_expr <span class="op">=</span> sp.Matrix(</span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>    [</span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>        [sigma_A_sym, <span class="dv">0</span>, <span class="dv">0</span>],</span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>        [<span class="dv">0</span>, sigma_B_sym, <span class="dv">0</span>],</span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a>        [<span class="dv">0</span>, <span class="dv">0</span>, sigma_T_sym],</span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a>    ],</span>
+<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a><span class="co"># Output: Full state measurement (with potential noise in practice)</span></span>
+<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a><span class="co"># technically optional</span></span>
+<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a><span class="va">self</span>._h_sym <span class="op">=</span> sp.Matrix([C_A, C_B, T])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Pure Diffusion Systems
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>To define purely stochastic systems with only diffusion terms and no drift terms, self._f_sym must be defined as a symbolic column vector of zero elements with the same dimensionality as the number of state variables.</p>
+</div>
+</div>
+<p>The following steps are optional, but recommended for explicit documentation of system behavior</p>
+<p>The order (number of time derivatives) is set to 1 by default, but can be set higher. If the order is higher than 1, the expression in self._f_sym must return only the highest derivative.</p>
+<p>The SDE type is set to Itô by default, but can be set to Stratonovich with self.sde_type = “stratonovich” if needed.</p>
+<p>Upon initialization, the origin and zero control are set as an equilibrium of the system, but if the user specifies a setup_equilibria method, it will be run after system setup to add necessary system equilibria automatically as well. This is especially useful if the system equilibria are parameter dependent.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> setup_equilibria(<span class="va">self</span>):</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Get parameters</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>    T_amb <span class="op">=</span> <span class="va">self</span>.parameters[sp.symbols(<span class="st">"T_amb"</span>)]</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Complete conversion equilibrium (deterministic part)</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>    <span class="va">self</span>.add_equilibrium(</span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>        <span class="st">"complete"</span>,</span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>        x_eq<span class="op">=</span>np.array([<span class="fl">0.0</span>, <span class="fl">0.0</span>, T_amb]),</span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>        u_eq<span class="op">=</span>np.array([<span class="fl">0.0</span>]),</span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>        verify<span class="op">=</span><span class="va">True</span>,</span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>        stability<span class="op">=</span><span class="st">"stable"</span>,</span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>        notes<span class="op">=</span><span class="st">"Equilibrium of deterministic part (drift). Stochastic trajectories "</span></span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>        <span class="st">"fluctuate around this point with variance growing over time."</span>,</span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Initial condition (if provided)</span></span>
+<span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="va">self</span>.C_A0 <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span> <span class="kw">and</span> <span class="va">self</span>.T0 <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span>:</span>
+<span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a>        alpha <span class="op">=</span> <span class="va">self</span>.parameters[sp.symbols(<span class="st">"alpha"</span>)]</span>
+<span id="cb5-19"><a href="#cb5-19" aria-hidden="true" tabindex="-1"></a>        Q_init <span class="op">=</span> alpha <span class="op">*</span> (<span class="va">self</span>.T0 <span class="op">-</span> T_amb)</span>
+<span id="cb5-20"><a href="#cb5-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-21"><a href="#cb5-21" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.add_equilibrium(</span>
+<span id="cb5-22"><a href="#cb5-22" aria-hidden="true" tabindex="-1"></a>            <span class="st">"initial"</span>,</span>
+<span id="cb5-23"><a href="#cb5-23" aria-hidden="true" tabindex="-1"></a>            x_eq<span class="op">=</span>np.array([<span class="va">self</span>.C_A0, <span class="fl">0.0</span>, <span class="va">self</span>.T0]),</span>
+<span id="cb5-24"><a href="#cb5-24" aria-hidden="true" tabindex="-1"></a>            u_eq<span class="op">=</span>np.array([Q_init]),</span>
+<span id="cb5-25"><a href="#cb5-25" aria-hidden="true" tabindex="-1"></a>            verify<span class="op">=</span><span class="va">False</span>,</span>
+<span id="cb5-26"><a href="#cb5-26" aria-hidden="true" tabindex="-1"></a>            stability<span class="op">=</span><span class="st">"unstable"</span>,</span>
+<span id="cb5-27"><a href="#cb5-27" aria-hidden="true" tabindex="-1"></a>            notes<span class="op">=</span><span class="st">"Initial state setpoint (deterministic part). Stochastic trajectories "</span></span>
+<span id="cb5-28"><a href="#cb5-28" aria-hidden="true" tabindex="-1"></a>            <span class="st">"will fluctuate with std ~ [σ_A·√t, σ_B·√t, σ_T·√t]."</span>,</span>
+<span id="cb5-29"><a href="#cb5-29" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb5-30"><a href="#cb5-30" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.set_default_equilibrium(<span class="st">"initial"</span>)</span>
+<span id="cb5-31"><a href="#cb5-31" aria-hidden="true" tabindex="-1"></a>    <span class="cf">else</span>:</span>
+<span id="cb5-32"><a href="#cb5-32" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.set_default_equilibrium(<span class="st">"complete"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Finally, a user can define other fields and methods for downstream usage as long as they don’t interfere with the system’s base methods and fields.</p>
 <p>TODO: go over basic trajectory and phase plotting</p>
 
 
 <!-- -->
 
+</section>
 
 </main> <!-- /main -->
 <script id="quarto-html-after-body" type="application/javascript">
@@ -847,161 +1166,402 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     }
   });
   </script><div class="modal fade" id="quarto-embedded-source-code-modal" tabindex="-1" aria-labelledby="quarto-embedded-source-code-modal-label" aria-hidden="true"><div class="modal-dialog modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h5 class="modal-title" id="quarto-embedded-source-code-modal-label">Source Code</h5><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2" data-shortcodes="false"><pre class="sourceCode markdown code-with-copy"><code class="sourceCode markdown"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co">---</span></span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="an">title:</span><span class="co"> "Anatomy of a Symbolic System"</span></span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="an">subtitle:</span><span class="co"> "Stochastic Batch Reactors"</span></span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="an">author:</span><span class="co"> "Gil Benezer"</span></span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="an">date:</span><span class="co"> today</span></span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="an">format:</span></span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="co">  html:</span></span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="co">    toc: true</span></span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="co">    toc-depth: 5</span></span>
-<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="co">    code-fold: show</span></span>
-<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a><span class="co">    code-tools: true</span></span>
-<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="co">    theme: cosmo</span></span>
-<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a><span class="an">execute:</span></span>
-<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a><span class="co">  eval: true</span></span>
-<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a><span class="co">  cache: true</span></span>
-<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a><span class="co">  warning: false</span></span>
-<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a><span class="co">---</span></span>
-<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>TODO: add front matter describing the batch reactor system</span>
-<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
-<span id="cb2-24"><a href="#cb2-24" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> typing <span class="im">import</span> List, Optional, Tuple</span>
-<span id="cb2-25"><a href="#cb2-25" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-26"><a href="#cb2-26" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
-<span id="cb2-27"><a href="#cb2-27" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> sympy <span class="im">as</span> sp</span>
-<span id="cb2-28"><a href="#cb2-28" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-29"><a href="#cb2-29" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> cdesym <span class="im">import</span> ContinuousStochasticSystem</span>
-<span id="cb2-30"><a href="#cb2-30" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-31"><a href="#cb2-31" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> ContinuousStochasticBatchReactor(ContinuousStochasticSystem):</span>
-<span id="cb2-32"><a href="#cb2-32" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> define_system(</span>
-<span id="cb2-33"><a href="#cb2-33" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>,</span>
-<span id="cb2-34"><a href="#cb2-34" aria-hidden="true" tabindex="-1"></a>        k1_val: <span class="bu">float</span> <span class="op">=</span> <span class="fl">0.5</span>,</span>
-<span id="cb2-35"><a href="#cb2-35" aria-hidden="true" tabindex="-1"></a>        k2_val: <span class="bu">float</span> <span class="op">=</span> <span class="fl">0.3</span>,</span>
-<span id="cb2-36"><a href="#cb2-36" aria-hidden="true" tabindex="-1"></a>        E1_val: <span class="bu">float</span> <span class="op">=</span> <span class="fl">1000.0</span>,</span>
-<span id="cb2-37"><a href="#cb2-37" aria-hidden="true" tabindex="-1"></a>        E2_val: <span class="bu">float</span> <span class="op">=</span> <span class="fl">1500.0</span>,</span>
-<span id="cb2-38"><a href="#cb2-38" aria-hidden="true" tabindex="-1"></a>        alpha_val: <span class="bu">float</span> <span class="op">=</span> <span class="fl">0.1</span>,</span>
-<span id="cb2-39"><a href="#cb2-39" aria-hidden="true" tabindex="-1"></a>        T_amb_val: <span class="bu">float</span> <span class="op">=</span> <span class="fl">300.0</span>,</span>
-<span id="cb2-40"><a href="#cb2-40" aria-hidden="true" tabindex="-1"></a>        sigma_A: <span class="bu">float</span> <span class="op">=</span> <span class="fl">0.01</span>,</span>
-<span id="cb2-41"><a href="#cb2-41" aria-hidden="true" tabindex="-1"></a>        sigma_B: <span class="bu">float</span> <span class="op">=</span> <span class="fl">0.01</span>,</span>
-<span id="cb2-42"><a href="#cb2-42" aria-hidden="true" tabindex="-1"></a>        sigma_T: <span class="bu">float</span> <span class="op">=</span> <span class="fl">1.0</span>,</span>
-<span id="cb2-43"><a href="#cb2-43" aria-hidden="true" tabindex="-1"></a>        C_A0: Optional[<span class="bu">float</span>] <span class="op">=</span> <span class="va">None</span>,</span>
-<span id="cb2-44"><a href="#cb2-44" aria-hidden="true" tabindex="-1"></a>        T0: Optional[<span class="bu">float</span>] <span class="op">=</span> <span class="va">None</span>,</span>
-<span id="cb2-45"><a href="#cb2-45" aria-hidden="true" tabindex="-1"></a>    ):</span>
-<span id="cb2-46"><a href="#cb2-46" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Store initial conditions</span></span>
-<span id="cb2-47"><a href="#cb2-47" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.C_A0 <span class="op">=</span> C_A0</span>
-<span id="cb2-48"><a href="#cb2-48" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.T0 <span class="op">=</span> T0</span>
-<span id="cb2-49"><a href="#cb2-49" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-50"><a href="#cb2-50" aria-hidden="true" tabindex="-1"></a>        <span class="co"># State and control variables</span></span>
-<span id="cb2-51"><a href="#cb2-51" aria-hidden="true" tabindex="-1"></a>        C_A, C_B, T <span class="op">=</span> sp.symbols(<span class="st">"C_A C_B T"</span>, real<span class="op">=</span><span class="va">True</span>, positive<span class="op">=</span><span class="va">True</span>)</span>
-<span id="cb2-52"><a href="#cb2-52" aria-hidden="true" tabindex="-1"></a>        Q <span class="op">=</span> sp.symbols(<span class="st">"Q"</span>, real<span class="op">=</span><span class="va">True</span>)</span>
-<span id="cb2-53"><a href="#cb2-53" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-54"><a href="#cb2-54" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Parameters (kinetics and heat transfer)</span></span>
-<span id="cb2-55"><a href="#cb2-55" aria-hidden="true" tabindex="-1"></a>        k1, k2, E1, E2, alpha, T_amb <span class="op">=</span> sp.symbols(</span>
-<span id="cb2-56"><a href="#cb2-56" aria-hidden="true" tabindex="-1"></a>            <span class="st">"k1 k2 E1 E2 alpha T_amb"</span>,</span>
-<span id="cb2-57"><a href="#cb2-57" aria-hidden="true" tabindex="-1"></a>            real<span class="op">=</span><span class="va">True</span>,</span>
-<span id="cb2-58"><a href="#cb2-58" aria-hidden="true" tabindex="-1"></a>            positive<span class="op">=</span><span class="va">True</span>,</span>
-<span id="cb2-59"><a href="#cb2-59" aria-hidden="true" tabindex="-1"></a>        )</span>
-<span id="cb2-60"><a href="#cb2-60" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-61"><a href="#cb2-61" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Noise intensities</span></span>
-<span id="cb2-62"><a href="#cb2-62" aria-hidden="true" tabindex="-1"></a>        sigma_A_sym <span class="op">=</span> sp.symbols(<span class="st">"sigma_A"</span>, real<span class="op">=</span><span class="va">True</span>, positive<span class="op">=</span><span class="va">True</span>)</span>
-<span id="cb2-63"><a href="#cb2-63" aria-hidden="true" tabindex="-1"></a>        sigma_B_sym <span class="op">=</span> sp.symbols(<span class="st">"sigma_B"</span>, real<span class="op">=</span><span class="va">True</span>, positive<span class="op">=</span><span class="va">True</span>)</span>
-<span id="cb2-64"><a href="#cb2-64" aria-hidden="true" tabindex="-1"></a>        sigma_T_sym <span class="op">=</span> sp.symbols(<span class="st">"sigma_T"</span>, real<span class="op">=</span><span class="va">True</span>, positive<span class="op">=</span><span class="va">True</span>)</span>
-<span id="cb2-65"><a href="#cb2-65" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-66"><a href="#cb2-66" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.parameters <span class="op">=</span> {</span>
-<span id="cb2-67"><a href="#cb2-67" aria-hidden="true" tabindex="-1"></a>            k1: k1_val,</span>
-<span id="cb2-68"><a href="#cb2-68" aria-hidden="true" tabindex="-1"></a>            k2: k2_val,</span>
-<span id="cb2-69"><a href="#cb2-69" aria-hidden="true" tabindex="-1"></a>            E1: E1_val,</span>
-<span id="cb2-70"><a href="#cb2-70" aria-hidden="true" tabindex="-1"></a>            E2: E2_val,</span>
-<span id="cb2-71"><a href="#cb2-71" aria-hidden="true" tabindex="-1"></a>            alpha: alpha_val,</span>
-<span id="cb2-72"><a href="#cb2-72" aria-hidden="true" tabindex="-1"></a>            T_amb: T_amb_val,</span>
-<span id="cb2-73"><a href="#cb2-73" aria-hidden="true" tabindex="-1"></a>            sigma_A_sym: sigma_A,</span>
-<span id="cb2-74"><a href="#cb2-74" aria-hidden="true" tabindex="-1"></a>            sigma_B_sym: sigma_B,</span>
-<span id="cb2-75"><a href="#cb2-75" aria-hidden="true" tabindex="-1"></a>            sigma_T_sym: sigma_T,</span>
-<span id="cb2-76"><a href="#cb2-76" aria-hidden="true" tabindex="-1"></a>        }</span>
-<span id="cb2-77"><a href="#cb2-77" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-78"><a href="#cb2-78" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.state_vars <span class="op">=</span> [C_A, C_B, T]</span>
-<span id="cb2-79"><a href="#cb2-79" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.control_vars <span class="op">=</span> [Q]</span>
-<span id="cb2-80"><a href="#cb2-80" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.output_vars <span class="op">=</span> []</span>
-<span id="cb2-81"><a href="#cb2-81" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.order <span class="op">=</span> <span class="dv">1</span></span>
-<span id="cb2-82"><a href="#cb2-82" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-83"><a href="#cb2-83" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Reaction rates (Arrhenius kinetics)</span></span>
-<span id="cb2-84"><a href="#cb2-84" aria-hidden="true" tabindex="-1"></a>        r1 <span class="op">=</span> k1 <span class="op">*</span> C_A <span class="op">*</span> sp.exp(<span class="op">-</span>E1 <span class="op">/</span> T)</span>
-<span id="cb2-85"><a href="#cb2-85" aria-hidden="true" tabindex="-1"></a>        r2 <span class="op">=</span> k2 <span class="op">*</span> C_B <span class="op">*</span> sp.exp(<span class="op">-</span>E2 <span class="op">/</span> T)</span>
-<span id="cb2-86"><a href="#cb2-86" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-87"><a href="#cb2-87" aria-hidden="true" tabindex="-1"></a>        <span class="co"># DRIFT (Deterministic part - same as deterministic reactor)</span></span>
-<span id="cb2-88"><a href="#cb2-88" aria-hidden="true" tabindex="-1"></a>        dC_A_dt <span class="op">=</span> <span class="op">-</span>r1</span>
-<span id="cb2-89"><a href="#cb2-89" aria-hidden="true" tabindex="-1"></a>        dC_B_dt <span class="op">=</span> r1 <span class="op">-</span> r2</span>
-<span id="cb2-90"><a href="#cb2-90" aria-hidden="true" tabindex="-1"></a>        dT_dt <span class="op">=</span> Q <span class="op">-</span> alpha <span class="op">*</span> (T <span class="op">-</span> T_amb)</span>
-<span id="cb2-91"><a href="#cb2-91" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-92"><a href="#cb2-92" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>._f_sym <span class="op">=</span> sp.Matrix([dC_A_dt, dC_B_dt, dT_dt])</span>
-<span id="cb2-93"><a href="#cb2-93" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-94"><a href="#cb2-94" aria-hidden="true" tabindex="-1"></a>        <span class="co"># DIFFUSION (Stochastic part - additive noise)</span></span>
-<span id="cb2-95"><a href="#cb2-95" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Diagonal matrix: three independent Wiener processes</span></span>
-<span id="cb2-96"><a href="#cb2-96" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.diffusion_expr <span class="op">=</span> sp.Matrix(</span>
-<span id="cb2-97"><a href="#cb2-97" aria-hidden="true" tabindex="-1"></a>            [</span>
-<span id="cb2-98"><a href="#cb2-98" aria-hidden="true" tabindex="-1"></a>                [sigma_A_sym, <span class="dv">0</span>, <span class="dv">0</span>],</span>
-<span id="cb2-99"><a href="#cb2-99" aria-hidden="true" tabindex="-1"></a>                [<span class="dv">0</span>, sigma_B_sym, <span class="dv">0</span>],</span>
-<span id="cb2-100"><a href="#cb2-100" aria-hidden="true" tabindex="-1"></a>                [<span class="dv">0</span>, <span class="dv">0</span>, sigma_T_sym],</span>
-<span id="cb2-101"><a href="#cb2-101" aria-hidden="true" tabindex="-1"></a>            ],</span>
-<span id="cb2-102"><a href="#cb2-102" aria-hidden="true" tabindex="-1"></a>        )</span>
-<span id="cb2-103"><a href="#cb2-103" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-104"><a href="#cb2-104" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Itô SDE interpretation</span></span>
-<span id="cb2-105"><a href="#cb2-105" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.sde_type <span class="op">=</span> <span class="st">"ito"</span></span>
-<span id="cb2-106"><a href="#cb2-106" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-107"><a href="#cb2-107" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Output: Full state measurement (with potential noise in practice)</span></span>
-<span id="cb2-108"><a href="#cb2-108" aria-hidden="true" tabindex="-1"></a>        <span class="co"># technically optional</span></span>
-<span id="cb2-109"><a href="#cb2-109" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>._h_sym <span class="op">=</span> sp.Matrix([C_A, C_B, T])</span>
-<span id="cb2-110"><a href="#cb2-110" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-111"><a href="#cb2-111" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> setup_equilibria(<span class="va">self</span>):</span>
-<span id="cb2-112"><a href="#cb2-112" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Get parameters</span></span>
-<span id="cb2-113"><a href="#cb2-113" aria-hidden="true" tabindex="-1"></a>        T_amb <span class="op">=</span> <span class="va">self</span>.parameters[sp.symbols(<span class="st">"T_amb"</span>)]</span>
-<span id="cb2-114"><a href="#cb2-114" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-115"><a href="#cb2-115" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Complete conversion equilibrium (deterministic part)</span></span>
-<span id="cb2-116"><a href="#cb2-116" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.add_equilibrium(</span>
-<span id="cb2-117"><a href="#cb2-117" aria-hidden="true" tabindex="-1"></a>            <span class="st">"complete"</span>,</span>
-<span id="cb2-118"><a href="#cb2-118" aria-hidden="true" tabindex="-1"></a>            x_eq<span class="op">=</span>np.array([<span class="fl">0.0</span>, <span class="fl">0.0</span>, T_amb]),</span>
-<span id="cb2-119"><a href="#cb2-119" aria-hidden="true" tabindex="-1"></a>            u_eq<span class="op">=</span>np.array([<span class="fl">0.0</span>]),</span>
-<span id="cb2-120"><a href="#cb2-120" aria-hidden="true" tabindex="-1"></a>            verify<span class="op">=</span><span class="va">True</span>,</span>
-<span id="cb2-121"><a href="#cb2-121" aria-hidden="true" tabindex="-1"></a>            stability<span class="op">=</span><span class="st">"stable"</span>,</span>
-<span id="cb2-122"><a href="#cb2-122" aria-hidden="true" tabindex="-1"></a>            notes<span class="op">=</span><span class="st">"Equilibrium of deterministic part (drift). Stochastic trajectories "</span></span>
-<span id="cb2-123"><a href="#cb2-123" aria-hidden="true" tabindex="-1"></a>            <span class="st">"fluctuate around this point with variance growing over time."</span>,</span>
-<span id="cb2-124"><a href="#cb2-124" aria-hidden="true" tabindex="-1"></a>        )</span>
-<span id="cb2-125"><a href="#cb2-125" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-126"><a href="#cb2-126" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Initial condition (if provided)</span></span>
-<span id="cb2-127"><a href="#cb2-127" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="va">self</span>.C_A0 <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span> <span class="kw">and</span> <span class="va">self</span>.T0 <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span>:</span>
-<span id="cb2-128"><a href="#cb2-128" aria-hidden="true" tabindex="-1"></a>            alpha <span class="op">=</span> <span class="va">self</span>.parameters[sp.symbols(<span class="st">"alpha"</span>)]</span>
-<span id="cb2-129"><a href="#cb2-129" aria-hidden="true" tabindex="-1"></a>            Q_init <span class="op">=</span> alpha <span class="op">*</span> (<span class="va">self</span>.T0 <span class="op">-</span> T_amb)</span>
-<span id="cb2-130"><a href="#cb2-130" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-131"><a href="#cb2-131" aria-hidden="true" tabindex="-1"></a>            <span class="va">self</span>.add_equilibrium(</span>
-<span id="cb2-132"><a href="#cb2-132" aria-hidden="true" tabindex="-1"></a>                <span class="st">"initial"</span>,</span>
-<span id="cb2-133"><a href="#cb2-133" aria-hidden="true" tabindex="-1"></a>                x_eq<span class="op">=</span>np.array([<span class="va">self</span>.C_A0, <span class="fl">0.0</span>, <span class="va">self</span>.T0]),</span>
-<span id="cb2-134"><a href="#cb2-134" aria-hidden="true" tabindex="-1"></a>                u_eq<span class="op">=</span>np.array([Q_init]),</span>
-<span id="cb2-135"><a href="#cb2-135" aria-hidden="true" tabindex="-1"></a>                verify<span class="op">=</span><span class="va">False</span>,</span>
-<span id="cb2-136"><a href="#cb2-136" aria-hidden="true" tabindex="-1"></a>                stability<span class="op">=</span><span class="st">"unstable"</span>,</span>
-<span id="cb2-137"><a href="#cb2-137" aria-hidden="true" tabindex="-1"></a>                notes<span class="op">=</span><span class="st">"Initial state setpoint (deterministic part). Stochastic trajectories "</span></span>
-<span id="cb2-138"><a href="#cb2-138" aria-hidden="true" tabindex="-1"></a>                <span class="st">"will fluctuate with std ~ [σ_A·√t, σ_B·√t, σ_T·√t]."</span>,</span>
-<span id="cb2-139"><a href="#cb2-139" aria-hidden="true" tabindex="-1"></a>            )</span>
-<span id="cb2-140"><a href="#cb2-140" aria-hidden="true" tabindex="-1"></a>            <span class="va">self</span>.set_default_equilibrium(<span class="st">"initial"</span>)</span>
-<span id="cb2-141"><a href="#cb2-141" aria-hidden="true" tabindex="-1"></a>        <span class="cf">else</span>:</span>
-<span id="cb2-142"><a href="#cb2-142" aria-hidden="true" tabindex="-1"></a>            <span class="va">self</span>.set_default_equilibrium(<span class="st">"complete"</span>)</span>
-<span id="cb2-143"><a href="#cb2-143" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb2-144"><a href="#cb2-144" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-145"><a href="#cb2-145" aria-hidden="true" tabindex="-1"></a>TODO: go stepwise over the definition of define system</span>
-<span id="cb2-146"><a href="#cb2-146" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-147"><a href="#cb2-147" aria-hidden="true" tabindex="-1"></a>TODO: go over what is optional and what isn't optional about deterministic systems</span>
-<span id="cb2-148"><a href="#cb2-148" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-149"><a href="#cb2-149" aria-hidden="true" tabindex="-1"></a>TODO: clarify what output variables actually are, what they semantically mean, and what _h_sym is relative to _f_sym</span>
-<span id="cb2-150"><a href="#cb2-150" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-151"><a href="#cb2-151" aria-hidden="true" tabindex="-1"></a>TODO: go over the added stochastic system mechanics and clarify that for pure diffusion systems the drift term _f_sym needs to be a zero vector</span>
-<span id="cb2-152"><a href="#cb2-152" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-153"><a href="#cb2-153" aria-hidden="true" tabindex="-1"></a>TODO: go over Ito versus Stratonovich and types of noise</span>
-<span id="cb2-154"><a href="#cb2-154" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-155"><a href="#cb2-155" aria-hidden="true" tabindex="-1"></a>TODO: go over the optional setup_equilibria method and why its there</span>
-<span id="cb2-156"><a href="#cb2-156" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-157"><a href="#cb2-157" aria-hidden="true" tabindex="-1"></a>TODO: go over basic trajectory and phase plotting</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6" data-shortcodes="false"><pre class="sourceCode markdown code-with-copy"><code class="sourceCode markdown"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co">---</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="an">title:</span><span class="co"> "Anatomy of a Symbolic System"</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="an">subtitle:</span><span class="co"> "Stochastic Batch Reactors"</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="an">author:</span><span class="co"> "Gil Benezer"</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="an">date:</span><span class="co"> today</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="an">format:</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="co">  html:</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a><span class="co">    toc: true</span></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a><span class="co">    toc-depth: 5</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a><span class="co">    code-fold: show</span></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a><span class="co">    code-tools: true</span></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a><span class="co">    theme: cosmo</span></span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a><span class="an">execute:</span></span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a><span class="co">  eval: true</span></span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a><span class="co">  cache: true</span></span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a><span class="co">  warning: false</span></span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a><span class="co">---</span></span>
+<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a>This tutorial introduces the anatomy of a symbolic control system using a **stochastic batch reactor** as a worked example. A batch reactor is a closed chemical system where reactants $A$ and $B$ undergo sequential reactions governed by Arrhenius kinetics, with temperature controlled via external heating $Q$.</span>
+<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-21"><a href="#cb6-21" aria-hidden="true" tabindex="-1"></a><span class="fu">## System Overview</span></span>
+<span id="cb6-22"><a href="#cb6-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-23"><a href="#cb6-23" aria-hidden="true" tabindex="-1"></a>The system demonstrates key <span class="in">`cdesym`</span> concepts:</span>
+<span id="cb6-24"><a href="#cb6-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-25"><a href="#cb6-25" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**State variables**: Concentrations $(C_A, C_B)$ and temperature $(T)$</span>
+<span id="cb6-26"><a href="#cb6-26" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Control input**: Heat input $(Q)$</span>
+<span id="cb6-27"><a href="#cb6-27" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Drift dynamics**: Deterministic reaction rates and heat transfer</span>
+<span id="cb6-28"><a href="#cb6-28" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Diffusion dynamics**: Additive noise on each state, representing measurement or process uncertainty</span>
+<span id="cb6-29"><a href="#cb6-29" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-30"><a href="#cb6-30" aria-hidden="true" tabindex="-1"></a>The reaction sequence $A \to B \to C$ follows first-order Arrhenius kinetics:</span>
+<span id="cb6-31"><a href="#cb6-31" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-32"><a href="#cb6-32" aria-hidden="true" tabindex="-1"></a>$$</span>
+<span id="cb6-33"><a href="#cb6-33" aria-hidden="true" tabindex="-1"></a>\begin{aligned}</span>
+<span id="cb6-34"><a href="#cb6-34" aria-hidden="true" tabindex="-1"></a>r_1 &amp;= k_1 \cdot C_A \cdot \exp(-E_1/T) <span class="sc">\\</span></span>
+<span id="cb6-35"><a href="#cb6-35" aria-hidden="true" tabindex="-1"></a>r_2 &amp;= k_2 \cdot C_B \cdot \exp(-E_2/T)</span>
+<span id="cb6-36"><a href="#cb6-36" aria-hidden="true" tabindex="-1"></a>\end{aligned}</span>
+<span id="cb6-37"><a href="#cb6-37" aria-hidden="true" tabindex="-1"></a>$$</span>
+<span id="cb6-38"><a href="#cb6-38" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-39"><a href="#cb6-39" aria-hidden="true" tabindex="-1"></a>The deterministic dynamics are:</span>
+<span id="cb6-40"><a href="#cb6-40" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-41"><a href="#cb6-41" aria-hidden="true" tabindex="-1"></a>$$</span>
+<span id="cb6-42"><a href="#cb6-42" aria-hidden="true" tabindex="-1"></a>\begin{aligned}</span>
+<span id="cb6-43"><a href="#cb6-43" aria-hidden="true" tabindex="-1"></a>\frac{dC_A}{dt} &amp;= -r_1 <span class="sc">\\</span></span>
+<span id="cb6-44"><a href="#cb6-44" aria-hidden="true" tabindex="-1"></a>\frac{dC_B}{dt} &amp;= r_1 - r_2 <span class="sc">\\</span></span>
+<span id="cb6-45"><a href="#cb6-45" aria-hidden="true" tabindex="-1"></a>\frac{dT}{dt} &amp;= Q - \alpha(T - T_{\text{amb}})</span>
+<span id="cb6-46"><a href="#cb6-46" aria-hidden="true" tabindex="-1"></a>\end{aligned}</span>
+<span id="cb6-47"><a href="#cb6-47" aria-hidden="true" tabindex="-1"></a>$$</span>
+<span id="cb6-48"><a href="#cb6-48" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-49"><a href="#cb6-49" aria-hidden="true" tabindex="-1"></a>::: {.callout-note collapse="true"}</span>
+<span id="cb6-50"><a href="#cb6-50" aria-hidden="true" tabindex="-1"></a><span class="fu">## Itô vs Stratonovich SDEs</span></span>
+<span id="cb6-51"><a href="#cb6-51" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-52"><a href="#cb6-52" aria-hidden="true" tabindex="-1"></a>The stochastic formulation in this example uses an **Itô SDE** of the form:</span>
+<span id="cb6-53"><a href="#cb6-53" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-54"><a href="#cb6-54" aria-hidden="true" tabindex="-1"></a>$$dX_t = f(X_t, u_t)\,dt + g(X_t)\,dW_t$$</span>
+<span id="cb6-55"><a href="#cb6-55" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-56"><a href="#cb6-56" aria-hidden="true" tabindex="-1"></a>where $W_t$ is a Wiener process (Brownian motion). The key distinction from **Stratonovich SDEs** lies in how the stochastic integral is defined:</span>
+<span id="cb6-57"><a href="#cb6-57" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-58"><a href="#cb6-58" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Property <span class="pp">|</span> Itô <span class="pp">|</span> Stratonovich <span class="pp">|</span></span>
+<span id="cb6-59"><a href="#cb6-59" aria-hidden="true" tabindex="-1"></a><span class="pp">|----------|-----|--------------|</span></span>
+<span id="cb6-60"><a href="#cb6-60" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> **Evaluation point** <span class="pp">|</span> Left endpoint of interval <span class="pp">|</span> Midpoint of interval <span class="pp">|</span></span>
+<span id="cb6-61"><a href="#cb6-61" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> **Martingale property** <span class="pp">|</span> Yes (integral is a martingale) <span class="pp">|</span> No <span class="pp">|</span></span>
+<span id="cb6-62"><a href="#cb6-62" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> **Chain rule** | Requires **Itô's lemma** with correction term <span class="pp">|</span> Standard chain rule applies <span class="pp">|</span></span>
+<span id="cb6-63"><a href="#cb6-63" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> **Typical use** <span class="pp">|</span> Finance, control theory, probability <span class="pp">|</span> Physics, systems with colored noise limits <span class="pp">|</span></span>
+<span id="cb6-64"><a href="#cb6-64" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-65"><a href="#cb6-65" aria-hidden="true" tabindex="-1"></a>**Itô's lemma** for a function $Y_t = h(X_t)$ includes an extra term:</span>
+<span id="cb6-66"><a href="#cb6-66" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-67"><a href="#cb6-67" aria-hidden="true" tabindex="-1"></a>$$dY_t = h'(X_t)\,dX_t + \frac{1}{2}h''(X_t)\,g(X_t)^2\,dt$$</span>
+<span id="cb6-68"><a href="#cb6-68" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-69"><a href="#cb6-69" aria-hidden="true" tabindex="-1"></a>The second term (absent in ordinary calculus) arises because Brownian paths have infinite quadratic variation.</span>
+<span id="cb6-70"><a href="#cb6-70" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-71"><a href="#cb6-71" aria-hidden="true" tabindex="-1"></a>**When the distinction matters**: For **state-dependent (multiplicative) noise** like $g(X_t) = \sigma X_t$, the two interpretations give different results. For **additive noise** where $g$ is constant, they coincide. This tutorial uses additive noise, so the choice is moot here—but understanding the difference is essential when modeling state-dependent noise.</span>
+<span id="cb6-72"><a href="#cb6-72" aria-hidden="true" tabindex="-1"></a>:::</span>
+<span id="cb6-73"><a href="#cb6-73" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-74"><a href="#cb6-74" aria-hidden="true" tabindex="-1"></a><span class="fu">## Noise Structure</span></span>
+<span id="cb6-75"><a href="#cb6-75" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-76"><a href="#cb6-76" aria-hidden="true" tabindex="-1"></a>The stochastic batch reactor extends the deterministic model with additive process noise:</span>
+<span id="cb6-77"><a href="#cb6-77" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-78"><a href="#cb6-78" aria-hidden="true" tabindex="-1"></a>$$</span>
+<span id="cb6-79"><a href="#cb6-79" aria-hidden="true" tabindex="-1"></a>\begin{aligned}</span>
+<span id="cb6-80"><a href="#cb6-80" aria-hidden="true" tabindex="-1"></a>dC_A &amp;= (-r_1)\,dt + \sigma_A\,dW_A <span class="sc">\\</span></span>
+<span id="cb6-81"><a href="#cb6-81" aria-hidden="true" tabindex="-1"></a>dC_B &amp;= (r_1 - r_2)\,dt + \sigma_B\,dW_B <span class="sc">\\</span></span>
+<span id="cb6-82"><a href="#cb6-82" aria-hidden="true" tabindex="-1"></a>dT &amp;= (Q - \alpha(T - T_{\text{amb}}))\,dt + \sigma_T\,dW_T</span>
+<span id="cb6-83"><a href="#cb6-83" aria-hidden="true" tabindex="-1"></a>\end{aligned}</span>
+<span id="cb6-84"><a href="#cb6-84" aria-hidden="true" tabindex="-1"></a>$$</span>
+<span id="cb6-85"><a href="#cb6-85" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-86"><a href="#cb6-86" aria-hidden="true" tabindex="-1"></a>Three independent Wiener processes model distinct physical noise sources: feed variability ($\sigma_A$, $\sigma_B$) and heat transfer fluctuations ($\sigma_T$). Trajectories fluctuate around the deterministic equilibrium with standard deviation growing as $\sqrt{t}$.</span>
+<span id="cb6-87"><a href="#cb6-87" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-88"><a href="#cb6-88" aria-hidden="true" tabindex="-1"></a><span class="fu">## What This Tutorial Covers</span></span>
+<span id="cb6-89"><a href="#cb6-89" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-90"><a href="#cb6-90" aria-hidden="true" tabindex="-1"></a>We define two equilibria:</span>
+<span id="cb6-91"><a href="#cb6-91" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-92"><a href="#cb6-92" aria-hidden="true" tabindex="-1"></a><span class="ss">1. </span>**Complete conversion** (stable): All reactants consumed, temperature at ambient</span>
+<span id="cb6-93"><a href="#cb6-93" aria-hidden="true" tabindex="-1"></a><span class="ss">2. </span>**Initial setpoint** (unstable): Starting conditions for batch operation</span>
+<span id="cb6-94"><a href="#cb6-94" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-95"><a href="#cb6-95" aria-hidden="true" tabindex="-1"></a>The tutorial walks through defining <span class="in">`_f_sym`</span> (drift), <span class="in">`diffusion_expr`</span> (noise structure), how to define optional <span class="in">`_h_sym`</span> (output map) and output variables if needed, then covers equilibrium setup and trajectory visualization.</span>
+<span id="cb6-96"><a href="#cb6-96" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-97"><a href="#cb6-97" aria-hidden="true" tabindex="-1"></a><span class="fu">## System Definition</span></span>
+<span id="cb6-98"><a href="#cb6-98" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-99"><a href="#cb6-99" aria-hidden="true" tabindex="-1"></a>The full system definition is as follows:</span>
+<span id="cb6-102"><a href="#cb6-102" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb6-103"><a href="#cb6-103" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> typing <span class="im">import</span> Optional</span>
+<span id="cb6-104"><a href="#cb6-104" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-105"><a href="#cb6-105" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+<span id="cb6-106"><a href="#cb6-106" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> sympy <span class="im">as</span> sp</span>
+<span id="cb6-107"><a href="#cb6-107" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-108"><a href="#cb6-108" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> cdesym <span class="im">import</span> ContinuousStochasticSystem</span>
+<span id="cb6-109"><a href="#cb6-109" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-110"><a href="#cb6-110" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> ContinuousStochasticBatchReactor(ContinuousStochasticSystem):</span>
+<span id="cb6-111"><a href="#cb6-111" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> define_system(</span>
+<span id="cb6-112"><a href="#cb6-112" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>,</span>
+<span id="cb6-113"><a href="#cb6-113" aria-hidden="true" tabindex="-1"></a>        k1_val: <span class="bu">float</span> <span class="op">=</span> <span class="fl">0.5</span>,</span>
+<span id="cb6-114"><a href="#cb6-114" aria-hidden="true" tabindex="-1"></a>        k2_val: <span class="bu">float</span> <span class="op">=</span> <span class="fl">0.3</span>,</span>
+<span id="cb6-115"><a href="#cb6-115" aria-hidden="true" tabindex="-1"></a>        E1_val: <span class="bu">float</span> <span class="op">=</span> <span class="fl">1000.0</span>,</span>
+<span id="cb6-116"><a href="#cb6-116" aria-hidden="true" tabindex="-1"></a>        E2_val: <span class="bu">float</span> <span class="op">=</span> <span class="fl">1500.0</span>,</span>
+<span id="cb6-117"><a href="#cb6-117" aria-hidden="true" tabindex="-1"></a>        alpha_val: <span class="bu">float</span> <span class="op">=</span> <span class="fl">0.1</span>,</span>
+<span id="cb6-118"><a href="#cb6-118" aria-hidden="true" tabindex="-1"></a>        T_amb_val: <span class="bu">float</span> <span class="op">=</span> <span class="fl">300.0</span>,</span>
+<span id="cb6-119"><a href="#cb6-119" aria-hidden="true" tabindex="-1"></a>        sigma_A: <span class="bu">float</span> <span class="op">=</span> <span class="fl">0.01</span>,</span>
+<span id="cb6-120"><a href="#cb6-120" aria-hidden="true" tabindex="-1"></a>        sigma_B: <span class="bu">float</span> <span class="op">=</span> <span class="fl">0.01</span>,</span>
+<span id="cb6-121"><a href="#cb6-121" aria-hidden="true" tabindex="-1"></a>        sigma_T: <span class="bu">float</span> <span class="op">=</span> <span class="fl">1.0</span>,</span>
+<span id="cb6-122"><a href="#cb6-122" aria-hidden="true" tabindex="-1"></a>        C_A0: Optional[<span class="bu">float</span>] <span class="op">=</span> <span class="va">None</span>,</span>
+<span id="cb6-123"><a href="#cb6-123" aria-hidden="true" tabindex="-1"></a>        T0: Optional[<span class="bu">float</span>] <span class="op">=</span> <span class="va">None</span>,</span>
+<span id="cb6-124"><a href="#cb6-124" aria-hidden="true" tabindex="-1"></a>    ):</span>
+<span id="cb6-125"><a href="#cb6-125" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Store initial conditions</span></span>
+<span id="cb6-126"><a href="#cb6-126" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.C_A0 <span class="op">=</span> C_A0</span>
+<span id="cb6-127"><a href="#cb6-127" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.T0 <span class="op">=</span> T0</span>
+<span id="cb6-128"><a href="#cb6-128" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-129"><a href="#cb6-129" aria-hidden="true" tabindex="-1"></a>        <span class="co"># State and control variables</span></span>
+<span id="cb6-130"><a href="#cb6-130" aria-hidden="true" tabindex="-1"></a>        C_A, C_B, T <span class="op">=</span> sp.symbols(<span class="st">"C_A C_B T"</span>, real<span class="op">=</span><span class="va">True</span>, positive<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb6-131"><a href="#cb6-131" aria-hidden="true" tabindex="-1"></a>        Q <span class="op">=</span> sp.symbols(<span class="st">"Q"</span>, real<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb6-132"><a href="#cb6-132" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-133"><a href="#cb6-133" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Deterministic Parameters (kinetics and heat transfer)</span></span>
+<span id="cb6-134"><a href="#cb6-134" aria-hidden="true" tabindex="-1"></a>        k1, k2, E1, E2, alpha, T_amb <span class="op">=</span> sp.symbols(</span>
+<span id="cb6-135"><a href="#cb6-135" aria-hidden="true" tabindex="-1"></a>            <span class="st">"k1 k2 E1 E2 alpha T_amb"</span>,</span>
+<span id="cb6-136"><a href="#cb6-136" aria-hidden="true" tabindex="-1"></a>            real<span class="op">=</span><span class="va">True</span>,</span>
+<span id="cb6-137"><a href="#cb6-137" aria-hidden="true" tabindex="-1"></a>            positive<span class="op">=</span><span class="va">True</span>,</span>
+<span id="cb6-138"><a href="#cb6-138" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb6-139"><a href="#cb6-139" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-140"><a href="#cb6-140" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Stochastic Parameters (noise intensities)</span></span>
+<span id="cb6-141"><a href="#cb6-141" aria-hidden="true" tabindex="-1"></a>        sigma_A_sym <span class="op">=</span> sp.symbols(<span class="st">"sigma_A"</span>, real<span class="op">=</span><span class="va">True</span>, positive<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb6-142"><a href="#cb6-142" aria-hidden="true" tabindex="-1"></a>        sigma_B_sym <span class="op">=</span> sp.symbols(<span class="st">"sigma_B"</span>, real<span class="op">=</span><span class="va">True</span>, positive<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb6-143"><a href="#cb6-143" aria-hidden="true" tabindex="-1"></a>        sigma_T_sym <span class="op">=</span> sp.symbols(<span class="st">"sigma_T"</span>, real<span class="op">=</span><span class="va">True</span>, positive<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb6-144"><a href="#cb6-144" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-145"><a href="#cb6-145" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.parameters <span class="op">=</span> {</span>
+<span id="cb6-146"><a href="#cb6-146" aria-hidden="true" tabindex="-1"></a>            k1: k1_val,</span>
+<span id="cb6-147"><a href="#cb6-147" aria-hidden="true" tabindex="-1"></a>            k2: k2_val,</span>
+<span id="cb6-148"><a href="#cb6-148" aria-hidden="true" tabindex="-1"></a>            E1: E1_val,</span>
+<span id="cb6-149"><a href="#cb6-149" aria-hidden="true" tabindex="-1"></a>            E2: E2_val,</span>
+<span id="cb6-150"><a href="#cb6-150" aria-hidden="true" tabindex="-1"></a>            alpha: alpha_val,</span>
+<span id="cb6-151"><a href="#cb6-151" aria-hidden="true" tabindex="-1"></a>            T_amb: T_amb_val,</span>
+<span id="cb6-152"><a href="#cb6-152" aria-hidden="true" tabindex="-1"></a>            sigma_A_sym: sigma_A,</span>
+<span id="cb6-153"><a href="#cb6-153" aria-hidden="true" tabindex="-1"></a>            sigma_B_sym: sigma_B,</span>
+<span id="cb6-154"><a href="#cb6-154" aria-hidden="true" tabindex="-1"></a>            sigma_T_sym: sigma_T,</span>
+<span id="cb6-155"><a href="#cb6-155" aria-hidden="true" tabindex="-1"></a>        }</span>
+<span id="cb6-156"><a href="#cb6-156" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-157"><a href="#cb6-157" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.state_vars <span class="op">=</span> [C_A, C_B, T]</span>
+<span id="cb6-158"><a href="#cb6-158" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.control_vars <span class="op">=</span> [Q]</span>
+<span id="cb6-159"><a href="#cb6-159" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.output_vars <span class="op">=</span> []</span>
+<span id="cb6-160"><a href="#cb6-160" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.order <span class="op">=</span> <span class="dv">1</span></span>
+<span id="cb6-161"><a href="#cb6-161" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-162"><a href="#cb6-162" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Reaction rates (Arrhenius kinetics)</span></span>
+<span id="cb6-163"><a href="#cb6-163" aria-hidden="true" tabindex="-1"></a>        r1 <span class="op">=</span> k1 <span class="op">*</span> C_A <span class="op">*</span> sp.exp(<span class="op">-</span>E1 <span class="op">/</span> T)</span>
+<span id="cb6-164"><a href="#cb6-164" aria-hidden="true" tabindex="-1"></a>        r2 <span class="op">=</span> k2 <span class="op">*</span> C_B <span class="op">*</span> sp.exp(<span class="op">-</span>E2 <span class="op">/</span> T)</span>
+<span id="cb6-165"><a href="#cb6-165" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-166"><a href="#cb6-166" aria-hidden="true" tabindex="-1"></a>        <span class="co"># DRIFT (Deterministic part - same as deterministic reactor)</span></span>
+<span id="cb6-167"><a href="#cb6-167" aria-hidden="true" tabindex="-1"></a>        dC_A_dt <span class="op">=</span> <span class="op">-</span>r1</span>
+<span id="cb6-168"><a href="#cb6-168" aria-hidden="true" tabindex="-1"></a>        dC_B_dt <span class="op">=</span> r1 <span class="op">-</span> r2</span>
+<span id="cb6-169"><a href="#cb6-169" aria-hidden="true" tabindex="-1"></a>        dT_dt <span class="op">=</span> Q <span class="op">-</span> alpha <span class="op">*</span> (T <span class="op">-</span> T_amb)</span>
+<span id="cb6-170"><a href="#cb6-170" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-171"><a href="#cb6-171" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>._f_sym <span class="op">=</span> sp.Matrix([dC_A_dt, dC_B_dt, dT_dt])</span>
+<span id="cb6-172"><a href="#cb6-172" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-173"><a href="#cb6-173" aria-hidden="true" tabindex="-1"></a>        <span class="co"># DIFFUSION (Stochastic part - additive noise)</span></span>
+<span id="cb6-174"><a href="#cb6-174" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Diagonal matrix: three independent Wiener processes</span></span>
+<span id="cb6-175"><a href="#cb6-175" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.diffusion_expr <span class="op">=</span> sp.Matrix(</span>
+<span id="cb6-176"><a href="#cb6-176" aria-hidden="true" tabindex="-1"></a>            [</span>
+<span id="cb6-177"><a href="#cb6-177" aria-hidden="true" tabindex="-1"></a>                [sigma_A_sym, <span class="dv">0</span>, <span class="dv">0</span>],</span>
+<span id="cb6-178"><a href="#cb6-178" aria-hidden="true" tabindex="-1"></a>                [<span class="dv">0</span>, sigma_B_sym, <span class="dv">0</span>],</span>
+<span id="cb6-179"><a href="#cb6-179" aria-hidden="true" tabindex="-1"></a>                [<span class="dv">0</span>, <span class="dv">0</span>, sigma_T_sym],</span>
+<span id="cb6-180"><a href="#cb6-180" aria-hidden="true" tabindex="-1"></a>            ],</span>
+<span id="cb6-181"><a href="#cb6-181" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb6-182"><a href="#cb6-182" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-183"><a href="#cb6-183" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Itô SDE interpretation</span></span>
+<span id="cb6-184"><a href="#cb6-184" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.sde_type <span class="op">=</span> <span class="st">"ito"</span></span>
+<span id="cb6-185"><a href="#cb6-185" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-186"><a href="#cb6-186" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Output: Full state measurement (with potential noise in practice)</span></span>
+<span id="cb6-187"><a href="#cb6-187" aria-hidden="true" tabindex="-1"></a>        <span class="co"># technically optional</span></span>
+<span id="cb6-188"><a href="#cb6-188" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>._h_sym <span class="op">=</span> sp.Matrix([C_A, C_B, T])</span>
+<span id="cb6-189"><a href="#cb6-189" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-190"><a href="#cb6-190" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> setup_equilibria(<span class="va">self</span>):</span>
+<span id="cb6-191"><a href="#cb6-191" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Get parameters</span></span>
+<span id="cb6-192"><a href="#cb6-192" aria-hidden="true" tabindex="-1"></a>        T_amb <span class="op">=</span> <span class="va">self</span>.parameters[sp.symbols(<span class="st">"T_amb"</span>)]</span>
+<span id="cb6-193"><a href="#cb6-193" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-194"><a href="#cb6-194" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Complete conversion equilibrium (deterministic part)</span></span>
+<span id="cb6-195"><a href="#cb6-195" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.add_equilibrium(</span>
+<span id="cb6-196"><a href="#cb6-196" aria-hidden="true" tabindex="-1"></a>            <span class="st">"complete"</span>,</span>
+<span id="cb6-197"><a href="#cb6-197" aria-hidden="true" tabindex="-1"></a>            x_eq<span class="op">=</span>np.array([<span class="fl">0.0</span>, <span class="fl">0.0</span>, T_amb]),</span>
+<span id="cb6-198"><a href="#cb6-198" aria-hidden="true" tabindex="-1"></a>            u_eq<span class="op">=</span>np.array([<span class="fl">0.0</span>]),</span>
+<span id="cb6-199"><a href="#cb6-199" aria-hidden="true" tabindex="-1"></a>            verify<span class="op">=</span><span class="va">True</span>,</span>
+<span id="cb6-200"><a href="#cb6-200" aria-hidden="true" tabindex="-1"></a>            stability<span class="op">=</span><span class="st">"stable"</span>,</span>
+<span id="cb6-201"><a href="#cb6-201" aria-hidden="true" tabindex="-1"></a>            notes<span class="op">=</span><span class="st">"Equilibrium of deterministic part (drift). Stochastic trajectories "</span></span>
+<span id="cb6-202"><a href="#cb6-202" aria-hidden="true" tabindex="-1"></a>            <span class="st">"fluctuate around this point with variance growing over time."</span>,</span>
+<span id="cb6-203"><a href="#cb6-203" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb6-204"><a href="#cb6-204" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-205"><a href="#cb6-205" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Initial condition (if provided)</span></span>
+<span id="cb6-206"><a href="#cb6-206" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="va">self</span>.C_A0 <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span> <span class="kw">and</span> <span class="va">self</span>.T0 <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span>:</span>
+<span id="cb6-207"><a href="#cb6-207" aria-hidden="true" tabindex="-1"></a>            alpha <span class="op">=</span> <span class="va">self</span>.parameters[sp.symbols(<span class="st">"alpha"</span>)]</span>
+<span id="cb6-208"><a href="#cb6-208" aria-hidden="true" tabindex="-1"></a>            Q_init <span class="op">=</span> alpha <span class="op">*</span> (<span class="va">self</span>.T0 <span class="op">-</span> T_amb)</span>
+<span id="cb6-209"><a href="#cb6-209" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-210"><a href="#cb6-210" aria-hidden="true" tabindex="-1"></a>            <span class="va">self</span>.add_equilibrium(</span>
+<span id="cb6-211"><a href="#cb6-211" aria-hidden="true" tabindex="-1"></a>                <span class="st">"initial"</span>,</span>
+<span id="cb6-212"><a href="#cb6-212" aria-hidden="true" tabindex="-1"></a>                x_eq<span class="op">=</span>np.array([<span class="va">self</span>.C_A0, <span class="fl">0.0</span>, <span class="va">self</span>.T0]),</span>
+<span id="cb6-213"><a href="#cb6-213" aria-hidden="true" tabindex="-1"></a>                u_eq<span class="op">=</span>np.array([Q_init]),</span>
+<span id="cb6-214"><a href="#cb6-214" aria-hidden="true" tabindex="-1"></a>                verify<span class="op">=</span><span class="va">False</span>,</span>
+<span id="cb6-215"><a href="#cb6-215" aria-hidden="true" tabindex="-1"></a>                stability<span class="op">=</span><span class="st">"unstable"</span>,</span>
+<span id="cb6-216"><a href="#cb6-216" aria-hidden="true" tabindex="-1"></a>                notes<span class="op">=</span><span class="st">"Initial state setpoint (deterministic part). Stochastic trajectories "</span></span>
+<span id="cb6-217"><a href="#cb6-217" aria-hidden="true" tabindex="-1"></a>                <span class="st">"will fluctuate with std ~ [σ_A·√t, σ_B·√t, σ_T·√t]."</span>,</span>
+<span id="cb6-218"><a href="#cb6-218" aria-hidden="true" tabindex="-1"></a>            )</span>
+<span id="cb6-219"><a href="#cb6-219" aria-hidden="true" tabindex="-1"></a>            <span class="va">self</span>.set_default_equilibrium(<span class="st">"initial"</span>)</span>
+<span id="cb6-220"><a href="#cb6-220" aria-hidden="true" tabindex="-1"></a>        <span class="cf">else</span>:</span>
+<span id="cb6-221"><a href="#cb6-221" aria-hidden="true" tabindex="-1"></a>            <span class="va">self</span>.set_default_equilibrium(<span class="st">"complete"</span>)</span>
+<span id="cb6-222"><a href="#cb6-222" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb6-223"><a href="#cb6-223" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-224"><a href="#cb6-224" aria-hidden="true" tabindex="-1"></a>The first step in system construction is to subclass the proper symbolic system and create the define_system method signature.</span>
+<span id="cb6-225"><a href="#cb6-225" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-226"><a href="#cb6-226" aria-hidden="true" tabindex="-1"></a><span class="in">```python</span></span>
+<span id="cb6-227"><a href="#cb6-227" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> ContinuousStochasticBatchReactor(ContinuousStochasticSystem):</span>
+<span id="cb6-228"><a href="#cb6-228" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> define_system(</span>
+<span id="cb6-229"><a href="#cb6-229" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>,</span>
+<span id="cb6-230"><a href="#cb6-230" aria-hidden="true" tabindex="-1"></a>        k1_val: <span class="bu">float</span> <span class="op">=</span> <span class="fl">0.5</span>,</span>
+<span id="cb6-231"><a href="#cb6-231" aria-hidden="true" tabindex="-1"></a>        k2_val: <span class="bu">float</span> <span class="op">=</span> <span class="fl">0.3</span>,</span>
+<span id="cb6-232"><a href="#cb6-232" aria-hidden="true" tabindex="-1"></a>        E1_val: <span class="bu">float</span> <span class="op">=</span> <span class="fl">1000.0</span>,</span>
+<span id="cb6-233"><a href="#cb6-233" aria-hidden="true" tabindex="-1"></a>        E2_val: <span class="bu">float</span> <span class="op">=</span> <span class="fl">1500.0</span>,</span>
+<span id="cb6-234"><a href="#cb6-234" aria-hidden="true" tabindex="-1"></a>        alpha_val: <span class="bu">float</span> <span class="op">=</span> <span class="fl">0.1</span>,</span>
+<span id="cb6-235"><a href="#cb6-235" aria-hidden="true" tabindex="-1"></a>        T_amb_val: <span class="bu">float</span> <span class="op">=</span> <span class="fl">300.0</span>,</span>
+<span id="cb6-236"><a href="#cb6-236" aria-hidden="true" tabindex="-1"></a>        sigma_A: <span class="bu">float</span> <span class="op">=</span> <span class="fl">0.01</span>,</span>
+<span id="cb6-237"><a href="#cb6-237" aria-hidden="true" tabindex="-1"></a>        sigma_B: <span class="bu">float</span> <span class="op">=</span> <span class="fl">0.01</span>,</span>
+<span id="cb6-238"><a href="#cb6-238" aria-hidden="true" tabindex="-1"></a>        sigma_T: <span class="bu">float</span> <span class="op">=</span> <span class="fl">1.0</span>,</span>
+<span id="cb6-239"><a href="#cb6-239" aria-hidden="true" tabindex="-1"></a>        C_A0: Optional[<span class="bu">float</span>] <span class="op">=</span> <span class="va">None</span>,</span>
+<span id="cb6-240"><a href="#cb6-240" aria-hidden="true" tabindex="-1"></a>        T0: Optional[<span class="bu">float</span>] <span class="op">=</span> <span class="va">None</span>,</span>
+<span id="cb6-241"><a href="#cb6-241" aria-hidden="true" tabindex="-1"></a>    ):</span>
+<span id="cb6-242"><a href="#cb6-242" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb6-243"><a href="#cb6-243" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-244"><a href="#cb6-244" aria-hidden="true" tabindex="-1"></a>More often than not, the only arguments to this function will be the <span class="in">`self`</span> argument and parameter values. It is not necessary to add type hints or default values, but it is recommended for debug purposes.</span>
+<span id="cb6-245"><a href="#cb6-245" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-246"><a href="#cb6-246" aria-hidden="true" tabindex="-1"></a>The next step in system definition is to define the (deterministic) symbolic variables to be used and place them in the proper fields.</span>
+<span id="cb6-247"><a href="#cb6-247" aria-hidden="true" tabindex="-1"></a>The main limitation currently is that it is not possible to explicitly define a symbolic variable for time. If it is heavily requested, we can implement it as a future feature.</span>
+<span id="cb6-248"><a href="#cb6-248" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-249"><a href="#cb6-249" aria-hidden="true" tabindex="-1"></a><span class="in">```python</span></span>
+<span id="cb6-250"><a href="#cb6-250" aria-hidden="true" tabindex="-1"></a><span class="co"># State and control variables</span></span>
+<span id="cb6-251"><a href="#cb6-251" aria-hidden="true" tabindex="-1"></a>C_A, C_B, T <span class="op">=</span> sp.symbols(<span class="st">"C_A C_B T"</span>, real<span class="op">=</span><span class="va">True</span>, positive<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb6-252"><a href="#cb6-252" aria-hidden="true" tabindex="-1"></a>Q <span class="op">=</span> sp.symbols(<span class="st">"Q"</span>, real<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb6-253"><a href="#cb6-253" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-254"><a href="#cb6-254" aria-hidden="true" tabindex="-1"></a><span class="co"># Deterministic Parameters (kinetics and heat transfer)</span></span>
+<span id="cb6-255"><a href="#cb6-255" aria-hidden="true" tabindex="-1"></a>k1, k2, E1, E2, alpha, T_amb <span class="op">=</span> sp.symbols(</span>
+<span id="cb6-256"><a href="#cb6-256" aria-hidden="true" tabindex="-1"></a>    <span class="st">"k1 k2 E1 E2 alpha T_amb"</span>,</span>
+<span id="cb6-257"><a href="#cb6-257" aria-hidden="true" tabindex="-1"></a>    real<span class="op">=</span><span class="va">True</span>,</span>
+<span id="cb6-258"><a href="#cb6-258" aria-hidden="true" tabindex="-1"></a>    positive<span class="op">=</span><span class="va">True</span>,</span>
+<span id="cb6-259"><a href="#cb6-259" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb6-260"><a href="#cb6-260" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-261"><a href="#cb6-261" aria-hidden="true" tabindex="-1"></a><span class="co"># Stochastic Parameters (noise intensities)</span></span>
+<span id="cb6-262"><a href="#cb6-262" aria-hidden="true" tabindex="-1"></a>sigma_A_sym <span class="op">=</span> sp.symbols(<span class="st">"sigma_A"</span>, real<span class="op">=</span><span class="va">True</span>, positive<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb6-263"><a href="#cb6-263" aria-hidden="true" tabindex="-1"></a>sigma_B_sym <span class="op">=</span> sp.symbols(<span class="st">"sigma_B"</span>, real<span class="op">=</span><span class="va">True</span>, positive<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb6-264"><a href="#cb6-264" aria-hidden="true" tabindex="-1"></a>sigma_T_sym <span class="op">=</span> sp.symbols(<span class="st">"sigma_T"</span>, real<span class="op">=</span><span class="va">True</span>, positive<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb6-265"><a href="#cb6-265" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-266"><a href="#cb6-266" aria-hidden="true" tabindex="-1"></a><span class="va">self</span>.parameters <span class="op">=</span> {</span>
+<span id="cb6-267"><a href="#cb6-267" aria-hidden="true" tabindex="-1"></a>    k1: k1_val,</span>
+<span id="cb6-268"><a href="#cb6-268" aria-hidden="true" tabindex="-1"></a>    k2: k2_val,</span>
+<span id="cb6-269"><a href="#cb6-269" aria-hidden="true" tabindex="-1"></a>    E1: E1_val,</span>
+<span id="cb6-270"><a href="#cb6-270" aria-hidden="true" tabindex="-1"></a>    E2: E2_val,</span>
+<span id="cb6-271"><a href="#cb6-271" aria-hidden="true" tabindex="-1"></a>    alpha: alpha_val,</span>
+<span id="cb6-272"><a href="#cb6-272" aria-hidden="true" tabindex="-1"></a>    T_amb: T_amb_val,</span>
+<span id="cb6-273"><a href="#cb6-273" aria-hidden="true" tabindex="-1"></a>    sigma_A_sym: sigma_A,</span>
+<span id="cb6-274"><a href="#cb6-274" aria-hidden="true" tabindex="-1"></a>    sigma_B_sym: sigma_B,</span>
+<span id="cb6-275"><a href="#cb6-275" aria-hidden="true" tabindex="-1"></a>    sigma_T_sym: sigma_T,</span>
+<span id="cb6-276"><a href="#cb6-276" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb6-277"><a href="#cb6-277" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-278"><a href="#cb6-278" aria-hidden="true" tabindex="-1"></a><span class="va">self</span>.state_vars <span class="op">=</span> [C_A, C_B, T]</span>
+<span id="cb6-279"><a href="#cb6-279" aria-hidden="true" tabindex="-1"></a><span class="va">self</span>.control_vars <span class="op">=</span> [Q]</span>
+<span id="cb6-280"><a href="#cb6-280" aria-hidden="true" tabindex="-1"></a><span class="va">self</span>.output_vars <span class="op">=</span> []</span>
+<span id="cb6-281"><a href="#cb6-281" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb6-282"><a href="#cb6-282" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-283"><a href="#cb6-283" aria-hidden="true" tabindex="-1"></a>The necessary symbolic variables include:</span>
+<span id="cb6-284"><a href="#cb6-284" aria-hidden="true" tabindex="-1"></a><span class="ss">    - </span>State variables</span>
+<span id="cb6-285"><a href="#cb6-285" aria-hidden="true" tabindex="-1"></a><span class="ss">    - </span>Control variables</span>
+<span id="cb6-286"><a href="#cb6-286" aria-hidden="true" tabindex="-1"></a><span class="ss">    - </span>Parameter variables</span>
+<span id="cb6-287"><a href="#cb6-287" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-288"><a href="#cb6-288" aria-hidden="true" tabindex="-1"></a>::: {.callout-warning}</span>
+<span id="cb6-289"><a href="#cb6-289" aria-hidden="true" tabindex="-1"></a><span class="fu">## Output Variables and the Output Map</span></span>
+<span id="cb6-290"><a href="#cb6-290" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-291"><a href="#cb6-291" aria-hidden="true" tabindex="-1"></a>There are two related but distinct concepts for system outputs:</span>
+<span id="cb6-292"><a href="#cb6-292" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-293"><a href="#cb6-293" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**`self.output_vars`**: A list of symbolic variables representing *computed outputs*—quantities derived from state variables but not states themselves. For example, if your states are position and velocity, an output variable might be kinetic energy. Do **not** add state variables to this list.</span>
+<span id="cb6-294"><a href="#cb6-294" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-295"><a href="#cb6-295" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**`self._h_sym`**: The *output map* $y = h(x)$, a symbolic column vector defining what the system actually outputs. This can include:</span>
+<span id="cb6-296"><a href="#cb6-296" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span>State variables (for full or partial state observation)</span>
+<span id="cb6-297"><a href="#cb6-297" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span>Output variables (computed quantities)</span>
+<span id="cb6-298"><a href="#cb6-298" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span>Any symbolic expression of states</span>
+<span id="cb6-299"><a href="#cb6-299" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-300"><a href="#cb6-300" aria-hidden="true" tabindex="-1"></a>**Defaults**: <span class="in">`self.output_vars = []`</span> (no computed outputs) and <span class="in">`self._h_sym = state vector`</span> (full state observability).</span>
+<span id="cb6-301"><a href="#cb6-301" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-302"><a href="#cb6-302" aria-hidden="true" tabindex="-1"></a>**Example**: For a system with states $<span class="co">[</span><span class="ot">x, v</span><span class="co">]</span>$ and a computed output $E = \frac{1}{2}mv^2$:</span>
+<span id="cb6-303"><a href="#cb6-303" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-304"><a href="#cb6-304" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`self.output_vars = [E]`</span></span>
+<span id="cb6-305"><a href="#cb6-305" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`self._h_sym = sp.Matrix([x, E])`</span> outputs position and energy (but not velocity)</span>
+<span id="cb6-306"><a href="#cb6-306" aria-hidden="true" tabindex="-1"></a>:::</span>
+<span id="cb6-307"><a href="#cb6-307" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-308"><a href="#cb6-308" aria-hidden="true" tabindex="-1"></a>::: {.callout-warning}</span>
+<span id="cb6-309"><a href="#cb6-309" aria-hidden="true" tabindex="-1"></a><span class="fu">## Autonomous Systems</span></span>
+<span id="cb6-310"><a href="#cb6-310" aria-hidden="true" tabindex="-1"></a>To specify that a system is autonomous and has no control variables, you must pass an empty list to the self.control_vars field. </span>
+<span id="cb6-311"><a href="#cb6-311" aria-hidden="true" tabindex="-1"></a>:::</span>
+<span id="cb6-312"><a href="#cb6-312" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-313"><a href="#cb6-313" aria-hidden="true" tabindex="-1"></a>::: {.callout-important}</span>
+<span id="cb6-314"><a href="#cb6-314" aria-hidden="true" tabindex="-1"></a><span class="fu">## Parameter Dictionary Keys Must Be Symbolic Variables</span></span>
+<span id="cb6-315"><a href="#cb6-315" aria-hidden="true" tabindex="-1"></a>A common mistake is to set the dictionary keys for self.parameters as strings, but for proper symbolic substitution and code generation, the keys must be SymPy Symbolic variables.</span>
+<span id="cb6-316"><a href="#cb6-316" aria-hidden="true" tabindex="-1"></a>:::</span>
+<span id="cb6-317"><a href="#cb6-317" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-318"><a href="#cb6-318" aria-hidden="true" tabindex="-1"></a>The final required step in system definition is to relate symbolic variables for the definition of the system (and possibly observation) dynamics.</span>
+<span id="cb6-319"><a href="#cb6-319" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-320"><a href="#cb6-320" aria-hidden="true" tabindex="-1"></a><span class="in">```python</span></span>
+<span id="cb6-321"><a href="#cb6-321" aria-hidden="true" tabindex="-1"></a><span class="co"># Reaction rates (Arrhenius kinetics)</span></span>
+<span id="cb6-322"><a href="#cb6-322" aria-hidden="true" tabindex="-1"></a>r1 <span class="op">=</span> k1 <span class="op">*</span> C_A <span class="op">*</span> sp.exp(<span class="op">-</span>E1 <span class="op">/</span> T)</span>
+<span id="cb6-323"><a href="#cb6-323" aria-hidden="true" tabindex="-1"></a>r2 <span class="op">=</span> k2 <span class="op">*</span> C_B <span class="op">*</span> sp.exp(<span class="op">-</span>E2 <span class="op">/</span> T)</span>
+<span id="cb6-324"><a href="#cb6-324" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-325"><a href="#cb6-325" aria-hidden="true" tabindex="-1"></a><span class="co"># DRIFT (Deterministic part - same as deterministic reactor)</span></span>
+<span id="cb6-326"><a href="#cb6-326" aria-hidden="true" tabindex="-1"></a>dC_A_dt <span class="op">=</span> <span class="op">-</span>r1</span>
+<span id="cb6-327"><a href="#cb6-327" aria-hidden="true" tabindex="-1"></a>dC_B_dt <span class="op">=</span> r1 <span class="op">-</span> r2</span>
+<span id="cb6-328"><a href="#cb6-328" aria-hidden="true" tabindex="-1"></a>dT_dt <span class="op">=</span> Q <span class="op">-</span> alpha <span class="op">*</span> (T <span class="op">-</span> T_amb)</span>
+<span id="cb6-329"><a href="#cb6-329" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-330"><a href="#cb6-330" aria-hidden="true" tabindex="-1"></a><span class="va">self</span>._f_sym <span class="op">=</span> sp.Matrix([dC_A_dt, dC_B_dt, dT_dt])</span>
+<span id="cb6-331"><a href="#cb6-331" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-332"><a href="#cb6-332" aria-hidden="true" tabindex="-1"></a><span class="co"># DIFFUSION (Stochastic part - additive noise)</span></span>
+<span id="cb6-333"><a href="#cb6-333" aria-hidden="true" tabindex="-1"></a><span class="co"># Diagonal matrix: three independent Wiener processes</span></span>
+<span id="cb6-334"><a href="#cb6-334" aria-hidden="true" tabindex="-1"></a><span class="va">self</span>.diffusion_expr <span class="op">=</span> sp.Matrix(</span>
+<span id="cb6-335"><a href="#cb6-335" aria-hidden="true" tabindex="-1"></a>    [</span>
+<span id="cb6-336"><a href="#cb6-336" aria-hidden="true" tabindex="-1"></a>        [sigma_A_sym, <span class="dv">0</span>, <span class="dv">0</span>],</span>
+<span id="cb6-337"><a href="#cb6-337" aria-hidden="true" tabindex="-1"></a>        [<span class="dv">0</span>, sigma_B_sym, <span class="dv">0</span>],</span>
+<span id="cb6-338"><a href="#cb6-338" aria-hidden="true" tabindex="-1"></a>        [<span class="dv">0</span>, <span class="dv">0</span>, sigma_T_sym],</span>
+<span id="cb6-339"><a href="#cb6-339" aria-hidden="true" tabindex="-1"></a>    ],</span>
+<span id="cb6-340"><a href="#cb6-340" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb6-341"><a href="#cb6-341" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-342"><a href="#cb6-342" aria-hidden="true" tabindex="-1"></a><span class="co"># Output: Full state measurement (with potential noise in practice)</span></span>
+<span id="cb6-343"><a href="#cb6-343" aria-hidden="true" tabindex="-1"></a><span class="co"># technically optional</span></span>
+<span id="cb6-344"><a href="#cb6-344" aria-hidden="true" tabindex="-1"></a><span class="va">self</span>._h_sym <span class="op">=</span> sp.Matrix([C_A, C_B, T])</span>
+<span id="cb6-345"><a href="#cb6-345" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb6-346"><a href="#cb6-346" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-347"><a href="#cb6-347" aria-hidden="true" tabindex="-1"></a>::: {.callout-note}</span>
+<span id="cb6-348"><a href="#cb6-348" aria-hidden="true" tabindex="-1"></a><span class="fu">## Pure Diffusion Systems</span></span>
+<span id="cb6-349"><a href="#cb6-349" aria-hidden="true" tabindex="-1"></a>To define purely stochastic systems with only diffusion terms and no drift terms, self._f_sym must be defined as a symbolic column vector of zero elements with the same dimensionality as the number of state variables.</span>
+<span id="cb6-350"><a href="#cb6-350" aria-hidden="true" tabindex="-1"></a>:::</span>
+<span id="cb6-351"><a href="#cb6-351" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-352"><a href="#cb6-352" aria-hidden="true" tabindex="-1"></a>The following steps are optional, but recommended for explicit documentation of system behavior</span>
+<span id="cb6-353"><a href="#cb6-353" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-354"><a href="#cb6-354" aria-hidden="true" tabindex="-1"></a>The order (number of time derivatives) is set to 1 by default, but can be set higher. If the order is higher than 1, the expression in self._f_sym must return only the highest derivative.</span>
+<span id="cb6-355"><a href="#cb6-355" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-356"><a href="#cb6-356" aria-hidden="true" tabindex="-1"></a>The SDE type is set to Itô by default, but can be set to Stratonovich with self.sde_type = "stratonovich" if needed.</span>
+<span id="cb6-357"><a href="#cb6-357" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-358"><a href="#cb6-358" aria-hidden="true" tabindex="-1"></a>Upon initialization, the origin and zero control are set as an equilibrium of the system, but if the user specifies a setup_equilibria method, it will be run after system setup to add necessary system equilibria automatically as well. This is especially useful if the system equilibria are parameter dependent. </span>
+<span id="cb6-359"><a href="#cb6-359" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-360"><a href="#cb6-360" aria-hidden="true" tabindex="-1"></a><span class="in">```python</span></span>
+<span id="cb6-361"><a href="#cb6-361" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> setup_equilibria(<span class="va">self</span>):</span>
+<span id="cb6-362"><a href="#cb6-362" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Get parameters</span></span>
+<span id="cb6-363"><a href="#cb6-363" aria-hidden="true" tabindex="-1"></a>    T_amb <span class="op">=</span> <span class="va">self</span>.parameters[sp.symbols(<span class="st">"T_amb"</span>)]</span>
+<span id="cb6-364"><a href="#cb6-364" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-365"><a href="#cb6-365" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Complete conversion equilibrium (deterministic part)</span></span>
+<span id="cb6-366"><a href="#cb6-366" aria-hidden="true" tabindex="-1"></a>    <span class="va">self</span>.add_equilibrium(</span>
+<span id="cb6-367"><a href="#cb6-367" aria-hidden="true" tabindex="-1"></a>        <span class="st">"complete"</span>,</span>
+<span id="cb6-368"><a href="#cb6-368" aria-hidden="true" tabindex="-1"></a>        x_eq<span class="op">=</span>np.array([<span class="fl">0.0</span>, <span class="fl">0.0</span>, T_amb]),</span>
+<span id="cb6-369"><a href="#cb6-369" aria-hidden="true" tabindex="-1"></a>        u_eq<span class="op">=</span>np.array([<span class="fl">0.0</span>]),</span>
+<span id="cb6-370"><a href="#cb6-370" aria-hidden="true" tabindex="-1"></a>        verify<span class="op">=</span><span class="va">True</span>,</span>
+<span id="cb6-371"><a href="#cb6-371" aria-hidden="true" tabindex="-1"></a>        stability<span class="op">=</span><span class="st">"stable"</span>,</span>
+<span id="cb6-372"><a href="#cb6-372" aria-hidden="true" tabindex="-1"></a>        notes<span class="op">=</span><span class="st">"Equilibrium of deterministic part (drift). Stochastic trajectories "</span></span>
+<span id="cb6-373"><a href="#cb6-373" aria-hidden="true" tabindex="-1"></a>        <span class="st">"fluctuate around this point with variance growing over time."</span>,</span>
+<span id="cb6-374"><a href="#cb6-374" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb6-375"><a href="#cb6-375" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-376"><a href="#cb6-376" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Initial condition (if provided)</span></span>
+<span id="cb6-377"><a href="#cb6-377" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="va">self</span>.C_A0 <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span> <span class="kw">and</span> <span class="va">self</span>.T0 <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span>:</span>
+<span id="cb6-378"><a href="#cb6-378" aria-hidden="true" tabindex="-1"></a>        alpha <span class="op">=</span> <span class="va">self</span>.parameters[sp.symbols(<span class="st">"alpha"</span>)]</span>
+<span id="cb6-379"><a href="#cb6-379" aria-hidden="true" tabindex="-1"></a>        Q_init <span class="op">=</span> alpha <span class="op">*</span> (<span class="va">self</span>.T0 <span class="op">-</span> T_amb)</span>
+<span id="cb6-380"><a href="#cb6-380" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-381"><a href="#cb6-381" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.add_equilibrium(</span>
+<span id="cb6-382"><a href="#cb6-382" aria-hidden="true" tabindex="-1"></a>            <span class="st">"initial"</span>,</span>
+<span id="cb6-383"><a href="#cb6-383" aria-hidden="true" tabindex="-1"></a>            x_eq<span class="op">=</span>np.array([<span class="va">self</span>.C_A0, <span class="fl">0.0</span>, <span class="va">self</span>.T0]),</span>
+<span id="cb6-384"><a href="#cb6-384" aria-hidden="true" tabindex="-1"></a>            u_eq<span class="op">=</span>np.array([Q_init]),</span>
+<span id="cb6-385"><a href="#cb6-385" aria-hidden="true" tabindex="-1"></a>            verify<span class="op">=</span><span class="va">False</span>,</span>
+<span id="cb6-386"><a href="#cb6-386" aria-hidden="true" tabindex="-1"></a>            stability<span class="op">=</span><span class="st">"unstable"</span>,</span>
+<span id="cb6-387"><a href="#cb6-387" aria-hidden="true" tabindex="-1"></a>            notes<span class="op">=</span><span class="st">"Initial state setpoint (deterministic part). Stochastic trajectories "</span></span>
+<span id="cb6-388"><a href="#cb6-388" aria-hidden="true" tabindex="-1"></a>            <span class="st">"will fluctuate with std ~ [σ_A·√t, σ_B·√t, σ_T·√t]."</span>,</span>
+<span id="cb6-389"><a href="#cb6-389" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb6-390"><a href="#cb6-390" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.set_default_equilibrium(<span class="st">"initial"</span>)</span>
+<span id="cb6-391"><a href="#cb6-391" aria-hidden="true" tabindex="-1"></a>    <span class="cf">else</span>:</span>
+<span id="cb6-392"><a href="#cb6-392" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.set_default_equilibrium(<span class="st">"complete"</span>)</span>
+<span id="cb6-393"><a href="#cb6-393" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb6-394"><a href="#cb6-394" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-395"><a href="#cb6-395" aria-hidden="true" tabindex="-1"></a>Finally, a user can define other fields and methods for downstream usage as long as they don't interfere with the system's base methods and fields.</span>
+<span id="cb6-396"><a href="#cb6-396" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-397"><a href="#cb6-397" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-398"><a href="#cb6-398" aria-hidden="true" tabindex="-1"></a>TODO: go over basic trajectory and phase plotting</span>
 </code></pre></div><button title="Copy to Clipboard" class="code-copy-button" data-in-quarto-modal=""><i class="bi"></i></button></div>
 </div></div></div></div></div>
 </div> <!-- /content -->
@@ -1009,4 +1569,4 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 
 
-<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions"><ul><li><a href="https://github.com/gilbenezer/ControlDESymulation/edit/main/tutorials/core_concepts_continuous/batch_reactor_tutorial.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/gilbenezer/ControlDESymulation/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div></div></footer></body></html>
+<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/gilbenezer/ControlDESymulation/edit/main/tutorials/core_concepts_continuous/batch_reactor_tutorial.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/gilbenezer/ControlDESymulation/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div></div></footer></body></html>
