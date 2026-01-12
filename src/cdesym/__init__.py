@@ -40,11 +40,14 @@ from .systems.builtin.deterministic.continuous import (
     Lorenz,
     Pendulum,
     VanDerPolOscillator,
+    PathTracking,
 )
 from .systems.builtin.deterministic.discrete import (
     DiscreteCartPole,
     DiscreteDoubleIntegrator,
     DiscretePendulum,
+    DifferentialDriveRobot,
+    DiscreteSolowModel,
 )
 
 # Builtin stochastic systems
@@ -54,12 +57,16 @@ from .systems.builtin.stochastic.continuous import (
     GeometricBrownianMotion,
     LangevinDynamics,
     OrnsteinUhlenbeck,
+    ContinuousStochasticBatchReactor,
+    ContinuousStochasticCSTR,
 )
 from .systems.builtin.stochastic.discrete import (
     DiscreteAR1,
     DiscreteGARCH11,
     DiscreteRandomWalk,
     DiscreteWhiteNoise,
+    DiscreteStochasticBatchReactor,
+    DiscreteStochasticCSTR,
 )
 
 # Aliases for backward compatibility
@@ -142,10 +149,13 @@ __all__ = [
     "CartPoleSystem",
     "Lorenz",
     "VanDerPolOscillator",
+    "PathTracking",
     # Builtin deterministic discrete
     "DiscreteDoubleIntegrator",
     "DiscretePendulum",
     "DiscreteCartPole",
+    "DiscreteSolowModel",
+    "DifferentialDriveRobot",
     # Builtin stochastic continuous
     "BrownianMotion",
     "OrnsteinUhlenbeck",
@@ -156,11 +166,15 @@ __all__ = [
     "CoxIngersollRoss",
     "CIR",
     "LangevinDynamics",
+    "ContinuousStochasticBatchReactor",
+    "ContinuousStochasticCSTR",
     # Builtin stochastic discrete
     "DiscreteAR1",
     "DiscreteWhiteNoise",
     "DiscreteRandomWalk",
     "DiscreteGARCH11",
+    "DiscreteStochasticBatchReactor",
+    "DiscreteStochasticCSTR",
     # Integration
     "IntegratorFactory",
     "SDEIntegratorFactory",
