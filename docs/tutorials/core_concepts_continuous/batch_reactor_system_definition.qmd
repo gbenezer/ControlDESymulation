@@ -305,7 +305,100 @@ There are two related but distinct concepts for system outputs:
 
 ::: {.callout-warning}
 ## Autonomous Systems
-To specify that a system is autonomous and has no control variables, you must pass an empty list to the self.control_vars field. 
+
+An **autonomous system** has no external control inputs—its dynamics depend only on the current state (and possibly time). Examples include free oscillators, population dynamics, and unforced chemical reactions.
+
+### Required Specification
+
+To define an autonomous system, you **must** set `self.control_vars = []` (an empty list). Do not use `None` or omit the field—this will cause errors during system initialization.
+
+```python
+# ✓ CORRECT: Autonomous system
+self.control_vars = []
+
+# ✗ WRONG: Will cause errors
+self.control_vars = None
+# self.control_vars = ...  (omitting the field)
+```
+
+### Dynamics for Autonomous Systems
+
+For autonomous systems, `self._f_sym` should depend only on state variables and parameters, **not control variables**:
+
+```python
+# Example: Damped harmonic oscillator (autonomous)
+x, v = sp.symbols('x v', real=True)
+k, b, m = sp.symbols('k b m', positive=True)
+
+self.state_vars = [x, v]
+self.control_vars = []  # No control
+self.parameters = {k: 10.0, b: 0.5, m: 1.0}
+
+# Dynamics: dx/dt = v, dv/dt = -(k/m)*x - (b/m)*v
+self._f_sym = sp.Matrix([
+    v,
+    -(k/m)*x - (b/m)*v
+])
+```
+
+### Calling Conventions
+
+When evaluating or integrating autonomous systems:
+- The `u` parameter in `system(x, u)` should be `None` or omitted
+- Integration accepts `u=None` or no control specification
+- The framework automatically handles zero control internally
+
+```python
+# Evaluating dynamics
+dxdt = system(x)              # ✓ Recommended
+dxdt = system(x, u=None)      # ✓ Also valid
+dxdt = system(x, np.array([])) # ✓ Works but unnecessary
+
+# Integration
+result = system.integrate(x0=x_init, t_span=(0, 10))
+# No need to specify u - it's ignored for autonomous systems
+```
+
+### Converting Between Controlled and Autonomous
+
+You can model the same physical system in different ways:
+
+**Controlled oscillator** (with external force):
+```python
+self.state_vars = [x, v]
+self.control_vars = [u]  # External force
+self._f_sym = sp.Matrix([v, -(k/m)*x - (b/m)*v + u/m])
+```
+
+**Free oscillator** (autonomous, special case u=0):
+```python
+self.state_vars = [x, v]
+self.control_vars = []  # No control
+self._f_sym = sp.Matrix([v, -(k/m)*x - (b/m)*v])
+```
+
+Both are valid modeling choices. Use controlled form when you plan to apply inputs; use autonomous form for analyzing free dynamics or when control is not part of the problem.
+
+### Time-Varying vs Autonomous
+
+**Important distinction**: 
+- **Autonomous** = no control inputs (`self.control_vars = []`)
+- **Time-invariant** = dynamics don't explicitly depend on time
+- **Time-varying** = dynamics explicitly depend on time
+
+A system can be autonomous but time-varying (e.g., $\dot{x} = -\sin(t) \cdot x$) or controlled but time-invariant (e.g., $\dot{x} = -x + u$). Most systems in control theory are both controlled and time-invariant.
+
+### Practical Examples
+
+**Autonomous systems:**
+- Lotka-Volterra predator-prey: $\dot{x} = \alpha x - \beta xy$, $\dot{y} = \delta xy - \gamma y$
+- Van der Pol oscillator: $\ddot{x} + \mu(x^2-1)\dot{x} + x = 0$
+- Free batch reactor (no heating): $\dot{C}_A = -k_1 C_A e^{-E_1/T}$, $\dot{T} = -\alpha(T - T_{amb})$
+
+**Controlled systems:**
+- Inverted pendulum with torque: $\ddot{\theta} = (g/L)\sin\theta + u/(mL^2)$
+- Batch reactor with heating (this tutorial): $\dot{T} = Q - \alpha(T - T_{amb})$
+- Linear regulator: $\dot{x} = Ax + Bu$
 :::
 
 ::: {.callout-important}
@@ -369,7 +462,184 @@ self._h_sym = sp.Matrix([C_A, C_B, T])
 
 ::: {.callout-note}
 ## Pure Diffusion Systems
-To define purely stochastic systems with only diffusion terms and no drift terms, self._f_sym must be defined as a symbolic column vector of zero elements with the same dimensionality as the number of state variables.
+
+A **pure diffusion system** (also called a pure noise process) has no deterministic drift—dynamics are driven entirely by stochastic forcing. Examples include Brownian motion, geometric random walks, and models of measurement noise.
+
+### Mathematical Form
+
+For pure diffusion systems, the SDE has zero drift:
+
+$$dX_t = 0 \cdot dt + G(X_t)\,dW_t = G(X_t)\,dW_t$$
+
+This means the state evolution is governed entirely by the diffusion term. The deterministic dynamics $f(x,u) = 0$ vanish.
+
+### Required Specification
+
+To define a pure diffusion system, you **must** set `self._f_sym` to a zero vector with the same dimension as the number of state variables. Use SymPy's `zeros()` function or explicitly construct the zero matrix:
+
+```python
+# ✓ CORRECT: Pure diffusion system (3 states)
+self._f_sym = sp.zeros(3, 1)  # Recommended approach
+
+# ✓ ALSO CORRECT: Explicit zero matrix
+self._f_sym = sp.Matrix([0, 0, 0])
+
+# ✓ ALSO CORRECT: Using symbols and expressions that equal zero
+self._f_sym = sp.Matrix([x - x, y - y, z - z])  # Works but unnecessary
+
+# ✗ WRONG: Omitting _f_sym entirely (required field)
+# self._f_sym = None  # Will cause errors
+```
+
+### Example: 3D Brownian Motion
+
+A particle undergoing pure diffusion in 3D space:
+
+```python
+class BrownianMotion3D(ContinuousStochasticSystem):
+    def define_system(self, sigma_x=1.0, sigma_y=1.0, sigma_z=1.0):
+        # Position coordinates
+        x, y, z = sp.symbols('x y z', real=True)
+        
+        # Diffusion coefficients
+        sx, sy, sz = sp.symbols('sigma_x sigma_y sigma_z', positive=True)
+        
+        self.state_vars = [x, y, z]
+        self.control_vars = []  # Autonomous (no control)
+        self.parameters = {sx: sigma_x, sy: sigma_y, sz: sigma_z}
+        
+        # ZERO DRIFT: No deterministic motion
+        self._f_sym = sp.zeros(3, 1)
+        
+        # DIFFUSION: Independent noise in each direction
+        self.diffusion_expr = sp.Matrix([
+            [sx, 0, 0],
+            [0, sy, 0],
+            [0, 0, sz]
+        ])
+        
+        self.sde_type = "ito"
+```
+
+### Example: Geometric Brownian Motion
+
+A multiplicative noise process (state-dependent diffusion):
+
+```python
+class GeometricBrownianMotion(ContinuousStochasticSystem):
+    def define_system(self, sigma=0.2):
+        # Asset price
+        S = sp.symbols('S', positive=True)
+        sigma_sym = sp.symbols('sigma', positive=True)
+        
+        self.state_vars = [S]
+        self.control_vars = []
+        self.parameters = {sigma_sym: sigma}
+        
+        # ZERO DRIFT (pure diffusion version)
+        self._f_sym = sp.zeros(1, 1)
+        
+        # STATE-DEPENDENT DIFFUSION: dS = σ·S·dW
+        self.diffusion_expr = sp.Matrix([[sigma_sym * S]])
+        
+        self.sde_type = "ito"
+```
+
+Note: Classic geometric Brownian motion includes drift ($dS = \mu S\,dt + \sigma S\,dW$), but this shows the pure diffusion case for illustration.
+
+### When to Use Pure Diffusion
+
+**Use pure diffusion when modeling:**
+- **Brownian motion**: Pure random walks in continuous time
+- **Measurement noise**: Sensors with zero mean noise and no drift
+- **Diffusion-only processes**: Heat diffusion at steady-state, particle diffusion
+- **Null models**: Testing whether observed dynamics are purely random
+- **Noise characterization**: Estimating noise covariance without modeling dynamics
+
+**Don't use pure diffusion when:**
+- System has deterministic dynamics (even if noisy)
+- Modeling physical systems with forces/flows (use drift + diffusion)
+- Equilibrium points matter (pure diffusion has no equilibria except possibly at boundaries)
+
+### Physical Interpretation
+
+For additive noise (constant $G$):
+$$dX_t = G\,dW_t$$
+
+The solution is simply $X_t = X_0 + G\,W_t$, where $W_t$ is Brownian motion. The state performs a random walk around its initial condition with variance growing linearly: $\text{Var}(X_t) = GG^T \cdot t$.
+
+For multiplicative noise (state-dependent $G(X)$):
+$$dX_t = G(X_t)\,dW_t$$
+
+The dynamics are more complex, and the SDE interpretation (Itô vs Stratonovich) becomes critical.
+
+### Integration Considerations
+
+Pure diffusion systems require:
+- **Stochastic integrators**: Methods like Euler-Maruyama, Milstein, or higher-order SDE schemes
+- **Fine time steps**: To resolve the noise structure accurately
+- **Multiple realizations**: Statistical properties emerge from ensemble averaging
+
+```python
+# Example: Simulating 3D Brownian motion
+brownian = BrownianMotion3D(sigma_x=1.0, sigma_y=1.0, sigma_z=1.0)
+
+# Initial position at origin
+x0 = np.array([0.0, 0.0, 0.0])
+
+# Integrate using Euler-Maruyama
+result = brownian.integrate(
+    x0=x0,
+    t_span=(0, 10),
+    method="euler_maruyama",
+    dt=0.01,  # Fine time step for noise resolution
+    seed=42   # Reproducible noise
+)
+
+# For statistics, run multiple trajectories
+trajectories = [
+    brownian.integrate(x0=x0, t_span=(0, 10), dt=0.01, seed=i)
+    for i in range(1000)
+]
+```
+
+### Drift + Diffusion vs Pure Diffusion
+
+Most physical systems have **both** drift and diffusion:
+
+**Drift + Diffusion** (this tutorial's reactor):
+```python
+# Deterministic part (drift)
+self._f_sym = sp.Matrix([dC_A_dt, dC_B_dt, dT_dt])
+
+# Stochastic part (diffusion)  
+self.diffusion_expr = sp.Matrix([[σ_A, 0, 0], ...])
+```
+
+**Pure Diffusion** (rare in practice):
+```python
+# No drift
+self._f_sym = sp.zeros(3, 1)
+
+# Only diffusion
+self.diffusion_expr = sp.Matrix([[σ_A, 0, 0], ...])
+```
+
+The batch reactor in this tutorial has **drift + diffusion** because chemical reactions (drift) occur alongside process noise (diffusion).
+
+### Practical Applications
+
+**Pure Brownian Motion:**
+- Modeling colloidal particle motion in fluids
+- Financial models with zero expected return
+- Null hypothesis testing in time series
+
+**State-Dependent Diffusion:**
+- Volatility modeling in finance (stochastic volatility models)
+- Birth-death processes at steady-state
+- Fluctuation-dissipation in statistical mechanics
+
+**General Recommendation**: If you're unsure whether your system should be pure diffusion, it probably shouldn't be. Most physical systems have deterministic dynamics (drift) plus noise (diffusion).
 :::
 
 ## Required vs Optional System Definition Elements
@@ -386,7 +656,7 @@ Every `define_system()` method **must** define:
    self.state_vars = [C_A, C_B, T]
    ```
 
-2. **`self.control_vars`**: List of control variable symbols (empty list `[]` for autonomous systems)
+2. **`self.control_vars`**: List of control variable symbols (empty list `[]` for autonomous systems—see the detailed Autonomous Systems callout below)
    ```python
    self.control_vars = [Q]  # or [] for autonomous
    ```
@@ -396,9 +666,10 @@ Every `define_system()` method **must** define:
    self.parameters = {k1: 0.5, k2: 0.3, ...}
    ```
 
-4. **`self._f_sym`**: Symbolic expression for system dynamics (drift for SDEs)
+4. **`self._f_sym`**: Symbolic expression for system dynamics (drift for SDEs). For pure diffusion systems with zero drift, see the detailed Pure Diffusion Systems callout above.
    ```python
    self._f_sym = sp.Matrix([dC_A_dt, dC_B_dt, dT_dt])
+   # For pure diffusion: self._f_sym = sp.zeros(n_states, 1)
    ```
 
 5. **`self.diffusion_expr`** (stochastic systems only): Diffusion matrix for SDE noise structure
@@ -585,6 +856,199 @@ def setup_equilibria(self):
         self.set_default_equilibrium("complete")
 ```
 
+## Simulation and Visualization
+
+Now that we've defined our stochastic batch reactor, let's see it in action. This section demonstrates the complete workflow: inspecting the system, running simulations, and visualizing results.
+
+::: {.callout-important}
+## Integration Methods: `integrate()` vs `simulate()`
+
+ControlDESymulation provides two methods for time evolution:
+
+### `integrate()` - Low-Level Interface
+**For stochastic systems, always use this method.**
+
+```python
+result = system.integrate(
+    x0=x0,
+    u=controller,
+    t_span=(0, 10),
+    method='euler_maruyama',  # Stochastic integrator
+    dt=0.01,                  # Required for fixed-step methods
+    seed=42,                  # Reproducibility
+    n_paths=100               # Monte Carlo ensemble
+)
+```
+
+**Stochastic-specific features:**
+- `seed`: Random number generator seed for reproducible noise
+- `n_paths`: Built-in Monte Carlo simulation (returns shape `(n_paths, T, nx)`)
+- Stochastic methods: `'euler_maruyama'`, `'milstein'`, `'heun'`, etc.
+- `dt`: Time step (required for most SDE methods)
+- `t_eval`: Optional array of specific output times
+
+**Fixed-Step vs Adaptive Methods:**
+
+Most SDE integrators are **fixed-step** (Euler-Maruyama, Milstein, Heun, etc.):
+```python
+result = system.integrate(
+    x0=x0, t_span=(0, 10),
+    method='euler_maruyama',
+    dt=0.01  # Required - sets uniform time grid
+)
+# result['t'] has uniform spacing: [0.00, 0.01, 0.02, ..., 10.00]
+```
+
+Some advanced methods are **adaptive** (use `rtol`/`atol` instead of `dt`):
+```python
+result = system.integrate(
+    x0=x0, t_span=(0, 10),
+    method='adaptive_sde',  # Hypothetical adaptive method
+    rtol=1e-6, atol=1e-8
+)
+# result['t'] may have non-uniform spacing
+```
+
+**Visualization tip:** For uniform time grids (most cases), plotting is straightforward. For adaptive grids, use `t_eval` to force specific output times:
+```python
+result = system.integrate(
+    x0=x0, t_span=(0, 10),
+    method='adaptive_sde',
+    t_eval=np.linspace(0, 10, 1000),  # Force uniform grid
+    rtol=1e-6
+)
+```
+
+**Returns:** `SDEIntegrationResult` with fields:
+- `t`: Time points `(T,)` - uniform for fixed-step, may vary for adaptive
+- `x`: States `(T, nx)` or `(n_paths, T, nx)` for Monte Carlo
+- `success`, `nfev`, `diffusion_evals`: Solver diagnostics
+
+### `simulate()` - High-Level Interface
+**For deterministic systems only** (not recommended for SDEs).
+
+```python
+result = system.simulate(
+    x0=x0,
+    controller=lambda x, t: -K @ x,
+    t_span=(0, 10),
+    dt=0.01
+)
+```
+
+**Key differences:**
+- Always returns regular time grid (uniform spacing `dt`)
+- Cleaner API for feedback controllers
+- No `seed` or `n_paths` support
+- Uses deterministic integrators (RK45, RK4, Euler)
+- Returns `SimulationResult` in time-major format `(T, nx)`
+
+**When to use each:**
+- **Stochastic systems (SDEs)** → `integrate()` with stochastic methods
+- **Deterministic systems (ODEs)** → Either method; `simulate()` is simpler
+- **Monte Carlo simulations** → `integrate()` with `n_paths > 1`
+
+For our stochastic batch reactor, we'll use `integrate()` exclusively.
+:::
+
+### Inspecting the System
+
+Before running simulations, let's examine what we've created:
+
+```{python}
+# Display symbolic equations
+reactor = ContinuousStochasticBatchReactor(
+    C_A0=1.0,    # Initial concentration
+    T0=350.0,    # Initial temperature
+    sigma_T=2.0  # Temperature noise intensity
+)
+
+# Print the mathematical structure
+reactor.print_equations(simplify=True)
+```
+
+This shows:
+- State and control variables
+- System dimensions (nx=3 states, nu=1 control)
+- Symbolic drift dynamics with parameters substituted
+- Output map (if defined)
+
+We can also inspect system properties programmatically:
+
+```{python}
+print(f"Number of states: {reactor.nx}")
+print(f"Number of controls: {reactor.nu}")
+print(f"State variables: {reactor.state_vars}")
+print(f"Parameters: {list(reactor.parameters.keys())}")
+```
+
+::: {.callout-tip}
+## Choosing an Integration Method
+
+For this tutorial, we use **Euler-Maruyama** (`method='euler_maruyama'`), the simplest fixed-step SDE method. It's a good starting point because:
+
+- **Fixed time step**: Requires `dt` parameter, produces uniform time grid
+- **Easy visualization**: Uniform spacing makes plotting straightforward
+- **Stable for additive noise**: Our reactor has additive noise (constant diffusion)
+- **Fast**: Minimal computation per step
+
+Other common methods:
+- **`milstein`**: Higher accuracy for multiplicative noise, still fixed-step
+- **`heun`**: Good balance of accuracy and stability, fixed-step
+- **Advanced methods**: May use adaptive stepping (see note below)
+
+::: {.callout-note collapse="true"}
+## Handling Adaptive SDE Methods
+
+Some advanced SDE solvers use adaptive time stepping for efficiency. If you use an adaptive method and need uniform output times (e.g., for certain visualizations or statistical analysis), use the `t_eval` parameter:
+
+```python
+# Adaptive method with non-uniform internal steps
+result = system.integrate(
+    x0=x0,
+    t_span=(0, 10),
+    method='adaptive_sde_method',  # Hypothetical adaptive method
+    rtol=1e-6, atol=1e-8,
+    t_eval=np.linspace(0, 10, 1000)  # Force uniform output grid
+)
+```
+
+The solver will use adaptive steps internally for efficiency but interpolate to provide output at the exact times specified in `t_eval`. This gives you:
+- Efficiency of adaptive stepping during integration
+- Uniform time grid for downstream analysis and visualization
+- Control over output density
+
+**For this tutorial:** We use fixed-step Euler-Maruyama, so `dt` controls both internal steps and output times. No `t_eval` needed.
+:::
+
+For production code with multiplicative noise, consider higher-order methods. For learning and visualization, Euler-Maruyama with `dt=0.01` to `dt=0.1` works well.
+:::
+
+### Equilibrium Points
+
+Our `setup_equilibria()` method created two equilibrium points. Let's see them:
+
+```{python}
+# List all equilibria
+equilibrium_names = reactor.list_equilibria()
+print(f"Available equilibria: {equilibrium_names}")
+
+# Get the "complete conversion" equilibrium
+x_eq, u_eq = reactor.get_equilibrium('complete')
+print(f"\nComplete conversion equilibrium:")
+print(f"  C_A = {x_eq[0]:.3f} mol/L")
+print(f"  C_B = {x_eq[1]:.3f} mol/L")
+print(f"  T = {x_eq[2]:.1f} K")
+print(f"  Q = {u_eq[0]:.3f} W")
+
+# Verify it's actually an equilibrium (drift should be zero)
+drift = reactor(x_eq, u_eq, t=0)
+print(f"\nDrift at equilibrium: {drift}")
+print(f"Max drift magnitude: {np.abs(drift).max():.2e}")
+```
+
+**Key insight:** For stochastic systems, equilibria are fixed points of the **drift** only. The diffusion causes trajectories to fluctuate around these points with variance growing as $\sqrt{t}$.
+
 ## Summary: Building Your System
 
 To define a symbolic system in ControlDESymulation:
@@ -604,6 +1068,50 @@ def define_system(self):
     
     # 3. For stochastic systems, add:
     # self.diffusion_expr = sp.Matrix([...])
+```
+
+**Autonomous system (no control inputs):**
+```python
+def define_system(self, damping=0.1, stiffness=1.0):
+    # 1. Define symbolic variables (no control symbols needed)
+    x, v = sp.symbols('x v')
+    b, k = sp.symbols('b k', positive=True)
+    
+    # 2. Set required fields
+    self.state_vars = [x, v]
+    self.control_vars = []  # Empty list for autonomous
+    self.parameters = {b: damping, k: stiffness}
+    
+    # 3. Dynamics depending only on states
+    self._f_sym = sp.Matrix([
+        v,                  # dx/dt = v
+        -k*x - b*v         # dv/dt = -kx - bv (damped oscillator)
+    ])
+```
+
+**Pure diffusion system (stochastic, zero drift):**
+```python
+def define_system(self, sigma_x=1.0, sigma_y=1.0, sigma_z=1.0):
+    # 1. Define symbolic variables
+    x, y, z = sp.symbols('x y z', real=True)
+    sx, sy, sz = sp.symbols('sigma_x sigma_y sigma_z', positive=True)
+    
+    # 2. Set required fields
+    self.state_vars = [x, y, z]
+    self.control_vars = []  # Typically autonomous
+    self.parameters = {sx: sigma_x, sy: sigma_y, sz: sigma_z}
+    
+    # 3. ZERO DRIFT: Pure diffusion has no deterministic dynamics
+    self._f_sym = sp.zeros(3, 1)  # Must be zero vector
+    
+    # 4. DIFFUSION: Stochastic dynamics only
+    self.diffusion_expr = sp.Matrix([
+        [sx, 0, 0],     # Independent noise in x
+        [0, sy, 0],     # Independent noise in y
+        [0, 0, sz]      # Independent noise in z
+    ])
+    
+    self.sde_type = "ito"
 ```
 
 **Well-documented system (recommended):**
@@ -634,6 +1142,56 @@ def setup_equilibria(self):
     self.add_equilibrium("my_equilibrium", x_eq=..., u_eq=...)
 ```
 
-The reactor example in this tutorial follows the well-documented approach.
+**Which template should you use?**
+
+- **Minimum viable**: Quick prototyping, testing, simple demos
+- **Autonomous system**: No control inputs (free oscillators, population models, unforced reactions)
+- **Pure diffusion**: Stochastic processes with zero drift (Brownian motion, pure noise)
+- **Well-documented**: Production code, complex systems, collaborative projects (recommended)
+
+The reactor example in this tutorial follows the well-documented approach with both drift and diffusion.
+
+## What You've Learned
+
+This tutorial covered the **anatomy of a symbolic system** through a stochastic batch reactor example:
+
+### System Definition
+- How to subclass `ContinuousStochasticSystem`
+- Required fields: `state_vars`, `control_vars`, `parameters`, `_f_sym`, `diffusion_expr`
+- Optional fields: `output_vars`, `_h_sym`, `order`, `sde_type`
+- Special cases: Autonomous systems and pure diffusion systems
+- Parameter-dependent equilibria via `setup_equilibria()`
+
+### System Introspection
+- `print_equations()`: Display symbolic dynamics
+- `list_equilibria()`: See all equilibrium points
+- `get_equilibrium()`: Access equilibrium states and controls
+- Programmatic access: `nx`, `nu`, `state_vars`, `parameters`
+
+### Critical Distinctions
+- **Drift vs Diffusion**: Deterministic dynamics vs stochastic forcing
+- **Itô vs Stratonovich**: Different stochastic calculus interpretations
+- **Equilibria in SDEs**: Fixed points of drift only (stochastic fluctuations persist)
+- **integrate() vs simulate()**: Use `integrate()` for stochastic systems
+- **Fixed-step vs adaptive**: Most SDE methods use fixed `dt` (uniform time grid), some advanced methods adapt step size (use `t_eval` for uniform output)
+
+## Next Steps
+
+**Tutorial 2: Simulation and Visualization** (Coming next)
+- Single trajectory simulation with `integrate()`
+- Monte Carlo ensembles with `n_paths`
+- Time series visualization with `reactor.plotter`
+- Phase portraits and state-space analysis
+- Ensemble statistics and confidence bands
+
+**Tutorial 3: Linearization and Stability**
+- Computing linearizations around equilibria
+- Stability analysis via eigenvalues
+- Controllability and observability
+
+**Tutorial 4: Control Design**
+- LQR controller synthesis
+- Kalman filter estimation
+- Combined LQG control
 
 TODO: go over basic trajectory and phase plotting
