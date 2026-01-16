@@ -1,6 +1,6 @@
 ---
 title: "Basic Usage"
-subtitle: "ControlDESymulation Tutorials"
+subtitle: "ControlDESymulation Quick Start"
 author: "Gil Benezer"
 date: today
 format:
@@ -9,14 +9,16 @@ format:
     code-fold: false
     code-tools: true
 execute:
-  eval: true      # Execute by default
+  eval: true
   cache: true
   warning: false
 ---
 
 ## Introduction {#sec-introduction}
 
-This tutorial covers the basics of defining and simulating dynamical systems.
+ControlDESymulation is a Python library for symbolic specification and numerical simulation of dynamical systems. This quick start guide demonstrates the basic workflow: define a system symbolically, simulate its behavior, and visualize the results.
+
+By the end of this tutorial, you'll have created and simulated a damped pendulum model - a fundamental example that illustrates the core library functionality.
 
 ## Setting Up {#sec-setting-up}
 
@@ -33,7 +35,8 @@ np.random.seed(42)
 
 ## Defining a Simple System {#sec-defining-a-simple-system}
 
-Let's create a simple pendulum:
+Let's model a damped pendulum - a mass swinging under gravity with friction. This system has two states (angle and angular velocity) and demonstrates fundamental dynamics concepts.
+
 ```{python}
 class SymbolicPendulum(ContinuousSymbolicSystem):
     def define_system(
@@ -43,97 +46,137 @@ class SymbolicPendulum(ContinuousSymbolicSystem):
         beta_val: float = 1.0,
         g_val: float = 9.81,
     ):
-        """First order model of a pendulum"""
-        # define the symbolic variables
+        """Define a damped pendulum with optional control torque"""
+        
+        # Define symbolic variables
         theta, theta_dot = sp.symbols("theta theta_dot", real=True)
-        u = sp.symbols("u", real=True)
+        u = sp.symbols("u", real=True)  # Control torque
         m, l, beta, g = sp.symbols("m l beta g", real=True, positive=True)
 
-        # add the variables to the system fields properly
+        # System parameters: mass, length, damping, gravity
         self.parameters = {m: m_val, l: l_val, beta: beta_val, g: g_val}
+        
+        # State variables: [angle, angular_velocity]
         self.state_vars = [theta, theta_dot]
+        
+        # Control input: external torque
         self.control_vars = [u]
+        
+        # First-order form (position and velocity as separate states)
         self.order = 1
 
-        # define the dynamics of the system
+        # System dynamics: d/dt[theta, theta_dot]
         ml2 = m * l * l
-        self._f_sym = sp.Matrix(
-            [theta_dot, (-beta / ml2) * theta_dot + (g / l) * sp.sin(theta) + u / ml2],
-        )
+        self._f_sym = sp.Matrix([
+            theta_dot,  # dθ/dt = θ̇
+            (-beta / ml2) * theta_dot + (g / l) * sp.sin(theta) + u / ml2
+        ])
+        
+        # Output equation: we observe the angle
         self._h_sym = sp.Matrix([theta])
 
     def setup_equilibria(self):
-        # method to add equilibria to the system automatically after initialization
-
-        # add the stable equilibrium where the pendulum is hanging down
+        """Define equilibrium points for analysis"""
+        
+        # Stable equilibrium: pendulum hanging downward
         self.add_equilibrium(
             'downward',
             x_eq=np.array([0.0, 0.0]),
             u_eq=np.array([0.0]),
             verify=True
-            )
+        )
 
-        # add the unstable equilibrium where the pendulum is inverted
+        # Unstable equilibrium: pendulum inverted upward
         self.add_equilibrium(
             'inverted',
             x_eq=np.array([np.pi, 0.0]),
             u_eq=np.array([0.0]),
             stability='unstable',
-            notes='Requires active control'
-            )
+            notes='Requires active control to maintain'
+        )
 
 # Instantiate the system
 pendulum = SymbolicPendulum()
 
-# Initial conditions
+# Set initial conditions: slight angle, zero velocity
 x0 = np.array([1.0, 0.0])
 ```
 
+The pendulum system encodes the physics:
+
+- **Damping** (β term): friction slows the motion
+- **Gravity** (g/l term): pulls the pendulum downward
+- **Control** (u term): allows external torque input
+
 ## Simulation {#sec-simulation}
 
-Now simulate the system:
+Now simulate the system with a regular time grid:
+
 ```{python}
-# Integrate a trajectory with auto-selection of
-# relevant arguments
-pendulum_integration_result = pendulum.integrate(
-        x0=x0,
-        t_span = (0.0, 20.0)
-    )
-for k, v in pendulum_integration_result.items():
-    if k != "x" and k != "t":
-        print(k, " : ", v)
+# Simulate for 20 seconds with 0.05 second time steps
+result = pendulum.simulate(
+    x0=x0,
+    t_span=(0.0, 20.0),
+    dt=0.05
+)
+
+# The result is a dictionary containing:
+
+# - 'time': array of time points [T]
+# - 'states': state trajectory [T x n_states]
+# - 'controls': control inputs applied [T x n_controls]
+# - 'metadata': simulation information
+
+print(f"Simulation completed with {len(result['time'])} time points")
+print(f"Final state: θ = {result['states'][-1, 0]:.3f}, θ̇ = {result['states'][-1, 1]:.3f}")
 ```
+
+The pendulum oscillates with decreasing amplitude as damping dissipates energy, eventually settling near the downward equilibrium.
 
 ## Visualization {#sec-visualization}
 
-Plot the trajectory in 2D:
+Plot the state trajectories over time:
+
 ```{python}
-STATE_NAMES = ['angle', 'angular velocity']
+STATE_NAMES = ['Angle (θ)', 'Angular Velocity (θ̇)']
+
 trajectory_plot = pendulum.plot(
-    result=pendulum_integration_result,
-    state_names = STATE_NAMES
+    result=result,
+    state_names=STATE_NAMES
 )
 trajectory_plot.show()
 ```
 
+You should observe:
+
+- **Angle**: Oscillates around zero with decreasing amplitude
+- **Angular velocity**: Peaks occur when the pendulum passes through zero angle
+
 ## Phase Portrait {#sec-phase-portrait}
 
-Plot the 2D phase portrait
+The phase portrait shows how the system evolves in state space:
+
 ```{python}
+# Get equilibrium points for visualization
 upright_state, _ = pendulum.get_equilibrium('inverted')
 downward_state, _ = pendulum.get_equilibrium('downward')
+
 phase_portrait = pendulum.phase_plotter.plot_2d(
-    x=pendulum_integration_result['x'],
-    state_names = STATE_NAMES,
-    show_direction = True,
-    equilibria=[upright_state, 
-                downward_state]
+    x=result['states'],
+    state_names=STATE_NAMES,
+    show_direction=True,
+    equilibria=[upright_state, downward_state]
 )
 phase_portrait.show()
 ```
 
+The trajectory spirals inward toward the stable equilibrium at (0, 0) due to damping. The unstable equilibrium at (π, 0) represents the inverted position.
+
 ## Next Steps {#sec-next-steps}
 
-- Learn about [stochastic systems](sde-integration.qmd) *not implemented*
-- Explore [different backends](backends.qmd) *not implemented*
-- See [advanced examples](../examples/index.qmd) *not implemented*
+Now that you've mastered the basics, try:
+
+- **Modify parameters**: Change `m_val`, `l_val`, or `beta_val` in the system definition to see their effects
+- **Different initial conditions**: Start with `x0 = np.array([3.0, 0.0])` for larger oscillations
+
+Once you have played around with this system, you can also move on to the more in-depth tutorial series using a stochastic reactor as a model system [here](../core_concepts_continuous/batch_reactor_system_definition.qmd)
