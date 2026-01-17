@@ -398,7 +398,7 @@ from .flatness import (
 # =============================================================================
 # Model Reduction - Balanced truncation and model order reduction
 # =============================================================================
-from .reduction import (
+from .model_reduction import (
     BalancedRealizationResult,
     ReducedOrderModelResult,
 )
@@ -412,10 +412,7 @@ from .protocols import (
     DiscreteSystemProtocol,
     LinearizableContinuousProtocol,
     LinearizableDiscreteProtocol,
-    LinearizableProtocol,
     ParametricSystemProtocol,
-    SimulatableProtocol,
-    StochasticProtocol,
     StochasticSystemProtocol,
     SymbolicContinuousProtocol,
     SymbolicDiscreteProtocol,
@@ -428,8 +425,13 @@ from .utilities import (
     ArrayConverter,
     CacheKey,
     CacheStatistics,
+    ExecutionStats,
+    LinearizableProtocol,
     Metadata,
     PerformanceMetrics,
+    SimulatableProtocol,
+    StochasticProtocol,
+    SymbolicValidationResult,
     ValidationResult,
     check_control_shape,
     check_state_shape,
@@ -732,6 +734,8 @@ __all__ = [
     # -------------------------------------------------------------------------
     # Utilities - Validation and Performance
     # -------------------------------------------------------------------------
+    "ExecutionStats",
     "ValidationResult",
+    "SymbolicValidationResult",
     "PerformanceMetrics",
 ]
