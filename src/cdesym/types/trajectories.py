@@ -22,10 +22,11 @@ Defines types for time series data in control and dynamical systems:
 - Output sequences (time series of measurements)
 - Noise sequences (time series of stochastic disturbances)
 - Time arrays and spans
-- Integration and simulation results
+- Trajectory analysis types
 
-These types represent the fundamental data structures for storing
-and analyzing system behavior over time.
+System execution result types (IntegrationResult, SimulationResult, etc.)
+are now defined in the system_results module and re-exported here for
+backward compatibility.
 
 Mathematical Context
 -------------------
@@ -46,6 +47,7 @@ Usage
 ...     ControlSequence,
 ...     TimePoints,
 ...     IntegrationResult,
+...     SimulationResult,
 ... )
 >>>
 >>> # Simulate system
@@ -63,6 +65,36 @@ from typing import Any, Dict, Optional, Tuple
 from typing_extensions import TypedDict
 
 from .core import ArrayLike
+
+# Import system execution result types from system_results module
+from .system_results import (
+    # Base types
+    IntegrationResultBase,
+    SimulationResultBase,
+    RolloutResultBase,
+    DiscreteSimulationResultBase,
+    # Continuous deterministic
+    IntegrationResult,
+    SimulationResult,
+    RolloutResult,
+    # Continuous stochastic
+    SDEIntegrationResult,
+    SDESimulationResult,
+    SDERolloutResult,
+    # Discrete deterministic
+    DiscreteSimulationResult,
+    DiscreteRolloutResult,
+    # Discrete stochastic
+    DiscreteStochasticSimulationResult,
+    DiscreteStochasticRolloutResult,
+    # Union types
+    ContinuousIntegrationResultUnion,
+    ContinuousSimulationResultUnion,
+    ContinuousRolloutResultUnion,
+    DiscreteSimulationResultUnion,
+    DiscreteRolloutResultUnion,
+    SystemResult,
+)
 
 # ============================================================================
 # Trajectory and Sequence Types
@@ -285,7 +317,7 @@ Examples
 >>> # From simulation result
 >>> result: IntegrationResult = integrator.solve(x0, u, t_span)
 >>> t: TimePoints = result['t']
->>> trajectory: StateTrajectory = result['y']
+>>> trajectory: StateTrajectory = result['x']
 >>> 
 >>> # Discrete-time steps (as floats)
 >>> k = np.arange(0, 100)
@@ -324,427 +356,6 @@ Examples
 >>> t_start, t_end = t_span
 >>> t_eval: TimePoints = np.linspace(t_start, t_end, 1000)
 """
-
-
-# ============================================================================
-# Integration and Simulation Result Types
-# ============================================================================
-
-
-class IntegrationResult(TypedDict, total=False):
-    """
-    Result from continuous-time integration (ODE/SDE solver).
-
-    Contains trajectory, time points, and solver diagnostics.
-
-    Shape Convention
-    ----------------
-    Time-major ordering for easy analysis and plotting:
-    - t: (T,) - Time points
-    - x: (T, nx) - State at each time point
-
-    This differs from scipy's (nx, T) convention but is more natural
-    for analysis: x[:, i] gives i-th component over time.
-
-    Attributes
-    ----------
-    t : ArrayLike
-        Time points (T,)
-    x : ArrayLike
-        State trajectory (T, nx) - time-major ordering
-    success : bool
-        Whether integration succeeded
-    message : str
-        Status message
-    nfev : int
-        Number of function evaluations
-    nsteps : int
-        Number of integration steps
-    integration_time : float
-        Computation time in seconds
-    solver : str
-        Name of solver used
-
-    Optional Fields
-    ---------------
-    njev : int
-        Number of Jacobian evaluations
-    nlu : int
-        Number of LU decompositions
-    status : int
-        Solver-specific status code
-    sol : Any
-        Dense output object (solver-specific)
-    dense_output : bool
-        Whether dense output is available
-
-    Examples
-    --------
-    >>> # Integrate system
-    >>> result: IntegrationResult = integrator.integrate(
-    ...     x0=np.array([1.0, 0.0]),
-    ...     u_func=lambda t, x: np.zeros(1),
-    ...     t_span=(0.0, 10.0)
-    ... )
-    >>>
-    >>> # Access results
-    >>> t = result["t"]        # Time points (T,)
-    >>> x = result["x"]        # States (T, nx)
-    >>>
-    >>> # Plot first state component
-    >>> import matplotlib.pyplot as plt
-    >>> plt.plot(t, x[:, 0], label='x1')
-    >>> plt.plot(t, x[:, 1], label='x2')
-    >>>
-    >>> # Check success
-    >>> if result["success"]:
-    ...     print(f"Completed in {result['integration_time']:.3f}s")
-    ...     print(f"Function evals: {result['nfev']}")
-    """
-
-    t: ArrayLike
-    x: ArrayLike
-    success: bool
-    message: str
-    nfev: int
-    nsteps: int
-    integration_time: float
-    solver: str
-    # Optional fields
-    njev: int
-    nlu: int
-    status: int
-    sol: Any
-    dense_output: bool
-
-
-class SimulationResult(TypedDict, total=False):
-    """
-    Result from continuous-time system simulation.
-
-    Contains trajectories on a regular time grid, control sequences, and metadata.
-
-    **SHAPE CONVENTION**: For backward compatibility, arrays use **state-major**
-    ordering (nx, n_steps). This may change in future versions to time-major.
-
-    Attributes
-    ----------
-    time : TimePoints
-        Regular time points (n_steps+1,) with spacing dt
-    states : StateTrajectory
-        State trajectory **(nx, n_steps+1)** - includes initial state
-        **NOTE**: State-major ordering for backward compatibility
-    controls : Optional[ControlSequence]
-        Control sequence used **(nu, n_steps)** if controller provided
-    outputs : Optional[OutputSequence]
-        Output sequence **(ny, n_steps+1)** if computed
-    noise : Optional[NoiseSequence]
-        Noise sequence (n_steps, nw) for stochastic systems
-    success : bool
-        Whether simulation succeeded
-    metadata : Dict[str, Any]
-        Additional information:
-        - 'method': Integration method used
-        - 'dt': Time step used
-        - 'nfev': Number of function evaluations
-        - 'cost': Trajectory cost (if applicable)
-
-    Notes
-    -----
-    This is the result from `simulate()` which provides a regular time grid
-    by wrapping the lower-level `integrate()` method.
-
-    **Array Ordering**: Currently uses **(nx, T)** state-major ordering for
-    backward compatibility with legacy code. Access states as `states[:, k]`
-    for state at time k, or `states[i, :]` for trajectory of state i.
-
-    For the raw adaptive-grid integration result, use `integrate()` which
-    may use different conventions depending on the backend.
-
-    Examples
-    --------
-    Continuous simulation with state feedback:
-
-    >>> def controller(x, t):  # Note: (x, t) order
-    ...     K = np.array([[-1.0, -2.0]])
-    ...     return -K @ x
-    >>>
-    >>> result: SimulationResult = system.simulate(
-    ...     x0=np.array([1.0, 0.0]),
-    ...     controller=controller,
-    ...     t_span=(0.0, 10.0),
-    ...     dt=0.01
-    ... )
-    >>>
-    >>> time = result['time']           # (1001,)
-    >>> states = result['states']       # (2, 1001) - state-major!
-    >>> controls = result['controls']   # (1, 1000)
-    >>>
-    >>> # Access state trajectory of first state variable
-    >>> x1_trajectory = states[0, :]    # (1001,)
-    >>>
-    >>> # Access state at time step k
-    >>> x_at_k = states[:, k]           # (2,)
-    >>>
-    >>> # Plot
-    >>> import matplotlib.pyplot as plt
-    >>> plt.plot(time, states[0, :], label='x1')
-    >>> plt.plot(time, states[1, :], label='x2')
-    >>>
-    >>> # Check success
-    >>> if result['success']:
-    ...     print(f"Simulation completed with {result['metadata']['nfev']} evaluations")
-
-    Stochastic simulation:
-
-    >>> result: SimulationResult = sde_system.simulate(
-    ...     x0=np.zeros(2),
-    ...     controller=None,  # Open-loop
-    ...     t_span=(0, 5),
-    ...     dt=0.01
-    ... )
-    >>>
-    >>> if 'noise' in result:
-    ...     print("Stochastic simulation")
-    ...     noise_used = result['noise']
-
-    See Also
-    --------
-    integrate : Lower-level integration with adaptive time grid
-    IntegrationResult : Result type from integrate()
-    """
-
-    time: ArrayLike  # (n_steps+1,)
-    states: ArrayLike  # (nx, n_steps+1) - STATE-MAJOR for backward compat
-    controls: Optional[ArrayLike]  # (nu, n_steps)
-    outputs: Optional[ArrayLike]  # (ny, n_steps+1)
-    noise: Optional[ArrayLike]  # (n_steps, nw)
-    success: bool
-    metadata: Dict[str, Any]
-
-
-class DiscreteSimulationResult(TypedDict, total=False):
-    """
-    Result from discrete-time system simulation.
-
-    Contains state trajectory, control sequence, and metadata for
-    discrete-time systems (difference equations).
-
-    **SHAPE CONVENTION**: Different methods return different orderings!
-    - `simulate()`: Returns **(nx, n_steps+1)** state-major (legacy)
-    - `rollout()`: Returns **(n_steps+1, nx)** time-major (preferred)
-
-    Attributes
-    ----------
-    states : StateTrajectory
-        State trajectory - **shape depends on method**:
-        - `simulate()`: **(nx, n_steps+1)** - state-major
-        - `rollout()`: **(n_steps+1, nx)** - time-major
-    controls : Optional[ControlSequence]
-        Control sequence applied - **shape depends on method**:
-        - `simulate()`: **(nu, n_steps)** - state-major
-        - `rollout()`: **(n_steps, nu)** - time-major
-    outputs : Optional[OutputSequence]
-        Output sequence (shape varies by method)
-    noise : Optional[NoiseSequence]
-        Noise sequence for stochastic discrete systems
-    time_steps : ArrayLike
-        Time step indices [0, 1, 2, ..., n_steps]
-    dt : float
-        Time step / sampling period (seconds per step)
-    success : bool
-        Whether simulation succeeded
-    metadata : Dict[str, Any]
-        Additional information:
-        - 'method': 'discrete_step', 'rollout', etc.
-        - 'closed_loop': bool - whether state feedback was used
-        - 'cost': Trajectory cost (if applicable)
-
-    Notes
-    -----
-    **Time Representation**: Unlike continuous systems which use continuous
-    time points, discrete systems use:
-    - `time_steps`: Integer indices [0, 1, 2, ...]
-    - `dt`: Scalar sampling period
-
-    Convert to continuous time if needed: `time = time_steps * dt`
-
-    **Array Ordering Inconsistency**: Be careful - `simulate()` and `rollout()`
-    return different array orderings! Check `metadata['method']` to determine
-    which convention is being used.
-
-    Examples
-    --------
-    Discrete simulation (state-major, from simulate()):
-
-    >>> result: DiscreteSimulationResult = discrete_system.simulate(
-    ...     x0=np.array([1.0, 0.0]),
-    ...     u_sequence=np.zeros((100, 1)),  # Time-major input
-    ...     n_steps=100
-    ... )
-    >>>
-    >>> states = result['states']          # (2, 101) - STATE-MAJOR!
-    >>> controls = result['controls']      # (1, 100) - STATE-MAJOR!
-    >>> time_steps = result['time_steps']  # [0, 1, ..., 100]
-    >>> dt = result['dt']                  # 0.01
-    >>>
-    >>> # Access state at step k
-    >>> x_k = states[:, k]                 # (2,) - column indexing
-    >>>
-    >>> # Access trajectory of state i
-    >>> x1_traj = states[0, :]             # (101,)
-
-    Discrete rollout (time-major, from rollout()):
-
-    >>> def policy(x, k):  # Note: (x, k) order
-    ...     K = np.array([[-1.0, -2.0]])
-    ...     return -K @ x
-    >>>
-    >>> result: DiscreteSimulationResult = discrete_system.rollout(
-    ...     x0=np.array([1.0, 0.0]),
-    ...     policy=policy,
-    ...     n_steps=100
-    ... )
-    >>>
-    >>> states = result['states']          # (101, 2) - TIME-MAJOR!
-    >>> controls = result['controls']      # (100, 1) - TIME-MAJOR!
-    >>>
-    >>> # Access state at step k
-    >>> x_k = states[k, :]                 # (2,) - row indexing
-    >>>
-    >>> # Access trajectory of state i
-    >>> x1_traj = states[:, 0]             # (101,)
-
-    Converting between conventions:
-
-    >>> # Check which convention was used
-    >>> if result['metadata']['method'] == 'rollout':
-    ...     # Time-major: (T, nx) - already correct for most uses
-    ...     states_time_major = result['states']
-    ... else:
-    ...     # State-major: (nx, T) - transpose if needed
-    ...     states_time_major = result['states'].T
-
-    Plot discrete trajectory (handle both conventions):
-
-    >>> import matplotlib.pyplot as plt
-    >>> method = result['metadata']['method']
-    >>>
-    >>> if method == 'rollout':
-    ...     # Time-major: states is (T, nx)
-    ...     plt.step(time_steps, states[:, 0], where='post', label='x1')
-    ... else:
-    ...     # State-major: states is (nx, T)
-    ...     plt.step(time_steps, states[0, :], where='post', label='x1')
-
-    See Also
-    --------
-    SimulationResult : Continuous-time simulation result
-    """
-
-    states: ArrayLike  # Shape varies: (nx, T) or (T, nx)
-    controls: Optional[ArrayLike]  # Shape varies: (nu, T) or (T, nu)
-    outputs: Optional[ArrayLike]
-    noise: Optional[ArrayLike]
-    time_steps: ArrayLike  # (n_steps+1,)
-    dt: float
-    success: bool
-    metadata: Dict[str, Any]
-
-
-class SDEIntegrationResult(TypedDict, total=False):
-    """
-    Result from SDE integration.
-
-    TypedDict containing trajectory, noise samples, and SDE-specific diagnostics.
-
-    Shape Conventions
-    -----------------
-    Single trajectory:
-    - t: (T,)
-    - x: (T, nx)
-    - noise_samples: (T-1, nw) or (T, nw)
-
-    Multiple paths (Monte Carlo):
-    - t: (T,)
-    - x: (n_paths, T, nx)
-    - noise_samples: (n_paths, T-1, nw) or (n_paths, T, nw)
-
-    Attributes
-    ----------
-    t : ArrayLike
-        Time points (T,)
-    x : ArrayLike
-        State trajectory:
-        - Single: (T, nx)
-        - Multiple paths: (n_paths, T, nx)
-    success : bool
-        Whether integration succeeded
-    message : str
-        Status message
-    nfev : int
-        Number of drift function evaluations
-    nsteps : int
-        Number of integration steps taken
-    solver : str
-        Solver method used
-    integration_time : float
-        Computation time in seconds
-
-    SDE-Specific Fields
-    -------------------
-    diffusion_evals : int
-        Number of diffusion function evaluations
-    noise_samples : ArrayLike
-        Brownian motion samples used
-    n_paths : int
-        Number of trajectories (1 for single, >1 for Monte Carlo)
-    convergence_type : str
-        'strong' or 'weak' convergence
-    sde_type : str
-        'ito' or 'stratonovich' interpretation
-
-    Examples
-    --------
-    >>> # Single trajectory
-    >>> result: SDEIntegrationResult = integrator.integrate(
-    ...     x0=np.array([1.0, 0.0]),
-    ...     u_func=lambda t, x: np.zeros(1),
-    ...     t_span=(0.0, 10.0)
-    ... )
-    >>> print(f"State shape: {result['x'].shape}")  # (T, nx)
-    >>> print(f"Diffusion evals: {result['diffusion_evals']}")
-    >>>
-    >>> # Monte Carlo with multiple paths
-    >>> mc_result: SDEIntegrationResult = integrator.integrate_monte_carlo(
-    ...     x0=np.array([1.0, 0.0]),
-    ...     u_func=lambda t, x: np.zeros(1),
-    ...     t_span=(0.0, 10.0),
-    ...     n_paths=1000
-    ... )
-    >>> print(f"Shape: {mc_result['x'].shape}")  # (1000, T, nx)
-    >>> print(f"Number of paths: {mc_result['n_paths']}")
-    """
-
-    # Required fields (from IntegrationResult)
-    t: ArrayLike
-    x: ArrayLike
-    success: bool
-    nfev: int
-    nsteps: int
-    solver: str
-
-    # Optional fields
-    message: str
-    integration_time: float
-
-    # SDE-specific fields
-    diffusion_evals: int
-    noise_samples: ArrayLike
-    noise_type: str
-    n_paths: int
-    convergence_type: str
-    sde_type: str
 
 
 # ============================================================================
@@ -834,13 +445,13 @@ class TrajectorySegment(TypedDict):
     ...     t_end: float
     ... ) -> TrajectorySegment:
     ...     '''Extract trajectory segment.'''
-    ...     time = result['time']
+    ...     time = result['t']
     ...     mask = (time >= t_start) & (time <= t_end)
     ...     indices = np.where(mask)[0]
     ...
     ...     return TrajectorySegment(
-    ...         states=result['states'][mask],
-    ...         controls=result['controls'][mask[:-1]] if 'controls' in result else None,
+    ...         states=result['x'][mask],
+    ...         controls=result['u'][mask[:-1]] if 'u' in result else None,
     ...         time=time[mask],
     ...         start_index=indices[0],
     ...         end_index=indices[-1],
@@ -871,9 +482,33 @@ __all__ = [
     # Time types
     "TimePoints",
     "TimeSpan",
-    # Result types
+    # Result types (re-exported from system_results)
+    # Base types
+    "IntegrationResultBase",
+    "SimulationResultBase",
+    "RolloutResultBase",
+    "DiscreteSimulationResultBase",
+    # Continuous deterministic
     "IntegrationResult",
     "SimulationResult",
+    "RolloutResult",
+    # Continuous stochastic
+    "SDEIntegrationResult",
+    "SDESimulationResult",
+    "SDERolloutResult",
+    # Discrete deterministic
+    "DiscreteSimulationResult",
+    "DiscreteRolloutResult",
+    # Discrete stochastic
+    "DiscreteStochasticSimulationResult",
+    "DiscreteStochasticRolloutResult",
+    # Union types
+    "ContinuousIntegrationResultUnion",
+    "ContinuousSimulationResultUnion",
+    "ContinuousRolloutResultUnion",
+    "DiscreteSimulationResultUnion",
+    "DiscreteRolloutResultUnion",
+    "SystemResult",
     # Analysis types
     "TrajectoryStatistics",
     "TrajectorySegment",
