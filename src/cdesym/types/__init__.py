@@ -27,161 +27,101 @@ This package provides comprehensive type definitions for:
    - Backend type literal
    - BackendConfig TypedDict
 
-3. Trajectories and Simulation
-   - TimePoints, StateTrajectory, ControlSequence
-   - SimulationResult
+3. System Execution Results (organized in system_results module)
+   - Integration: IntegrationResult, SDEIntegrationResult
+   - Simulation: SimulationResult, SDESimulationResult, DiscreteSimulationResult
+   - Rollout: RolloutResult, SDERolloutResult, DiscreteRolloutResult
+   - Stochastic variants: DiscreteStochasticSimulationResult, etc.
+   - Union types: SystemResult (all results), ContinuousSimulationResultUnion, etc.
 
-4. Linearization
+4. Trajectories and Time Series
+   - TimePoints, StateTrajectory, ControlSequence
+   - TrajectoryStatistics, TrajectorySegment
+
+5. Linearization
    - LinearizationResult, DeterministicLinearization
    - StochasticLinearization
 
-5. Control Design
+6. Control Design
    - Classical: LQRResult, LQGResult, KalmanFilterResult
    - Advanced: MPCResult, MHEResult, H2ControlResult, HInfControlResult
 
-6. State Estimation
+7. State Estimation
    - EKFResult, UKFResult, ParticleFilterResult
 
-7. System Identification
+8. System Identification
    - SystemIDResult, SubspaceIDResult
    - ERAResult, DMDResult, SINDyResult
 
-8. Symbolic Computation
+9. Symbolic Computation
    - SymbolicExpression, SymbolicMatrix
    - SymbolicStateEquations, SymbolicJacobian
 
-9. Reachability and Safety
-   - ReachabilityResult, ROAResult
-   - CBFResult, CLFResult, BarrierCertificateResult
+10. Reachability and Safety
+    - ReachabilityResult, ROAResult
+    - CBFResult, CLFResult, BarrierCertificateResult
 
-10. Robustness Analysis
+11. Robustness Analysis
     - RobustStabilityResult, TubeMPCResult
     - StochasticMPCResult, RiskSensitiveResult
 
-11. Optimization
+12. Optimization
     - OptimizationResult, TrajectoryOptimizationResult
     - ConvexOptimizationResult
 
-12. Machine Learning
+13. Machine Learning
     - TrainingResult, RLTrainingResult
     - ImitationLearningResult
 
-13. Conformal Prediction
+14. Conformal Prediction
     - ConformalPredictionResult, AdaptiveConformalResult
 
-14. Contraction Theory
+15. Contraction Theory
     - ContractionAnalysisResult, CCMResult
     - FunnelingResult
 
-15. Differential Flatness
+16. Differential Flatness
     - DifferentialFlatnessResult, TrajectoryPlanningResult
 
-16. Model Reduction
+17. Model Reduction
     - BalancedRealizationResult, ReducedOrderModelResult
 
-17. Utilities
+18. Utilities
     - Type guards, converters, validators
     - Protocols for structural subtyping
 
 Usage
 -----
->>> from controldesymulation.types import (
+>>> from cdesym.types import (
 ...     StateVector, ControlVector, StateMatrix,
-...     LQRResult, MPCResult, SimulationResult,
+...     LQRResult, MPCResult, SimulationResult, SystemResult,
 ... )
 >>>
 >>> # Type-annotated function
 >>> def simulate(x0: StateVector, u: ControlVector) -> SimulationResult:
 ...     ...
+>>>
+>>> # Polymorphic function using union type
+>>> def plot_trajectory(result: SystemResult) -> None:
+...     plt.plot(result['t'], result['x'])
 
 Import Patterns
 --------------
 # Import specific types
-from controldesymulation.types import StateVector, LQRResult
+from cdesym.types import StateVector, LQRResult, SystemResult
 
 # Import from specific modules
-from controldesymulation.types.core import StateVector, SystemDimensions
-from controldesymulation.types.control_classical import LQRResult
+from cdesym.types.core import StateVector, SystemDimensions
+from cdesym.types.control_classical import LQRResult
+from cdesym.types.system_results import IntegrationResult, SystemResult
 
 # Import entire module
-from controldesymulation.types import core, estimation
+from cdesym.types import core, estimation, system_results
 """
 
 # =============================================================================
 # Core Types - Fundamental vectors and matrices
 # =============================================================================
-# =============================================================================
-# Backend Support - Multi-backend array operations
-# =============================================================================
-from .backends import (
-    Backend,
-    BackendConfig,
-    ConvergenceType,
-    Device,
-    DiscretizationMethod,
-    DiscretizerConfig,
-    IntegrationMethod,
-    IntegratorConfig,
-    NoiseType,
-    OptimizationMethod,
-    SDEIntegrationMethod,
-    SDEIntegratorConfig,
-    SDEType,
-    SystemConfig,
-    get_backend_default_method,
-    validate_backend,
-    validate_device,
-)
-
-# =============================================================================
-# Conformal Prediction - Distribution-free uncertainty quantification
-# =============================================================================
-from .conformal import (
-    AdaptiveConformalResult,
-    ConformalCalibrationResult,
-    ConformalPredictionResult,
-    ConformalPredictionSet,
-    NonconformityScore,
-)
-
-# =============================================================================
-# Contraction Theory - Contraction analysis and CCM
-# =============================================================================
-from .contraction import (
-    CCMResult,
-    ContractionAnalysisResult,
-    ContractionMetric,
-    ContractionRate,
-    FunnelingResult,
-    IncrementalStabilityResult,
-)
-
-# =============================================================================
-# Advanced Control - MPC, MHE, H2, H-infinity
-# =============================================================================
-from .control_advanced import (
-    AdaptiveControlResult,
-    H2ControlResult,
-    HInfControlResult,
-    LMIResult,
-    MHEResult,
-    MPCResult,
-    SlidingModeResult,
-)
-
-# =============================================================================
-# Classical Control - LQR, LQG, Kalman, pole placement
-# =============================================================================
-from .control_classical import (
-    ControllabilityInfo,
-    KalmanFilterResult,
-    LQGResult,
-    LQRResult,
-    LuenbergerObserverResult,
-    ObservabilityInfo,
-    PolePlacementResult,
-    StabilityInfo,
-)
 from .core import (
     ArrayLike,
     ControlInput,
@@ -208,58 +148,76 @@ from .core import (
 )
 
 # =============================================================================
-# State Estimation - EKF, UKF, Particle filters
+# Backend Support - Multi-backend array operations
 # =============================================================================
-from .estimation import (
-    EKFResult,
-    ParticleFilterResult,
-    UKFResult,
+from .backends import (
+    Backend,
+    BackendConfig,
+    ConvergenceType,
+    Device,
+    DiscretizationMethod,
+    DiscretizerConfig,
+    IntegrationMethod,
+    IntegratorConfig,
+    NoiseType,
+    OptimizationMethod,
+    SDEIntegrationMethod,
+    SDEIntegratorConfig,
+    SDEType,
+    SystemConfig,
+    get_backend_default_method,
+    validate_backend,
+    validate_device,
 )
 
 # =============================================================================
-# Differential Flatness - Flatness analysis and trajectory planning
+# System Execution Results - Integration, simulation, rollout results
 # =============================================================================
-from .flatness import (
-    DifferentialFlatnessResult,
-    FlatnessOutput,
-    TrajectoryPlanningResult,
+from .system_results import (
+    # Base types
+    DiscreteSimulationResultBase,
+    IntegrationResultBase,
+    RolloutResultBase,
+    SimulationResultBase,
+    # Continuous deterministic
+    IntegrationResult,
+    RolloutResult,
+    SimulationResult,
+    # Continuous stochastic
+    SDEIntegrationResult,
+    SDERolloutResult,
+    SDESimulationResult,
+    # Discrete deterministic
+    DiscreteRolloutResult,
+    DiscreteSimulationResult,
+    # Discrete stochastic
+    DiscreteStochasticRolloutResult,
+    DiscreteStochasticSimulationResult,
+    # Union types for polymorphic code
+    ContinuousIntegrationResultUnion,
+    ContinuousRolloutResultUnion,
+    ContinuousSimulationResultUnion,
+    DiscreteRolloutResultUnion,
+    DiscreteSimulationResultUnion,
+    SystemResult,
 )
 
 # =============================================================================
-# System Identification - Data-driven model estimation
+# Trajectories - Time series data types
 # =============================================================================
-from .identification import (
-    DMDResult,
-    ERAResult,
-    HankelMatrix,
-    KoopmanResult,
-    MarkovParameters,
-    SINDyResult,
-    SubspaceIDResult,
-    SystemIDResult,
-    ToeplitzMatrix,
-    TrajectoryMatrix,
+from .trajectories import (
+    ControlSequence,
+    NoiseSequence,
+    OutputSequence,
+    StateTrajectory,
+    TimePoints,
+    TimeSpan,
+    TrajectorySegment,
+    TrajectoryStatistics,
 )
 
 # =============================================================================
-# Learning - Neural networks and reinforcement learning
-# =============================================================================
-from .learning import (
-    Dataset,
-    ImitationLearningResult,
-    LearningRate,
-    LossValue,
-    NeuralDynamicsResult,
-    NeuralNetworkConfig,
-    OnlineAdaptationResult,
-    PolicyEvaluationResult,
-    RLTrainingResult,
-    TrainingBatch,
-    TrainingResult,
-)
-
-# =============================================================================
-# Linearization - Jacobian computation and linearization results
+# Linearization - Jacobian matrices and linearization results
 # =============================================================================
 from .linearization import (
     ContinuousLinearization,
@@ -280,42 +238,77 @@ from .linearization import (
 )
 
 # =============================================================================
-# Model Reduction - Balanced realization and order reduction
+# Classical Control - LQR, LQG, Kalman, pole placement
 # =============================================================================
-from .model_reduction import (
-    BalancedRealizationResult,
-    ReducedOrderModelResult,
+from .control_classical import (
+    ControllabilityInfo,
+    KalmanFilterResult,
+    LQGResult,
+    LQRResult,
+    LuenbergerObserverResult,
+    ObservabilityInfo,
+    PolePlacementResult,
+    StabilityInfo,
 )
 
 # =============================================================================
-# Optimization - General and trajectory optimization
+# Advanced Control - MPC, MHE, H2, H-infinity
 # =============================================================================
-from .optimization import (
-    ConstrainedOptimizationResult,
-    ConvexOptimizationResult,
-    OptimizationBounds,
-    OptimizationResult,
-    ParameterOptimizationResult,
-    TrajectoryOptimizationResult,
+from .control_advanced import (
+    AdaptiveControlResult,
+    H2ControlResult,
+    HInfControlResult,
+    LMIResult,
+    MHEResult,
+    MPCResult,
+    SlidingModeResult,
 )
 
 # =============================================================================
-# Protocols - Structural subtyping for system interfaces
+# State Estimation - EKF, UKF, Particle filters
 # =============================================================================
-from .protocols import (
-    CompilableSystemProtocol,
-    ContinuousSystemProtocol,
-    DiscreteSystemProtocol,
-    LinearizableContinuousProtocol,
-    LinearizableDiscreteProtocol,
-    ParametricSystemProtocol,
-    StochasticSystemProtocol,
-    SymbolicContinuousProtocol,
-    SymbolicDiscreteProtocol,
+from .estimation import (
+    EKFResult,
+    ParticleFilterResult,
+    UKFResult,
 )
 
 # =============================================================================
-# Reachability and Safety - Set-based analysis and verification
+# System Identification - Data-driven model estimation
+# =============================================================================
+from .identification import (
+    DMDResult,
+    ERAResult,
+    HankelMatrix,
+    KoopmanResult,
+    MarkovParameters,
+    SINDyResult,
+    SubspaceIDResult,
+    SystemIDResult,
+    ToeplitzMatrix,
+    TrajectoryMatrix,
+)
+
+# =============================================================================
+# Symbolic Computation - SymPy types and operations
+# =============================================================================
+from .symbolic import (
+    ParameterDict,
+    SubstitutionDict,
+    SymbolicDiffusionMatrix,
+    SymbolicExpression,
+    SymbolicGradient,
+    SymbolicHessian,
+    SymbolicJacobian,
+    SymbolicMatrix,
+    SymbolicOutputEquations,
+    SymbolicStateEquations,
+    SymbolicSymbol,
+    SymbolDict,
+)
+
+# =============================================================================
+# Reachability and Safety - Reachable sets and barrier functions
 # =============================================================================
 from .reachability import (
     BarrierCertificateResult,
@@ -329,7 +322,7 @@ from .reachability import (
 )
 
 # =============================================================================
-# Robustness - Uncertainty handling and robust control
+# Robustness - Robust control and uncertainty quantification
 # =============================================================================
 from .robustness import (
     RiskSensitiveResult,
@@ -342,51 +335,101 @@ from .robustness import (
 )
 
 # =============================================================================
-# Symbolic Computation - Symbolic expressions and systems
+# Optimization - Trajectory and parameter optimization
 # =============================================================================
-from .symbolic import (
-    ParameterDict,
-    SubstitutionDict,
-    SymbolDict,
-    SymbolicDiffusionMatrix,
-    SymbolicExpression,
-    SymbolicGradient,
-    SymbolicHessian,
-    SymbolicJacobian,
-    SymbolicMatrix,
-    SymbolicOutputEquations,
-    SymbolicStateEquations,
-    SymbolicSymbol,
+from .optimization import (
+    ConstrainedOptimizationResult,
+    ConvexOptimizationResult,
+    OptimizationBounds,
+    OptimizationResult,
+    ParameterOptimizationResult,
+    TrajectoryOptimizationResult,
 )
 
 # =============================================================================
-# Trajectories - Time series and simulation results
+# Learning - Neural networks and reinforcement learning
 # =============================================================================
-from .trajectories import (
-    ControlSequence,
-    IntegrationResult,
-    NoiseSequence,
-    OutputSequence,
-    SimulationResult,
-    StateTrajectory,
-    TimePoints,
-    TimeSpan,
-    TrajectorySegment,
-    TrajectoryStatistics,
+from .learning import (
+    Dataset,
+    ImitationLearningResult,
+    LearningRate,
+    LossValue,
+    NeuralDynamicsResult,
+    NeuralNetworkConfig,
+    OnlineAdaptationResult,
+    PolicyEvaluationResult,
+    RLTrainingResult,
+    TrainingBatch,
+    TrainingResult,
 )
 
 # =============================================================================
-# Utilities - Type guards, converters, protocols
+# Conformal Prediction - Distribution-free uncertainty quantification
+# =============================================================================
+from .conformal import (
+    AdaptiveConformalResult,
+    ConformalCalibrationResult,
+    ConformalPredictionResult,
+    ConformalPredictionSet,
+    NonconformityScore,
+)
+
+# =============================================================================
+# Contraction Theory - Contraction analysis and CCM
+# =============================================================================
+from .contraction import (
+    CCMResult,
+    ContractionAnalysisResult,
+    ContractionMetric,
+    ContractionRate,
+    FunnelingResult,
+    IncrementalStabilityResult,
+)
+
+# =============================================================================
+# Differential Flatness - Flatness analysis and trajectory planning
+# =============================================================================
+from .flatness import (
+    DifferentialFlatnessResult,
+    FlatnessOutput,
+    TrajectoryPlanningResult,
+)
+
+# =============================================================================
+# Model Reduction - Balanced truncation and model order reduction
+# =============================================================================
+from .reduction import (
+    BalancedRealizationResult,
+    ReducedOrderModelResult,
+)
+
+# =============================================================================
+# System Protocols - Structural subtyping for systems
+# =============================================================================
+from .protocols import (
+    CompilableSystemProtocol,
+    ContinuousSystemProtocol,
+    DiscreteSystemProtocol,
+    LinearizableContinuousProtocol,
+    LinearizableDiscreteProtocol,
+    LinearizableProtocol,
+    ParametricSystemProtocol,
+    SimulatableProtocol,
+    StochasticProtocol,
+    StochasticSystemProtocol,
+    SymbolicContinuousProtocol,
+    SymbolicDiscreteProtocol,
+)
+
+# =============================================================================
+# Utilities - Type guards, converters, validators
 # =============================================================================
 from .utilities import (
     ArrayConverter,
     CacheKey,
     CacheStatistics,
-    LinearizableProtocol,
     Metadata,
     PerformanceMetrics,
-    SimulatableProtocol,
-    StochasticProtocol,
     ValidationResult,
     check_control_shape,
     check_state_shape,
@@ -403,19 +446,22 @@ from .utilities import (
 )
 
 # =============================================================================
-# Public API - All exported symbols
+# Public API - Exported types
 # =============================================================================
+
 __all__ = [
     # -------------------------------------------------------------------------
     # Core Types
     # -------------------------------------------------------------------------
     "ArrayLike",
     "ScalarLike",
+    # Vector types
     "StateVector",
     "ControlVector",
     "OutputVector",
     "NoiseVector",
     "ParameterVector",
+    # Matrix types
     "StateMatrix",
     "InputMatrix",
     "OutputMatrix",
@@ -453,7 +499,36 @@ __all__ = [
     "validate_backend",
     "validate_device",
     # -------------------------------------------------------------------------
-    # Trajectories
+    # System Execution Results
+    # -------------------------------------------------------------------------
+    # Base types
+    "IntegrationResultBase",
+    "SimulationResultBase",
+    "RolloutResultBase",
+    "DiscreteSimulationResultBase",
+    # Continuous deterministic
+    "IntegrationResult",
+    "SimulationResult",
+    "RolloutResult",
+    # Continuous stochastic
+    "SDEIntegrationResult",
+    "SDESimulationResult",
+    "SDERolloutResult",
+    # Discrete deterministic
+    "DiscreteSimulationResult",
+    "DiscreteRolloutResult",
+    # Discrete stochastic
+    "DiscreteStochasticSimulationResult",
+    "DiscreteStochasticRolloutResult",
+    # Union types
+    "ContinuousIntegrationResultUnion",
+    "ContinuousSimulationResultUnion",
+    "ContinuousRolloutResultUnion",
+    "DiscreteSimulationResultUnion",
+    "DiscreteRolloutResultUnion",
+    "SystemResult",
+    # -------------------------------------------------------------------------
+    # Trajectories and Time Series
     # -------------------------------------------------------------------------
     "TimePoints",
     "TimeSpan",
@@ -461,8 +536,6 @@ __all__ = [
     "ControlSequence",
     "OutputSequence",
     "NoiseSequence",
-    "IntegrationResult",
-    "SimulationResult",
     "TrajectoryStatistics",
     "TrajectorySegment",
     # -------------------------------------------------------------------------
