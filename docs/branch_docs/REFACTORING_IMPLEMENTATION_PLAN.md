@@ -1,34 +1,9 @@
 # ControlDESymulation Refactoring Implementation Plan
 
-## Phase 0: Preparation (Before Starting)
-
-### 0.1 Ensure Clean Working Directory
-```bash
-# Check status
-git status
-
-# Commit or stash any uncommitted changes
-git add -A
-git commit -m "Pre-refactoring checkpoint"
-
-# Verify you're on main/master
-git branch
-```
-
-### 0.2 Create Refactoring Branch
-```bash
-# Create and switch to new branch
-git switch -c refactor/time-major-rollout
-
-# Push branch to remote (optional, for backup)
-git push -u origin refactor/time-major-rollout
-```
-
----
-
 ## Phase 1: Type Definitions
 
 ### 1.1 Update SimulationResult TypedDict
+
 **File**: `src/cdesym/types/results.py` (or wherever TypedDicts are defined)
 
 ```python
@@ -46,6 +21,7 @@ SimulationResult = TypedDict('SimulationResult', {
 ```
 
 ### 1.2 Update DiscreteSimulationResult TypedDict
+
 ```python
 DiscreteSimulationResult = TypedDict('DiscreteSimulationResult', {
     't': NDArray,          # Changed from 'time_steps'
@@ -60,6 +36,7 @@ DiscreteSimulationResult = TypedDict('DiscreteSimulationResult', {
 ```
 
 ### 1.3 Commit Type Changes
+
 ```bash
 git add src/cdesym/types/
 git commit -m "refactor: Standardize result TypedDicts to time-major with consistent keys"
@@ -70,9 +47,11 @@ git commit -m "refactor: Standardize result TypedDicts to time-major with consis
 ## Phase 2: Continuous System Base
 
 ### 2.1 Add rollout() Method
+
 **File**: `src/cdesym/systems/base/core/continuous_system_base.py`
 
 Add new method:
+
 ```python
 def rollout(
     self,
@@ -119,6 +98,7 @@ def rollout(
 ```
 
 ### 2.2 Refactor simulate() Method
+
 **Same file**: Modify existing `simulate()` to remove `controller` parameter
 
 ```python
@@ -167,6 +147,7 @@ def simulate(
 ```
 
 ### 2.3 Commit Continuous Base Changes
+
 ```bash
 git add src/cdesym/systems/base/core/continuous_system_base.py
 git commit -m "refactor: Add rollout() and refactor simulate() in ContinuousSystemBase"
@@ -177,9 +158,11 @@ git commit -m "refactor: Add rollout() and refactor simulate() in ContinuousSyst
 ## Phase 3: Continuous Stochastic System
 
 ### 3.1 Override simulate() and rollout()
+
 **File**: `src/cdesym/systems/continuous_stochastic_system.py`
 
 Add overrides:
+
 ```python
 def simulate(
     self,
@@ -218,6 +201,7 @@ def rollout(
 ```
 
 ### 3.2 Commit Stochastic Changes
+
 ```bash
 git add src/cdesym/systems/continuous_stochastic_system.py
 git commit -m "refactor: Override simulate() and rollout() in ContinuousStochasticSystem with Monte Carlo support"
@@ -228,9 +212,11 @@ git commit -m "refactor: Override simulate() and rollout() in ContinuousStochast
 ## Phase 4: Discrete System Base
 
 ### 4.1 Update simulate() Return Format
+
 **File**: `src/cdesym/systems/base/core/discrete_system_base.py`
 
 Update abstract method signature and docstring:
+
 ```python
 @abstractmethod
 def simulate(
@@ -259,6 +245,7 @@ def simulate(
 ```
 
 ### 4.2 Commit Discrete Base Changes
+
 ```bash
 git add src/cdesym/systems/base/core/discrete_system_base.py
 git commit -m "refactor: Update DiscreteSystemBase.simulate() to time-major convention"
@@ -269,9 +256,11 @@ git commit -m "refactor: Update DiscreteSystemBase.simulate() to time-major conv
 ## Phase 5: Discrete Symbolic System
 
 ### 5.1 Update simulate() Implementation
+
 **File**: `src/cdesym/systems/discrete_symbolic_system.py`
 
 Change implementation to return time-major:
+
 ```python
 def simulate(
     self,
@@ -317,6 +306,7 @@ def simulate(
 ```
 
 ### 5.2 Commit Discrete Symbolic Changes
+
 ```bash
 git add src/cdesym/systems/discrete_symbolic_system.py
 git commit -m "refactor: Update DiscreteSymbolicSystem.simulate() to time-major with standardized keys"
@@ -327,9 +317,11 @@ git commit -m "refactor: Update DiscreteSymbolicSystem.simulate() to time-major 
 ## Phase 6: Discrete Stochastic System
 
 ### 6.1 Update simulate_stochastic() Implementation
+
 **File**: `src/cdesym/systems/discrete_stochastic_system.py`
 
 Update to return time-major:
+
 ```python
 def simulate_stochastic(
     self,
@@ -409,6 +401,7 @@ def simulate_stochastic(
 ```
 
 ### 6.2 Commit Discrete Stochastic Changes
+
 ```bash
 git add src/cdesym/systems/discrete_stochastic_system.py
 git commit -m "refactor: Update DiscreteStochasticSystem.simulate_stochastic() to time-major"
@@ -419,9 +412,11 @@ git commit -m "refactor: Update DiscreteStochasticSystem.simulate_stochastic() t
 ## Phase 7: Discretized System
 
 ### 7.1 Update Both simulate() Methods
+
 **File**: `src/cdesym/systems/discretized_system.py`
 
 Update `_simulate_step_by_step()`:
+
 ```python
 def _simulate_step_by_step(self, x0, u_sequence, n_steps):
     # TIME-MAJOR
@@ -450,6 +445,7 @@ def _simulate_step_by_step(self, x0, u_sequence, n_steps):
 ```
 
 Update `_simulate_batch()`:
+
 ```python
 def _simulate_batch(self, x0, u_sequence, n_steps):
     # ... existing code ...
@@ -476,6 +472,7 @@ def _simulate_batch(self, x0, u_sequence, n_steps):
 ```
 
 Update `simulate_stochastic()`:
+
 ```python
 def simulate_stochastic(
     self,
@@ -521,6 +518,7 @@ def simulate_stochastic(
 ```
 
 ### 7.2 Commit Discretized System Changes
+
 ```bash
 git add src/cdesym/systems/discretized_system.py
 git commit -m "refactor: Update DiscretizedSystem to time-major convention"
@@ -531,11 +529,14 @@ git commit -m "refactor: Update DiscretizedSystem to time-major convention"
 ## Phase 8: Update Plotting Infrastructure
 
 ### 8.1 Verify Plotting Compatibility
-**Files**: 
+
+**Files**:
+
 - `src/cdesym/ui/plotting/trajectory_plotter.py`
 - `src/cdesym/ui/plotting/phase_plotter.py`
 
 Check if plotting assumes specific shapes. Update if needed:
+
 ```python
 # Should handle both (T, nx) and (nx, T) gracefully
 def plot_trajectory(self, t, x, ...):
@@ -548,9 +549,11 @@ def plot_trajectory(self, t, x, ...):
 ```
 
 ### 8.2 Update plot() Convenience Method
+
 **File**: `src/cdesym/systems/base/core/continuous_system_base.py`
 
 Ensure it works with new result format:
+
 ```python
 def plot(self, result: Union[IntegrationResult, SimulationResult], ...):
     """Plot integration or simulation result."""
@@ -563,6 +566,7 @@ def plot(self, result: Union[IntegrationResult, SimulationResult], ...):
 ```
 
 ### 8.3 Commit Plotting Changes
+
 ```bash
 git add src/cdesym/ui/plotting/
 git commit -m "refactor: Update plotting to handle time-major convention uniformly"
@@ -573,9 +577,11 @@ git commit -m "refactor: Update plotting to handle time-major convention uniform
 ## Phase 9: Update Tests
 
 ### 9.1 Update Continuous System Tests
+
 **Files**: `tests/systems/test_continuous_*.py`
 
 Update tests that use `simulate()` with controller:
+
 ```python
 # OLD
 result = system.simulate(x0, controller=my_controller, ...)
@@ -585,9 +591,11 @@ result = system.rollout(x0, controller=my_controller, ...)
 ```
 
 ### 9.2 Update Discrete System Tests
+
 **Files**: `tests/systems/test_discrete_*.py`
 
 Update shape assertions:
+
 ```python
 # OLD
 assert result['states'].shape == (nx, n_steps + 1)
@@ -599,11 +607,13 @@ assert result['x'][:, 0].shape == (n_steps + 1,)
 ```
 
 ### 9.3 Update Plotting Tests
+
 **Files**: `tests/ui/test_plotting.py`
 
 Verify tests pass with new format.
 
 ### 9.4 Run All Tests
+
 ```bash
 # Run full test suite
 pytest tests/ -v
@@ -619,9 +629,11 @@ git commit -m "test: Update all tests for time-major convention and API changes"
 ## Phase 10: Update Examples and Tutorials
 
 ### 10.1 Update Example Scripts
+
 **Files**: `examples/**/*.py`
 
 Update all example code:
+
 - Change `controller=` to `rollout()`
 - Update indexing for discrete systems
 - Update key access (`states` → `x`, `time` → `t`)
@@ -632,6 +644,7 @@ git commit -m "docs: Update examples for refactored API"
 ```
 
 ### 10.2 Update Tutorial Notebooks
+
 **Files**: `tutorials/**/*.qmd` or `*.ipynb`
 
 Same changes as examples.
@@ -642,6 +655,7 @@ git commit -m "docs: Update tutorials for refactored API"
 ```
 
 ### 10.3 Update basic_usage.qmd
+
 ```python
 # Now can use either
 result = pendulum.simulate(x0, u=None, t_span=(0, 20), dt=0.05)
@@ -657,12 +671,15 @@ pendulum.plot(result)
 ## Phase 11: Update Documentation
 
 ### 11.1 Update API Reference
+
 Update docstrings if needed (should be done in phases above).
 
 ### 11.2 Update README
+
 **File**: `README.md`
 
 Update quick start examples:
+
 ```python
 # Open-loop simulation
 result = system.simulate(x0, u=my_control_func, t_span=(0, 10), dt=0.01)
@@ -675,6 +692,7 @@ plt.plot(result['t'], result['x'][:, 0])  # First state
 ```
 
 ### 11.3 Add Migration Guide
+
 **File**: `docs/MIGRATION.md` or similar
 
 Document breaking changes and how to migrate.
@@ -689,6 +707,7 @@ git commit -m "docs: Update documentation for API refactoring"
 ## Phase 12: Final Verification
 
 ### 12.1 Run Complete Test Suite
+
 ```bash
 # Run all tests
 pytest tests/ -v --cov=cdesym
@@ -698,6 +717,7 @@ coverage report
 ```
 
 ### 12.2 Build Documentation
+
 ```bash
 # Build docs locally
 cd docs
@@ -707,6 +727,7 @@ make html
 ```
 
 ### 12.3 Test Example Scripts
+
 ```bash
 # Run all example scripts
 for script in examples/**/*.py; do
@@ -716,6 +737,7 @@ done
 ```
 
 ### 12.4 Render Tutorials
+
 ```bash
 # Render Quarto tutorials
 cd tutorials
@@ -729,6 +751,7 @@ quarto render
 ## Phase 13: Merge to Main
 
 ### 13.1 Final Review
+
 ```bash
 # Review all changes
 git log --oneline origin/main..HEAD
@@ -738,18 +761,22 @@ git diff origin/main
 ```
 
 ### 13.2 Push Branch
+
 ```bash
 # Push all commits
 git push origin refactor/time-major-rollout
 ```
 
 ### 13.3 Create Pull Request (Optional)
+
 If using GitHub/GitLab:
+
 - Create PR from refactor branch to main
 - Review changes
 - Request review if working with team
 
 ### 13.4 Merge to Main
+
 ```bash
 # Switch to main
 git switch main
@@ -778,6 +805,7 @@ git push origin main
 ```
 
 ### 13.5 Tag Release
+
 ```bash
 # Tag as pre-release (before v1.0)
 git tag -a v0.9.0 -m "Pre-release with API standardization"
@@ -789,6 +817,7 @@ git push origin v1.0.0
 ```
 
 ### 13.6 Delete Refactor Branch (Optional)
+
 ```bash
 # Delete local branch
 git branch -d refactor/time-major-rollout
@@ -804,6 +833,7 @@ git push origin --delete refactor/time-major-rollout
 If something goes wrong:
 
 ### Option 1: Reset Branch
+
 ```bash
 # On refactor branch, undo all commits
 git reset --hard origin/main
@@ -812,6 +842,7 @@ git reset --hard origin/main
 ```
 
 ### Option 2: Revert Merge (If Already Merged)
+
 ```bash
 # On main, revert the merge commit
 git revert -m 1 <merge-commit-hash>
@@ -821,6 +852,7 @@ git reset --hard HEAD~1
 ```
 
 ### Option 3: Cherry-Pick Good Commits
+
 ```bash
 # Create new branch from main
 git switch -c refactor/time-major-rollout-v2 main
@@ -868,11 +900,13 @@ git cherry-pick <commit-hash>
 ## Post-Merge Tasks
 
 ### Immediate
+
 - [ ] Update CHANGELOG.md
 - [ ] Announce breaking changes (if any users)
 - [ ] Update PyPI description (when releasing)
 
 ### Before v1.0 PyPI Release
+
 - [ ] Final documentation review
 - [ ] Create comprehensive migration guide
 - [ ] Prepare release notes
