@@ -22,28 +22,50 @@ Tests cover:
 - Output and noise sequences
 - Time array types (TimePoints, TimeSpan)
 - IntegrationResult TypedDict structure
-- SimulationResult TypedDict structure
+- SimulationResult TypedDict structure (standardized keys: 't', 'x', 'u')
+- RolloutResult TypedDict structure (closed-loop simulation)
+- SDE result types (stochastic systems)
+- Discrete result types
 - TrajectoryStatistics computation
 - TrajectorySegment extraction
 - Single vs batched vs multi-trial patterns
 - Edge cases and realistic usage
+
+Note: Result types use standardized keys per time-major-rollout refactoring:
+- 't' for time (not 'time')
+- 'x' for states (not 'states')
+- 'u' for controls (not 'controls')
 """
 
 
 import numpy as np
 import pytest
 
-from cdesym.types.trajectories import (  # Trajectory types; Time types; Result types; Analysis types
-    ControlSequence,
-    IntegrationResult,
-    NoiseSequence,
-    OutputSequence,
-    SimulationResult,
+from cdesym.types.trajectories import (
+    # Trajectory types
     StateTrajectory,
+    ControlSequence,
+    OutputSequence,
+    NoiseSequence,
+    # Time types
     TimePoints,
     TimeSpan,
-    TrajectorySegment,
+    # Result types (re-exported from system_results)
+    IntegrationResult,
+    SimulationResult,
+    RolloutResult,
+    SDEIntegrationResult,
+    SDESimulationResult,
+    SDERolloutResult,
+    DiscreteSimulationResult,
+    DiscreteRolloutResult,
+    DiscreteStochasticSimulationResult,
+    DiscreteStochasticRolloutResult,
+    # Union types
+    SystemResult,
+    # Analysis types
     TrajectoryStatistics,
+    TrajectorySegment,
 )
 
 # ============================================================================
@@ -390,26 +412,32 @@ class TestIntegrationResult:
         """Test successful integration result."""
         result: IntegrationResult = {
             "t": np.linspace(0, 10, 101),
-            "y": np.random.randn(101, 3),
+            "x": np.random.randn(101, 3),
             "success": True,
             "message": "Integration successful",
             "nfev": 523,
             "njev": 0,
+            "nsteps": 100,
+            "solver": "RK45",
+            "integration_time": 0.05,
         }
 
         assert result["success"] is True
         assert result["t"].shape == (101,)
-        assert result["y"].shape == (101, 3)
+        assert result["x"].shape == (101, 3)
         assert result["nfev"] > 0
 
     def test_integration_result_failure(self):
         """Test failed integration result."""
         result: IntegrationResult = {
             "t": np.array([0.0]),
-            "y": np.array([[1.0, 0.0]]),
+            "x": np.array([[1.0, 0.0]]),
             "success": False,
             "message": "Integration stopped: step size too small",
             "nfev": 10000,
+            "nsteps": 0,
+            "solver": "RK45",
+            "integration_time": 1.0,
         }
 
         assert result["success"] is False
@@ -419,25 +447,27 @@ class TestIntegrationResult:
         """Test IntegrationResult with partial fields (total=False)."""
         result: IntegrationResult = {
             "t": np.linspace(0, 1, 11),
-            "y": np.random.randn(11, 2),
+            "x": np.random.randn(11, 2),
             "success": True,
         }
 
         assert "t" in result
-        assert "y" in result
+        assert "x" in result
         assert "success" in result
-        assert "nfev" not in result  # Optional
 
     def test_integration_result_with_jacobian_info(self):
         """Test IntegrationResult with Jacobian evaluations."""
         result: IntegrationResult = {
             "t": np.linspace(0, 10, 101),
-            "y": np.random.randn(101, 3),
+            "x": np.random.randn(101, 3),
             "success": True,
             "message": "Success",
             "nfev": 200,
             "njev": 50,  # Jacobian evaluations
             "nlu": 30,  # LU decompositions
+            "nsteps": 100,
+            "solver": "Radau",
+            "integration_time": 0.1,
         }
 
         assert result["njev"] == 50
@@ -445,26 +475,32 @@ class TestIntegrationResult:
 
 
 # ============================================================================
-# Test Simulation Result
+# Test Simulation Result (Standardized Keys)
 # ============================================================================
 
 
 class TestSimulationResult:
-    """Test SimulationResult TypedDict."""
+    """Test SimulationResult TypedDict with standardized keys."""
 
     def test_simulation_result_basic(self):
-        """Test basic simulation result."""
+        """Test basic simulation result with 't', 'x', 'u' keys."""
         n_steps = 100
         nx = 3
         nu = 2
 
         result: SimulationResult = {
-            "states": np.random.randn(n_steps + 1, nx),
-            "controls": np.random.randn(n_steps, nu),
+            "t": np.linspace(0, 10, n_steps + 1),
+            "x": np.random.randn(n_steps + 1, nx),
+            "u": np.random.randn(n_steps, nu),
+            "success": True,
+            "message": "Simulation completed",
+            "method": "euler",
+            "dt": 0.1,
         }
 
-        assert result["states"].shape == (n_steps + 1, nx)
-        assert result["controls"].shape == (n_steps, nu)
+        assert result["x"].shape == (n_steps + 1, nx)
+        assert result["u"].shape == (n_steps, nu)
+        assert result["t"].shape == (n_steps + 1,)
 
     def test_simulation_result_with_outputs(self):
         """Test simulation result with outputs."""
@@ -474,60 +510,429 @@ class TestSimulationResult:
         ny = 2
 
         result: SimulationResult = {
-            "states": np.random.randn(n_steps + 1, nx),
-            "controls": np.random.randn(n_steps, nu),
-            "outputs": np.random.randn(n_steps + 1, ny),
+            "t": np.linspace(0, 10, n_steps + 1),
+            "x": np.random.randn(n_steps + 1, nx),
+            "u": np.random.randn(n_steps, nu),
+            "y": np.random.randn(n_steps + 1, ny),
+            "success": True,
         }
 
-        assert "outputs" in result
-        assert result["outputs"].shape == (n_steps + 1, ny)
+        assert "y" in result
+        assert result["y"].shape == (n_steps + 1, ny)
 
-    def test_simulation_result_stochastic(self):
-        """Test stochastic simulation result with noise."""
+    def test_simulation_result_open_loop_no_control(self):
+        """Test open-loop simulation with no control (autonomous)."""
         n_steps = 100
+        nx = 2
+
+        result: SimulationResult = {
+            "t": np.linspace(0, 10, n_steps + 1),
+            "x": np.random.randn(n_steps + 1, nx),
+            "u": None,
+            "success": True,
+            "method": "rk4",
+            "dt": 0.1,
+        }
+
+        assert result["u"] is None
+        assert result["x"].shape == (n_steps + 1, nx)
+
+    def test_simulation_result_with_metadata(self):
+        """Test simulation result with metadata."""
+        result: SimulationResult = {
+            "t": np.linspace(0, 10, 101),
+            "x": np.random.randn(101, 3),
+            "success": True,
+            "metadata": {
+                "cost": 123.45,
+                "constraint_violations": 0,
+                "solver_iterations": 50,
+            },
+        }
+
+        assert "metadata" in result
+        assert result["metadata"]["cost"] == 123.45
+
+
+# ============================================================================
+# Test Rollout Result (Closed-Loop)
+# ============================================================================
+
+
+class TestRolloutResult:
+    """Test RolloutResult TypedDict for closed-loop simulation."""
+
+    def test_rollout_result_basic(self):
+        """Test basic rollout result."""
+        n_steps = 100
+        nx = 3
+        nu = 2
+
+        result: RolloutResult = {
+            "t": np.linspace(0, 10, n_steps + 1),
+            "x": np.random.randn(n_steps + 1, nx),
+            "u": np.random.randn(n_steps, nu),  # Always present for rollout
+            "success": True,
+            "message": "Rollout completed",
+            "method": "rk4",
+            "dt": 0.1,
+            "controller_type": "LQR",
+            "closed_loop": True,
+        }
+
+        assert result["x"].shape == (n_steps + 1, nx)
+        assert result["u"].shape == (n_steps, nu)
+        assert result["closed_loop"] is True
+        assert result["controller_type"] == "LQR"
+
+    def test_rollout_result_with_outputs(self):
+        """Test rollout result with outputs."""
+        n_steps = 100
+        nx = 3
+        nu = 2
+        ny = 2
+
+        result: RolloutResult = {
+            "t": np.linspace(0, 10, n_steps + 1),
+            "x": np.random.randn(n_steps + 1, nx),
+            "u": np.random.randn(n_steps, nu),
+            "y": np.random.randn(n_steps + 1, ny),
+            "success": True,
+            "closed_loop": True,
+        }
+
+        assert "y" in result
+        assert result["y"].shape == (n_steps + 1, ny)
+
+
+# ============================================================================
+# Test SDE Integration Result
+# ============================================================================
+
+
+class TestSDEIntegrationResult:
+    """Test SDEIntegrationResult TypedDict."""
+
+    def test_sde_integration_result_single_path(self):
+        """Test SDE integration result for single path."""
+        n_steps = 1000
+        nx = 2
+
+        result: SDEIntegrationResult = {
+            "t": np.linspace(0, 10, n_steps + 1),
+            "x": np.random.randn(n_steps + 1, nx),
+            "success": True,
+            "message": "SDE integration completed",
+            "nfev": 1000,
+            "nsteps": n_steps,
+            "solver": "euler_maruyama",
+            "integration_time": 0.2,
+            "diffusion_evals": 1000,
+            "noise_samples": np.random.randn(n_steps, nx),
+            "n_paths": 1,
+            "noise_type": "diagonal",
+            "sde_type": "ito",
+            "convergence_type": "strong",
+        }
+
+        assert result["x"].shape == (n_steps + 1, nx)
+        assert result["n_paths"] == 1
+        assert result["sde_type"] == "ito"
+
+    def test_sde_integration_result_monte_carlo(self):
+        """Test SDE integration result for Monte Carlo (multiple paths)."""
+        n_steps = 100
+        n_paths = 500
+        nx = 2
+        nw = 2
+
+        result: SDEIntegrationResult = {
+            "t": np.linspace(0, 10, n_steps + 1),
+            "x": np.random.randn(n_paths, n_steps + 1, nx),
+            "success": True,
+            "nfev": n_steps * n_paths,
+            "nsteps": n_steps,
+            "solver": "euler_maruyama",
+            "integration_time": 1.5,
+            "diffusion_evals": n_steps * n_paths,
+            "noise_samples": np.random.randn(n_paths, n_steps, nw),
+            "n_paths": n_paths,
+            "noise_type": "diagonal",
+            "sde_type": "ito",
+            "convergence_type": "strong",
+        }
+
+        assert result["x"].shape == (n_paths, n_steps + 1, nx)
+        assert result["n_paths"] == 500
+        assert result["noise_samples"].shape == (n_paths, n_steps, nw)
+
+
+# ============================================================================
+# Test SDE Simulation Result
+# ============================================================================
+
+
+class TestSDESimulationResult:
+    """Test SDESimulationResult TypedDict."""
+
+    def test_sde_simulation_result_single_path(self):
+        """Test SDE simulation result for single path."""
+        n_steps = 100
+        nx = 2
+        nw = 2
+
+        result: SDESimulationResult = {
+            "t": np.linspace(0, 10, n_steps + 1),
+            "x": np.random.randn(n_steps + 1, nx),
+            "success": True,
+            "method": "euler_maruyama",
+            "dt": 0.1,
+            "n_paths": 1,
+            "noise_type": "diagonal",
+            "sde_type": "ito",
+            "seed": 42,
+            "noise_samples": np.random.randn(n_steps, nw),
+            "diffusion_evals": n_steps,
+        }
+
+        assert result["x"].shape == (n_steps + 1, nx)
+        assert result["n_paths"] == 1
+        assert result["seed"] == 42
+        assert result["noise_samples"].shape == (n_steps, nw)
+        assert result["diffusion_evals"] == n_steps
+
+    def test_sde_simulation_result_monte_carlo(self):
+        """Test SDE simulation result for Monte Carlo."""
+        n_steps = 100
+        n_paths = 500
+        nx = 2
+        nw = 2
+
+        result: SDESimulationResult = {
+            "t": np.linspace(0, 10, n_steps + 1),
+            "x": np.random.randn(n_paths, n_steps + 1, nx),
+            "success": True,
+            "method": "euler_maruyama",
+            "dt": 0.1,
+            "n_paths": n_paths,
+            "noise_type": "diagonal",
+            "sde_type": "ito",
+            "seed": 42,
+            "noise_samples": np.random.randn(n_paths, n_steps, nw),
+            "diffusion_evals": n_steps * n_paths,
+        }
+
+        # Monte Carlo shape: (n_paths, T, nx)
+        assert result["x"].shape == (n_paths, n_steps + 1, nx)
+        assert result["n_paths"] == 500
+        assert result["noise_samples"].shape == (n_paths, n_steps, nw)
+        assert result["diffusion_evals"] == n_steps * n_paths
+
+
+# ============================================================================
+# Test SDE Rollout Result
+# ============================================================================
+
+
+class TestSDERolloutResult:
+    """Test SDERolloutResult TypedDict."""
+
+    def test_sde_rollout_result(self):
+        """Test SDE rollout result with feedback control."""
+        n_steps = 100
+        n_paths = 50
         nx = 2
         nu = 1
         nw = 2
 
-        result: SimulationResult = {
-            "states": np.random.randn(n_steps + 1, nx),
-            "controls": np.random.randn(n_steps, nu),
-            "noise": np.random.randn(n_steps, nw),
+        result: SDERolloutResult = {
+            "t": np.linspace(0, 10, n_steps + 1),
+            "x": np.random.randn(n_paths, n_steps + 1, nx),
+            "u": np.random.randn(n_paths, n_steps, nu),
+            "success": True,
+            "method": "euler_maruyama",
+            "dt": 0.1,
+            "controller_type": "LQR",
+            "closed_loop": True,
+            "n_paths": n_paths,
+            "noise_type": "diagonal",
+            "sde_type": "ito",
+            "seed": 42,
+            "noise_samples": np.random.randn(n_paths, n_steps, nw),
+            "diffusion_evals": n_steps * n_paths,
         }
 
-        assert "noise" in result
-        assert result["noise"].shape == (n_steps, nw)
+        assert result["x"].shape == (n_paths, n_steps + 1, nx)
+        assert result["u"].shape == (n_paths, n_steps, nu)
+        assert result["closed_loop"] is True
+        assert result["noise_samples"].shape == (n_paths, n_steps, nw)
+        assert result["diffusion_evals"] == n_steps * n_paths
 
-    def test_simulation_result_with_time(self):
-        """Test simulation result with time information."""
+
+# ============================================================================
+# Test Discrete Simulation Result
+# ============================================================================
+
+
+class TestDiscreteSimulationResult:
+    """Test DiscreteSimulationResult TypedDict."""
+
+    def test_discrete_simulation_result_basic(self):
+        """Test basic discrete simulation result."""
         n_steps = 100
-        dt = 0.01
+        nx = 3
+        nu = 2
 
-        result: SimulationResult = {
-            "states": np.random.randn(n_steps + 1, 3),
-            "controls": np.random.randn(n_steps, 2),
-            "time": np.arange(n_steps + 1) * dt,
+        result: DiscreteSimulationResult = {
+            "t": np.arange(n_steps + 1),  # Integer time steps
+            "x": np.random.randn(n_steps + 1, nx),
+            "u": np.random.randn(n_steps, nu),
+            "dt": 0.01,
+            "success": True,
+            "message": "Discrete simulation completed",
+            "method": "direct",
         }
 
-        assert "time" in result
-        assert result["time"].shape == (n_steps + 1,)
-        assert result["time"][-1] == pytest.approx(n_steps * dt)
+        assert result["x"].shape == (n_steps + 1, nx)
+        assert result["u"].shape == (n_steps, nu)
+        assert result["t"].shape == (n_steps + 1,)
 
-    def test_simulation_result_with_info(self):
-        """Test simulation result with metadata."""
-        result: SimulationResult = {
-            "states": np.random.randn(101, 3),
-            "controls": np.random.randn(100, 2),
-            "info": {
-                "cost": 123.45,
-                "constraint_violations": 0,
-                "method": "euler",
-            },
+    def test_discrete_simulation_result_autonomous(self):
+        """Test discrete autonomous system (no control)."""
+        n_steps = 100
+        nx = 2
+
+        result: DiscreteSimulationResult = {
+            "t": np.arange(n_steps + 1),
+            "x": np.random.randn(n_steps + 1, nx),
+            "u": None,
+            "dt": 0.1,
+            "success": True,
         }
 
-        assert "info" in result
-        assert result["info"]["cost"] == 123.45
-        assert result["info"]["method"] == "euler"
+        assert result["u"] is None
+        assert result["x"].shape == (n_steps + 1, nx)
+
+
+# ============================================================================
+# Test Discrete Rollout Result
+# ============================================================================
+
+
+class TestDiscreteRolloutResult:
+    """Test DiscreteRolloutResult TypedDict."""
+
+    def test_discrete_rollout_result(self):
+        """Test discrete rollout with feedback control."""
+        n_steps = 100
+        nx = 3
+        nu = 2
+
+        result: DiscreteRolloutResult = {
+            "t": np.arange(n_steps + 1),
+            "x": np.random.randn(n_steps + 1, nx),
+            "u": np.random.randn(n_steps, nu),
+            "dt": 0.01,
+            "success": True,
+            "method": "direct",
+            "policy_type": "LQR",
+            "closed_loop": True,
+        }
+
+        assert result["x"].shape == (n_steps + 1, nx)
+        assert result["u"].shape == (n_steps, nu)
+        assert result["closed_loop"] is True
+        assert result["policy_type"] == "LQR"
+
+
+# ============================================================================
+# Test Discrete Stochastic Simulation Result
+# ============================================================================
+
+
+class TestDiscreteStochasticSimulationResult:
+    """Test DiscreteStochasticSimulationResult TypedDict."""
+
+    def test_discrete_stochastic_simulation_single(self):
+        """Test discrete stochastic simulation single path."""
+        n_steps = 100
+        nx = 2
+        nw = 2
+
+        result: DiscreteStochasticSimulationResult = {
+            "t": np.arange(n_steps + 1),
+            "x": np.random.randn(n_steps + 1, nx),
+            "dt": 0.1,
+            "success": True,
+            "n_paths": 1,
+            "noise_type": "additive",
+            "noise_samples": np.random.randn(n_steps, nw),
+            "seed": 42,
+        }
+
+        assert result["x"].shape == (n_steps + 1, nx)
+        assert result["n_paths"] == 1
+        assert result["noise_type"] == "additive"
+
+    def test_discrete_stochastic_simulation_monte_carlo(self):
+        """Test discrete stochastic simulation Monte Carlo."""
+        n_steps = 100
+        n_paths = 1000
+        nx = 2
+        nw = 2
+
+        result: DiscreteStochasticSimulationResult = {
+            "t": np.arange(n_steps + 1),
+            "x": np.random.randn(n_paths, n_steps + 1, nx),
+            "dt": 0.1,
+            "success": True,
+            "n_paths": n_paths,
+            "noise_type": "additive",
+            "seed": 42,
+            "noise_samples": np.random.randn(n_paths, n_steps, nw),
+        }
+
+        assert result["x"].shape == (n_paths, n_steps + 1, nx)
+        assert result["n_paths"] == 1000
+        assert result["noise_type"] == "additive"
+        assert result["noise_samples"].shape == (n_paths, n_steps, nw)
+
+
+# ============================================================================
+# Test Discrete Stochastic Rollout Result
+# ============================================================================
+
+
+class TestDiscreteStochasticRolloutResult:
+    """Test DiscreteStochasticRolloutResult TypedDict."""
+
+    def test_discrete_stochastic_rollout(self):
+        """Test discrete stochastic rollout with feedback."""
+        n_steps = 100
+        n_paths = 50
+        nx = 2
+        nu = 1
+        nw = 2
+
+        result: DiscreteStochasticRolloutResult = {
+            "t": np.arange(n_steps + 1),
+            "x": np.random.randn(n_paths, n_steps + 1, nx),
+            "u": np.random.randn(n_paths, n_steps, nu),
+            "dt": 0.1,
+            "success": True,
+            "policy_type": "LQR",
+            "closed_loop": True,
+            "n_paths": n_paths,
+            "noise_type": "additive",
+            "seed": 42,
+            "noise_samples": np.random.randn(n_paths, n_steps, nw),
+        }
+
+        assert result["x"].shape == (n_paths, n_steps + 1, nx)
+        assert result["u"].shape == (n_paths, n_steps, nu)
+        assert result["closed_loop"] is True
+        assert result["noise_type"] == "additive"
+        assert result["noise_samples"].shape == (n_paths, n_steps, nw)
 
 
 # ============================================================================
@@ -669,7 +1074,7 @@ class TestRealisticUsage:
     """Test types in realistic scenarios."""
 
     def test_discrete_simulation_workflow(self):
-        """Test complete discrete simulation workflow."""
+        """Test complete discrete simulation workflow with new keys."""
         # Setup
         nx, nu = 3, 2
         n_steps = 100
@@ -688,15 +1093,18 @@ class TestRealisticUsage:
         # Time points
         time: TimePoints = np.arange(n_steps + 1) * dt
 
-        # Result
+        # Result with standardized keys
         result: SimulationResult = {
-            "states": trajectory,
-            "controls": u_seq,
-            "time": time,
+            "t": time,
+            "x": trajectory,
+            "u": u_seq,
+            "success": True,
+            "method": "euler",
+            "dt": dt,
         }
 
-        assert result["states"][0][0] == x0[0]
-        assert result["time"][-1] == pytest.approx(n_steps * dt)
+        assert result["x"][0][0] == x0[0]
+        assert result["t"][-1] == pytest.approx(n_steps * dt)
 
     def test_continuous_integration_workflow(self):
         """Test continuous integration workflow."""
@@ -707,14 +1115,17 @@ class TestRealisticUsage:
         # Mock integration result
         result: IntegrationResult = {
             "t": t_eval,
-            "y": np.random.randn(101, 3),
+            "x": np.random.randn(101, 3),
             "success": True,
             "message": "Integration successful",
             "nfev": 500,
+            "nsteps": 100,
+            "solver": "RK45",
+            "integration_time": 0.05,
         }
 
         # Extract trajectory
-        trajectory: StateTrajectory = result["y"]
+        trajectory: StateTrajectory = result["x"]
         time: TimePoints = result["t"]
 
         assert len(trajectory) == len(time)
@@ -776,6 +1187,86 @@ class TestRealisticUsage:
         assert stats["duration"] == pytest.approx(10.0)
         assert len(transient["states"]) == transient_end
 
+    def test_closed_loop_rollout_workflow(self):
+        """Test closed-loop rollout workflow with feedback control."""
+        n_steps = 100
+        nx = 4
+        nu = 2
+        dt = 0.01
+
+        # Mock LQR rollout result
+        result: RolloutResult = {
+            "t": np.arange(n_steps + 1) * dt,
+            "x": np.random.randn(n_steps + 1, nx),
+            "u": np.random.randn(n_steps, nu),
+            "success": True,
+            "message": "Rollout completed",
+            "method": "rk4",
+            "dt": dt,
+            "controller_type": "LQR",
+            "closed_loop": True,
+        }
+
+        # Verify closed-loop properties
+        assert result["closed_loop"] is True
+        assert result["u"] is not None
+        assert result["u"].shape == (n_steps, nu)
+
+        # Extract final cost (would be computed from x and u)
+        x_final = result["x"][-1]
+        assert x_final.shape == (nx,)
+
+    def test_sde_monte_carlo_workflow(self):
+        """Test SDE Monte Carlo simulation workflow."""
+        n_steps = 100
+        n_paths = 500
+        nx = 2
+        nw = 2
+        dt = 0.01
+
+        # Mock SDE simulation result
+        result: SDESimulationResult = {
+            "t": np.arange(n_steps + 1) * dt,
+            "x": np.random.randn(n_paths, n_steps + 1, nx),
+            "success": True,
+            "method": "euler_maruyama",
+            "dt": dt,
+            "n_paths": n_paths,
+            "noise_type": "diagonal",
+            "sde_type": "ito",
+            "seed": 42,
+            "noise_samples": np.random.randn(n_paths, n_steps, nw),
+            "diffusion_evals": n_steps * n_paths,
+        }
+
+        # Compute path statistics
+        trajectories = result["x"]  # (n_paths, T, nx)
+        mean_path = np.mean(trajectories, axis=0)  # (T, nx)
+        std_path = np.std(trajectories, axis=0)  # (T, nx)
+
+        assert mean_path.shape == (n_steps + 1, nx)
+        assert std_path.shape == (n_steps + 1, nx)
+
+    def test_pandas_integration(self):
+        """Test natural pandas integration with time-major ordering."""
+        n_steps = 100
+        nx = 3
+        dt = 0.1
+
+        # Simulation result
+        result: SimulationResult = {
+            "t": np.arange(n_steps + 1) * dt,
+            "x": np.random.randn(n_steps + 1, nx),
+            "success": True,
+        }
+
+        # Natural pandas DataFrame creation (time-major)
+        # df = pd.DataFrame(result['x'], index=result['t'])
+        # This works naturally because x.shape is (T, nx)
+
+        # Verify shape compatibility
+        assert result["x"].shape[0] == len(result["t"])
+
 
 # ============================================================================
 # Test Edge Cases
@@ -828,6 +1319,28 @@ class TestEdgeCases:
 
         assert trajectories.shape == (n_steps, batch, nx)
 
+    def test_high_dimensional_state(self):
+        """Test with high-dimensional state space."""
+        n_steps = 100
+        nx = 100  # High dimensional
+
+        trajectory: StateTrajectory = np.random.randn(n_steps, nx)
+
+        assert trajectory.shape == (n_steps, nx)
+
+    def test_result_without_optional_fields(self):
+        """Test result types work with minimal required fields."""
+        # SimulationResult with only essential fields
+        result: SimulationResult = {
+            "t": np.linspace(0, 1, 11),
+            "x": np.random.randn(11, 2),
+            "success": True,
+        }
+
+        assert "t" in result
+        assert "x" in result
+        assert "u" not in result  # Optional
+
 
 # ============================================================================
 # Test Documentation Examples
@@ -872,6 +1385,112 @@ class TestDocumentationExamples:
         t_start, t_end = t_span
         assert t_start == 0.0
         assert t_end == 10.0
+
+    def test_trajectory_segment_docstring_example(self):
+        """Test TrajectorySegment docstring example pattern."""
+        # Simulate extracting segment from result
+        n_steps = 100
+        result: SimulationResult = {
+            "t": np.linspace(0, 10, n_steps + 1),
+            "x": np.random.randn(n_steps + 1, 2),
+            "u": np.random.randn(n_steps, 1),
+            "success": True,
+        }
+
+        # Extract segment
+        t_start, t_end = 2.0, 5.0
+        time = result["t"]
+        mask = (time >= t_start) & (time <= t_end)
+        indices = np.where(mask)[0]
+
+        segment: TrajectorySegment = {
+            "states": result["x"][mask],
+            "controls": None,  # Simplified for test
+            "time": time[mask],
+            "start_index": indices[0],
+            "end_index": indices[-1],
+        }
+
+        assert segment["time"][0] >= t_start
+        assert segment["time"][-1] <= t_end
+
+
+# ============================================================================
+# Test Union Types
+# ============================================================================
+
+
+class TestUnionTypes:
+    """Test SystemResult and other union types."""
+
+    def test_system_result_accepts_simulation_result(self):
+        """Test SystemResult union accepts SimulationResult."""
+        result: SystemResult = {
+            "t": np.linspace(0, 10, 101),
+            "x": np.random.randn(101, 2),
+            "success": True,
+        }
+
+        assert "t" in result
+        assert "x" in result
+
+    def test_system_result_accepts_integration_result(self):
+        """Test SystemResult union accepts IntegrationResult."""
+        result: SystemResult = {
+            "t": np.linspace(0, 10, 101),
+            "x": np.random.randn(101, 3),
+            "success": True,
+            "nfev": 500,
+            "nsteps": 100,
+            "solver": "RK45",
+            "integration_time": 0.05,
+        }
+
+        assert "nfev" in result
+        assert "solver" in result
+
+    def test_system_result_accepts_rollout_result(self):
+        """Test SystemResult union accepts RolloutResult."""
+        result: SystemResult = {
+            "t": np.linspace(0, 10, 101),
+            "x": np.random.randn(101, 2),
+            "u": np.random.randn(100, 1),
+            "success": True,
+            "closed_loop": True,
+        }
+
+        assert "closed_loop" in result
+        assert result["closed_loop"] is True
+
+
+# ============================================================================
+# Test Backward Compatibility
+# ============================================================================
+
+
+class TestBackwardCompatibility:
+    """Test that imports work for backward compatibility."""
+
+    def test_import_from_trajectories(self):
+        """Test importing result types from trajectories module."""
+        # These should all be importable from trajectories
+        from cdesym.types.trajectories import (
+            IntegrationResult,
+            SimulationResult,
+            RolloutResult,
+            DiscreteSimulationResult,
+            DiscreteRolloutResult,
+            SDEIntegrationResult,
+            SDESimulationResult,
+            SDERolloutResult,
+            SystemResult,
+        )
+
+        # Just verify they're callable (TypedDict classes)
+        assert IntegrationResult is not None
+        assert SimulationResult is not None
+        assert RolloutResult is not None
+        assert SystemResult is not None
 
 
 if __name__ == "__main__":
